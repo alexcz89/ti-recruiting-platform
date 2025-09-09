@@ -1,0 +1,27 @@
+# dependencias y builds
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+.pnpm-store/
+
+# entorno / credenciales
+.env
+.env.*
+!.env.example
+
+# logs y temporales
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+
+# herramientas
+coverage/
+.vscode/
+.idea/
+.vercel/

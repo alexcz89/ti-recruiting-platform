@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  RECRUITER
+  CANDIDATE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+}
+
+enum Seniority {
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  REVIEWING
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String        @unique
+  passwordHash  String
+  role          Role          @default(CANDIDATE)
+  createdAt     DateTime      @default(now())
+  applications  Application[]
+  jobs          Job[]         @relation("PostedJobs")
+}
+
+model Job {
+  id             String           @id @default(cuid())
+  title          String
+  company        String
+  location       String
+  employmentType EmploymentType
+  seniority      Seniority
+  description    String
+  skills         String[]
+  salaryMin      Int?
+  salaryMax      Int?
+  currency       String?          @default("MXN")
+  remote         Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  recruiterId    String?
+  recruiter      User?            @relation("PostedJobs", fields: [recruiterId], references: [id])
+  applications   Application[]
+}
+
+model Application {
+  id           String            @id @default(cuid())
+  jobId        String
+  candidateId  String
+  resumeUrl    String?
+  coverLetter  String?
+  status       ApplicationStatus @default(SUBMITTED)
+  createdAt    DateTime          @default(now())
+
+  candidate    User              @relation(fields: [candidateId], references: [id])
+  job          Job               @relation(fields: [jobId], references: [id])
+}
