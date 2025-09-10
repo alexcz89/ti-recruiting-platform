@@ -1,6 +1,11 @@
 // app/layout.tsx
-import { auth, signOut } from "@/auth";
-import { redirect } from "next/navigation";
+import "./globals.css";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import Link from "next/link";
+import SignOutButton from "@/components/SignOutButton";
+import SignInButton from "@/components/SignInButton";
+
 
 export const metadata = {
   title: "Bolsa TI | Starter",
@@ -8,16 +13,10 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   const user = session?.user as any | undefined;
   const isRecruiter = user?.role === "RECRUITER";
   const isCandidate = user?.role === "CANDIDATE";
-
-  async function doSignOut() {
-    "use server";
-    await signOut();
-	redirect("/");
-  }
 
   return (
     <html lang="es">
@@ -26,23 +25,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <header className="flex items-center justify-between py-4">
             <h1 className="text-2xl font-bold">Bolsa TI</h1>
             <nav className="flex items-center gap-4">
-				<a href="/" className="hover:underline">Inicio</a>
-				<a href="/jobs" className="hover:underline">Vacantes</a>
+              <Link href="/" className="hover:underline">Inicio</Link>
+              <Link href="/jobs" className="hover:underline">Vacantes</Link>
 
-			  {!session && <a href="/signin" className="hover:underline">Ingresar</a>}
+              {!session && <SignInButton />}
 
-			  {isRecruiter && <a href="/dashboard" className="hover:underline">Panel</a>}
-			  {isCandidate && <a href="/profile" className="hover:underline">Perfil</a>}
+              {isRecruiter && <Link href="/dashboard" className="hover:underline">Panel</Link>}
+              {isCandidate && <Link href="/profile" className="hover:underline">Perfil</Link>}
 
-			  {session && (
-				<>
-				  <span className="text-sm text-zinc-600">{user?.email || "Sesión activa"}</span>
-				  <form action={doSignOut}>
-					<button className="border rounded px-3 py-1">Cerrar sesión</button>
-				  </form>
-				</>
-			  )}
-			</nav>
+              {session && (
+                <>
+                  <span className="text-sm text-zinc-600">{user?.email || "Sesión activa"}</span>
+                  <SignOutButton />
+                </>
+              )}
+            </nav>
           </header>
 
           <main>{children}</main>
