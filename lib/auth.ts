@@ -1,22 +1,16 @@
 // lib/auth.ts
 import { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import GoogleProvider from "next-auth/providers/google";
-import GitHubProvider from "next-auth/providers/github";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
+
+// Whitelists de ejemplo (ajusta a tus correos reales si quieres)
+const ADMIN_EMAILS = new Set(["admin@demo.local"]);
+const RECRUITER_EMAILS = new Set(["recruiter@demo.local"]);
 
 export const authOptions: NextAuthOptions = {
   providers: [
-    // OAuth (configura tus envs)
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-    }),
-    GitHubProvider({
-      clientId: process.env.GITHUB_ID ?? "",
-      clientSecret: process.env.GITHUB_SECRET ?? "",
-    }),
-
-    // Credenciales (ejemplo mínimo — AJÚSTALO a tu DB real)
     Credentials({
       name: "Credentials",
       credentials: {
@@ -24,15 +18,41 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        // TODO: valida en tu DB (bcrypt, etc.)
         if (!credentials?.email || !credentials?.password) return null;
 
-        // DEMO: acepta cualquier email y password (cámbialo por tu lógica real)
+        const email = credentials.email.toLowerCase();
+
+        // 1) Intenta leer usuario desde BD
+        let dbUser = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, email: true, name: true, role: true, passwordHash: true },
+        });
+
+        // 2) Si no existe, créalo con un rol razonable (demo)
+        if (!dbUser) {
+          const role = ADMIN_EMAILS.has(email)
+            ? "ADMIN"
+            : RECRUITER_EMAILS.has(email)
+            ? "RECRUITER"
+            : "CANDIDATE";
+
+          dbUser = await prisma.user.create({
+            data: {
+              email,
+              name: email.split("@")[0],
+              passwordHash: "demo", // demo: no validamos pass real
+              role,
+            },
+            select: { id: true, email: true, name: true, role: true },
+          });
+        }
+
+        // DEV: acepta cualquier password (demo). En producción valida hash.
         return {
-          id: "user-demo",
-          name: "Usuario Demo",
-          email: credentials.email,
-          role: "CANDIDATE",
+          id: dbUser.id,
+          name: dbUser.name ?? email.split("@")[0],
+          email: dbUser.email,
+          role: dbUser.role,
         } as any;
       },
     }),
@@ -40,7 +60,28 @@ export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
   callbacks: {
     async jwt({ token, user }) {
-      if (user && (user as any).role) token.role = (user as any).role;
+      // Si acaba de loguearse vía Credentials, ya viene user con role
+      if (user?.email) {
+        token.email = user.email;
+        (token as any).role = (user as any).role;
+        return token;
+      }
+
+      // Sesiones subsecuentes: resuelve rol desde BD o whitelist
+      const email = token.email as string | undefined;
+      if (email) {
+        const dbUser = await prisma.user.findUnique({
+          where: { email },
+          select: { role: true },
+        });
+        if (dbUser?.role) {
+          (token as any).role = dbUser.role;
+        } else {
+          if (ADMIN_EMAILS.has(email)) (token as any).role = "ADMIN";
+          else if (RECRUITER_EMAILS.has(email)) (token as any).role = "RECRUITER";
+          else (token as any).role = "CANDIDATE";
+        }
+      }
       return token;
     },
     async session({ session, token }) {

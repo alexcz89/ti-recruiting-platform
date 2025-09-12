@@ -3,6 +3,76 @@ const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
 async function main() {
+  // === Usuarios demo ===
+  const admin = await prisma.user.upsert({
+    where: { email: 'admin@demo.local' },
+    update: {},
+    create: {
+      email: 'admin@demo.local',
+      name: 'Admin Demo',
+      passwordHash: 'demo',
+      role: 'ADMIN',
+    },
+  });
+
+  const recruiter = await prisma.user.upsert({
+    where: { email: 'recruiter@demo.local' },
+    update: {},
+    create: {
+      email: 'recruiter@demo.local',
+      name: 'Recruiter Demo',
+      passwordHash: 'demo',
+      role: 'RECRUITER',
+    },
+  });
+
+  const candidate = await prisma.user.upsert({
+    where: { email: 'candidate@demo.local' },
+    update: {},
+    create: {
+      email: 'candidate@demo.local',
+      name: 'Candidate Demo',
+      passwordHash: 'demo',
+      role: 'CANDIDATE',
+      location: 'Monterrey, NL, México',
+      linkedin: 'https://linkedin.com/in/candidate-demo',
+      github: 'https://github.com/candidate-demo',
+      // ✅ skills por categoría (según tu schema extendido)
+      frontend: ['React', 'Next.js'],
+      backend: ['Node.js', 'Prisma'],
+      mobile: ['React Native'],
+      cloud: ['AWS'],
+      database: ['PostgreSQL'],
+      cybersecurity: [],
+      testing: ['Jest'],
+      ai: [],
+      // ✅ certificaciones sigue existiendo
+      certifications: ['AWS Fundamentals'],
+    },
+  });
+
+  // === Vacante demo ===
+  await prisma.job.upsert({
+    where: { id: 'seed-job-1' }, // id fijo para evitar duplicados al reseed
+    update: {},
+    create: {
+      id: 'seed-job-1',
+      title: 'Desarrollador Full Stack',
+      company: 'Acme Corp',
+      location: 'Remoto',
+      employmentType: 'FULL_TIME',
+      seniority: 'MID',
+      description: 'Stack: Next.js, Node.js, PostgreSQL. Trabajo 100% remoto.',
+      skills: ['next.js', 'node.js', 'postgresql'],
+      salaryMin: 40000,
+      salaryMax: 60000,
+      currency: 'MXN',
+      remote: true,
+      recruiterId: recruiter.id,
+    },
+  });
+
+  // === Codex demo ===
   await prisma.codexEntry.upsert({
     where: { slug: 'next-auth-troubleshooting' },
     update: {},
@@ -13,8 +83,7 @@ async function main() {
       tech: 'Next.js',
       tags: ['next-auth','debug','auth'],
       published: true,
-      content: `
-# Diagnóstico rápido
+      content: `# Diagnóstico rápido
 
 1. **Variables** en \`.env\`
    - \`NEXTAUTH_URL\`
@@ -26,19 +95,7 @@ async function main() {
 
 3. **Versión**
    - v4 → \`getServerSession\`
-   - v5 → \`auth()\` desde \`@/auth\`
-
-## Tabla de checks
-
-| Ítem               | OK | Comentario                     |
-|--------------------|----|--------------------------------|
-| NEXTAUTH_URL       | ✅ | http://localhost:3000          |
-| NEXTAUTH_SECRET    | ✅ | usa un valor aleatorio seguro  |
-| Providers OAuth    | ⚠️ | define clientId/secret         |
-| Callback URL OAuth | ✅ | coincide con tu dominio        |
-
-> Tip: revisa logs del server al autenticar para errores detallados.
-      `.trim(),
+   - v5 → \`auth()\` desde \`@/auth\``,
     },
   });
 
@@ -52,32 +109,18 @@ async function main() {
       tech: 'PostgreSQL',
       tags: ['prisma','db','migrations'],
       published: true,
-      content: `
-# Checklist de migraciones
+      content: `# Checklist de migraciones
 
 - \`docker ps\` (DB arriba)
 - \`npx prisma validate\`
 - \`npx prisma migrate dev -n "mensaje"\`
-- \`npx prisma studio\` para verificar
-
-## Snippets
-
-\`\`\`bash
-# levantar Postgres con Docker (Windows/PowerShell una sola línea)
-docker run --name pg-ti -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=ti_recruiting -p 5432:5432 -v pgdata:/var/lib/postgresql/data -d postgres:15
-\`\`\`
-
-> Usa \`SHADOW_DATABASE_URL\` si tu host limita creación de DBs sombra.
-      `.trim(),
+- \`npx prisma studio\` para verificar`,
     },
   });
 
-  console.log('Seed Codex con Markdown listo ✅');
+  console.log('✅ Seed listo: admin, recruiter, candidate (perfil extendido), 1 vacante y 2 artículos de Codex.');
 }
 
-main().catch(e => {
-  console.error(e);
-  process.exit(1);
-}).finally(async () => {
-  await prisma.$disconnect();
-});
+main()
+  .catch(e => { console.error(e); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); });

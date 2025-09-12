@@ -17,6 +17,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const user = session?.user as any | undefined;
   const isRecruiter = user?.role === "RECRUITER";
   const isCandidate = user?.role === "CANDIDATE";
+  const isAdmin = user?.role === "ADMIN";
+  {(isRecruiter || isAdmin) && <Link href="/dashboard">Panel</Link>}
 
   return (
     <html lang="es">

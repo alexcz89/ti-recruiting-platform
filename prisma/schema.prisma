@@ -39,11 +39,32 @@ model User {
   id           String        @id @default(cuid())
   name         String?
   email        String        @unique
-  passwordHash String
+  passwordHash String? // ← ahora opcional
   role         Role          @default(CANDIDATE)
   createdAt    DateTime      @default(now())
   applications Application[]
   jobs         Job[]         @relation("PostedJobs")
+
+  // --- Perfil ---
+  location  String?
+  phone     String?
+  birthdate DateTime?
+  linkedin  String?
+  github    String?
+  resumeUrl String?
+
+  // Skills organizadas (MVP con arreglos)
+  frontend      String[] @default([])
+  backend       String[] @default([])
+  mobile        String[] @default([])
+  cloud         String[] @default([])
+  database      String[] @default([])
+  cybersecurity String[] @default([])
+  testing       String[] @default([])
+  ai            String[] @default([])
+
+  // Certificaciones
+  certifications String[] @default([])
 }
 
 model Job {
@@ -64,6 +85,10 @@ model Job {
   recruiterId    String?
   recruiter      User?          @relation("PostedJobs", fields: [recruiterId], references: [id])
   applications   Application[]
+
+  @@index([title])
+  @@index([location])
+  @@index([seniority, employmentType])
 }
 
 model Application {
@@ -75,20 +100,22 @@ model Application {
   status      ApplicationStatus @default(SUBMITTED)
   createdAt   DateTime          @default(now())
 
-  candidate User @relation(fields: [candidateId], references: [id])
-  job       Job  @relation(fields: [jobId], references: [id])
+  candidate User @relation(fields: [candidateId], references: [id]) // , onDelete: Cascade
+  job       Job  @relation(fields: [jobId], references: [id]) // , onDelete: Cascade
+
+  @@unique([candidateId, jobId])
 }
 
 // =========================
-// Codex (nuevo)
+// Codex
 // =========================
 model CodexEntry {
   id        String   @id @default(cuid())
   title     String
   slug      String   @unique
   excerpt   String?
-  content   String   @db.Text // contenido largo (Markdown o texto)
-  tags      String[] // requiere PostgreSQL
+  content   String   @db.Text
+  tags      String[]
   tech      String?
   published Boolean  @default(true)
   createdAt DateTime @default(now())
