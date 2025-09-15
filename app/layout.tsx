@@ -33,7 +33,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {!session && <SignInButton />}
 
               {isRecruiter && <Link href="/dashboard" className="hover:underline">Panel</Link>}
-              {isCandidate && <Link href="/profile" className="hover:underline">Perfil</Link>}
+              {isCandidate && <Link href="/profile/summary" className="hover:underline">Perfil</Link>}
 
               {session && (
                 <>

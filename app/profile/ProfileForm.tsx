@@ -2,10 +2,21 @@
 
 import { useState } from "react";
 
+const COUNTRIES = [
+  { code: "MX", dial: "52", label: "México (+52)" },
+  { code: "US", dial: "1", label: "Estados Unidos (+1)" },
+  { code: "AR", dial: "54", label: "Argentina (+54)" },
+  { code: "CO", dial: "57", label: "Colombia (+57)" },
+  { code: "ES", dial: "34", label: "España (+34)" },
+  // agrega más si los necesitas
+];
+
 type Initial = {
   name: string;
   email: string;
-  phone: string;
+  // Teléfono separado en partes
+  phoneCountry: string; // ej "52"
+  phoneLocal: string;   // ej "8112345678"
   location: string;
   birthdate: string;
   linkedin: string;
@@ -27,65 +38,91 @@ export default function ProfileForm({
   onSubmit,
 }: {
   initial: Initial;
-  onSubmit: (fd: FormData) => Promise<void>;
+  onSubmit: (fd: FormData) => Promise<any>; // ← leemos posible { error }
 }) {
   const [form, setForm] = useState(initial);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleChange(key: keyof Initial, value: string) {
+  const normalizeDigits = (s: string) => s.replace(/\D+/g, "");
+  const isMX = form.phoneCountry === "52";
+
+  function handleChange<K extends keyof Initial>(key: K, value: Initial[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setError(null);
     setBusy(true);
+
+    // --- Validación de teléfono (cliente) ---
+    const localDigits = normalizeDigits(form.phoneLocal || "");
+    if (isMX && localDigits && localDigits.length !== 10) {
+      setBusy(false);
+      setError("Para México (+52), el número local debe tener exactamente 10 dígitos.");
+      return;
+    }
+    if (!isMX && localDigits && (localDigits.length < 6 || localDigits.length > 15)) {
+      setBusy(false);
+      setError("El número local debe tener entre 6 y 15 dígitos.");
+      return;
+    }
+
     const fd = new FormData();
-    for (const [key, value] of Object.entries(form)) {
-      if (Array.isArray(value)) {
-        fd.set(key, value.join(", "));
-      } else {
-        fd.set(key, value ?? "");
-      }
-    }
-    await onSubmit(fd); // el server action puede redirigir a /profile/summary
+
+    // Campos simples
+    fd.set("name", form.name ?? "");
+    fd.set("location", form.location ?? "");
+    fd.set("birthdate", form.birthdate ?? "");
+    fd.set("linkedin", form.linkedin ?? "");
+    fd.set("github", form.github ?? "");
+    fd.set("resumeUrl", form.resumeUrl ?? "");
+
+    // Teléfono en partes (el server los combinará a E.164)
+    fd.set("phoneCountry", form.phoneCountry || "52");
+    fd.set("phoneLocal", normalizeDigits(form.phoneLocal || ""));
+
+    // Arrays (como CSV)
+    fd.set("frontend", (form.frontend || []).join(", "));
+    fd.set("backend", (form.backend || []).join(", "));
+    fd.set("mobile", (form.mobile || []).join(", "));
+    fd.set("cloud", (form.cloud || []).join(", "));
+    fd.set("database", (form.database || []).join(", "));
+    fd.set("cybersecurity", (form.cybersecurity || []).join(", "));
+    fd.set("testing", (form.testing || []).join(", "));
+    fd.set("ai", (form.ai || []).join(", "));
+    fd.set("certifications", (form.certifications || []).join(", "));
+
+    // Ejecuta la Server Action y revisa respuesta (posible error)
+    const res = await onSubmit(fd);
     setBusy(false);
-    // Si tu server action redirige, esta alerta no se verá; si no, te sirve de feedback:
-    // alert("Perfil actualizado ✅");
-  }
 
-  // --- Subida de CV: envía el archivo a /api/upload y guarda la URL resultante en resumeUrl
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const data = new FormData();
-    data.set("file", file);
-
-    try {
-      const res = await fetch("/api/upload", { method: "POST", body: data });
-      const json = await res.json();
-      if (res.ok && json?.url) {
-        setForm((prev) => ({ ...prev, resumeUrl: json.url }));
-        alert("CV subido ✅");
-      } else {
-        alert(json?.error ?? "No se pudo subir el archivo");
-      }
-    } catch (err) {
-      alert("Error al subir el archivo");
-    } finally {
-      // limpia el input file para permitir re-subidas del mismo nombre si hace falta
-      e.target.value = "";
+    if (res?.error) {
+      setError(res.error);
+      return;
     }
+    // En éxito, el server redirige a /profile/summary
   }
 
   function textAreaField(label: string, key: keyof Initial, placeholder: string) {
+    const value = (form[key] as string[]).join(", ");
     return (
       <div className="grid gap-1">
         <label className="text-sm">{label}</label>
         <textarea
           className="border rounded-xl p-3 font-mono"
           rows={2}
-          value={(form[key] as string[]).join(", ")}
-          onChange={(e) => handleChange(key, e.target.value)}
+          value={value}
+          onChange={(e) =>
+            handleChange(
+              key as any,
+              e.target.value
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean) as any
+            )
+          }
           placeholder={placeholder}
         />
       </div>
@@ -104,13 +141,59 @@ export default function ProfileForm({
             onChange={(e) => handleChange("name", e.target.value)}
           />
         </div>
+
+        {/* Teléfono con selector de país */}
         <div className="grid gap-1">
           <label className="text-sm">Teléfono</label>
-          <input
-            className="border rounded-xl p-3"
-            value={form.phone}
-            onChange={(e) => handleChange("phone", e.target.value)}
-          />
+          <div className="flex gap-2">
+            <select
+              className="border rounded-xl p-3 w-44"
+              value={form.phoneCountry}
+              onChange={(e) => handleChange("phoneCountry", e.target.value)}
+              title="LADA / Código de país"
+              autoComplete="tel-country-code"
+            >
+              {COUNTRIES.map((c) => (
+                <option key={c.dial} value={c.dial}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Input con remount por país + corte en vivo */}
+            <input
+              key={isMX ? "tel-mx" : `tel-${form.phoneCountry}`} // remonta al cambiar país
+              type="tel"
+              className="border rounded-xl p-3 flex-1"
+              placeholder={isMX ? "10 dígitos (solo números)" : "solo dígitos"}
+              value={form.phoneLocal}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D+/g, "");
+                handleChange("phoneLocal", isMX ? digits.slice(0, 10) : digits.slice(0, 15));
+              }}
+              onInput={(e) => {
+                const t = e.currentTarget as HTMLInputElement;
+                const digits = t.value.replace(/\D+/g, "");
+                t.value = isMX ? digits.slice(0, 10) : digits.slice(0, 15);
+              }}
+              inputMode="numeric"
+              autoComplete="tel-national"
+              maxLength={isMX ? 10 : 15}
+              minLength={isMX ? 10 : 6}
+              pattern={isMX ? "\\d{10}" : "\\d{6,15}"}
+              required={Boolean(form.phoneLocal)} // si escribe algo, debe cumplir el patrón
+              aria-invalid={
+                isMX
+                  ? form.phoneLocal.length > 0 && form.phoneLocal.length !== 10
+                  : form.phoneLocal.length > 0 && (form.phoneLocal.length < 6 || form.phoneLocal.length > 15)
+              }
+            />
+          </div>
+          <p className="text-xs text-zinc-500">
+            {isMX
+              ? "Para México (+52) deben ser exactamente 10 dígitos."
+              : "Usa de 6 a 15 dígitos según el país."}
+          </p>
         </div>
       </div>
 
@@ -138,7 +221,7 @@ export default function ProfileForm({
       <div className="grid md:grid-cols-2 gap-3">
         <div className="grid gap-1">
           <label className="text-sm">LinkedIn</label>
-        <input
+          <input
             className="border rounded-xl p-3"
             value={form.linkedin}
             onChange={(e) => handleChange("linkedin", e.target.value)}
@@ -152,34 +235,6 @@ export default function ProfileForm({
             onChange={(e) => handleChange("github", e.target.value)}
           />
         </div>
-      </div>
-
-      {/* CV: subir archivo o pegar URL */}
-      <div className="grid gap-1">
-        <label className="text-sm">CV</label>
-        <div className="flex items-center gap-3">
-          <input
-            type="file"
-            accept=".pdf,.doc,.docx"
-            onChange={handleUpload}
-          />
-          <span className="text-xs text-zinc-500">o pega una URL</span>
-        </div>
-        <input
-          className="border rounded-xl p-3"
-          value={form.resumeUrl}
-          onChange={(e) => setForm((prev) => ({ ...prev, resumeUrl: e.target.value }))}
-          placeholder="/uploads/mi-cv.pdf o https://..."
-        />
-        {!!form.resumeUrl && (
-          <a
-            href={form.resumeUrl}
-            target="_blank"
-            className="text-xs text-blue-600 hover:underline"
-          >
-            Ver CV
-          </a>
-        )}
       </div>
 
       {/* Skills por categorías */}
@@ -198,10 +253,25 @@ export default function ProfileForm({
       <textarea
         className="border rounded-xl p-3 font-mono"
         rows={3}
-        value={form.certifications.join(", ")}
-        onChange={(e) => handleChange("certifications", e.target.value)}
+        value={(form.certifications || []).join(", ")}
+        onChange={(e) =>
+          handleChange(
+            "certifications",
+            e.target.value
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          )
+        }
         placeholder="AWS SAA, CCNA, Scrum Master"
       />
+
+      {/* Error de validación */}
+      {error && (
+        <div className="border border-red-300 bg-red-50 text-red-700 text-sm rounded-xl px-3 py-2">
+          {error}
+        </div>
+      )}
 
       <button disabled={busy} className="border rounded-xl px-4 py-2">
         {busy ? "Guardando..." : "Guardar cambios"}
