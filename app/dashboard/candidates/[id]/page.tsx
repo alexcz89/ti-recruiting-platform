@@ -1,31 +1,34 @@
 // app/dashboard/candidates/[id]/page.tsx
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { redirect, notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import { redirect, notFound } from "next/navigation"
+import { prisma } from "@/lib/prisma"
+import Link from "next/link"
 
-export const metadata = { title: "Candidato | Panel" };
+export const metadata = { title: "Candidato | Panel" }
 
 export default async function CandidateDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string };
-  searchParams?: { applicationId?: string };
+  params: { id: string }
+  searchParams?: { applicationId?: string; jobId?: string }
 }) {
   // 1) Guard sesión/rol
-  const session = await getServerSession(authOptions);
-  if (!session) redirect("/signin?callbackUrl=/dashboard/candidates");
+  const session = await getServerSession(authOptions)
+  if (!session) redirect("/signin?callbackUrl=/dashboard/candidates")
 
+  // Reclutador/Admin + obtener companyId del reclutador para multi-tenant
   const me = await prisma.user.findUnique({
     where: { email: session.user?.email! },
-    select: { id: true, role: true },
-  });
+    select: { id: true, role: true, companyId: true },
+  })
   if (!me || (me.role !== "RECRUITER" && me.role !== "ADMIN")) {
-    redirect("/");
+    redirect("/")
   }
+  const companyId = me.companyId ?? null
 
-  // 2) Candidato
+  // 2) Candidato (solo campos vigentes)
   const candidate = await prisma.user.findUnique({
     where: { id: params.id },
     select: {
@@ -39,51 +42,49 @@ export default async function CandidateDetailPage({
       github: true,
       resumeUrl: true,
       role: true,
-      frontend: true,
-      backend: true,
-      mobile: true,
-      cloud: true,
-      database: true,
-      cybersecurity: true,
-      testing: true,
-      ai: true,
+      skills: true,          // ← unificado
       certifications: true,
     },
-  });
-  if (!candidate) notFound();
-  if (candidate.role !== "CANDIDATE") redirect("/dashboard/candidates");
+  })
+  if (!candidate) notFound()
+  if (candidate.role !== "CANDIDATE") redirect("/dashboard")
 
-  // 3) Postulaciones del candidato SOLO a vacantes del recruiter actual
-  const myApps = await prisma.application.findMany({
-    where: {
-      candidateId: candidate.id,
-      job: { recruiterId: me.id }, // ← FILTRO CLAVE: SOLO mis vacantes
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      status: true,
-      createdAt: true,
-      job: { select: { id: true, title: true, company: true } },
-    },
-    take: 10,
-  });
+  // 3) Postulaciones del candidato SOLO a vacantes de MI EMPRESA
+  const myApps = companyId
+    ? await prisma.application.findMany({
+        where: {
+          candidateId: candidate.id,
+          job: { companyId }, // filtro multi-tenant por empresa
+        },
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          job: { select: { id: true, title: true, company: { select: { name: true } } } },
+        },
+        take: 10,
+      })
+    : []
 
-  // Si viene un applicationId en la URL, valida que sea tuyo (del recruiter)
-  const activeAppId = searchParams?.applicationId || "";
+  // (Opcional) Si viene un applicationId en la URL, valida que pertenece a MI EMPRESA
+  const activeAppId = searchParams?.applicationId || ""
   const activeApp = activeAppId
     ? await prisma.application.findFirst({
-        where: { id: activeAppId, job: { recruiterId: me.id } },
+        where: { id: activeAppId, job: { companyId: companyId ?? "" } },
         select: { id: true },
       })
-    : null;
+    : null
+
+  // Para botones de regreso desde job
+  const fromJobId = searchParams?.jobId
 
   // UI helpers
   const Pill = ({ children }: { children: React.ReactNode }) => (
     <span className="inline-block text-xs bg-gray-100 rounded-full px-2 py-1 mr-2 mb-2">
       {children}
     </span>
-  );
+  )
   const List = ({ items }: { items?: string[] | null }) =>
     items && items.length ? (
       <div className="mt-2">
@@ -93,16 +94,17 @@ export default async function CandidateDetailPage({
       </div>
     ) : (
       <p className="text-sm text-zinc-500">—</p>
-    );
+    )
 
   const waHref = candidate.phone
     ? `https://wa.me/${candidate.phone.replace(/^\+/, "")}?text=${encodeURIComponent(
         `Hola ${candidate.name ?? ""}, te contacto por una oportunidad laboral.`
       )}`
-    : null;
+    : null
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Candidato</h1>
@@ -111,6 +113,24 @@ export default async function CandidateDetailPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {fromJobId && (
+            <>
+              <Link
+                href={`/dashboard/jobs/${fromJobId}/applications`}
+                className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+              >
+                ← Volver a la vacante
+              </Link>
+              <Link
+                href={`/dashboard/jobs/${fromJobId}`}
+                className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                title="Abrir Kanban"
+              >
+                Ver Kanban
+              </Link>
+            </>
+          )}
+
           {candidate.resumeUrl ? (
             <a
               href={candidate.resumeUrl}
@@ -124,6 +144,7 @@ export default async function CandidateDetailPage({
           ) : (
             <span className="text-xs text-zinc-400">Sin CV</span>
           )}
+
           {waHref ? (
             <a
               href={waHref}
@@ -137,7 +158,7 @@ export default async function CandidateDetailPage({
           ) : (
             <span className="text-xs text-zinc-400">Sin teléfono</span>
           )}
-          {/* Si venimos con una postulación válida, botón directo a mensajes */}
+
           {activeApp?.id ? (
             <a
               href={`/dashboard/messages?applicationId=${activeApp.id}`}
@@ -206,40 +227,7 @@ export default async function CandidateDetailPage({
 
           <div className="border rounded-xl p-4">
             <h2 className="font-semibold">Skills</h2>
-            <div className="mt-3 grid md:grid-cols-2 gap-4">
-              <div>
-                <div className="text-sm font-medium">Frontend</div>
-                <List items={candidate.frontend} />
-              </div>
-              <div>
-                <div className="text-sm font-medium">Backend</div>
-                <List items={candidate.backend} />
-              </div>
-              <div>
-                <div className="text-sm font-medium">Móviles</div>
-                <List items={candidate.mobile} />
-              </div>
-              <div>
-                <div className="text-sm font-medium">Cloud</div>
-                <List items={candidate.cloud} />
-              </div>
-              <div>
-                <div className="text-sm font-medium">Bases de datos</div>
-                <List items={candidate.database} />
-              </div>
-              <div>
-                <div className="text-sm font-medium">Ciberseguridad</div>
-                <List items={candidate.cybersecurity} />
-              </div>
-              <div>
-                <div className="text-sm font-medium">Testing / QA</div>
-                <List items={candidate.testing} />
-              </div>
-              <div>
-                <div className="text-sm font-medium">IA / ML</div>
-                <List items={candidate.ai} />
-              </div>
-            </div>
+            <List items={candidate.skills} />
           </div>
         </section>
 
@@ -253,7 +241,7 @@ export default async function CandidateDetailPage({
               {myApps.map((a) => (
                 <li key={a.id} className="border rounded-lg p-3">
                   <div className="text-sm font-medium">
-                    {a.job?.title} — {a.job?.company}
+                    {a.job?.title} — {a.job?.company?.name ?? "—"}
                   </div>
                   <div className="text-xs text-zinc-500">
                     Estado: {a.status} · {new Date(a.createdAt).toLocaleDateString()}
@@ -266,13 +254,13 @@ export default async function CandidateDetailPage({
                     >
                       Mensajes
                     </a>
-                    <a
-                      href={`/dashboard/applications?jobId=${a.job?.id}`}
-                      className="border rounded px-2 py-1 text-xs"
+                    <Link
+                      href={`/dashboard/jobs/${a.job?.id}/applications`}
+                      className="border rounded px-2 py-1 text-xs hover:bg-gray-50"
                       title="Ver postulaciones de esta vacante"
                     >
-                      Ver postulación
-                    </a>
+                      Ver vacante
+                    </Link>
                   </div>
                 </li>
               ))}
@@ -281,11 +269,14 @@ export default async function CandidateDetailPage({
         </aside>
       </div>
 
-      <div>
-        <a href="/dashboard/applications" className="text-sm text-blue-600 hover:underline">
-          ← Volver a postulaciones
-        </a>
-      </div>
+      {/* Fallback de regreso cuando no venimos desde job */}
+      {!fromJobId && (
+        <div>
+          <Link href="/dashboard/jobs" className="text-sm text-blue-600 hover:underline">
+            ← Volver a vacantes
+          </Link>
+        </div>
+      )}
     </main>
-  );
+  )
 }

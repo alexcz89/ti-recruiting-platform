@@ -32,20 +32,41 @@ enum ApplicationStatus {
   REVIEWING
   INTERVIEW
   OFFER
+  HIRED
   REJECTED
 }
 
+// =========================
+// Multiempresa
+// =========================
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  country   String?
+  city      String?
+  domain    String?
+  users     User[]
+  jobs      Job[]
+  createdAt DateTime @default(now())
+}
+
+// =========================
+// Usuarios y perfiles
+// =========================
 model User {
-  id           String        @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String?
-  email        String        @unique
-  passwordHash String? // ← ahora opcional
-  role         Role          @default(CANDIDATE)
-  createdAt    DateTime      @default(now())
+  email        String   @unique
+  passwordHash String?
+  role         Role     @default(CANDIDATE)
+  createdAt    DateTime @default(now())
+
   applications Application[]
   jobs         Job[]         @relation("PostedJobs")
 
-  // --- Perfil ---
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?
+
   location  String?
   phone     String?
   birthdate DateTime?
@@ -53,47 +74,53 @@ model User {
   github    String?
   resumeUrl String?
 
-  // Skills organizadas (MVP con arreglos)
-  frontend      String[] @default([])
-  backend       String[] @default([])
-  mobile        String[] @default([])
-  cloud         String[] @default([])
-  database      String[] @default([])
-  cybersecurity String[] @default([])
-  testing       String[] @default([])
-  ai            String[] @default([])
+  // ✅ Lista unificada de skills (para tu nuevo combobox)
+  skills String[] @default([])
 
-  // Certificaciones
   certifications String[] @default([])
 
-  // 👇 NUEVO: relación opuesta 1:1 con RecruiterProfile
   recruiterProfile RecruiterProfile?
 }
 
+// =========================
+// Vacantes
+// =========================
 model Job {
-  id             String         @id @default(cuid())
-  title          String
-  company        String
+  id    String @id @default(cuid())
+  title String
+
+  // Requerido (multiempresa)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
   location       String
   employmentType EmploymentType
   seniority      Seniority
   description    String
-  skills         String[]
-  salaryMin      Int?
-  salaryMax      Int?
-  currency       String?        @default("MXN")
-  remote         Boolean        @default(false)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  recruiterId    String?
-  recruiter      User?          @relation("PostedJobs", fields: [recruiterId], references: [id])
-  applications   Application[]
+  skills         String[]    // ✅ ya presente
 
+  salaryMin Int?
+  salaryMax Int?
+  currency  String? @default("MXN")
+  remote    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  recruiterId String?
+  recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id])
+
+  applications Application[]
+
+  @@index([companyId])
   @@index([title])
   @@index([location])
   @@index([seniority, employmentType])
 }
 
+// =========================
+// Postulaciones y Mensajería
+// =========================
 model Application {
   id          String            @id @default(cuid())
   jobId       String
@@ -103,13 +130,13 @@ model Application {
   status      ApplicationStatus @default(SUBMITTED)
   createdAt   DateTime          @default(now())
 
-  candidate User @relation(fields: [candidateId], references: [id]) // , onDelete: Cascade
-  job       Job  @relation(fields: [jobId], references: [id]) // , onDelete: Cascade
+  candidate User @relation(fields: [candidateId], references: [id])
+  job       Job  @relation(fields: [jobId], references: [id])
 
-  // 👇 NUEVO: relación opuesta con Message
   messages Message[]
 
   @@unique([candidateId, jobId])
+  @@index([status, createdAt])
 }
 
 // =========================
@@ -130,6 +157,9 @@ model CodexEntry {
   @@index([published, createdAt])
 }
 
+// =========================
+// Perfil de Reclutador
+// =========================
 enum RecruiterStatus {
   PENDING
   APPROVED
@@ -149,6 +179,9 @@ model RecruiterProfile {
   user User @relation(fields: [userId], references: [id])
 }
 
+// =========================
+// Mensajes y Auditoría
+// =========================
 model Message {
   id            String   @id @default(cuid())
   applicationId String
@@ -163,8 +196,8 @@ model Message {
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?
-  action    String // e.g. "APPLICATION_STATUS_UPDATED"
-  target    String? // e.g. "Application:abc123"
+  action    String
+  target    String?
   meta      Json?
   createdAt DateTime @default(now())
 }

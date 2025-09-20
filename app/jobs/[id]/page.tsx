@@ -1,38 +1,61 @@
-import { prisma } from "@/lib/prisma";
-import { notFound, redirect } from "next/navigation";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+// app/jobs/[id]/page.tsx
+import { prisma } from "@/lib/prisma"
+import { notFound, redirect } from "next/navigation"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
 export default async function JobDetail({ params }: { params: { id: string } }) {
-  const job = await prisma.job.findUnique({ where: { id: params.id } });
+  // 1) Cargar la vacante con la relación a Company
+  const job = await prisma.job.findUnique({
+    where: { id: params.id },
+    select: {
+      id: true,
+      title: true,
+      location: true,
+      employmentType: true,
+      seniority: true,
+      remote: true,
+      description: true,
+      skills: true,
+      updatedAt: true,
+      company: { select: { name: true } },
+    },
+  })
+  if (!job) notFound()
 
-  if (!job) notFound();
+  // 2) Leer sesión (si existe) para decidir qué botón mostrar
+  const session = await getServerSession(authOptions)
+  const role = (session?.user as any)?.role
+  const isCandidate = role === "CANDIDATE"
 
+  // 3) Server Action para postularse
   async function applyAction() {
-    "use server";
-    const session = await getServerSession(authOptions);
-    const user = session?.user as any;
+    "use server"
+    const s = await getServerSession(authOptions)
 
-    if (!session) {
-      redirect(`/signin?callbackUrl=/jobs/${params.id}`);
+    if (!s?.user) {
+      redirect(`/signin?role=CANDIDATE&callbackUrl=/jobs/${params.id}`)
+    }
+    if ((s.user as any).role !== "CANDIDATE") {
+      // Solo candidatos pueden postular
+      redirect("/")
     }
 
-    if (user?.role !== "CANDIDATE") {
-      redirect("/"); // solo candidatos pueden postular
-    }
-
-    // busca candidateId en la tabla User
+    // Ubicar candidateId por email de sesión
     const candidate = await prisma.user.findUnique({
-      where: { email: user.email },
-    });
-    if (!candidate) redirect("/");
+      where: { email: s.user.email! },
+      select: { id: true },
+    })
+    if (!candidate) redirect("/")
 
-    // evita duplicar aplicación
+    // Evitar duplicados
     const existing = await prisma.application.findFirst({
       where: { jobId: params.id, candidateId: candidate.id },
-    });
+      select: { id: true },
+    })
     if (existing) {
-      redirect("/profile"); // ya postuló
+      // Ya postuló; regresa al resumen con aviso
+      redirect("/profile/summary?applied=existing")
     }
 
     await prisma.application.create({
@@ -41,40 +64,56 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
         candidateId: candidate.id,
         status: "SUBMITTED",
       },
-    });
+    })
 
-    redirect("/profile"); // o /dashboard/applications para ver como recruiter
+    // Éxito
+    redirect("/profile/summary?applied=1")
   }
 
   return (
-    <main className="max-w-3xl mx-auto p-6">
-      <h1 className="text-2xl font-bold">{job.title}</h1>
-      <p className="text-zinc-600 mt-1">{job.company} — {job.location}</p>
-      <p className="text-sm text-zinc-500 mt-1">
-        {job.employmentType} · {job.seniority} · {job.remote ? "Remoto" : "Presencial"}
-      </p>
+    <main className="max-w-3xl mx-auto p-6 space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-bold">{job.title}</h1>
+        <p className="text-zinc-600">
+          {job.company?.name ?? "—"} — {job.location}
+        </p>
+        <p className="text-sm text-zinc-500">
+          {job.employmentType} · {job.seniority} · {job.remote ? "Remoto" : "Presencial/Híbrido"}
+        </p>
+      </header>
 
-      <hr className="my-6" />
-
-      <div className="prose prose-zinc max-w-none">
-        <pre className="whitespace-pre-wrap font-sans">{job.description}</pre>
-      </div>
+      <section className="prose prose-zinc max-w-none">
+        <pre className="whitespace-pre-wrap font-sans text-[15px] leading-6">
+          {job.description}
+        </pre>
+      </section>
 
       {job.skills?.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-2">
+        <section className="mt-2 flex flex-wrap gap-2">
           {job.skills.map((s) => (
-            <span key={s} className="text-xs bg-gray-100 px-2 py-1 rounded">
+            <span key={s} className="text-xs bg-gray-100 px-2 py-1 rounded border">
               {s}
             </span>
           ))}
-        </div>
+        </section>
       )}
 
-      <div className="mt-6">
-        <form action={applyAction}>
-          <button className="border rounded-xl px-4 py-2">Postular</button>
-        </form>
-      </div>
+      <footer className="pt-4">
+        {isCandidate ? (
+          <form action={applyAction}>
+            <button className="border rounded-xl px-4 py-2 hover:bg-gray-50">
+              Postularme
+            </button>
+          </form>
+        ) : (
+          <a
+            href={`/signin?role=CANDIDATE&callbackUrl=/jobs/${job.id}`}
+            className="border rounded-xl px-4 py-2 hover:bg-gray-50 inline-block"
+          >
+            Iniciar sesión como candidato para postular
+          </a>
+        )}
+      </footer>
     </main>
-  );
+  )
 }

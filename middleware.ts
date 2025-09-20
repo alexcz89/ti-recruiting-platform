@@ -1,43 +1,59 @@
 // middleware.ts
-import { withAuth } from "next-auth/middleware";
-import type { NextRequest } from "next/server";
+import { withAuth } from "next-auth/middleware"
+import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
 export default withAuth(
   function middleware(req: NextRequest) {
-    // Aquí puedes poner lógica adicional si quieres
-    // Por ejemplo, logs de auditoría o ajustes a la URL
+    const { pathname } = req.nextUrl
+    const token = (req as any).nextauth?.token as
+      | { role?: string; companyId?: string | null }
+      | undefined
+
+    // Si intenta acceder al dashboard y NO tiene companyId, lo llevamos a onboarding
+    if (pathname.startsWith("/dashboard")) {
+      if (token && (token.role === "RECRUITER" || token.role === "ADMIN")) {
+        if (!token.companyId) {
+          const url = req.nextUrl.clone()
+          url.pathname = "/onboarding/company" // crea esta ruta si no existe
+          url.searchParams.set("from", pathname)
+          return NextResponse.redirect(url)
+        }
+      }
+    }
+
+    // Puedes añadir aquí logs/auditoría si gustas
+    return NextResponse.next()
   },
   {
-    pages: { signIn: "/signin" }, // usa tu página personalizada
+    // usa tu página personalizada de login; si prefieres la de NextAuth, pon "/api/auth/signin"
+    pages: { signIn: "/signin" },
     callbacks: {
       authorized: ({ token, req }) => {
-        const { pathname } = req.nextUrl;
+        const { pathname } = req.nextUrl
 
-        // Si no hay token (no logueado), solo permitimos rutas públicas
-        if (!token) {
-          // Estas rutas están en matcher, así que si no hay token → false (redirige a /signin)
-          return false;
-        }
+        // No logueado → no pasa a las rutas protegidas
+        if (!token) return false
 
-        // Con token → validamos rol en /dashboard
+        // /dashboard: requiere RECRUITER o ADMIN
         if (pathname.startsWith("/dashboard")) {
-          const role = (token as any).role;
-          return role === "RECRUITER" || role === "ADMIN";
+          const role = (token as any).role
+          return role === "RECRUITER" || role === "ADMIN"
         }
 
-        // /profile: basta con estar logueado
+        // /profile: con estar logueado basta
         if (pathname.startsWith("/profile")) {
-          return true;
+          return true
         }
 
-        // Cualquier otra ruta no listada en matcher → ignorada por el middleware
-        return true;
+        // Cualquier otra ruta listada en matcher, si llegara a existir
+        return true
       },
     },
   }
-);
+)
 
-// Limita el middleware a estas rutas:
+// Limita el middleware a estas rutas protegidas (no afecta /api)
 export const config = {
   matcher: ["/dashboard/:path*", "/profile/:path*"],
-};
+}

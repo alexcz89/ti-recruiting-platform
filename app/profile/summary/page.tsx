@@ -9,7 +9,7 @@ export const metadata = { title: "Resumen de perfil | Bolsa TI" };
 export default async function ProfileSummaryPage({
   searchParams,
 }: {
-  searchParams?: { updated?: string };
+  searchParams?: { updated?: string; applied?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/signin?callbackUrl=/profile/summary");
@@ -28,20 +28,29 @@ export default async function ProfileSummaryPage({
       linkedin: true,
       github: true,
       resumeUrl: true,
-      frontend: true,
-      backend: true,
-      mobile: true,
-      cloud: true,
-      database: true,
-      cybersecurity: true,
-      testing: true,
-      ai: true,
+      skills: true,          // ✅ unificada
       certifications: true,
     },
   });
 
-  if (!me) redirect("/profile"); // crea el perfil primero
+  if (!me) redirect("/profile/edit");
   if (me.role !== "CANDIDATE") redirect("/dashboard");
+
+  // Mis postulaciones (opcional, si ya lo habías agregado)
+  const myApps = await prisma.application.findMany({
+    where: { candidateId: me.id },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    include: {
+      job: {
+        select: {
+          id: true,
+          title: true,
+          company: { select: { name: true } },
+        },
+      },
+    },
+  });
 
   const Pill = ({ children }: { children: React.ReactNode }) => (
     <span className="inline-block text-xs bg-gray-100 rounded-full px-2 py-1 mr-2 mb-2">
@@ -49,23 +58,29 @@ export default async function ProfileSummaryPage({
     </span>
   );
 
-  const List = ({ items }: { items?: string[] | null }) =>
-    items && items.length ? (
-      <div className="mt-2">
-        {items.map((s) => (
-          <Pill key={s}>{s}</Pill>
-        ))}
-      </div>
-    ) : (
-      <p className="text-sm text-zinc-500">—</p>
-    );
+  const appliedMsg =
+    searchParams?.applied === "1"
+      ? { text: "¡Postulación enviada! 🎉", tone: "emerald" }
+      : searchParams?.applied === "existing"
+      ? { text: "Ya habías postulado a esta vacante.", tone: "amber" }
+      : null;
 
   return (
     <main className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Banner opcional si vienes de guardar con ?updated=1 */}
       {searchParams?.updated === "1" && (
         <div className="border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm rounded-xl px-3 py-2">
           Perfil actualizado correctamente.
+        </div>
+      )}
+      {appliedMsg && (
+        <div
+          className={`border text-sm rounded-xl px-3 py-2 ${
+            appliedMsg.tone === "emerald"
+              ? "border-emerald-300 bg-emerald-50 text-emerald-800"
+              : "border-amber-300 bg-amber-50 text-amber-800"
+          }`}
+        >
+          {appliedMsg.text}
         </div>
       )}
 
@@ -78,7 +93,7 @@ export default async function ProfileSummaryPage({
         </div>
         <div className="flex items-center gap-2">
           <a
-            href="/profile"
+            href="/profile/edit"
             className="text-sm border rounded-xl px-3 py-2"
             title="Editar mi perfil"
           >
@@ -147,51 +162,66 @@ export default async function ProfileSummaryPage({
 
         <div className="border rounded-xl p-4">
           <h2 className="font-semibold">Certificaciones</h2>
-          <List items={me.certifications} />
+          {me.certifications?.length ? (
+            <div className="mt-2">
+              {me.certifications.map((c) => (
+                <Pill key={c}>{c}</Pill>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">—</p>
+          )}
         </div>
       </section>
 
       <section className="border rounded-xl p-4">
         <h2 className="font-semibold">Skills</h2>
-        <div className="mt-3 grid md:grid-cols-2 gap-4">
-          <div>
-            <div className="text-sm font-medium">Frontend</div>
-            <List items={me.frontend} />
+        {me.skills?.length ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {me.skills.map((s) => (
+              <Pill key={s}>{s}</Pill>
+            ))}
           </div>
-          <div>
-            <div className="text-sm font-medium">Backend</div>
-            <List items={me.backend} />
-          </div>
-          <div>
-            <div className="text-sm font-medium">Móviles</div>
-            <List items={me.mobile} />
-          </div>
-          <div>
-            <div className="text-sm font-medium">Cloud</div>
-            <List items={me.cloud} />
-          </div>
-          <div>
-            <div className="text-sm font-medium">Bases de datos</div>
-            <List items={me.database} />
-          </div>
-          <div>
-            <div className="text-sm font-medium">Ciberseguridad</div>
-            <List items={me.cybersecurity} />
-          </div>
-          <div>
-            <div className="text-sm font-medium">Testing / QA</div>
-            <List items={me.testing} />
-          </div>
-          <div>
-            <div className="text-sm font-medium">IA / ML</div>
-            <List items={me.ai} />
-          </div>
-        </div>
+        ) : (
+          <p className="text-sm text-zinc-500 mt-2">—</p>
+        )}
       </section>
 
-      <div>
+      {/* Mis postulaciones (si quieres mostrarlo aquí) */}
+      <section className="border rounded-xl p-4">
+        <h2 className="font-semibold mb-2">Mis postulaciones</h2>
+        {myApps.length === 0 ? (
+          <p className="text-sm text-zinc-500">Aún no has postulado a ninguna vacante.</p>
+        ) : (
+          <ul className="space-y-2">
+            {myApps.map((a) => (
+              <li key={a.id} className="border rounded-lg p-3">
+                <div className="text-sm font-medium">
+                  {a.job?.title ?? "—"} — {a.job?.company?.name ?? "—"}
+                </div>
+                <div className="text-xs text-zinc-500">
+                  {new Date(a.createdAt).toLocaleDateString()}
+                </div>
+                <div className="mt-2">
+                  <a
+                    href={`/jobs/${a.job?.id}`}
+                    className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                  >
+                    Ver vacante
+                  </a>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="flex items-center gap-3">
         <a href="/jobs" className="text-sm text-blue-600 hover:underline">
           ← Buscar vacantes
+        </a>
+        <a href="/profile/edit" className="text-sm text-blue-600 hover:underline">
+          Editar mi perfil
         </a>
       </div>
     </main>
