@@ -1,3 +1,7 @@
+// =========================================================
+// Prisma Schema
+// =========================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,6 +11,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// =========================
+// Enums
+// =========================
 enum Role {
   ADMIN
   RECRUITER
@@ -34,6 +41,12 @@ enum ApplicationStatus {
   OFFER
   HIRED
   REJECTED
+}
+
+// Catálogo: tipo de término
+enum TaxonomyKind {
+  SKILL
+  CERTIFICATION
 }
 
 // =========================
@@ -74,10 +87,15 @@ model User {
   github    String?
   resumeUrl String?
 
-  // ✅ Lista unificada de skills (para tu nuevo combobox)
+  // Lista unificada de skills (simple, rápida)
   skills String[] @default([])
 
+  // Certificaciones (simple)
   certifications String[] @default([])
+
+  // Relaciones opcionales a catálogo detallado
+  candidateSkills      CandidateSkill[]
+  candidateCredentials CandidateCredential[]
 
   recruiterProfile RecruiterProfile?
 }
@@ -97,7 +115,12 @@ model Job {
   employmentType EmploymentType
   seniority      Seniority
   description    String
-  skills         String[]    // ✅ ya presente
+
+  // Lista simple para búsquedas rápidas
+  skills String[]
+
+  // Relación opcional a catálogo para “obligatorio/deseable”
+  requiredSkills JobRequiredSkill[]
 
   salaryMin Int?
   salaryMax Int?
@@ -200,4 +223,74 @@ model AuditLog {
   target    String?
   meta      Json?
   createdAt DateTime @default(now())
+}
+
+// =========================================================
+// Catálogo editable de skills / certificaciones
+// =========================================================
+model TaxonomyTerm {
+  id          String       @id @default(cuid())
+  kind        TaxonomyKind
+  slug        String
+  label       String
+  aliases     String[]     @default([])
+  description String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relaciones
+  requiredByJobs  JobRequiredSkill[]
+  candidateSkills CandidateSkill[]
+  candidateCreds  CandidateCredential[]
+
+  @@unique([kind, slug])
+  @@index([kind])
+}
+
+// Vacante ↔ Skill (obligatorio/deseable)
+model JobRequiredSkill {
+  id     String  @id @default(cuid())
+  jobId  String
+  termId String
+  must   Boolean @default(true) // true = obligatorio, false = deseable
+  weight Int? // opcional para ordenar/score
+
+  job  Job          @relation(fields: [jobId], references: [id])
+  term TaxonomyTerm @relation(fields: [termId], references: [id])
+
+  @@unique([jobId, termId])
+  @@index([termId])
+}
+
+// Candidato ↔ Skill (detalle opcional)
+model CandidateSkill {
+  id     String @id @default(cuid())
+  userId String
+  termId String
+  level  Int? // 1–5
+  years  Int? // años de experiencia aprox
+
+  user User         @relation(fields: [userId], references: [id])
+  term TaxonomyTerm @relation(fields: [termId], references: [id])
+
+  @@unique([userId, termId])
+  @@index([termId])
+}
+
+// Candidato ↔ Certificación (con metadatos)
+model CandidateCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  termId       String
+  issuer       String?
+  issuedAt     DateTime?
+  expiresAt    DateTime?
+  credentialId String?
+  url          String?
+
+  user User         @relation(fields: [userId], references: [id])
+  term TaxonomyTerm @relation(fields: [termId], references: [id])
+
+  @@index([termId])
+  @@index([userId, termId])
 }
