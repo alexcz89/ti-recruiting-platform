@@ -1,0 +1,21 @@
+ El volumen de la unidad C no tiene etiqueta.
+ El n£mero de serie del volumen es: 5E9F-64C8
+
+ Directorio de C:\Users\Alejandro\Desktop\HUZKIT\ti-recruiting-nextjs-starter\components
+
+25/09/2025  03:38 p. m.    <DIR>          .
+25/09/2025  03:38 p. m.    <DIR>          ..
+22/09/2025  11:13 a. m.             1,046 AvatarBubble.tsx
+17/09/2025  05:46 p. m.    <DIR>          dashboard
+25/09/2025  03:31 p. m.    <DIR>          form
+22/09/2025  12:06 p. m.             5,310 Header.tsx
+22/09/2025  11:12 a. m.             1,899 JobSearchBar.tsx
+24/09/2025  07:57 p. m.             5,065 LocationAutocomplete.tsx
+25/09/2025  03:38 p. m.                 0 printit.txt
+25/09/2025  03:27 p. m.               732 Providers.tsx
+09/09/2025  01:26 p. m.               298 SignInButton.tsx
+09/09/2025  12:36 p. m.               314 SignOutButton.tsx
+22/09/2025  10:25 p. m.             1,956 ThemeProvider.tsx
+22/09/2025  10:26 p. m.               532 ThemeToggle.tsx
+              10 archivos         17,152 bytes
+               4 dirs  20,124,512,256 bytes libres

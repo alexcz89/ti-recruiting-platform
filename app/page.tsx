@@ -1,56 +1,158 @@
 // app/page.tsx
 import Link from "next/link"
+import JobSearchBar from "@/components/JobSearchBar"
+import AvatarBubble from "@/components/AvatarBubble"
 
 export default function Home() {
   return (
-    <main className="max-w-5xl mx-auto px-6 py-16">
-      <h1 className="text-3xl font-bold mb-8">Plataforma de Reclutamiento TI</h1>
+    <main className="min-h-screen bg-gradient-to-b from-[#071A1F] via-[#08252C] to-[#0A2F38] text-white">
+      {/* Hero */}
+      <section className="relative">
+        <div className="mx-auto max-w-6xl px-6 pt-16 pb-10 lg:pt-20">
+          <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:gap-14">
+            {/* Copy */}
+            <div className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs ring-1 ring-white/15">
+                <span className="text-emerald-300">Nuevo</span>
+                <span className="text-white/70">Postula con un clic y gestiona en Kanban</span>
+              </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Reclutadores */}
-        <section className="border rounded-2xl p-6 bg-white">
-          <h2 className="text-xl font-semibold">Soy reclutador</h2>
-          <p className="text-sm text-zinc-600 mt-2">
-            Publica vacantes, gestiona postulaciones en Kanban y contacta talento.
-          </p>
-          <div className="mt-4 flex gap-3">
-            <Link
-              href="/signin?role=RECRUITER"
-              className="border rounded-xl px-4 py-2 hover:bg-gray-50"
-            >
-              Iniciar sesión
-            </Link>
-            <Link
-              href="/signin?role=RECRUITER&signup=1"
-              className="border rounded-xl px-4 py-2 hover:bg-gray-50"
-            >
-              Crear cuenta
-            </Link>
-          </div>
-        </section>
+              <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
+                Plataforma de Reclutamiento TI
+              </h1>
+              <p className="mt-3 text-white/80">
+                Conecta talento con empresas. Publica vacantes, busca candidatos y lleva tus procesos
+                en un tablero Kanban simple y potente.
+              </p>
 
-        {/* Talento / Candidatos */}
-        <section className="border rounded-2xl p-6 bg-white">
-          <h2 className="text-xl font-semibold">Soy talento</h2>
-          <p className="text-sm text-zinc-600 mt-2">
-            Crea tu perfil, sube tu CV y postúlate a vacantes.
-          </p>
-          <div className="mt-4 flex gap-3">
-            <Link
-              href="/signin?role=CANDIDATE"
-              className="border rounded-xl px-4 py-2 hover:bg-gray-50"
-            >
-              Iniciar sesión
-            </Link>
-            <Link
-              href="/signin?role=CANDIDATE&signup=1"
-              className="border rounded-xl px-4 py-2 hover:bg-gray-50"
-            >
-              Crear cuenta
-            </Link>
+              {/* CTAs rápidos */}
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link
+                  href="/jobs"
+                  className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#042229] hover:bg-emerald-300"
+                >
+                  Ver vacantes
+                </Link>
+                <Link
+                  href="/signin?role=CANDIDATE&signup=1"
+                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                >
+                  Crear cuenta (Candidato)
+                </Link>
+                <Link
+                  href="/signin?role=RECRUITER&signup=1"
+                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                >
+                  Crear cuenta (Reclutador)
+                </Link>
+              </div>
+            </div>
+
+            {/* Avatares “hero” */}
+            <div className="flex w-full flex-1 justify-center gap-6 lg:justify-end">
+              <AvatarBubble emoji="🧑‍💻" label="Talento TI" color="emerald" />
+              <AvatarBubble emoji="🧑‍💼" label="Reclutador" color="violet" />
+              <AvatarBubble emoji="🤝" label="Match" color="sky" className="hidden sm:block" />
+            </div>
           </div>
-        </section>
-      </div>
+
+          {/* Buscador */}
+          <div className="mt-8">
+            <JobSearchBar />
+          </div>
+        </div>
+      </section>
+
+      {/* Dos caminos: Soy reclutador / Soy talento */}
+      <section className="mx-auto max-w-6xl px-6 pb-16">
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Reclutadores */}
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-400/90 text-[#081F26]">
+                👔
+              </div>
+              <h2 className="text-lg font-semibold">Soy reclutador</h2>
+            </div>
+            <p className="mt-2 text-sm text-white/80">
+              Publica vacantes, gestiona postulaciones en Kanban y contacta talento de forma directa.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/signin?role=RECRUITER"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                href="/signin?role=RECRUITER&signup=1"
+                className="rounded-xl bg-violet-400 px-4 py-2 text-sm font-semibold text-[#082B33] hover:bg-violet-300"
+              >
+                Crear cuenta
+              </Link>
+            </div>
+          </div>
+
+          {/* Candidatos */}
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-400/90 text-[#081F26]">
+                💼
+              </div>
+              <h2 className="text-lg font-semibold">Soy talento</h2>
+            </div>
+            <p className="mt-2 text-sm text-white/80">
+              Crea tu perfil, sube tu CV, selecciona tus skills y postúlate a vacantes en segundos.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/signin?role=CANDIDATE"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                href="/signin?role=CANDIDATE&signup=1"
+                className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#042229] hover:bg-emerald-300"
+              >
+                Crear cuenta
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Highlights cortos */}
+      <section className="mx-auto max-w-6xl px-6 pb-20">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="text-2xl">⚡</div>
+            <h3 className="mt-2 font-semibold">Postulación rápida</h3>
+            <p className="mt-1 text-sm text-white/75">
+              Aplica con un clic y gestiona tu perfil con skills buscables.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="text-2xl">🎯</div>
+            <h3 className="mt-2 font-semibold">Búsqueda precisa</h3>
+            <p className="mt-1 text-sm text-white/75">
+              Filtra por título, tecnología y ubicación. Encuentra el mejor match.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+            <div className="text-2xl">📊</div>
+            <h3 className="mt-2 font-semibold">Kanban de procesos</h3>
+            <p className="mt-1 text-sm text-white/75">
+              Visualiza el pipeline de cada vacante y avanza candidatos sin fricción.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer mínimo */}
+      <footer className="border-t border-white/10 py-8 text-center text-xs text-white/60">
+        © {new Date().getFullYear()} Bolsa TI — Todos los derechos reservados.
+      </footer>
     </main>
   )
 }

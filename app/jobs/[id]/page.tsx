@@ -1,8 +1,8 @@
 // app/jobs/[id]/page.tsx
-import { prisma } from "@/lib/prisma"
-import { notFound, redirect } from "next/navigation"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { prisma } from "@/lib/prisma";
+import { notFound } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export default async function JobDetail({ params }: { params: { id: string } }) {
   // 1) Cargar la vacante con la relación a Company
@@ -20,42 +20,48 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
       updatedAt: true,
       company: { select: { name: true } },
     },
-  })
-  if (!job) notFound()
+  });
+  if (!job) notFound();
 
-  // 2) Leer sesión (si existe) para decidir qué botón mostrar
-  const session = await getServerSession(authOptions)
-  const role = (session?.user as any)?.role
-  const isCandidate = role === "CANDIDATE"
+  // 2) Leer sesión (si existe) para decidir qué UI mostrar
+  const session = await getServerSession(authOptions);
+  const role = (session?.user as any)?.role;
+  const isCandidate = role === "CANDIDATE";
 
-  // 3) Server Action para postularse
+  // 3) Server Action para postularse (sin carta ni CV)
   async function applyAction() {
-    "use server"
-    const s = await getServerSession(authOptions)
+    "use server";
+    const s = await getServerSession(authOptions);
 
-    if (!s?.user) {
-      redirect(`/signin?role=CANDIDATE&callbackUrl=/jobs/${params.id}`)
+    // Sin sesión → pedir login como candidato
+    if (!s?.user?.email) {
+      return {
+        error: "AUTH",
+        signinUrl: `/signin?role=CANDIDATE&callbackUrl=/jobs/${params.id}`,
+      } as const;
     }
-    if ((s.user as any).role !== "CANDIDATE") {
-      // Solo candidatos pueden postular
-      redirect("/")
+
+    // Solo candidatos pueden postular
+    if ((s.user as any)?.role !== "CANDIDATE") {
+      return { error: "ROLE", message: "Solo candidatos pueden postular" } as const;
     }
 
     // Ubicar candidateId por email de sesión
     const candidate = await prisma.user.findUnique({
       where: { email: s.user.email! },
       select: { id: true },
-    })
-    if (!candidate) redirect("/")
+    });
+    if (!candidate) {
+      return { error: "UNKNOWN", message: "Usuario no encontrado" } as const;
+    }
 
     // Evitar duplicados
     const existing = await prisma.application.findFirst({
       where: { jobId: params.id, candidateId: candidate.id },
       select: { id: true },
-    })
+    });
     if (existing) {
-      // Ya postuló; regresa al resumen con aviso
-      redirect("/profile/summary?applied=existing")
+      return { ok: true, redirect: "/profile/summary?applied=existing" } as const;
     }
 
     await prisma.application.create({
@@ -64,10 +70,9 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
         candidateId: candidate.id,
         status: "SUBMITTED",
       },
-    })
+    });
 
-    // Éxito
-    redirect("/profile/summary?applied=1")
+    return { ok: true, redirect: "/profile/summary?applied=1" } as const;
   }
 
   return (
@@ -100,11 +105,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
 
       <footer className="pt-4">
         {isCandidate ? (
-          <form action={applyAction}>
-            <button className="border rounded-xl px-4 py-2 hover:bg-gray-50">
-              Postularme
-            </button>
-          </form>
+          <ApplyButton applyAction={applyAction} />
         ) : (
           <a
             href={`/signin?role=CANDIDATE&callbackUrl=/jobs/${job.id}`}
@@ -115,5 +116,59 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
         )}
       </footer>
     </main>
-  )
+  );
+}
+
+/* ===================== CLIENT ===================== */
+"use client";
+
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
+
+function ApplyButton({
+  applyAction,
+}: {
+  applyAction: () => Promise<
+    | { ok: true; redirect: string }
+    | { error: "AUTH"; signinUrl: string }
+    | { error: "ROLE"; message: string }
+    | { error: "UNKNOWN"; message?: string }
+  >;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  const onClick = () => {
+    startTransition(async () => {
+      const res = await applyAction();
+
+      if ("ok" in res && res.ok) {
+        toast.success("Postulación enviada");
+        router.push(res.redirect);
+        return;
+      }
+
+      if (res.error === "AUTH") {
+        toast.message("Inicia sesión para postular");
+        window.location.href = res.signinUrl;
+        return;
+      }
+      if (res.error === "ROLE") {
+        toast.error(res.message || "No autorizado");
+        return;
+      }
+      toast.error(res.message || "No se pudo postular");
+    });
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={pending}
+      className="border rounded-xl px-4 py-2 disabled:opacity-60 hover:bg-gray-50"
+    >
+      {pending ? "Postulando..." : "Postularme"}
+    </button>
+  );
 }

@@ -1,0 +1,20 @@
+ El volumen de la unidad C no tiene etiqueta.
+ El n£mero de serie del volumen es: 5E9F-64C8
+
+ Directorio de C:\Users\Alejandro\Desktop\HUZKIT\ti-recruiting-nextjs-starter\app
+
+25/09/2025  03:41 p. m.    <DIR>          .
+25/09/2025  03:41 p. m.    <DIR>          ..
+24/09/2025  01:08 p. m.    <DIR>          api
+09/09/2025  04:57 p. m.    <DIR>          codex
+22/09/2025  10:54 p. m.    <DIR>          components
+23/09/2025  04:17 p. m.    <DIR>          dashboard
+23/09/2025  10:25 a. m.               941 globals.css
+10/09/2025  12:42 p. m.    <DIR>          jobs
+25/09/2025  03:26 p. m.             5,933 layout.tsx
+22/09/2025  06:19 p. m.             6,918 page.tsx
+25/09/2025  03:41 p. m.                 0 printit.txt
+18/09/2025  12:12 p. m.    <DIR>          profile
+09/09/2025  03:43 p. m.    <DIR>          signin
+               4 archivos         13,792 bytes
+               9 dirs  20,121,870,336 bytes libres

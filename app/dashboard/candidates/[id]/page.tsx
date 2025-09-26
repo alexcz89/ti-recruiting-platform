@@ -1,4 +1,3 @@
-// app/dashboard/candidates/[id]/page.tsx
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { redirect, notFound } from "next/navigation"
@@ -61,7 +60,14 @@ export default async function CandidateDetailPage({
           id: true,
           status: true,
           createdAt: true,
-          job: { select: { id: true, title: true, company: { select: { name: true } } } },
+          job: {
+            select: {
+              id: true,
+              title: true,
+              skills: true, // 👈 necesitamos los skills de la vacante para saber cuáles son "Req"
+              company: { select: { name: true } },
+            },
+          },
         },
         take: 10,
       })
@@ -80,8 +86,14 @@ export default async function CandidateDetailPage({
   const fromJobId = searchParams?.jobId
 
   // UI helpers
-  const Pill = ({ children }: { children: React.ReactNode }) => (
-    <span className="inline-block text-xs bg-gray-100 rounded-full px-2 py-1 mr-2 mb-2">
+  const Pill = ({ children, highlight = false }: { children: React.ReactNode; highlight?: boolean }) => (
+    <span
+      className={
+        highlight
+          ? "inline-block text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5 mr-2 mb-2"
+          : "inline-block text-[11px] bg-gray-50 text-zinc-700 border rounded-full px-2 py-0.5 mr-2 mb-2"
+      }
+    >
       {children}
     </span>
   )
@@ -101,6 +113,46 @@ export default async function CandidateDetailPage({
         `Hola ${candidate.name ?? ""}, te contacto por una oportunidad laboral.`
       )}`
     : null
+
+  // Helper simple para PDFs
+  const pdfSrc = candidate.resumeUrl
+    ? `${candidate.resumeUrl}${candidate.resumeUrl.includes("#") ? "" : "#toolbar=1&navpanes=0&scrollbar=1"}`
+    : null
+
+  // Helper: calcula snapshot de hasta 4 skills priorizando matches REQUERIDOS (Req: <skill>)
+  function buildRequiredSnapshot(jobSkills: string[] | null | undefined, candSkills: string[] | null | undefined) {
+    const reqNames = new Set(
+      (jobSkills || [])
+        .filter(s => s.toLowerCase().startsWith("req:"))
+        .map(s => s.slice(4).trim().toLowerCase())
+        .filter(Boolean)
+    )
+    const cand = (candSkills || [])
+
+    // matches (requeridos ∩ candidato), preserva casing del candidato
+    const matches: string[] = []
+    const seen = new Set<string>()
+    for (const s of cand) {
+      const key = s.toLowerCase()
+      if (!seen.has(key) && reqNames.has(key)) {
+        matches.push(s)
+        seen.add(key)
+      }
+    }
+
+    // si faltan hasta 4, completa con otros skills del candidato (no requeridos)
+    const others: string[] = []
+    for (const s of cand) {
+      const key = s.toLowerCase()
+      if (!seen.has(key)) {
+        others.push(s)
+        seen.add(key)
+      }
+      if (matches.length + others.length >= 4) break
+    }
+
+    return { matches: matches.slice(0, 4), others: others.slice(0, Math.max(0, 4 - matches.length)) }
+  }
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-6">
@@ -220,6 +272,44 @@ export default async function CandidateDetailPage({
             </div>
           </div>
 
+          {/* 🔎 Preview embebido del CV */}
+          {candidate.resumeUrl && (
+            <div className="border rounded-xl p-4">
+              <h2 className="font-semibold">CV</h2>
+              <div className="mt-3 overflow-hidden rounded-lg border bg-gray-50">
+                <div className="relative w-full" style={{ height: "70vh" }}>
+                  <iframe
+                    src={pdfSrc!}
+                    title="Vista previa del CV"
+                    className="absolute inset-0 h-full w-full"
+                  />
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <a
+                  href={candidate.resumeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                >
+                  Abrir en nueva pestaña
+                </a>
+                <a
+                  href={candidate.resumeUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  download
+                  className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                >
+                  Descargar
+                </a>
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                Si el visor no carga, el sitio del CV podría bloquear la inserción. Usa “Abrir en nueva pestaña”.
+              </p>
+            </div>
+          )}
+
           <div className="border rounded-xl p-4">
             <h2 className="font-semibold">Certificaciones</h2>
             <List items={candidate.certifications} />
@@ -238,38 +328,55 @@ export default async function CandidateDetailPage({
             <p className="text-sm text-zinc-500">—</p>
           ) : (
             <ul className="space-y-3">
-              {myApps.map((a) => (
-                <li key={a.id} className="border rounded-lg p-3">
-                  <div className="text-sm font-medium">
-                    {a.job?.title} — {a.job?.company?.name ?? "—"}
-                  </div>
-                  <div className="text-xs text-zinc-500">
-                    Estado: {a.status} · {new Date(a.createdAt).toLocaleDateString()}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <a
-                      href={`/dashboard/messages?applicationId=${a.id}`}
-                      className="border rounded px-2 py-1 text-xs"
-                      title="Abrir mensajes"
-                    >
-                      Mensajes
-                    </a>
-                    <Link
-                      href={`/dashboard/jobs/${a.job?.id}/applications`}
-                      className="border rounded px-2 py-1 text-xs hover:bg-gray-50"
-                      title="Ver postulaciones de esta vacante"
-                    >
-                      Ver vacante
-                    </Link>
-                  </div>
-                </li>
-              ))}
+              {myApps.map((a) => {
+                // Construir snapshot priorizando skills requeridos que el candidato sí tiene
+                const { matches, others } = buildRequiredSnapshot(a.job?.skills, candidate.skills)
+                const show = [...matches, ...others].slice(0, 4)
+
+                return (
+                  <li key={a.id} className="border rounded-lg p-3">
+                    <div className="text-sm font-medium">
+                      {a.job?.title} — {a.job?.company?.name ?? "—"}
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      Estado: {a.status} · {new Date(a.createdAt).toLocaleDateString()}
+                    </div>
+
+                    {/* 👇 Snapshot: requeridos (match) resaltados */}
+                    {show.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {show.map((s) => (
+                          <Pill key={s} highlight={matches.includes(s)}>
+                            {s}
+                          </Pill>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <a
+                        href={`/dashboard/messages?applicationId=${a.id}`}
+                        className="border rounded px-2 py-1 text-xs"
+                        title="Abrir mensajes"
+                      >
+                        Mensajes
+                      </a>
+                      <Link
+                        href={`/dashboard/jobs/${a.job?.id}/applications`}
+                        className="border rounded px-2 py-1 text-xs hover:bg-gray-50"
+                        title="Ver postulaciones de esta vacante"
+                      >
+                        Ver vacante
+                      </Link>
+                    </div>
+                  </li>
+                )
+              })}
             </ul>
           )}
         </aside>
       </div>
 
-      {/* Fallback de regreso cuando no venimos desde job */}
       {!fromJobId && (
         <div>
           <Link href="/dashboard/jobs" className="text-sm text-blue-600 hover:underline">

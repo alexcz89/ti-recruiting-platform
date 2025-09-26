@@ -28,15 +28,15 @@ export default async function ProfileSummaryPage({
       linkedin: true,
       github: true,
       resumeUrl: true,
-      skills: true,          // ✅ unificada
-      certifications: true,
+      skills: true,           // ✅ unificada
+      certifications: true,   // ✅ unificada
     },
   });
 
   if (!me) redirect("/profile/edit");
   if (me.role !== "CANDIDATE") redirect("/dashboard");
 
-  // Mis postulaciones (opcional, si ya lo habías agregado)
+  // (Opcional) Mis postulaciones
   const myApps = await prisma.application.findMany({
     where: { candidateId: me.id },
     orderBy: { createdAt: "desc" },
@@ -60,9 +60,9 @@ export default async function ProfileSummaryPage({
 
   const appliedMsg =
     searchParams?.applied === "1"
-      ? { text: "¡Postulación enviada! 🎉", tone: "emerald" }
+      ? { text: "¡Postulación enviada! 🎉", tone: "emerald" as const }
       : searchParams?.applied === "existing"
-      ? { text: "Ya habías postulado a esta vacante.", tone: "amber" }
+      ? { text: "Ya habías postulado a esta vacante.", tone: "amber" as const }
       : null;
 
   return (
@@ -187,7 +187,6 @@ export default async function ProfileSummaryPage({
         )}
       </section>
 
-      {/* Mis postulaciones (si quieres mostrarlo aquí) */}
       <section className="border rounded-xl p-4">
         <h2 className="font-semibold mb-2">Mis postulaciones</h2>
         {myApps.length === 0 ? (

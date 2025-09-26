@@ -27,7 +27,7 @@ export default async function MessagesPage({
 
   const applicationId = searchParams.applicationId;
 
-  // 1) Sin applicationId: muestra un selector de postulaciones del recruiter
+  // 1) Sin applicationId: lista de postulaciones del recruiter
   if (!applicationId) {
     const myApps = await prisma.application.findMany({
       where: { job: { recruiterId: me.id } },
@@ -78,7 +78,7 @@ export default async function MessagesPage({
     where: { id: applicationId },
     include: {
       job: { select: { id: true, title: true, company: true, recruiterId: true } },
-      candidate: { select: { id: true, name: true, email: true, phone: true } }, // ← añadimos phone
+      candidate: { select: { id: true, name: true, email: true, phone: true } },
     },
   });
   if (!app || app.job?.recruiterId !== me.id) {
@@ -93,24 +93,50 @@ export default async function MessagesPage({
   // Server Action: enviar mensaje (recruiter -> candidato)
   async function sendMessageAction(formData: FormData) {
     "use server";
+    const s = await getServerSession(authOptions);
+    if (!s?.user?.email) return { error: "No autenticado" };
+
+    const sender = await prisma.user.findUnique({
+      where: { email: s.user.email },
+      select: { id: true, role: true },
+    });
+    if (!sender || (sender.role !== "RECRUITER" && sender.role !== "ADMIN")) {
+      return { error: "Sin permisos" };
+    }
+
     const body = String(formData.get("body") || "").trim();
-    if (!body) return;
+    if (!body || body.length < 2) {
+      return { error: "El mensaje es muy corto" };
+    }
+    if (body.length > 2000) {
+      return { error: "El mensaje es demasiado largo (máx. 2000)" };
+    }
+
+    // seguridad: la aplicación debe pertenecer al recruiter
+    const appCheck = await prisma.application.findUnique({
+      where: { id: applicationId },
+      select: { candidateId: true, job: { select: { recruiterId: true } } },
+    });
+    if (!appCheck || appCheck.job?.recruiterId !== sender.id) {
+      return { error: "No autorizado para este hilo" };
+    }
 
     await prisma.message.create({
       data: {
         applicationId,
-        fromUserId: me.id,
-        toUserId: app.candidateId,
+        fromUserId: sender.id,
+        toUserId: appCheck.candidateId,
         body,
       },
     });
 
     revalidatePath(`/dashboard/messages?applicationId=${applicationId}`);
+    return { ok: true };
   }
 
   const CandidateLabel = app.candidate?.name || app.candidate?.email || "Candidato";
 
-  // --- WhatsApp link (usa E.164 guardado en user.phone) ---
+  // WhatsApp link (usa E.164 guardado en user.phone)
   const waPhone = app.candidate?.phone ? app.candidate.phone.replace("+", "") : null;
   const waText = encodeURIComponent(
     `Hola ${app.candidate?.name ?? ""}, te contacto por la vacante "${app.job?.title}" de ${app.job?.company}.`
@@ -127,7 +153,6 @@ export default async function MessagesPage({
           </p>
         </div>
 
-        {/* Botón WhatsApp si existe teléfono */}
         {waHref ? (
           <a
             href={waHref}
@@ -164,15 +189,84 @@ export default async function MessagesPage({
         )}
       </div>
 
-      {/* Enviar mensaje */}
-      <form action={sendMessageAction} className="flex gap-2">
-        <input
-          name="body"
-          className="flex-1 border rounded-xl px-3 py-2"
-          placeholder={`Mensaje para ${CandidateLabel}...`}
-        />
-        <button className="border rounded-xl px-4 py-2">Enviar</button>
-      </form>
+      {/* Formulario de envío con RHF + Zod + toasts */}
+      <MessageFormClient candidateLabel={CandidateLabel} onAction={sendMessageAction} />
     </main>
+  );
+}
+
+/* ==================== CLIENT ==================== */
+"use client";
+
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+
+const MessageSchema = z.object({
+  body: z
+    .string()
+    .min(2, "El mensaje es muy corto")
+    .max(2000, "Máximo 2000 caracteres"),
+});
+type MessageInput = z.infer<typeof MessageSchema>;
+
+function MessageFormClient({
+  candidateLabel,
+  onAction,
+}: {
+  candidateLabel: string;
+  onAction: (fd: FormData) => Promise<{ ok?: boolean; error?: string }>;
+}) {
+  const {
+    register,
+    handleSubmit,
+    setError,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<MessageInput>({
+    resolver: zodResolver(MessageSchema),
+    defaultValues: { body: "" },
+  });
+
+  const onSubmit = async (data: MessageInput) => {
+    const fd = new FormData();
+    fd.set("body", data.body);
+    const res = await onAction(fd);
+
+    if (res?.error) {
+      setError("body", { type: "server", message: res.error });
+      toast.error(res.error);
+      return;
+    }
+
+    toast.success("Mensaje enviado");
+    reset({ body: "" });
+  };
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="flex gap-2">
+      <input
+        {...register("body")}
+        className="flex-1 border rounded-xl px-3 py-2"
+        placeholder={`Mensaje para ${candidateLabel}...`}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            // Ctrl/Cmd + Enter = enviar
+            e.currentTarget.form?.requestSubmit();
+          }
+        }}
+      />
+      <button
+        type="submit"
+        disabled={isSubmitting}
+        className="border rounded-xl px-4 py-2 disabled:opacity-60"
+      >
+        {isSubmitting ? "Enviando..." : "Enviar"}
+      </button>
+      {errors.body && (
+        <p className="ml-2 self-center text-xs text-red-600">{errors.body.message}</p>
+      )}
+    </form>
   );
 }

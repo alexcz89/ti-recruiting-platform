@@ -1,28 +1,29 @@
 // lib/auth.ts
 import { NextAuthOptions } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
-import { PrismaClient } from "@prisma/client"
+import { PrismaClient, Role } from "@prisma/client"
 
 const prisma = new PrismaClient()
 
 export const authOptions: NextAuthOptions = {
+  // ✅ Solo Credentials: sin Google/GitHub
   providers: [
     Credentials({
       name: "Credentials",
       credentials: {
-        email:   { label: "Email", type: "email" },
-        password:{ label: "Password", type: "password" },
-        role:    { label: "Role", type: "text" },      // "RECRUITER" | "CANDIDATE"
-        signup:  { label: "Signup", type: "text" },    // opcional (UX)
+        email:    { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+        // el form debe mandar un hidden input con el rol que intenta usar
+        role:     { label: "Role", type: "text" }, // "RECRUITER" | "CANDIDATE"
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null
 
-        const email = credentials.email.toLowerCase()
-        const intendedRole =
+        const email = credentials.email.toLowerCase().trim()
+        const intendedRole: Role =
           credentials.role === "RECRUITER" ? "RECRUITER" : "CANDIDATE"
 
-        // 1) Busca usuario
+        // 🔐 Busca el usuario por email
         let dbUser = await prisma.user.findUnique({
           where: { email },
           select: {
@@ -31,26 +32,28 @@ export const authOptions: NextAuthOptions = {
           },
         })
 
-        // 2) Si no existe, auto-crear con el rol solicitado (MVP)
+        // ⚠️ IMPORTANTE:
+        // Para employers, la autenticación es SOLO por email/contraseña (este provider).
+        // Aquí no hay OAuth, y si el usuario existe con un rol diferente, se rechaza.
         if (!dbUser) {
+          // Si no existe, lo creamos con el rol solicitado (MVP simple con password "demo").
           dbUser = await prisma.user.create({
             data: {
               email,
               name: email.split("@")[0],
-              passwordHash: "demo",   // MVP: sin validar contraseña real
+              passwordHash: "demo", // ⚠️ MVP: sin verificación de password real
               role: intendedRole,
             },
             select: { id: true, email: true, name: true, role: true, companyId: true },
           })
         } else {
-          // 3) Si ya existe pero su rol NO coincide con lo que intenta loguear → rechaza
+          // Si el usuario existe pero intenta entrar con un rol distinto → rechaza
           if (dbUser.role !== intendedRole) {
-            // hará que NextAuth devuelva CredentialsSignin
             return null
           }
         }
 
-        // 4) Retorna shape que NextAuth pondrá en "user" (primera vez del login)
+        // Retorna el shape que NextAuth usará para firmar el JWT
         return {
           id: dbUser.id,
           name: dbUser.name ?? email.split("@")[0],
@@ -66,7 +69,7 @@ export const authOptions: NextAuthOptions = {
 
   callbacks: {
     async jwt({ token, user }) {
-      // Primer login de la sesión: viene "user" desde authorize()
+      // Primer login: propaga datos del usuario al token
       if (user) {
         token.email = (user as any).email
         ;(token as any).id = (user as any).id
@@ -75,7 +78,7 @@ export const authOptions: NextAuthOptions = {
         return token
       }
 
-      // Renovaciones subsecuentes: asegura id/role/companyId buscando en BD
+      // Renovaciones: sincroniza rol/ids desde BD por seguridad
       const email = token.email as string | undefined
       if (email) {
         const dbUser = await prisma.user.findUnique({
@@ -92,7 +95,6 @@ export const authOptions: NextAuthOptions = {
     },
 
     async session({ session, token }) {
-      // Propaga al cliente lo que necesitamos en todas las páginas/API
       ;(session.user as any).id = (token as any).id ?? null
       ;(session.user as any).role = (token as any).role ?? "CANDIDATE"
       ;(session.user as any).companyId = (token as any).companyId ?? null

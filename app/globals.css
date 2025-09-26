@@ -1,17 +1,43 @@
+/* app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --bg: 255 255 255;
-  --fg: 24 24 27;
+/* Fuente global (usa la variable de Inter que inyecta layout.tsx) */
+html {
+  font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+    sans-serif;
 }
 
-html, body {
-  min-height: 100%;
+/* Reset base */
+* {
+  @apply box-border;
 }
-
 body {
-  color: rgb(var(--fg));
-  background: rgb(var(--bg));
+  @apply min-h-screen antialiased text-zinc-800 bg-gradient-to-br from-brand via-white to-emerald-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 dark:text-zinc-100;
+  margin: 0;
+  padding: 0;
+}
+
+/* Links */
+a {
+  @apply text-blue-600 hover:underline dark:text-blue-400;
+}
+
+/* Botones */
+button {
+  @apply cursor-pointer;
+}
+
+/* Scrollbar estilizada */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-zinc-400/50 rounded-md dark:bg-zinc-700/70;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
 }

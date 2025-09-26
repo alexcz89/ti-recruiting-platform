@@ -50,8 +50,6 @@ enum TaxonomyKind {
 }
 
 // =========================
-// Multiempresa
-// =========================
 model Company {
   id        String   @id @default(cuid())
   name      String
@@ -63,8 +61,6 @@ model Company {
   createdAt DateTime @default(now())
 }
 
-// =========================
-// Usuarios y perfiles
 // =========================
 model User {
   id           String   @id @default(cuid())
@@ -80,7 +76,10 @@ model User {
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
 
-  location  String?
+  location    String?
+  locationLat Float?   // 👈 latitud
+  locationLng Float?   // 👈 longitud
+
   phone     String?
   birthdate DateTime?
   linkedin  String?
@@ -98,10 +97,10 @@ model User {
   candidateCredentials CandidateCredential[]
 
   recruiterProfile RecruiterProfile?
+
+  @@index([locationLat, locationLng])
 }
 
-// =========================
-// Vacantes
 // =========================
 model Job {
   id    String @id @default(cuid())
@@ -111,7 +110,10 @@ model Job {
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
 
-  location       String
+  location    String
+  locationLat Float?   // 👈 latitud
+  locationLng Float?   // 👈 longitud
+
   employmentType EmploymentType
   seniority      Seniority
   description    String
@@ -139,10 +141,9 @@ model Job {
   @@index([title])
   @@index([location])
   @@index([seniority, employmentType])
+  @@index([locationLat, locationLng])
 }
 
-// =========================
-// Postulaciones y Mensajería
 // =========================
 model Application {
   id          String            @id @default(cuid())
@@ -163,8 +164,6 @@ model Application {
 }
 
 // =========================
-// Codex
-// =========================
 model CodexEntry {
   id        String   @id @default(cuid())
   title     String
@@ -180,8 +179,6 @@ model CodexEntry {
   @@index([published, createdAt])
 }
 
-// =========================
-// Perfil de Reclutador
 // =========================
 enum RecruiterStatus {
   PENDING
@@ -202,8 +199,6 @@ model RecruiterProfile {
   user User @relation(fields: [userId], references: [id])
 }
 
-// =========================
-// Mensajes y Auditoría
 // =========================
 model Message {
   id            String   @id @default(cuid())

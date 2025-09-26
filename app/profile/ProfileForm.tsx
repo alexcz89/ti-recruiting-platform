@@ -1,245 +1,268 @@
 // app/profile/ProfileForm.tsx
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import { useForm, useWatch } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
+import { PhoneNumberUtil } from "google-libphonenumber";
+import { toast } from "sonner";
 
-/** ---------------------------
- *  Datos base
- *  --------------------------*/
-const COUNTRIES = [
-  { code: "MX", dial: "52", label: "México (+52)" },
-  { code: "US", dial: "1", label: "Estados Unidos (+1)" },
-  { code: "AR", dial: "54", label: "Argentina (+54)" },
-  { code: "CO", dial: "57", label: "Colombia (+57)" },
-  { code: "ES", dial: "34", label: "España (+34)" },
-];
-
-const RAW_SKILLS = [
-  // Lenguajes
-  "Python","Java","C","C++","C#","Go","Rust","Ruby","PHP","Kotlin","Swift","Dart",
-  "Julia","Scala","R","Perl","Visual Basic .NET","Objective-C","Assembly","Zig",
-  // Web / marcado
-  "HTML","CSS","XML","Markdown","LaTeX","Javascript",".NET",
-  // Runtimes / frameworks backend
-  "Node.js","Django","Flask","FastAPI","Spring Boot","ASP.NET","Ruby on Rails",
-  "Laravel","Symfony","Express.js",
-  // Mobile
-  "React Native","Flutter","Xamarin","Ionic",
-  "Native Android (Java/Kotlin)","Native iOS (Swift/Objective-C)",
-  // Data/ML/Science
-  "TensorFlow","PyTorch","Keras","Scikit-Learn","OpenCV","Apache Spark (MLlib)",
-  "Pandas","NumPy","Matplotlib","Seaborn","SciPy","Plotly","D3.js","MATLAB",
-  "Simulink","Simulink Test",
-  // Cloud / DevOps
-  "AWS","Microsoft Azure","Google Cloud Platform","Docker","Kubernetes","Terraform",
-  "Ansible","Chef","Puppet","Jenkins","GitLab CI/CD","GitHub Actions",
-  // DB/ORM/Query
-  "SQL","MySQL","PostgreSQL","Oracle","SQL Server","MongoDB","Cassandra",
-  "Couchbase","Redis","DynamoDB","Prisma","Hibernate","SQLAlchemy","Entity Framework","GraphQL",
-  // QA / Testing
-  "Selenium","Cypress","Puppeteer","JUnit","NUnit","PyTest","TestNG","Postman","Newman",
-  // Scripting / Others
-  "Bash","PowerShell","LabVIEW","TestStand","VeriStand","dSPACE HIL","Vector CANoe",
-  "Arduino IDE","Raspberry Pi GPIO",
-];
-
-const SKILLS = Array.from(new Set(RAW_SKILLS)).sort((a, b) =>
-  a.localeCompare(b, undefined, { sensitivity: "base" })
-);
-
-/** ---------------------------
- *  Tipos de props
- *  --------------------------*/
+// --------- Tipos / Props ----------
 type Initial = {
-  // nombre separado
   firstName: string;
-  lastName1: string; // paterno
-  lastName2: string; // materno (opcional)
+  lastName1: string;
+  lastName2: string;
   email: string;
-
-  // Teléfono en partes
   phoneCountry: string; // ej "52"
   phoneLocal: string;   // ej "8112345678"
-
   location: string;
   birthdate: string;
   linkedin: string;
   github: string;
-
-  // CV
   resumeUrl: string;
-
-  // Skills unificadas
   skills?: string[];
-  // certificaciones (opcional)
   certifications?: string[];
 };
 
 export default function ProfileForm({
   initial,
+  skillsOptions,
+  certOptions,
   onSubmit,
 }: {
   initial: Initial;
+  skillsOptions: string[];
+  certOptions: string[];
   onSubmit: (fd: FormData) => Promise<any>;
 }) {
-  // Normaliza initial para evitar undefined
-  const normalizedInitial = {
-    ...initial,
-    skills: Array.isArray(initial.skills) ? initial.skills : [],
-    certifications: Array.isArray(initial.certifications) ? initial.certifications : [],
-  };
+  // ---------- PHONE helpers ----------
+  const phoneUtil = PhoneNumberUtil.getInstance();
+  const onlyDigits = (s: string) => s.replace(/\D+/g, "");
+  function buildE164(countryDial: string, localRaw: string): string | null {
+    const localDigits = onlyDigits(localRaw);
+    if (!localDigits) return null;
+    const full = `+${countryDial}${localDigits}`;
+    try {
+      const parsed = phoneUtil.parse(full);
+      if (!phoneUtil.isValidNumber(parsed)) return null;
+      const region = phoneUtil.getRegionCodeForNumber(parsed);
+      const cc = phoneUtil.getCountryCodeForRegion(region);
+      const nsn = phoneUtil.getNationalSignificantNumber(parsed);
+      return `+${cc}${nsn}`;
+    } catch {
+      return null;
+    }
+  }
 
-  const [form, setForm] = useState<typeof normalizedInitial>(normalizedInitial);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  // ---------- Países para teléfono ----------
+  function buildCountryOptions() {
+    const regions = Array.from(phoneUtil.getSupportedRegions()); // ['MX','US',...]
+    const mapped = regions.map((iso) => {
+      const dial = String(phoneUtil.getCountryCodeForRegion(iso));
+      return { code: iso, dial, label: `${iso} (+${dial})` };
+    });
+    const mx = mapped.find((c) => c.code === "MX");
+    const rest = mapped.filter((c) => c.code !== "MX").sort((a, b) => a.code.localeCompare(b.code));
+    return mx ? [mx, ...rest] : rest;
+  }
+  const COUNTRY_OPTIONS = useMemo(buildCountryOptions, []);
 
-  // Si cambian las props initial (SSR → CSR), sincroniza y normaliza
+  // ---------- Zod schema (cliente) ----------
+  const ProfileFormSchema = z.object({
+    firstName: z.string().min(2, "Nombre requerido"),
+    lastName1: z.string().min(2, "Apellido paterno requerido"),
+    lastName2: z.string().optional(),
+    location: z.string().min(2, "Ubicación requerida"),
+    birthdate: z.string().optional(), // la parsea el servidor si hace falta
+    linkedin: z.string().url("URL inválida").optional().or(z.literal("")),
+    github: z.string().url("URL inválida").optional().or(z.literal("")),
+    phoneCountry: z.string().default("52"),
+    phoneLocal: z.string().optional(), // validamos E.164 más abajo (libphonenumber)
+    skills: z.array(z.string()).optional().default([]),
+    certifications: z.array(z.string()).optional().default([]),
+  });
+
+  type FormDataShape = z.infer<typeof ProfileFormSchema>;
+
+  // ---------- RHF ----------
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting },
+    control,
+    reset,
+  } = useForm<FormDataShape>({
+    resolver: zodResolver(ProfileFormSchema),
+    defaultValues: {
+      firstName: initial.firstName ?? "",
+      lastName1: initial.lastName1 ?? "",
+      lastName2: initial.lastName2 ?? "",
+      location: initial.location ?? "",
+      birthdate: initial.birthdate ?? "",
+      linkedin: initial.linkedin ?? "",
+      github: initial.github ?? "",
+      phoneCountry: initial.phoneCountry || "52",
+      phoneLocal: initial.phoneLocal || "",
+      skills: Array.isArray(initial.skills) ? initial.skills : [],
+      certifications: Array.isArray(initial.certifications) ? initial.certifications : [],
+    },
+  });
+
+  // sincroniza si cambian las props (SSR→CSR)
   useEffect(() => {
-    setForm({
-      ...initial,
+    reset({
+      firstName: initial.firstName ?? "",
+      lastName1: initial.lastName1 ?? "",
+      lastName2: initial.lastName2 ?? "",
+      location: initial.location ?? "",
+      birthdate: initial.birthdate ?? "",
+      linkedin: initial.linkedin ?? "",
+      github: initial.github ?? "",
+      phoneCountry: initial.phoneCountry || "52",
+      phoneLocal: initial.phoneLocal || "",
       skills: Array.isArray(initial.skills) ? initial.skills : [],
       certifications: Array.isArray(initial.certifications) ? initial.certifications : [],
     });
-  }, [initial]);
+  }, [initial, reset]);
 
-  const isMX = form.phoneCountry === "52";
-  const normalizeDigits = (s: string) => s.replace(/\D+/g, "");
+  // ---------- Skills & Certs helpers ----------
+  const skills = useWatch({ control, name: "skills" }) || [];
+  const certifications = useWatch({ control, name: "certifications" }) || [];
 
-  function handleChange<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  }
+  const addCI = (arr: string[], value: string) => {
+    const v = value.trim();
+    if (!v) return arr;
+    const exists = arr.some((x) => x.toLowerCase() === v.toLowerCase());
+    return exists ? arr : [...arr, v];
+  };
+  const removeCI = (arr: string[], value: string) =>
+    arr.filter((x) => x.toLowerCase() !== value.toLowerCase());
 
-  /** ----- Skills: búsqueda + selección con chips ----- */
+  // Skills search UI
   const [skillQuery, setSkillQuery] = useState("");
-  const listRef = useRef<HTMLDivElement | null>(null);
-
+  const skillListRef = useRef<HTMLDivElement | null>(null);
   const filteredSkills = useMemo(() => {
     const q = skillQuery.trim().toLowerCase();
-    if (!q) return SKILLS.slice(0, 20);
-    return SKILLS.filter((s) => s.toLowerCase().includes(q)).slice(0, 30);
-  }, [skillQuery]);
+    if (!q) return skillsOptions.slice(0, 20);
+    return skillsOptions.filter((s) => s.toLowerCase().includes(q)).slice(0, 30);
+  }, [skillQuery, skillsOptions]);
 
   function addSkill(s: string) {
-    const existsCI = form.skills!.some((x) => x.toLowerCase() === s.toLowerCase());
-    if (!existsCI) {
-      handleChange("skills", [...(form.skills || []), s]);
-    }
-    setSkillQuery("");
+    setValue("skills", addCI(skills, s), { shouldValidate: true });
   }
-
   function removeSkill(s: string) {
-    handleChange(
-      "skills",
-      (form.skills || []).filter((x) => x.toLowerCase() !== s.toLowerCase())
-    );
+    setValue("skills", removeCI(skills, s), { shouldValidate: true });
   }
-
   function handleSkillsKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if ((e.key === "Enter" || e.key === "Tab") && skillQuery.trim()) {
       e.preventDefault();
       const suggestion = filteredSkills[0];
       addSkill(suggestion || skillQuery.trim());
+      setSkillQuery("");
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
+  // Certs search UI
+  const [certQuery, setCertQuery] = useState("");
+  const certListRef = useRef<HTMLDivElement | null>(null);
+  const filteredCerts = useMemo(() => {
+    const q = certQuery.trim().toLowerCase();
+    if (!q) return certOptions.slice(0, 20);
+    return certOptions.filter((s) => s.toLowerCase().includes(q)).slice(0, 30);
+  }, [certQuery, certOptions]);
 
-    // Validación nombre requerido
-    if (!form.firstName.trim() || !form.lastName1.trim()) {
-      setError("Nombre y Apellido paterno son obligatorios.");
-      return;
+  function addCert(s: string) {
+    setValue("certifications", addCI(certifications, s), { shouldValidate: true });
+  }
+  function removeCert(s: string) {
+    setValue("certifications", removeCI(certifications, s), { shouldValidate: true });
+  }
+  function handleCertsKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if ((e.key === "Enter" || e.key === "Tab") && certQuery.trim()) {
+      e.preventDefault();
+      const suggestion = filteredCerts[0];
+      addCert(suggestion || certQuery.trim());
+      setCertQuery("");
     }
+  }
 
-    setBusy(true);
+  // Archivo de CV
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
-    // Validación teléfono (cliente)
-    const localDigits = normalizeDigits(form.phoneLocal || "");
-    if (isMX && localDigits && localDigits.length !== 10) {
-      setBusy(false);
-      setError("Para México (+52), el número local debe tener exactamente 10 dígitos.");
-      return;
-    }
-    if (!isMX && localDigits && (localDigits.length < 6 || localDigits.length > 15)) {
-      setBusy(false);
-      setError("El número local debe tener entre 6 y 15 dígitos.");
-      return;
+  // Submit
+  const onSubmitRHF = async (vals: FormDataShape) => {
+    clearErrors("root");
+
+    // Validación de teléfono con libphonenumber (si se proporcionó)
+    let phoneE164: string | null = null;
+    if (vals.phoneLocal?.trim()) {
+      phoneE164 = buildE164(vals.phoneCountry || "52", vals.phoneLocal || "");
+      if (!phoneE164) {
+        setError("phoneLocal", { type: "manual", message: "Número inválido para el país seleccionado" });
+        return;
+      }
     }
 
     const fd = new FormData();
+    fd.set("firstName", vals.firstName ?? "");
+    fd.set("lastName1", vals.lastName1 ?? "");
+    fd.set("lastName2", vals.lastName2 ?? "");
+    fd.set("location", vals.location ?? "");
+    fd.set("birthdate", vals.birthdate ?? "");
+    fd.set("linkedin", vals.linkedin ?? "");
+    fd.set("github", vals.github ?? "");
 
-    // Nombre separado → lo compone el server (más confiable)
-    fd.set("firstName", form.firstName ?? "");
-    fd.set("lastName1", form.lastName1 ?? "");
-    fd.set("lastName2", form.lastName2 ?? "");
+    // Teléfono
+    fd.set("phone", phoneE164 || "");
+    fd.set("phoneCountry", vals.phoneCountry || "52");
+    fd.set("phoneLocal", (vals.phoneLocal || "").replace(/\D+/g, ""));
 
-    // Campos simples
-    fd.set("location", form.location ?? "");
-    fd.set("birthdate", form.birthdate ?? "");
-    fd.set("linkedin", form.linkedin ?? "");
-    fd.set("github", form.github ?? "");
+    // Skills & Certs
+    fd.set("skills", (vals.skills || []).join(", "));
+    fd.set("certifications", (vals.certifications || []).join(", "));
 
-    // Si no se sube archivo, aún enviamos el URL para compat
-    if (!resumeFile && form.resumeUrl) {
-      fd.set("resumeUrl", form.resumeUrl);
-    }
-
-    // Teléfono en partes
-    fd.set("phoneCountry", form.phoneCountry || "52");
-    fd.set("phoneLocal", localDigits);
-
-    // Lista única de skills
-    fd.set("skills", (form.skills || []).join(", "));
-
-    // Certificaciones (opcional)
-    fd.set("certifications", (form.certifications || []).join(", "));
-
-    // Archivo CV (opcional)
+    // CV (archivo opcional) o URL actual
     if (resumeFile) {
       fd.set("resume", resumeFile);
+    } else if (initial.resumeUrl) {
+      fd.set("resumeUrl", initial.resumeUrl);
     }
 
     const res = await onSubmit(fd);
-    setBusy(false);
-
     if (res?.error) {
-      setError(res.error);
+      setError("root", { type: "server", message: res.error });
+      toast.error(res.error);
       return;
     }
-    // En éxito, el server hace redirect a /profile/summary?updated=1
-  }
+    toast.success("Perfil actualizado");
+    // el servidor puede redirigir a /profile/summary
+  };
+
+  const phoneCountry = useWatch({ control, name: "phoneCountry" });
+  const isMX = phoneCountry === "52";
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6" encType="multipart/form-data">
+    <form onSubmit={handleSubmit(onSubmitRHF)} className="space-y-6" encType="multipart/form-data">
       {/* Nombre separado */}
       <section className="grid md:grid-cols-3 gap-3">
         <div className="grid gap-1">
           <label className="text-sm">Nombre(s) *</label>
-          <input
-            className="border rounded-xl p-3"
-            value={form.firstName}
-            onChange={(e) => handleChange("firstName", e.target.value)}
-            required
-          />
+          <input className="border rounded-xl p-3" {...register("firstName")} />
+          {errors.firstName && <p className="text-xs text-red-600">{errors.firstName.message}</p>}
         </div>
         <div className="grid gap-1">
           <label className="text-sm">Apellido paterno *</label>
-          <input
-            className="border rounded-xl p-3"
-            value={form.lastName1}
-            onChange={(e) => handleChange("lastName1", e.target.value)}
-            required
-          />
+          <input className="border rounded-xl p-3" {...register("lastName1")} />
+          {errors.lastName1 && <p className="text-xs text-red-600">{errors.lastName1.message}</p>}
         </div>
         <div className="grid gap-1">
           <label className="text-sm">Apellido materno</label>
-          <input
-            className="border rounded-xl p-3"
-            value={form.lastName2}
-            onChange={(e) => handleChange("lastName2", e.target.value)}
-          />
+          <input className="border rounded-xl p-3" {...register("lastName2")} />
         </div>
       </section>
 
@@ -251,95 +274,76 @@ export default function ProfileForm({
           <div className="flex gap-2">
             <select
               className="border rounded-xl p-3 w-44"
-              value={form.phoneCountry}
-              onChange={(e) => handleChange("phoneCountry", e.target.value)}
+              {...register("phoneCountry")}
               title="LADA / Código de país"
               autoComplete="tel-country-code"
             >
-              {COUNTRIES.map((c) => (
-                <option key={c.dial} value={c.dial}>
+              {COUNTRY_OPTIONS.map((c) => (
+                <option key={`${c.code}-${c.dial}`} value={c.dial}>
                   {c.label}
                 </option>
               ))}
             </select>
 
             <input
-              key={isMX ? "tel-mx" : `tel-${form.phoneCountry}`}
               type="tel"
               className="border rounded-xl p-3 flex-1"
               placeholder={isMX ? "10 dígitos (solo números)" : "solo dígitos"}
-              value={form.phoneLocal}
-              onChange={(e) => {
-                const digits = e.target.value.replace(/\D+/g, "");
-                handleChange("phoneLocal", isMX ? digits.slice(0, 10) : digits.slice(0, 15));
-              }}
-              onInput={(e) => {
-                const t = e.currentTarget as HTMLInputElement;
-                const digits = t.value.replace(/\D+/g, "");
-                t.value = isMX ? digits.slice(0, 10) : digits.slice(0, 15);
-              }}
+              {...register("phoneLocal", {
+                onChange: (e) => {
+                  const digits = e.target.value.replace(/\D+/g, "");
+                  e.target.value = digits.slice(0, 15);
+                },
+              })}
               inputMode="numeric"
               autoComplete="tel-national"
-              maxLength={isMX ? 10 : 15}
-              minLength={isMX ? 10 : 6}
-              pattern={isMX ? "\\d{10}" : "\\d{6,15}"}
-              required={Boolean(form.phoneLocal)}
-              aria-invalid={
-                isMX
-                  ? form.phoneLocal.length > 0 && form.phoneLocal.length !== 10
-                  : form.phoneLocal.length > 0 &&
-                    (form.phoneLocal.length < 6 || form.phoneLocal.length > 15)
-              }
             />
           </div>
+          {errors.phoneLocal && <p className="text-xs text-red-600">{errors.phoneLocal.message}</p>}
           <p className="text-xs text-zinc-500">
-            {isMX
-              ? "Para México (+52) deben ser exactamente 10 dígitos."
-              : "Usa de 6 a 15 dígitos según el país."}
+            Guardamos tu teléfono en formato internacional (E.164) para que funcione en WhatsApp.
           </p>
         </div>
 
+        {/* Ubicación con autocomplete */}
         <div className="grid gap-1">
           <label className="text-sm">Ubicación</label>
-          <input
-            className="border rounded-xl p-3"
-            value={form.location}
-            onChange={(e) => handleChange("location", e.target.value)}
-            placeholder="CDMX, Remoto, etc."
+          <LocationAutocomplete
+            value={useWatch({ control, name: "location" }) || ""}
+            onChange={(v) => setValue("location", v, { shouldValidate: true })}
+            countries={["mx"]}
+            className="border rounded-xl p-3 w-full"
+            placeholder="Ciudad (ej. CDMX, Monterrey) o Remoto"
           />
+          {errors.location && <p className="text-xs text-red-600">{errors.location.message}</p>}
         </div>
 
         <div className="grid gap-1">
           <label className="text-sm">Fecha de nacimiento</label>
-          <input
-            type="date"
-            className="border rounded-xl p-3"
-            value={form.birthdate}
-            onChange={(e) => handleChange("birthdate", e.target.value)}
-          />
+          <input type="date" className="border rounded-xl p-3" {...register("birthdate")} />
         </div>
 
         <div className="grid gap-1">
           <label className="text-sm">LinkedIn</label>
           <input
             className="border rounded-xl p-3"
-            value={form.linkedin}
-            onChange={(e) => handleChange("linkedin", e.target.value)}
             placeholder="https://www.linkedin.com/in/tu-perfil"
+            {...register("linkedin")}
           />
+          {errors.linkedin && <p className="text-xs text-red-600">{errors.linkedin.message}</p>}
         </div>
 
         <div className="grid gap-1">
           <label className="text-sm">GitHub</label>
           <input
             className="border rounded-xl p-3"
-            value={form.github}
-            onChange={(e) => handleChange("github", e.target.value)}
             placeholder="https://github.com/tu-usuario"
+            {...register("github")}
           />
+          {errors.github && <p className="text-xs text-red-600">{errors.github.message}</p>}
         </div>
 
-        {/* CV: subir archivo + mostrar enlace actual si existe */}
+        {/* CV */}
         <div className="grid gap-1 md:col-span-2">
           <label className="text-sm">Currículum (PDF/DOC/DOCX)</label>
           <div className="flex items-center gap-3">
@@ -348,9 +352,9 @@ export default function ProfileForm({
               accept=".pdf,.doc,.docx"
               onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
             />
-            {form.resumeUrl ? (
+            {initial.resumeUrl ? (
               <a
-                href={form.resumeUrl}
+                href={initial.resumeUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="text-sm text-blue-600 hover:underline"
@@ -368,25 +372,16 @@ export default function ProfileForm({
         </div>
       </section>
 
-      {/* Skills unificadas */}
+      {/* Skills */}
       <section className="grid gap-2">
-        <label className="text-sm font-semibold">Skills / Tecnologías</label>
+        <label className="text-sm font-semibold">Skills / Tecnologías (opcional)</label>
 
-        {/* Chips seleccionados */}
-        {(form.skills || []).length > 0 ? (
+        {skills.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {(form.skills || []).map((s) => (
-              <span
-                key={s}
-                className="inline-flex items-center gap-1 text-xs bg-gray-100 border rounded-full px-2 py-1"
-              >
+            {skills.map((s) => (
+              <span key={s} className="inline-flex items-center gap-1 text-xs bg-gray-100 border rounded-full px-2 py-1">
                 {s}
-                <button
-                  type="button"
-                  aria-label={`Quitar ${s}`}
-                  className="hover:text-red-600"
-                  onClick={() => removeSkill(s)}
-                >
+                <button type="button" aria-label={`Quitar ${s}`} className="hover:text-red-600" onClick={() => removeSkill(s)}>
                   ×
                 </button>
               </span>
@@ -396,79 +391,123 @@ export default function ProfileForm({
           <p className="text-xs text-zinc-500">Aún no has agregado skills.</p>
         )}
 
-        {/* Buscador de skills */}
-        <div className="relative">
-          <input
-            className="w-full border rounded-xl p-3"
-            placeholder="Busca y selecciona (ej. Python, AWS, React Native...)"
-            value={skillQuery}
-            onChange={(e) => setSkillQuery(e.target.value)}
-            onKeyDown={handleSkillsKeyDown}
-            aria-autocomplete="list"
-            aria-expanded={!!skillQuery}
-            aria-controls="skills-suggestions"
-          />
-          {/* Lista de sugerencias */}
-          {skillQuery && (
-            <div
-              ref={listRef}
-              id="skills-suggestions"
-              className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-xl border bg-white shadow"
-              role="listbox"
-            >
-              {filteredSkills.length === 0 ? (
-                <div className="p-3 text-sm text-zinc-500">Sin resultados</div>
-              ) : (
-                filteredSkills.map((s) => (
-                  <button
-                    type="button"
-                    key={s}
-                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                    onClick={() => addSkill(s)}
-                    role="option"
-                  >
-                    {s}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-zinc-500">
-          Escribe para buscar y presiona Enter/Tab o haz clic en una sugerencia para agregarla.
-        </p>
-      </section>
-
-      {/* Certificaciones (opcional) */}
-      <section className="grid gap-1">
-        <label className="text-sm">Certificaciones</label>
-        <textarea
-          className="border rounded-xl p-3 font-mono"
-          rows={3}
-          value={(form.certifications || []).join(", ")}
-          onChange={(e) =>
-            handleChange(
-              "certifications",
-              e.target.value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean)
-            )
-          }
-          placeholder="AWS SAA, CCNA, Scrum Master"
+        <SkillSearchInput
+          query={skillQuery}
+          setQuery={setSkillQuery}
+          listRef={skillListRef}
+          results={filteredSkills}
+          onPick={(s) => {
+            addSkill(s);
+            setSkillQuery("");
+          }}
+          onKeyDown={handleSkillsKeyDown}
+          placeholder="Busca y selecciona (ej. Python, AWS, React Native...)"
         />
       </section>
 
-      {/* Error */}
-      {error && (
+      {/* Certificaciones */}
+      <section className="grid gap-2">
+        <label className="text-sm font-semibold">Certificaciones (opcional)</label>
+
+        {certifications.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {certifications.map((s) => (
+              <span key={s} className="inline-flex items-center gap-1 text-xs bg-gray-100 border rounded-full px-2 py-1">
+                {s}
+                <button type="button" aria-label={`Quitar ${s}`} className="hover:text-red-600" onClick={() => removeCert(s)}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-500">Aún no has agregado certificaciones.</p>
+        )}
+
+        <SkillSearchInput
+          query={certQuery}
+          setQuery={setCertQuery}
+          listRef={certListRef}
+          results={filteredCerts}
+          onPick={(s) => {
+            addCert(s);
+            setCertQuery("");
+          }}
+          onKeyDown={handleCertsKeyDown}
+          placeholder="Busca y selecciona (ej. AWS SAA, CCNA, Scrum Master...)"
+        />
+      </section>
+
+      {errors.root?.message && (
         <div className="border border-red-300 bg-red-50 text-red-700 text-sm rounded-xl px-3 py-2">
-          {error}
+          {errors.root.message}
         </div>
       )}
 
-      <button disabled={busy} className="border rounded-xl px-4 py-2">
-        {busy ? "Guardando..." : "Guardar cambios"}
+      <button disabled={isSubmitting} className="border rounded-xl px-4 py-2">
+        {isSubmitting ? "Guardando..." : "Guardar cambios"}
       </button>
     </form>
+  );
+}
+
+/** Input + lista reutilizable para skills/certs */
+function SkillSearchInput({
+  query,
+  setQuery,
+  listRef,
+  results,
+  onPick,
+  onKeyDown,
+  placeholder,
+}: {
+  query: string;
+  setQuery: (s: string) => void;
+  listRef: React.MutableRefObject<HTMLDivElement | null>;
+  results: string[];
+  onPick: (s: string) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative">
+      <input
+        className="w-full border rounded-xl p-3"
+        placeholder={placeholder}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={onKeyDown}
+        aria-autocomplete="list"
+        aria-expanded={!!query}
+        aria-controls="skills-suggestions"
+      />
+      {query && (
+        <div
+          ref={listRef}
+          id="skills-suggestions"
+          className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-xl border bg-white shadow"
+          role="listbox"
+        >
+          {results.length === 0 ? (
+            <div className="p-3 text-sm text-zinc-500">Sin resultados</div>
+          ) : (
+            results.map((s) => (
+              <button
+                type="button"
+                key={s}
+                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
+                onClick={() => onPick(s)}
+                role="option"
+              >
+                {s}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      <p className="text-xs text-zinc-500 mt-1">
+        Escribe para buscar y presiona Enter/Tab o haz clic en una sugerencia para agregarla.
+      </p>
+    </div>
   );
 }
