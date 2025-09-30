@@ -4,8 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
-import { formatDistanceToNow } from "date-fns";
-import { es } from "date-fns/locale";
+import { fromNow } from "@/lib/dates"; // ⬅️ helper "hace X"
+import { sendNewMessageEmail } from "@/lib/mailer"; // ⬅️ notificación por nuevo mensaje
 
 export const metadata = { title: "Mis mensajes | Bolsa TI" };
 
@@ -58,10 +58,7 @@ export default async function MyMessagesPage({
                     <div className="text-xs text-zinc-500">
                       Postulada{" "}
                       <time title={new Date(a.createdAt).toLocaleString()}>
-                        {formatDistanceToNow(new Date(a.createdAt), {
-                          addSuffix: true,
-                          locale: es,
-                        })}
+                        {fromNow(a.createdAt)}
                       </time>
                     </div>
                   </div>
@@ -110,16 +107,25 @@ export default async function MyMessagesPage({
 
     const sender = await prisma.user.findUnique({
       where: { email: s.user.email },
-      select: { id: true, role: true },
+      select: { id: true, role: true, name: true, email: true },
     });
     if (!sender || sender.role !== "CANDIDATE") {
       return { error: "Sin permisos" };
     }
 
-    // Verificación de ownership del hilo
+    // Verificación de ownership del hilo + datos para email
     const appCheck = await prisma.application.findUnique({
       where: { id: applicationId },
-      select: { candidateId: true, job: { select: { recruiterId: true } } },
+      select: {
+        candidateId: true,
+        job: {
+          select: {
+            recruiterId: true,
+            title: true,
+            recruiter: { select: { email: true, name: true } },
+          },
+        },
+      },
     });
     if (!appCheck || appCheck.candidateId !== sender.id || !appCheck.job?.recruiterId) {
       return { error: "No autorizado para este hilo" };
@@ -137,6 +143,20 @@ export default async function MyMessagesPage({
         body,
       },
     });
+
+    // 🔔 Email al recruiter con el nuevo mensaje (no bloquea)
+    const recruiterEmail = appCheck.job.recruiter?.email;
+    if (recruiterEmail) {
+      void sendNewMessageEmail({
+        to: recruiterEmail,
+        recipientName: appCheck.job.recruiter?.name || "",
+        fromName: sender.name || sender.email!,
+        jobTitle: appCheck.job.title,
+        applicationId,
+        preview: body,
+        isRecruiterRecipient: true, // destinatario es recruiter
+      });
+    }
 
     revalidatePath(`/profile/messages?applicationId=${applicationId}`);
     return { ok: true };
@@ -164,10 +184,11 @@ export default async function MyMessagesPage({
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div className={`rounded-xl px-3 py-2 text-sm ${mine ? "bg-blue-50" : "bg-gray-100"}`}>
                   <div>{m.body}</div>
-                  <div className="text-[10px] text-zinc-500 mt-1">
-                    <time title={new Date(m.createdAt).toLocaleString()}>
-                      {formatDistanceToNow(new Date(m.createdAt), { addSuffix: true, locale: es })}
-                    </time>
+                  <div
+                    className="text-[10px] text-zinc-500 mt-1"
+                    title={new Date(m.createdAt).toLocaleString()}
+                  >
+                    {fromNow(m.createdAt)}
                   </div>
                 </div>
               </div>
@@ -188,7 +209,7 @@ export default async function MyMessagesPage({
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@/lib/ui/toast";
 
 const MessageSchema = z.object({
   body: z.string().min(2, "El mensaje es muy corto").max(2000, "Máximo 2000 caracteres"),
@@ -220,10 +241,10 @@ function MessageFormClient({
     const res = await onAction(fd);
     if (res?.error) {
       setError("body", { type: "server", message: res.error });
-      toast.error(res.error);
+      toastError(res.error);
       return;
     }
-    toast.success("Mensaje enviado");
+    toastSuccess("Mensaje enviado");
     reset({ body: "" });
   };
 

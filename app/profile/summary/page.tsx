@@ -3,8 +3,20 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { fromNow, formatDate } from "@/lib/dates";
 
 export const metadata = { title: "Resumen de perfil | Bolsa TI" };
+
+// Helper: "mes corto y año" en español (ej. "ene 2024")
+function formatMonthYear(d: Date | string | null | undefined) {
+  if (!d) return "—";
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return "—";
+  // es-MX o es-ES según prefieras. Reemplazo para quitar el punto en abreviaturas.
+  return date
+    .toLocaleDateString("es-MX", { month: "short", year: "numeric" })
+    .replace(".", "");
+}
 
 export default async function ProfileSummaryPage({
   searchParams,
@@ -28,13 +40,27 @@ export default async function ProfileSummaryPage({
       linkedin: true,
       github: true,
       resumeUrl: true,
-      skills: true,           // ✅ unificada
-      certifications: true,   // ✅ unificada
+      skills: true,
+      certifications: true,
     },
   });
 
   if (!me) redirect("/profile/edit");
   if (me.role !== "CANDIDATE") redirect("/dashboard");
+
+  // Historial laboral (más reciente primero)
+  const experiences = await prisma.workExperience.findMany({
+    where: { userId: me.id },
+    orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+    select: {
+      id: true,
+      role: true,
+      company: true,
+      startDate: true,
+      endDate: true,
+      isCurrent: true,
+    },
+  });
 
   // (Opcional) Mis postulaciones
   const myApps = await prisma.application.findMany({
@@ -47,6 +73,7 @@ export default async function ProfileSummaryPage({
           id: true,
           title: true,
           company: { select: { name: true } },
+          updatedAt: true,
         },
       },
     },
@@ -124,14 +151,13 @@ export default async function ProfileSummaryPage({
             <div>Teléfono: {me.phone ?? "—"}</div>
             <div>Ubicación: {me.location ?? "—"}</div>
             <div>
-              Fecha de nacimiento:{" "}
-              {me.birthdate ? new Date(me.birthdate).toLocaleDateString() : "—"}
+              Fecha de nacimiento: {me.birthdate ? formatDate(me.birthdate) : "—"}
             </div>
             <div>
               LinkedIn:{" "}
               {me.linkedin ? (
                 <a
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-600 hover:underline break-all"
                   href={me.linkedin}
                   target="_blank"
                   rel="noreferrer"
@@ -146,7 +172,7 @@ export default async function ProfileSummaryPage({
               GitHub:{" "}
               {me.github ? (
                 <a
-                  className="text-blue-600 hover:underline"
+                  className="text-blue-600 hover:underline break-all"
                   href={me.github}
                   target="_blank"
                   rel="noreferrer"
@@ -187,6 +213,28 @@ export default async function ProfileSummaryPage({
         )}
       </section>
 
+      {/* Historial de trabajo */}
+      <section className="border rounded-xl p-4">
+        <h2 className="font-semibold mb-2">Historial de trabajo</h2>
+        {experiences.length === 0 ? (
+          <p className="text-sm text-zinc-500">Aún no has agregado experiencias.</p>
+        ) : (
+          <ul className="space-y-3">
+            {experiences.map((e) => (
+              <li key={e.id} className="border rounded-lg p-3">
+                <div className="text-sm font-medium">
+                  {e.role} — {e.company}
+                </div>
+                <div className="text-xs text-zinc-600">
+                  {formatMonthYear(e.startDate)} — {e.isCurrent ? "actual" : formatMonthYear(e.endDate)}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* Postulaciones */}
       <section className="border rounded-xl p-4">
         <h2 className="font-semibold mb-2">Mis postulaciones</h2>
         {myApps.length === 0 ? (
@@ -199,7 +247,7 @@ export default async function ProfileSummaryPage({
                   {a.job?.title ?? "—"} — {a.job?.company?.name ?? "—"}
                 </div>
                 <div className="text-xs text-zinc-500">
-                  {new Date(a.createdAt).toLocaleDateString()}
+                  <time title={new Date(a.createdAt).toLocaleString()}>{fromNow(a.createdAt)}</time>
                 </div>
                 <div className="mt-2">
                   <a

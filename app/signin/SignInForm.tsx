@@ -5,7 +5,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastPromise } from "@/lib/ui/toast";
 import { Field, TextInput } from "@/components/form/RhfFields";
 import { SignInSchema } from "@/lib/validation";
 
@@ -48,12 +48,12 @@ export default function SignInForm({
     if (res?.error) {
       // Marca error de formulario y muestra toast
       setError("root", { type: "auth", message: "No se pudo iniciar sesión. Verifica tus datos." });
-      toast.error("No se pudo iniciar sesión. Verifica tus datos.");
+      toastError("No se pudo iniciar sesión. Verifica tus datos.");
       return;
     }
 
     // Éxito: redirige manualmente
-    toast.success("¡Bienvenido!");
+    toastSuccess("¡Bienvenido!");
     window.location.href = res?.url || callbackUrl || (isRecruiter ? "/dashboard/overview" : "/jobs");
   };
 

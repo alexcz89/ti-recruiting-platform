@@ -12,8 +12,6 @@ datasource db {
 }
 
 // =========================
-// Enums
-// =========================
 enum Role {
   ADMIN
   RECRUITER
@@ -47,6 +45,15 @@ enum ApplicationStatus {
 enum TaxonomyKind {
   SKILL
   CERTIFICATION
+  LANGUAGE   // 👈 NUEVO
+}
+
+// Nivel de idiomas
+enum LanguageProficiency {
+  NATIVE          // Nativo
+  PROFESSIONAL    // C1–C2
+  CONVERSATIONAL  // B1–B2
+  BASIC           // A1–A2
 }
 
 // =========================
@@ -77,8 +84,8 @@ model User {
   companyId String?
 
   location    String?
-  locationLat Float?   // 👈 latitud
-  locationLng Float?   // 👈 longitud
+  locationLat Float?
+  locationLng Float?
 
   phone     String?
   birthdate DateTime?
@@ -86,19 +93,41 @@ model User {
   github    String?
   resumeUrl String?
 
-  // Lista unificada de skills (simple, rápida)
+  // Lista unificada de skills simples (fallback)
   skills String[] @default([])
 
-  // Certificaciones (simple)
+  // Certificaciones simples
   certifications String[] @default([])
 
-  // Relaciones opcionales a catálogo detallado
+  // Relaciones detalladas
   candidateSkills      CandidateSkill[]
   candidateCredentials CandidateCredential[]
+  candidateLanguages   CandidateLanguage[]   // 👈 NUEVO
 
   recruiterProfile RecruiterProfile?
 
+  // Historial laboral (relacional)
+  experiences WorkExperience[]
+
   @@index([locationLat, locationLng])
+}
+
+// =========================
+model WorkExperience {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  company   String
+  startDate DateTime
+  endDate   DateTime?
+  isCurrent Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startDate])
+  @@index([userId, isCurrent])
 }
 
 // =========================
@@ -111,17 +140,17 @@ model Job {
   company   Company @relation(fields: [companyId], references: [id])
 
   location    String
-  locationLat Float?   // 👈 latitud
-  locationLng Float?   // 👈 longitud
+  locationLat Float?
+  locationLng Float?
 
   employmentType EmploymentType
   seniority      Seniority
   description    String
 
-  // Lista simple para búsquedas rápidas
+  // Lista simple
   skills String[]
 
-  // Relación opcional a catálogo para “obligatorio/deseable”
+  // Relación opcional a catálogo
   requiredSkills JobRequiredSkill[]
 
   salaryMin Int?
@@ -154,6 +183,10 @@ model Application {
   status      ApplicationStatus @default(SUBMITTED)
   createdAt   DateTime          @default(now())
 
+  // Lógica de rechazo diferido
+  rejectedAt         DateTime?
+  rejectionEmailSent Boolean   @default(false)
+
   candidate User @relation(fields: [candidateId], references: [id])
   job       Job  @relation(fields: [jobId], references: [id])
 
@@ -161,6 +194,7 @@ model Application {
 
   @@unique([candidateId, jobId])
   @@index([status, createdAt])
+  @@index([status, rejectedAt, rejectionEmailSent])
 }
 
 // =========================
@@ -221,7 +255,7 @@ model AuditLog {
 }
 
 // =========================================================
-// Catálogo editable de skills / certificaciones
+// Catálogo editable de skills / certificaciones / idiomas
 // =========================================================
 model TaxonomyTerm {
   id          String       @id @default(cuid())
@@ -237,18 +271,19 @@ model TaxonomyTerm {
   requiredByJobs  JobRequiredSkill[]
   candidateSkills CandidateSkill[]
   candidateCreds  CandidateCredential[]
+  candidateLangs  CandidateLanguage[]   // 👈 NUEVO
 
   @@unique([kind, slug])
   @@index([kind])
 }
 
-// Vacante ↔ Skill (obligatorio/deseable)
+// =========================
 model JobRequiredSkill {
   id     String  @id @default(cuid())
   jobId  String
   termId String
-  must   Boolean @default(true) // true = obligatorio, false = deseable
-  weight Int? // opcional para ordenar/score
+  must   Boolean @default(true)
+  weight Int?
 
   job  Job          @relation(fields: [jobId], references: [id])
   term TaxonomyTerm @relation(fields: [termId], references: [id])
@@ -257,13 +292,13 @@ model JobRequiredSkill {
   @@index([termId])
 }
 
-// Candidato ↔ Skill (detalle opcional)
+// =========================
 model CandidateSkill {
   id     String @id @default(cuid())
   userId String
   termId String
   level  Int? // 1–5
-  years  Int? // años de experiencia aprox
+  years  Int?
 
   user User         @relation(fields: [userId], references: [id])
   term TaxonomyTerm @relation(fields: [termId], references: [id])
@@ -272,7 +307,21 @@ model CandidateSkill {
   @@index([termId])
 }
 
-// Candidato ↔ Certificación (con metadatos)
+// =========================
+model CandidateLanguage {
+  id     String              @id @default(cuid())
+  userId String
+  termId String
+  level  LanguageProficiency
+
+  user User         @relation(fields: [userId], references: [id])
+  term TaxonomyTerm @relation(fields: [termId], references: [id])
+
+  @@unique([userId, termId])
+  @@index([termId])
+}
+
+// =========================
 model CandidateCredential {
   id           String    @id @default(cuid())
   userId       String

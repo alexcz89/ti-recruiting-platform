@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { fromNow } from "@/lib/dates"; // ⬅️ helper para "hace X"
+import { sendNewMessageEmail } from "@/lib/mailer"; // ⬅️ notificación por nuevo mensaje
 
 export const metadata = { title: "Mensajes | Panel" };
 
@@ -98,7 +100,7 @@ export default async function MessagesPage({
 
     const sender = await prisma.user.findUnique({
       where: { email: s.user.email },
-      select: { id: true, role: true },
+      select: { id: true, role: true, name: true, email: true },
     });
     if (!sender || (sender.role !== "RECRUITER" && sender.role !== "ADMIN")) {
       return { error: "Sin permisos" };
@@ -112,10 +114,14 @@ export default async function MessagesPage({
       return { error: "El mensaje es demasiado largo (máx. 2000)" };
     }
 
-    // seguridad: la aplicación debe pertenecer al recruiter
+    // seguridad: la aplicación debe pertenecer al recruiter + datos para email
     const appCheck = await prisma.application.findUnique({
       where: { id: applicationId },
-      select: { candidateId: true, job: { select: { recruiterId: true } } },
+      select: {
+        candidateId: true,
+        candidate: { select: { email: true, name: true } },
+        job: { select: { recruiterId: true, title: true } },
+      },
     });
     if (!appCheck || appCheck.job?.recruiterId !== sender.id) {
       return { error: "No autorizado para este hilo" };
@@ -129,6 +135,19 @@ export default async function MessagesPage({
         body,
       },
     });
+
+    // 🔔 Email al candidato con el nuevo mensaje (no bloquea)
+    if (appCheck.candidate?.email) {
+      void sendNewMessageEmail({
+        to: appCheck.candidate.email,
+        recipientName: appCheck.candidate.name || "",
+        fromName: sender.name || sender.email!,
+        jobTitle: appCheck.job?.title || "",
+        applicationId,
+        preview: body,
+        isRecruiterRecipient: false, // el destinatario es el candidato
+      });
+    }
 
     revalidatePath(`/dashboard/messages?applicationId=${applicationId}`);
     return { ok: true };
@@ -179,8 +198,8 @@ export default async function MessagesPage({
               <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                 <div className={`rounded-xl px-3 py-2 text-sm ${mine ? "bg-blue-50" : "bg-gray-100"}`}>
                   <div>{m.body}</div>
-                  <div className="text-[10px] text-zinc-500 mt-1">
-                    {new Date(m.createdAt).toLocaleString()}
+                  <div className="text-[10px] text-zinc-500 mt-1" title={new Date(m.createdAt).toLocaleString()}>
+                    {fromNow(m.createdAt)}
                   </div>
                 </div>
               </div>
@@ -201,7 +220,7 @@ export default async function MessagesPage({
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@/lib/ui/toast";
 
 const MessageSchema = z.object({
   body: z
@@ -236,11 +255,11 @@ function MessageFormClient({
 
     if (res?.error) {
       setError("body", { type: "server", message: res.error });
-      toast.error(res.error);
+      toastError(res.error);
       return;
     }
 
-    toast.success("Mensaje enviado");
+    toastSuccess("Mensaje enviado");
     reset({ body: "" });
   };
 

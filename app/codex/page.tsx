@@ -2,8 +2,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
-import { formatDistanceToNow } from "date-fns";
-import { es } from "date-fns/locale";
+import { fromNow } from "@/lib/dates"; // ⬅️ helper centralizado "hace X"
 
 type SearchParams = { q?: string; tag?: string; tech?: string };
 
@@ -189,10 +188,7 @@ export default async function CodexPage({ searchParams }: { searchParams: Search
                   className="text-xs text-zinc-500 whitespace-nowrap"
                   title={new Date(e.createdAt).toLocaleString()}
                 >
-                  {formatDistanceToNow(new Date(e.createdAt), {
-                    addSuffix: true,
-                    locale: es,
-                  })}
+                  {fromNow(e.createdAt)}
                 </time>
               </div>
             </li>

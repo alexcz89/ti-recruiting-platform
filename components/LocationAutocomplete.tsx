@@ -2,162 +2,192 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-type Item = { id: string; fullName: string };
+type CityItem = { id: string; label: string; value: string };
+
+type Props = {
+  value: string;
+  onChange: (v: string) => void;
+  countries?: string[];                 // ej: ["mx"]
+  placeholder?: string;
+  className?: string;                   // se aplica al <input>
+  /** Evita buscar al montar aunque haya valor inicial (default: true = NO busca) */
+  fetchOnMount?: boolean;
+  /** Abrir la lista al hacer foco (default: false) */
+  openOnFocus?: boolean;
+  /** Mínimo de caracteres para buscar (default: 3) */
+  minChars?: number;
+  /** Debounce en ms (default: 350) */
+  debounceMs?: number;
+};
 
 export default function LocationAutocomplete({
   value,
   onChange,
   countries,
-  placeholder = "Ciudad (ej. CDMX, Monterrey)",
-  minLength = 2,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  countries?: string[]; // ISO2 en minúsculas (ej. ["mx"])
-  placeholder?: string;
-  minLength?: number;
-}) {
-  const [q, setQ] = useState(value || "");
+  placeholder = "Ciudad (ej. CDMX, Monterrey) o Remoto",
+  className = "border rounded-xl p-3 w-full",
+  fetchOnMount = false,
+  openOnFocus = false,
+  minChars = 3,
+  debounceMs = 350,
+}: Props) {
+  const [input, setInput] = useState(value ?? "");
+  const [options, setOptions] = useState<CityItem[]>([]);
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
+  const [dirty, setDirty] = useState(false); // usuario ya interactuó
   const [error, setError] = useState<string | null>(null);
-  const acRef = useRef<AbortController | null>(null);
-  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sincroniza cuando el valor externo cambia
+  useEffect(() => setInput(value ?? ""), [value]);
 
   // Cierra lista si se hace click fuera
   useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!boxRef.current) return;
-      if (!boxRef.current.contains(e.target as Node)) setOpen(false);
-    }
+    const onDocClick = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
     document.addEventListener("mousedown", onDocClick);
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  // Mantén controlado el valor externo
-  useEffect(() => {
-    setQ(value || "");
-  }, [value]);
+  const canSearch = useMemo(() => {
+    const q = input.trim();
+    if (!q) return false;
+    if (!dirty && !fetchOnMount) return false; // 👈 no buscar al montar
+    return q.length >= minChars;
+  }, [input, dirty, fetchOnMount, minChars]);
 
-  // Debounce de 250 ms
-  const debouncedQ = useDebounce(q, 250);
-
+  // Buscar con debounce
   useEffect(() => {
-    if (debouncedQ.trim().length < minLength) {
-      setItems([]);
-      setError(null); // no es error; solo muy corto
+    if (!canSearch) {
+      if (!dirty && !fetchOnMount) setOptions([]);
       return;
     }
 
-    acRef.current?.abort();
-    const ac = new AbortController();
-    acRef.current = ac;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(async () => {
+      if (abortRef.current) abortRef.current.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
 
-    (async () => {
       try {
         setLoading(true);
         setError(null);
 
         const params = new URLSearchParams();
-        params.set("q", debouncedQ.trim());
-        countries?.forEach((c) => params.append("country", c));
+        params.set("q", input.trim());
+        if (countries?.length) params.set("country", countries.join(","));
 
         const res = await fetch(`/api/geo/cities?${params.toString()}`, {
           signal: ac.signal,
           headers: { Accept: "application/json" },
         });
 
-        // Si el servidor responde con texto (p. ej. error html), evita .json()
-        const ct = res.headers.get("content-type") || "";
-        if (!res.ok || !ct.includes("application/json")) {
-          // intenta leer mensaje de error breve
-          let msg = "No se pudo buscar la ciudad.";
-          try {
-            const txt = await res.text();
-            if (txt) msg = msg + (": " + txt.slice(0, 120));
-          } catch {}
-          setItems([]);
-          setError(msg);
-          return;
+        if (!res.ok) {
+          const txt = await res.text().catch(() => "");
+          throw new Error(txt || "Error de red");
         }
+        const data = await res.json();
 
-        const data = (await res.json()) as any[];
-        setItems((data || []).map((d) => ({ id: String(d.id), fullName: String(d.fullName) })));
-        setError(null); // ✅ respuesta OK, aunque sea []
+        // Compatibilidad con varios formatos:
+        // - Array<{ id, fullName }>
+        // - { results: Array<{ id?, name | fullName }> }
+        const raw: any[] = Array.isArray(data) ? data : (data?.results ?? []);
+        const items: CityItem[] = raw.map((r: any, i: number) => {
+          const label = String(r.fullName ?? r.name ?? "");
+          return { id: String(r.id ?? i), label, value: label };
+        });
+
+        setOptions(items.slice(0, 10));
+        setOpen(true);
       } catch (err: any) {
-        if (err?.name === "AbortError") return; // typing fast: cancelado
-        setItems([]);
+        if (err?.name === "AbortError") return;
+        setOptions([]);
         setError("No se pudo buscar la ciudad.");
+        setOpen(true);
       } finally {
         setLoading(false);
-        setOpen(true);
       }
-    })();
+    }, debounceMs);
 
-    return () => ac.abort();
-  }, [debouncedQ, countries, minLength]);
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      abortRef.current?.abort();
+    };
+  }, [canSearch, input, countries, debounceMs, dirty, fetchOnMount]);
 
   return (
-    <div className="relative" ref={boxRef}>
+    <div className="relative" ref={containerRef}>
       <input
-        className="mt-2 w-full rounded-md border p-2"
+        className={className}
         placeholder={placeholder}
-        value={q}
+        value={input}
         onChange={(e) => {
-          setQ(e.target.value);
-          onChange(e.target.value); // burbujea al form
+          setDirty(true);
+          setInput(e.target.value);
+          // No llamamos onChange aquí para evitar “ensuciar” el valor hasta seleccionar.
         }}
-        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          // Si el usuario escribió libremente (ej. "Remoto"), propaga al salir.
+          if (input !== value) onChange(input);
+        }}
+        onFocus={() => {
+          if (openOnFocus && (input || "").trim().length >= minChars) {
+            setDirty(true);
+            setOpen(true);
+          }
+        }}
         aria-autocomplete="list"
         aria-expanded={open}
+        autoComplete="off"
+        spellCheck={false}
       />
 
-      {/* Mensaje informativo o error */}
+      {/* Helper pequeño */}
       <p className={`mt-1 text-xs ${error ? "text-red-600" : "text-zinc-500"}`}>
         {error
           ? error
-          : q.trim().length < minLength
-          ? `Escribe al menos ${minLength} caracteres para buscar.`
+          : !dirty && !fetchOnMount
+          ? "Escribe para buscar."
+          : input.trim().length < minChars
+          ? `Escribe al menos ${minChars} caracteres.`
           : loading
           ? "Buscando…"
-          : items.length === 0
+          : options.length === 0
           ? "Sin resultados."
           : "Selecciona una opción de la lista."}
       </p>
 
-      {/* Lista de sugerencias */}
-      {open && (loading || items.length > 0) && (
-        <div className="absolute z-10 mt-1 max-h-64 w-full overflow-auto rounded-md border bg-white shadow">
-          {loading ? (
+      {/* Lista */}
+      {open && (loading || options.length > 0) && (
+        <div className="absolute z-20 mt-1 w-full rounded-xl border bg-white shadow-md max-h-64 overflow-auto">
+          {loading && (
             <div className="px-3 py-2 text-sm text-zinc-500">Buscando…</div>
-          ) : (
-            items.map((it) => (
+          )}
+          {!loading &&
+            options.map((opt) => (
               <button
-                key={it.id}
+                key={opt.id}
                 type="button"
-                className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
+                className="block w-full text-left px-3 py-2 text-sm hover:bg-zinc-50"
+                onMouseDown={(e) => e.preventDefault()} // evita blur antes del click
                 onClick={() => {
-                  onChange(it.fullName);
-                  setQ(it.fullName);
+                  onChange(opt.value);
+                  setInput(opt.value);
                   setOpen(false);
                 }}
+                title={opt.label}
               >
-                {it.fullName}
+                {opt.label}
               </button>
-            ))
-          )}
+            ))}
         </div>
       )}
     </div>
   );
-}
-
-function useDebounce<T>(val: T, delay = 250) {
-  const [v, setV] = useState<T>(val);
-  useEffect(() => {
-    const t = setTimeout(() => setV(val), delay);
-    return () => clearTimeout(t);
-  }, [val, delay]);
-  return v;
 }

@@ -4,7 +4,7 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastPromise } from "@/lib/ui/toast";
 
 const EMPLOYMENT_TYPES = ["FULL_TIME","PART_TIME","CONTRACT","INTERNSHIP"] as const;
 const SENIORITIES = ["JUNIOR","MID","SENIOR","LEAD"] as const;
@@ -74,7 +74,7 @@ export default function JobForm({
   const onSubmitRHF = async (vals: FormShape) => {
     // Valida rango salario (opcional)
     if ((vals.salaryMin ?? 0) > (vals.salaryMax ?? 0)) {
-      toast.error("El salario mínimo no puede ser mayor que el máximo");
+      toastError("El salario mínimo no puede ser mayor que el máximo");
       return;
     }
 
@@ -97,7 +97,7 @@ export default function JobForm({
     fd.set("remote", String(!!vals.remote));
 
     await onSubmit(fd);
-    toast.success("Vacante guardada");
+    toastSuccess("Vacante guardada");
   };
 
   return (

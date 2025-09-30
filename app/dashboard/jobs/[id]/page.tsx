@@ -1,35 +1,45 @@
-import { notFound } from "next/navigation"
-import { prisma } from "@/lib/prisma"
-import { getSessionCompanyId } from "@/lib/session"
-import KanbanBoard from "./KanbanBoard"
+// app/dashboard/jobs/[id]/page.tsx
+import { notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { getSessionCompanyId } from "@/lib/session";
+import KanbanBoard from "./KanbanBoard";
 
 export default async function JobKanbanPage({ params }: { params: { id: string } }) {
-  const companyId = await getSessionCompanyId()
-  if (!companyId) return notFound()
+  const companyId = await getSessionCompanyId();
+  if (!companyId) return notFound();
 
   const job = await prisma.job.findFirst({
     where: { id: params.id, companyId },
-    select: { id: true, title: true }
-  })
-  if (!job) return notFound()
+    select: { id: true, title: true },
+  });
+  if (!job) return notFound();
 
   const applications = await prisma.application.findMany({
     where: { jobId: job.id },
     include: {
       candidate: {
         select: {
-          id: true, name: true, email: true, resumeUrl: true,
-          frontend: true, backend: true, cloud: true, database: true
-        }
-      }
+          id: true,
+          name: true,
+          email: true,
+          resumeUrl: true,
+          // Campos vigentes tras la unificación:
+          skills: true,
+          certifications: true,
+          // (opcional) algo de contexto
+          location: true,
+          linkedin: true,
+          github: true,
+        },
+      },
     },
-    orderBy: { createdAt: "desc" }
-  })
+    orderBy: { createdAt: "desc" },
+  });
 
   return (
     <div className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Kanban — {job.title}</h1>
       <KanbanBoard jobId={job.id} initialApplications={applications} />
     </div>
-  )
+  );
 }

@@ -1,10 +1,10 @@
 // lib/skills.ts
-// Fuente única de skills, certificaciones y taxonomías para formularios de
-// candidato y vacantes. Incluye fallbacks estáticos y helpers para leer de DB
-// (tabla Taxonomy con TaxonomyKind: "SKILLS" | "CERTIFICATIONS").
+// Fuente de catálogos (skills, certificaciones, idiomas) y helpers para UI.
+// Lee de DB (TaxonomyTerm) con fallback a listas estáticas. ¡Server-only en las
+// funciones que golpean Prisma (usamos dynamic import)!
 
 // ──────────────────────────────────────────────────────────────────────────────
-// CATÁLOGO ESTÁTICO (FALLBACK)
+// FALLBACKS ESTÁTICOS
 // ──────────────────────────────────────────────────────────────────────────────
 export const ALL_SKILLS = [
   // Lenguajes
@@ -41,11 +41,10 @@ export const ALL_SKILLS = [
   // Hardware / HIL
   "LabVIEW","TestStand","VeriStand","dSPACE HIL","Vector CANoe","Arduino IDE","Raspberry Pi GPIO",
 ] as const;
-
 export type Skill = (typeof ALL_SKILLS)[number];
 
 export const CERTIFICATIONS = [
-  // Cloud (AWS / Azure / GCP)
+  // Cloud
   "AWS Certified Cloud Practitioner (CLF-C02)",
   "AWS Certified Solutions Architect – Associate (SAA-C03)",
   "AWS Certified Solutions Architect – Professional (SAP-C02)",
@@ -58,47 +57,64 @@ export const CERTIFICATIONS = [
   "Google Associate Cloud Engineer (ACE)",
   "Google Professional Cloud Architect",
 
-  // DevOps / K8s / IaC
+  // DevOps
   "CKA (Certified Kubernetes Administrator)",
   "CKAD (Certified Kubernetes Application Developer)",
   "Terraform Associate",
   "GitHub Actions Certification (Foundations/Intermediate)",
 
   // Redes / Seguridad / ITSM
-  "CCNA",
-  "CCNP",
-  "CompTIA A+",
-  "CompTIA Network+",
-  "CompTIA Security+",
-  "CEH (Certified Ethical Hacker)",
-  "OSCP",
-  "ITIL Foundation",
+  "CCNA","CCNP","CompTIA A+","CompTIA Network+","CompTIA Security+",
+  "CEH (Certified Ethical Hacker)","OSCP","ITIL Foundation",
 
   // QA / Agile / Gestión
-  "ISTQB Foundation",
-  "PMP",
-  "Scrum Master (CSM/PSM)",
+  "ISTQB Foundation","PMP","Scrum Master (CSM/PSM)",
 
-  // Salesforce / Otros (populares)
+  // Salesforce
   "Salesforce Administrator",
 ] as const;
-
 export type Certification = (typeof CERTIFICATIONS)[number];
 
-// ──────────────────────────────────────────────────────────────────────────────
-// HELPERS DE DB (SERVER ONLY) CON FALLBACK
-//   NOTA: usamos dynamic import de "@/lib/prisma" dentro de la función para
-//   evitar que el cliente (browser) intente incluir Prisma en el bundle.
-//   LLAMAR SOLO DESDE SERVER COMPONENTS / ROUTE HANDLERS / SERVER ACTIONS.
-// ──────────────────────────────────────────────────────────────────────────────
-export type TaxonomyKind = "SKILLS" | "CERTIFICATIONS";
+export const LANGUAGES_FALLBACK = [
+  "Inglés","Mandarín (Chino estándar)","Hindi","Español","Francés","Árabe (variedades)",
+  "Bengalí","Ruso","Portugués","Urdu","Indonesio/Malayo","Alemán","Japonés","Nigerian Pidgin",
+  "Maratí","Telugu","Turco","Tamil","Yue (Cantonés)","Italiano",
+  "Persa (Farsi/Dari/Tayiko)","Vietnamita","Hausa","Egipcio árabe","Javanés",
+  "Coreano","Punjabi occidental (Lahnda)","Wu (Shanghainés)","Gujarati","Bhojpuri",
+] as const;
 
+// ──────────────────────────────────────────────────────────────────────────────
+// NIVELES
+// ──────────────────────────────────────────────────────────────────────────────
+export const SKILL_LEVELS = [
+  { value: 1, label: "Básico" },
+  { value: 2, label: "Junior" },
+  { value: 3, label: "Intermedio" },
+  { value: 4, label: "Avanzado" },
+  { value: 5, label: "Experto" },
+] as const;
+export type SkillLevelValue = (typeof SKILL_LEVELS)[number]["value"];
+
+export const LANGUAGE_LEVELS = [
+  { value: "NATIVE", label: "Nativo" },
+  { value: "PROFESSIONAL", label: "Profesional (C1–C2)" },
+  { value: "CONVERSATIONAL", label: "Conversacional (B1–B2)" },
+  { value: "BASIC", label: "Básico (A1–A2)" },
+] as const;
+export type LanguageLevelValue = (typeof LANGUAGE_LEVELS)[number]["value"];
+
+// ──────────────────────────────────────────────────────────────────────────────
+// HELPERS DB
+// ──────────────────────────────────────────────────────────────────────────────
 export async function getSkillsFromDB(): Promise<string[]> {
   try {
-    const { prisma } = await import("@/lib/prisma"); // server-only
-    const row = await prisma.taxonomy.findUnique({ where: { kind: "SKILLS" as TaxonomyKind } });
-    const items = row?.items ?? [];
-    return items.length ? items : [...ALL_SKILLS];
+    const { prisma } = await import("@/lib/prisma");
+    const rows = await prisma.taxonomyTerm.findMany({
+      where: { kind: "SKILL" },
+      select: { label: true },
+      orderBy: { label: "asc" },
+    });
+    return rows.map((r) => r.label).length ? rows.map((r) => r.label) : [...ALL_SKILLS];
   } catch {
     return [...ALL_SKILLS];
   }
@@ -106,26 +122,41 @@ export async function getSkillsFromDB(): Promise<string[]> {
 
 export async function getCertificationsFromDB(): Promise<string[]> {
   try {
-    const { prisma } = await import("@/lib/prisma"); // server-only
-    const row = await prisma.taxonomy.findUnique({ where: { kind: "CERTIFICATIONS" as TaxonomyKind } });
-    const items = row?.items ?? [];
-    return items.length ? items : [...CERTIFICATIONS];
+    const { prisma } = await import("@/lib/prisma");
+    const rows = await prisma.taxonomyTerm.findMany({
+      where: { kind: "CERTIFICATION" },
+      select: { label: true },
+      orderBy: { label: "asc" },
+    });
+    return rows.map((r) => r.label).length ? rows.map((r) => r.label) : [...CERTIFICATIONS];
   } catch {
     return [...CERTIFICATIONS];
   }
 }
 
+export async function getLanguagesFromDB(): Promise<string[]> {
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    const rows = await prisma.taxonomyTerm.findMany({
+      where: { kind: "LANGUAGE" },
+      select: { label: true },
+      orderBy: { label: "asc" },
+    });
+    return rows.map((r) => r.label).length ? rows.map((r) => r.label) : [...LANGUAGES_FALLBACK];
+  } catch {
+    return [...LANGUAGES_FALLBACK];
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
-/** Búsqueda simple (para combobox con typeahead) */
+// CLIENT HELPERS
+// ──────────────────────────────────────────────────────────────────────────────
 export function searchSkills(query: string, limit = 30): string[] {
   const q = query.trim().toLowerCase();
   if (!q) return [...ALL_SKILLS].slice(0, limit);
-  return (ALL_SKILLS as readonly string[])
-    .filter((s) => s.toLowerCase().includes(q))
-    .slice(0, limit);
+  return (ALL_SKILLS as readonly string[]).filter((s) => s.toLowerCase().includes(q)).slice(0, limit);
 }
 
-/** Normaliza strings “libres” a skills del catálogo (case-insensitive, sin duplicados). */
 export function normalizeSkills(values: string[]): string[] {
   const set = new Set<string>();
   const catalogLC = new Map((ALL_SKILLS as readonly string[]).map((s) => [s.toLowerCase(), s]));
@@ -139,21 +170,21 @@ export function normalizeSkills(values: string[]): string[] {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// TAXONOMÍAS DE EMPLEO
+// EMPLEO
 // ──────────────────────────────────────────────────────────────────────────────
 export const EMPLOYMENT_TYPES = [
   { value: "FULL_TIME", label: "Tiempo completo" },
   { value: "PART_TIME", label: "Medio tiempo" },
-  { value: "CONTRACT",  label: "Por periodo / Contrato" },
-  { value: "INTERNSHIP",label: "Prácticas profesionales" },
+  { value: "CONTRACT", label: "Por periodo / Contrato" },
+  { value: "INTERNSHIP", label: "Prácticas profesionales" },
 ] as const;
 export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number]["value"];
 
 export const SENIORITY_OPTIONS = [
   { value: "JUNIOR", label: "Junior" },
-  { value: "MID",    label: "Mid" },
+  { value: "MID", label: "Mid" },
   { value: "SENIOR", label: "Senior" },
-  { value: "LEAD",   label: "Lead" },
+  { value: "LEAD", label: "Lead" },
 ] as const;
 export type Seniority = (typeof SENIORITY_OPTIONS)[number]["value"];
 
@@ -178,100 +209,113 @@ export const labelForLocationType = (v?: string) =>
   LOCATION_TYPES.find((x) => x.value === v)?.label ?? v ?? "";
 
 // ──────────────────────────────────────────────────────────────────────────────
-// PRESTACIONES (DEFAULT + TYPES)
+// BUCKETS LEGACY
 // ──────────────────────────────────────────────────────────────────────────────
-export type BenefitKey =
-  | "aguinaldoDias"
-  | "vacacionesDias"
-  | "primaVacacionalPct"
-  | "utilidades"
-  | "bonos"
-  | "valesDespensa"
-  | "fondoAhorro"
-  | "combustible"
-  | "comedor"
-  | "celular"
-  | "sgmm"
-  | "seguroVida"
-  | "automovil"
-  | "otros";
-
-export type BenefitValue = boolean | number | string;
-
-export type BenefitConfig = {
-  key: BenefitKey;
-  label: string;
-  defaultValue: BenefitValue;
-  publicable?: boolean; // sugerencia para UI
-};
-
-export const BENEFITS_DEFAULT: BenefitConfig[] = [
-  { key: "aguinaldoDias",      label: "Aguinaldo (días)",               defaultValue: 15,   publicable: true },
-  { key: "vacacionesDias",     label: "Vacaciones (días)",              defaultValue: 12,   publicable: true },
-  { key: "primaVacacionalPct", label: "Prima vacacional (%)",           defaultValue: 25,   publicable: true },
-  { key: "utilidades",         label: "Utilidades",                      defaultValue: true,  publicable: true },
-  { key: "bonos",              label: "Bonos",                           defaultValue: false, publicable: true },
-  { key: "valesDespensa",      label: "Vales de despensa",               defaultValue: false, publicable: true },
-  { key: "fondoAhorro",        label: "Fondo de Ahorro",                 defaultValue: false, publicable: true },
-  { key: "combustible",        label: "Combustible",                     defaultValue: false, publicable: true },
-  { key: "comedor",            label: "Comedor subsidiado",              defaultValue: false, publicable: true },
-  { key: "celular",            label: "Celular",                         defaultValue: false, publicable: true },
-  { key: "sgmm",               label: "Seguro de Gastos Médicos",        defaultValue: false, publicable: true },
-  { key: "seguroVida",         label: "Seguro de Vida",                  defaultValue: false, publicable: true },
-  { key: "automovil",          label: "Automóvil",                       defaultValue: false, publicable: true },
-  { key: "otros",              label: "Otros",                           defaultValue: "",    publicable: true },
-];
-
-export function defaultBenefitsRecord(): Record<BenefitKey, BenefitValue> {
-  const out = {} as Record<BenefitKey, BenefitValue>;
-  for (const b of BENEFITS_DEFAULT) out[b.key] = b.defaultValue;
-  return out;
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// BUCKETS LEGACY (OPCIONAL) — si todavía mapeas skills a columnas
-// ──────────────────────────────────────────────────────────────────────────────
-export type Bucket =
-  | "frontend" | "backend" | "mobile" | "cloud" | "database"
-  | "cybersecurity" | "testing" | "ai";
+export type Bucket = "frontend" | "backend" | "mobile" | "cloud" | "database" | "cybersecurity" | "testing" | "ai";
 
 export const SKILL_TO_BUCKET: Record<string, Bucket> = {
-  // Frontend
-  "HTML":"frontend","CSS":"frontend","D3.js":"frontend","Javascript":"frontend",
-
-  // Backend / lenguajes genéricos
-  "Python":"backend","Java":"backend","C":"backend","C++":"backend","C#":"backend","Go":"backend","Rust":"backend","Ruby":"backend","PHP":"backend",
-  "Kotlin":"backend","Swift":"backend","Dart":"backend","Julia":"backend","Scala":"backend","R":"backend","Perl":"backend",
-  "Visual Basic .NET":"backend","Objective-C":"backend","Assembly":"backend","Zig":"backend",".NET":"backend",
-  "Node.js":"backend","Django":"backend","Flask":"backend","FastAPI":"backend","Spring Boot":"backend","ASP.NET":"backend","Ruby on Rails":"backend",
-  "Laravel":"backend","Symfony":"backend","Express.js":"backend",
-
-  // Mobile
-  "React Native":"mobile","Flutter":"mobile","Xamarin":"mobile","Ionic":"mobile",
-  "Native Android (Java/Kotlin)":"mobile","Native iOS (Swift/Objective-C)":"mobile",
-
-  // AI / Data
-  "TensorFlow":"ai","PyTorch":"ai","Keras":"ai","Scikit-Learn":"ai","OpenCV":"ai","Apache Spark (MLlib)":"ai",
-  "Pandas":"ai","NumPy":"ai","Matplotlib":"ai","Seaborn":"ai","SciPy":"ai","Plotly":"ai","MATLAB":"ai","Simulink":"ai","Simulink Test":"ai",
-
-  // Cloud / DevOps
-  "AWS":"cloud","Microsoft Azure":"cloud","Google Cloud Platform":"cloud","Docker":"cloud",
-  "Kubernetes":"cloud","Terraform":"cloud","Ansible":"cloud","Chef":"cloud","Puppet":"cloud",
-  "Jenkins":"cloud","GitLab CI/CD":"cloud","GitHub Actions":"cloud","Bash":"cloud","PowerShell":"cloud",
-
-  // DB
-  "SQL":"database","MySQL":"database","PostgreSQL":"database","Oracle":"database","SQL Server":"database",
-  "MongoDB":"database","Cassandra":"database","Couchbase":"database","Redis":"database","DynamoDB":"database",
-  "Prisma":"database","Hibernate":"database","SQLAlchemy":"database","Entity Framework":"database","GraphQL":"database",
-
-  // Testing
-  "Selenium":"testing","Cypress":"testing","Puppeteer":"testing","JUnit":"testing","NUnit":"testing",
-  "PyTest":"testing","TestNG":"testing","Postman":"testing","Newman":"testing",
-
-  // Hardware / HIL (si por ahora los enrutas a backend)
-  "LabVIEW":"backend","TestStand":"backend","VeriStand":"backend","dSPACE HIL":"backend","Vector CANoe":"backend",
-  "Arduino IDE":"backend","Raspberry Pi GPIO":"backend",
-
-  // Markup / miscelánea
-  "XML":"backend","Markdown":"backend","LaTeX":"backend",
+  HTML: "frontend",
+  CSS: "frontend",
+  "D3.js": "frontend",
+  Javascript: "frontend",
+  Python: "backend",
+  Java: "backend",
+  C: "backend",
+  "C++": "backend",
+  "C#": "backend",
+  Go: "backend",
+  Rust: "backend",
+  Ruby: "backend",
+  PHP: "backend",
+  Kotlin: "backend",
+  Swift: "backend",
+  Dart: "backend",
+  Julia: "backend",
+  Scala: "backend",
+  R: "backend",
+  Perl: "backend",
+  "Visual Basic .NET": "backend",
+  "Objective-C": "backend",
+  Assembly: "backend",
+  Zig: "backend",
+  ".NET": "backend",
+  "Node.js": "backend",
+  Django: "backend",
+  Flask: "backend",
+  FastAPI: "backend",
+  "Spring Boot": "backend",
+  "ASP.NET": "backend",
+  "Ruby on Rails": "backend",
+  Laravel: "backend",
+  Symfony: "backend",
+  "Express.js": "backend",
+  "React Native": "mobile",
+  Flutter: "mobile",
+  Xamarin: "mobile",
+  Ionic: "mobile",
+  "Native Android (Java/Kotlin)": "mobile",
+  "Native iOS (Swift/Objective-C)": "mobile",
+  TensorFlow: "ai",
+  PyTorch: "ai",
+  Keras: "ai",
+  "Scikit-Learn": "ai",
+  OpenCV: "ai",
+  "Apache Spark (MLlib)": "ai",
+  Pandas: "ai",
+  NumPy: "ai",
+  Matplotlib: "ai",
+  Seaborn: "ai",
+  SciPy: "ai",
+  Plotly: "ai",
+  MATLAB: "ai",
+  Simulink: "ai",
+  "Simulink Test": "ai",
+  AWS: "cloud",
+  "Microsoft Azure": "cloud",
+  "Google Cloud Platform": "cloud",
+  Docker: "cloud",
+  Kubernetes: "cloud",
+  Terraform: "cloud",
+  Ansible: "cloud",
+  Chef: "cloud",
+  Puppet: "cloud",
+  Jenkins: "cloud",
+  "GitLab CI/CD": "cloud",
+  "GitHub Actions": "cloud",
+  Bash: "cloud",
+  PowerShell: "cloud",
+  SQL: "database",
+  MySQL: "database",
+  PostgreSQL: "database",
+  Oracle: "database",
+  "SQL Server": "database",
+  MongoDB: "database",
+  Cassandra: "database",
+  Couchbase: "database",
+  Redis: "database",
+  DynamoDB: "database",
+  Prisma: "database",
+  Hibernate: "database",
+  SQLAlchemy: "database",
+  "Entity Framework": "database",
+  GraphQL: "database",
+  Selenium: "testing",
+  Cypress: "testing",
+  Puppeteer: "testing",
+  JUnit: "testing",
+  NUnit: "testing",
+  PyTest: "testing",
+  TestNG: "testing",
+  Postman: "testing",
+  Newman: "testing",
+  LabVIEW: "backend",
+  TestStand: "backend",
+  VeriStand: "backend",
+  "dSPACE HIL": "backend",
+  "Vector CANoe": "backend",
+  "Arduino IDE": "backend",
+  "Raspberry Pi GPIO": "backend",
+  XML: "backend",
+  Markdown: "backend",
+  LaTeX: "backend",
 };

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/skills";
-import { z } from "zod";
+import { fromNow } from "@/lib/dates";
 
 export const metadata = { title: "Admin · Taxonomía" };
 
@@ -101,8 +101,8 @@ export default async function TaxonomyAdminPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Skills / Tecnologías</h2>
           {skillsMeta?.updatedAt && (
-            <span className="text-xs text-zinc-500">
-              Actualizado: {new Date(skillsMeta.updatedAt).toLocaleString()}
+            <span className="text-xs text-zinc-500" title={new Date(skillsMeta.updatedAt).toLocaleString()}>
+              Actualizado: {fromNow(skillsMeta.updatedAt)}
             </span>
           )}
         </div>
@@ -119,8 +119,8 @@ export default async function TaxonomyAdminPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Certificaciones</h2>
           {certsMeta?.updatedAt && (
-            <span className="text-xs text-zinc-500">
-              Actualizado: {new Date(certsMeta.updatedAt).toLocaleString()}
+            <span className="text-xs text-zinc-500" title={new Date(certsMeta.updatedAt).toLocaleString()}>
+              Actualizado: {fromNow(certsMeta.updatedAt)}
             </span>
           )}
         </div>
@@ -139,8 +139,9 @@ export default async function TaxonomyAdminPage() {
 "use client";
 
 import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { toastSuccess, toastError } from "@/lib/ui/toast";
 
 /** --------- Schemas Zod (cliente) --------- */
 const SkillsSchema = z.object({
@@ -181,10 +182,10 @@ function SkillsFormClient({
     fd.set("skills", data.skills);
     const res = await onAction(fd);
     if (res?.error) {
-      toast.error(res.error);
+      toastError(res.error);
       return;
     }
-    toast.success("Skills guardadas");
+    toastSuccess("Skills guardadas");
   };
 
   return (
@@ -236,10 +237,10 @@ function CertsFormClient({
     fd.set("certs", data.certs);
     const res = await onAction(fd);
     if (res?.error) {
-      toast.error(res.error);
+      toastError(res.error);
       return;
     }
-    toast.success("Certificaciones guardadas");
+    toastSuccess("Certificaciones guardadas");
   };
 
   return (

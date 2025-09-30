@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { fromNow } from "@/lib/dates"; // ⬅️ helper date-fns
+import { sendApplicationSubmittedEmail } from "@/lib/mailer"; // ⬅️ notificación al candidato
 
 export default async function JobDetail({ params }: { params: { id: string } }) {
   // 1) Cargar la vacante con la relación a Company
@@ -49,7 +51,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
     // Ubicar candidateId por email de sesión
     const candidate = await prisma.user.findUnique({
       where: { email: s.user.email! },
-      select: { id: true },
+      select: { id: true, name: true, email: true },
     });
     if (!candidate) {
       return { error: "UNKNOWN", message: "Usuario no encontrado" } as const;
@@ -72,6 +74,15 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
       },
     });
 
+    // 🔔 Email al candidato (async, no bloquea la respuesta)
+    void sendApplicationSubmittedEmail({
+      to: candidate.email!,
+      candidateName: candidate.name || "",
+      jobTitle: job.title,
+      companyName: job.company?.name,
+      applicationId: params.id,
+    });
+
     return { ok: true, redirect: "/profile/summary?applied=1" } as const;
   }
 
@@ -83,8 +94,15 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           {job.company?.name ?? "—"} — {job.location}
         </p>
         <p className="text-sm text-zinc-500">
-          {job.employmentType} · {job.seniority} · {job.remote ? "Remoto" : "Presencial/Híbrido"}
+          {job.employmentType} · {job.seniority} ·{" "}
+          {job.remote ? "Remoto" : "Presencial/Híbrido"}
         </p>
+        <time
+          className="block text-xs text-zinc-500"
+          title={new Date(job.updatedAt).toLocaleString()}
+        >
+          Actualizada {fromNow(job.updatedAt)}
+        </time>
       </header>
 
       <section className="prose prose-zinc max-w-none">
@@ -96,7 +114,10 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
       {job.skills?.length > 0 && (
         <section className="mt-2 flex flex-wrap gap-2">
           {job.skills.map((s) => (
-            <span key={s} className="text-xs bg-gray-100 px-2 py-1 rounded border">
+            <span
+              key={s}
+              className="text-xs bg-gray-100 px-2 py-1 rounded border"
+            >
               {s}
             </span>
           ))}
@@ -122,7 +143,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
 /* ===================== CLIENT ===================== */
 "use client";
 
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo } from "@/lib/ui/toast";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 
@@ -144,21 +165,21 @@ function ApplyButton({
       const res = await applyAction();
 
       if ("ok" in res && res.ok) {
-        toast.success("Postulación enviada");
+        toastSuccess("Postulación enviada");
         router.push(res.redirect);
         return;
       }
 
       if (res.error === "AUTH") {
-        toast.message("Inicia sesión para postular");
+        toastInfo("Inicia sesión para postular");
         window.location.href = res.signinUrl;
         return;
       }
       if (res.error === "ROLE") {
-        toast.error(res.message || "No autorizado");
+        toastError(res.message || "No autorizado");
         return;
       }
-      toast.error(res.message || "No se pudo postular");
+      toastError(res.message || "No se pudo postular");
     });
   };
 

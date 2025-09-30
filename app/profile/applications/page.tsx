@@ -4,8 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { formatDistanceToNow } from "date-fns";
-import { es } from "date-fns/locale";
+import { fromNow } from "@/lib/dates"; // ⬅️ helper "hace X"
 
 export const metadata = { title: "Mis postulaciones | Bolsa TI" };
 
@@ -165,10 +164,7 @@ export default async function MyApplicationsPage({
                     </td>
                     <td className="py-2">
                       <time title={new Date(a.createdAt).toLocaleString()}>
-                        {formatDistanceToNow(new Date(a.createdAt), {
-                          addSuffix: true,
-                          locale: es,
-                        })}
+                        {fromNow(a.createdAt)}
                       </time>
                     </td>
                     <td className="py-2">
