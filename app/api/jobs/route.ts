@@ -1,143 +1,452 @@
 // app/api/jobs/route.ts
-import { NextRequest } from "next/server";
-import { prisma } from "lib/prisma";
-import { z } from "zod";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { getSessionCompanyId, getSessionOrThrow } from "@/lib/session";
+import {
+  EmploymentType,
+  JobStatus,
+  EducationLevel,
+  LocationType,
+} from "@prisma/client";
 
-const EMPLOYMENT_TYPES = ["FULL_TIME","PART_TIME","CONTRACT","INTERNSHIP"] as const;
-const SENIORITIES = ["JUNIOR","MID","SENIOR","LEAD"] as const;
-
-const JobServerSchema = z.object({
-  title: z.string().min(3, "Título requerido"),
-  company: z.string().min(2, "Empresa requerida"),
-  location: z.string().min(2, "Ubicación requerida"),
-  employmentType: z.enum(EMPLOYMENT_TYPES, { required_error: "Tipo de contrato requerido" }),
-  seniority: z.enum(SENIORITIES, { required_error: "Seniority requerido" }),
-  description: z.string().min(10, "Descripción muy corta"),
-  skillsCsv: z.string().optional().default(""),
-  salaryMin: z.coerce.number().nonnegative().optional().nullable(),
-  salaryMax: z.coerce.number().nonnegative().optional().nullable(),
-  currency: z.string().optional().default("MXN"),
-  remote: z
-    .union([z.literal("true"), z.literal("false"), z.string(), z.boolean()])
-    .optional()
-    .transform((v) => v === true || v === "true"),
-});
-
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
-
-  const id = searchParams.get("id");
-  if (id) {
-    const job = await prisma.job.findUnique({ where: { id } });
-    return Response.json({ job });
+// Helpers
+function getFormString(fd: FormData, key: string): string {
+  const v = fd.get(key);
+  return (typeof v === "string" ? v : v?.toString() || "").trim();
+}
+function getFormNumber(fd: FormData, key: string): number | null {
+  const v = getFormString(fd, key);
+  if (!v) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function getFormBool(fd: FormData, key: string): boolean {
+  const v = getFormString(fd, key).toLowerCase();
+  return v === "true" || v === "1" || v === "on" || v === "yes" || v === "sí" || v === "si";
+}
+function getFormJSON<T>(fd: FormData, key: string): T | null {
+  const raw = getFormString(fd, key);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
   }
-
-  // Filtros
-  const q = searchParams.get("q")?.trim() || ""; // busca en title/company/skills
-  const location = searchParams.get("location")?.trim() || "";
-  const remote = searchParams.get("remote"); // "true" | "false" | null
-  const seniority = searchParams.get("seniority") as
-    | "JUNIOR" | "MID" | "SENIOR" | "LEAD" | null;
-  const employmentType = searchParams.get("employmentType") as
-    | "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP" | null;
-
-  const where: any = {};
-
-  if (q) {
-    // NOTA: hasSome con [q] busca coincidencia exacta en el array skills.
-    // Si quieres "icontains" por cada skill, habría que usar un where OR adicional vía JSON filter (depende de tu proveedor).
-    where.OR = [
-      { title: { contains: q, mode: "insensitive" } },
-      { company: { contains: q, mode: "insensitive" } },
-      { skills: { hasSome: [q] } },
-    ];
-  }
-  if (location) where.location = { contains: location, mode: "insensitive" };
-  if (remote === "true") where.remote = true;
-  if (remote === "false") where.remote = false;
-  if (seniority) where.seniority = seniority;
-  if (employmentType) where.employmentType = employmentType;
-
-  const jobs = await prisma.job.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-  });
-
-  return Response.json({ jobs });
 }
 
-// ✅ Nuevo POST con Zod + FormData
-export async function POST(req: Request) {
+export async function GET(req: NextRequest) {
   try {
-    const ctype = req.headers.get("content-type") || "";
-    if (!ctype.includes("multipart/form-data")) {
-      // En tu JobForm ya enviamos FormData; si algún cliente manda JSON, puedes soportarlo aquí si lo deseas.
-      // Por simplicidad, exigimos FormData:
-      return Response.json({ message: "Content-Type must be multipart/form-data" }, { status: 415 });
+    const { searchParams } = new URL(req.url);
+
+    // -------- Detalle por ID --------
+    const id = searchParams.get("id");
+    if (id) {
+      const job = await prisma.job.findFirst({
+        where: { id, status: JobStatus.OPEN },
+        select: {
+          id: true,
+          title: true,
+          location: true,
+          locationType: true,
+          locationLat: true,
+          locationLng: true,
+          country: true,
+          admin1: true,
+          city: true,
+          remote: true,
+          employmentType: true,
+          description: true,
+          skills: true,
+          skillsJson: true,
+          educationJson: true,
+          minDegree: true,
+          certsJson: true,
+          benefitsJson: true,
+          showBenefits: true,
+          schedule: true,
+          salaryMin: true,
+          salaryMax: true,
+          showSalary: true,
+          currency: true,
+          createdAt: true,
+          updatedAt: true,
+          companyConfidential: true,
+          company: { select: { name: true } },
+        },
+      });
+      if (!job) return NextResponse.json({ job: null });
+
+      return NextResponse.json({
+        job: {
+          id: job.id,
+          title: job.title,
+          company: job.companyConfidential ? "Confidencial" : job.company?.name ?? null,
+          location: job.location,
+          locationType: job.locationType,
+          locationLat: job.locationLat,
+          locationLng: job.locationLng,
+          country: job.country,
+          admin1: job.admin1,
+          city: job.city,
+          remote: job.remote,
+          employmentType: job.employmentType,
+          description: job.description,
+          // para compatibilidad y también estructurado
+          skills: job.skills,
+          skillsJson: job.skillsJson,
+          educationJson: job.educationJson,
+          minDegree: job.minDegree,
+          certsJson: job.certsJson,
+          benefitsJson: job.benefitsJson,
+          showBenefits: job.showBenefits,
+          schedule: job.schedule,
+          salaryMin: job.salaryMin,
+          salaryMax: job.salaryMax,
+          showSalary: job.showSalary,
+          currency: job.currency,
+          createdAt: job.createdAt,
+          updatedAt: job.updatedAt,
+        },
+      });
     }
 
-    const form = await req.formData();
+    // -------- Lista + filtros --------
+    const limit = Math.min(parseInt(searchParams.get("limit") || "10", 10), 50);
+    const cursor = searchParams.get("cursor") ?? undefined;
 
-    const payload = {
-      title: String(form.get("title") ?? ""),
-      company: String(form.get("company") ?? ""),
-      location: String(form.get("location") ?? ""),
-      employmentType: String(form.get("employmentType") ?? "FULL_TIME"),
-      seniority: String(form.get("seniority") ?? "MID"),
-      description: String(form.get("description") ?? ""),
-      skillsCsv: String(form.get("skills") ?? ""),
-      salaryMin: form.get("salaryMin") ?? null,
-      salaryMax: form.get("salaryMax") ?? null,
-      currency: String(form.get("currency") ?? "MXN"),
-      remote: form.get("remote") ?? "false",
-    };
+    const q = (searchParams.get("q") || "").trim();
+    const location = (searchParams.get("location") || "").trim();
 
-    const data = JobServerSchema.parse(payload);
+    const remoteParam = searchParams.get("remote");
+    const remote =
+      remoteParam === "true" ? true : remoteParam === "false" ? false : undefined;
 
-    // Validación adicional de rango salarial
-    if (
-      data.salaryMin != null &&
-      data.salaryMax != null &&
-      !Number.isNaN(data.salaryMin) &&
-      !Number.isNaN(data.salaryMax) &&
-      data.salaryMin > data.salaryMax
-    ) {
-      return Response.json(
-        { message: "El salario mínimo no puede ser mayor que el máximo" },
+    const employmentType = (searchParams.get("employmentType") ||
+      "") as "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP" | "";
+
+    const sort = (searchParams.get("sort") as "recent" | "updated") || "recent";
+
+    const where: any = { status: JobStatus.OPEN };
+
+    if (q) {
+      where.OR = [
+        { title: { contains: q, mode: "insensitive" } },
+        { description: { contains: q, mode: "insensitive" } },
+        { skills: { hasSome: [q] } }, // compat text array
+      ];
+    }
+    if (location) {
+      // match por string legible o por campos estructurados
+      where.OR = [
+        ...(where.OR || []),
+        { location: { contains: location, mode: "insensitive" } },
+        { city: { contains: location, mode: "insensitive" } },
+        { admin1: { contains: location, mode: "insensitive" } },
+        { country: { contains: location, mode: "insensitive" } },
+      ];
+    }
+    if (remote !== undefined) where.remote = remote;
+    if (employmentType) where.employmentType = employmentType;
+
+    const orderBy =
+      sort === "updated" ? [{ updatedAt: "desc" as const }] : [{ createdAt: "desc" as const }];
+
+    const page = await prisma.job.findMany({
+      where,
+      orderBy,
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      select: {
+        id: true,
+        title: true,
+        location: true,
+        locationType: true,
+        country: true,
+        admin1: true,
+        city: true,
+        remote: true,
+        employmentType: true,
+        description: true,
+        skills: true,
+        salaryMin: true,
+        salaryMax: true,
+        showSalary: true,
+        currency: true,
+        createdAt: true,
+        updatedAt: true,
+        companyConfidential: true,
+        company: { select: { name: true } },
+      },
+    });
+
+    const items = page.slice(0, limit).map((j) => ({
+      id: j.id,
+      title: j.title,
+      company: j.companyConfidential ? "Confidencial" : j.company?.name ?? null,
+      location: j.location,
+      locationType: j.locationType,
+      country: j.country,
+      admin1: j.admin1,
+      city: j.city,
+      remote: j.remote,
+      employmentType: j.employmentType,
+      description: j.description,
+      skills: j.skills,
+      salaryMin: j.salaryMin,
+      salaryMax: j.salaryMax,
+      showSalary: j.showSalary,
+      currency: j.currency,
+      createdAt: j.createdAt,
+      updatedAt: j.updatedAt,
+    }));
+
+    let nextCursor: string | null = null;
+    if (page.length > limit) nextCursor = page[limit].id;
+
+    return NextResponse.json({ items, nextCursor });
+  } catch (err) {
+    console.error("[GET /api/jobs]", err);
+    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/jobs
+ * Crea una vacante y la liga al recruiter autenticado y a su companyId.
+ * Acepta FormData (desde JobWizard).
+ *
+ * BLINDAJES ANTI-DUPLICADOS:
+ *  - Si llega 'jobId' en el FormData => 409 (esto viene del editor; no se permite crear).
+ *  - Idempotencia por ventana corta: si existe una vacante OPEN con mismo (title, companyId, recruiterId)
+ *    creada en los últimos 3 minutos, devolvemos esa misma en lugar de crear otra.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const session = await getSessionOrThrow();
+    // @ts-ignore
+    const role = session.user?.role as "RECRUITER" | "ADMIN" | string | undefined;
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const companyId = await getSessionCompanyId();
+    if (!companyId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userId = (session.user?.id as string) || "";
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // ---- FormData
+    const formData = await req.formData();
+
+    // 1) Si viene desde el editor, no permitimos crear
+    const incomingJobId = getFormString(formData, "jobId");
+    if (incomingJobId) {
+      return NextResponse.json(
+        { error: "Esta operación es de edición. Usa el endpoint de actualización." },
+        { status: 409 }
+      );
+    }
+
+    // Requeridos mínimos
+    const title = getFormString(formData, "title");
+    const description = getFormString(formData, "description");
+    let employmentType = getFormString(formData, "employmentType") as EmploymentType;
+    const locationType = (getFormString(formData, "locationType") ||
+      "ONSITE") as LocationType;
+
+    if (!title || !description) {
+      return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
+    }
+
+    // Fallback seguro para employmentType
+    if (!["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"].includes(employmentType)) {
+      employmentType = "FULL_TIME";
+    }
+
+    // Ubicación legible + estructurada (opcionales)
+    const city = getFormString(formData, "city");
+    const country = getFormString(formData, "country") || null;
+    const admin1 = getFormString(formData, "admin1") || null;
+    const cityNorm = getFormString(formData, "cityNorm") || null;
+    const admin1Norm = getFormString(formData, "admin1Norm") || null;
+    const locationLat = getFormNumber(formData, "locationLat");
+    const locationLng = getFormNumber(formData, "locationLng");
+    const safeLat = Number.isFinite(locationLat as number) ? (locationLat as number) : null;
+    const safeLng = Number.isFinite(locationLng as number) ? (locationLng as number) : null;
+    const remote = locationType === "REMOTE";
+
+    // Compensación
+    const currency = getFormString(formData, "currency") || "MXN";
+    const salaryMin = getFormNumber(formData, "salaryMin");
+    const salaryMax = getFormNumber(formData, "salaryMax");
+    const showSalary = getFormBool(formData, "showSalary");
+
+    // Validación: rango de sueldo coherente
+    if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
+      return NextResponse.json(
+        { error: "El sueldo mínimo no puede ser mayor que el sueldo máximo." },
         { status: 400 }
       );
     }
 
-    const skills = (data.skillsCsv || "")
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    // Extras
+    const schedule = getFormString(formData, "schedule") || null;
+    const showBenefits = getFormBool(formData, "showBenefits");
+    const benefitsJson = getFormJSON<any>(formData, "benefitsJson");
+    const educationJson = getFormJSON<any>(formData, "educationJson");
+    const minDegree = (getFormString(formData, "minDegree") ||
+      null) as EducationLevel | null;
+    const skillsJson = getFormJSON<any>(formData, "skillsJson");
+    const certsJson = getFormJSON<any>(formData, "certsJson");
 
-    // Persistencia
-    const created = await prisma.job.create({
+    // Compat: array de skills legible para búsquedas simples (a partir de skillsJson)
+    const skillsList: string[] = Array.isArray(skillsJson)
+      ? skillsJson
+          .map((s: any) =>
+            typeof s?.name === "string"
+              ? `${s?.required ? "Req" : "Dese"}: ${s.name}`
+              : ""
+          )
+          .filter(Boolean)
+      : [];
+
+    // Confidencial
+    const companyMode = getFormString(formData, "companyMode"); // "own" | "confidential"
+    const companyConfidential = companyMode === "confidential";
+
+    // 2) Idempotencia por ventana corta
+    const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
+    const existing = await prisma.job.findFirst({
+      where: {
+        status: JobStatus.OPEN,
+        title,
+        companyId,
+        recruiterId: userId,
+        createdAt: { gte: threeMinutesAgo },
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      return NextResponse.json({ ok: true, id: existing.id, deduped: true });
+    }
+
+    // 3) Crear
+    const job = await prisma.job.create({
       data: {
-        title: data.title,
-        company: data.company,
-        location: data.location,
-        employmentType: data.employmentType,
-        seniority: data.seniority,
-        description: data.description,
-        skills,
-        salaryMin: data.salaryMin ?? null,
-        salaryMax: data.salaryMax ?? null,
-        currency: data.currency || "MXN",
-        remote: data.remote,
-        // postedById / companyId: agrega aquí si tu schema lo requiere
+        title,
+        description,
+        // Ubicación legible (fallback a "Remoto" o ciudad/cadena)
+        location:
+          locationType === "REMOTE"
+            ? "Remoto"
+            : city
+            ? city
+            : "—",
+        locationType,
+        locationLat: safeLat ?? undefined,
+        locationLng: safeLng ?? undefined,
+        country: country || undefined,
+        admin1: admin1 || undefined,
+        city: city || undefined,
+        cityNorm: cityNorm || undefined,
+        admin1Norm: admin1Norm || undefined,
+
+        remote,
+        employmentType,
+
+        schedule,
+        benefitsJson: benefitsJson ?? undefined,
+        showBenefits,
+
+        educationJson: educationJson ?? undefined,
+        minDegree: minDegree ?? undefined,
+
+        skillsJson: skillsJson ?? undefined,
+        certsJson: certsJson ?? undefined,
+        skills: skillsList, // compat
+
+        salaryMin: salaryMin ?? undefined,
+        salaryMax: salaryMax ?? undefined,
+        currency,
+        showSalary,
+
+        companyConfidential,
+        status: JobStatus.OPEN,
+
+        companyId,
+        recruiterId: userId,
       },
       select: { id: true },
     });
 
-    return Response.json({ ok: true, id: created.id }, { status: 201 });
-  } catch (e: any) {
-    if (e instanceof z.ZodError) {
-      return Response.json({ error: e.flatten() }, { status: 400 });
+    // 4) Auto-guardar/actualizar plantilla (no bloquear si falla)
+    try {
+      const payloadForTemplate = {
+        // Paso 1
+        title,
+        locationType,
+        city,
+        country,
+        admin1,
+        cityNorm,
+        admin1Norm,
+        locationLat: safeLat,
+        locationLng: safeLng,
+        currency,
+        salaryMin,
+        salaryMax,
+        showSalary,
+        // Paso 2
+        employmentType,
+        schedule,
+        // Paso 3
+        benefitsJson: benefitsJson ?? {},
+        // Paso 4
+        description,
+        education: educationJson ?? [],
+        minDegree,
+        skills: Array.isArray(skillsJson) ? skillsJson : [],
+        certs: Array.isArray(certsJson) ? certsJson : [],
+        // metadatos opcionales
+        _v: 1,
+      };
+
+      const existingTpl = await prisma.jobTemplate.findFirst({
+        where: { companyId, title },
+        select: { id: true },
+      });
+
+      if (existingTpl) {
+        await prisma.jobTemplate.update({
+          where: { id: existingTpl.id },
+          data: {
+            title,
+            payload: payloadForTemplate,
+            lastUsedAt: new Date(),
+          },
+        });
+      } else {
+        await prisma.jobTemplate.create({
+          data: {
+            companyId,
+            title,
+            payload: payloadForTemplate,
+            creatorId: userId,
+            lastUsedAt: new Date(),
+          },
+        });
+      }
+    } catch (tplErr) {
+      console.warn("[POST /api/jobs] JobTemplate save skipped:", tplErr);
     }
-    console.error(e);
-    return Response.json({ message: "Internal error" }, { status: 500 });
+
+    return NextResponse.json({ ok: true, id: job.id });
+  } catch (err) {
+    console.error("[POST /api/jobs]", err);
+    return NextResponse.json({ error: "Error al crear la vacante" }, { status: 500 });
   }
 }

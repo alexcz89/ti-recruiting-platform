@@ -1,12 +1,15 @@
+// components/WorkExperienceCard.tsx
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { Controller, Control, UseFormSetValue, useWatch } from "react-hook-form";
+
+import React, { useEffect } from "react";
+import { useFormContext } from "react-hook-form";
 
 export type WorkExperience = {
+  id?: string;
   role: string;
   company: string;
-  startDate: string;       // YYYY-MM
-  endDate?: string | null; // YYYY-MM | null
+  startDate: string;        // "YYYY-MM"
+  endDate?: string | null;  // "YYYY-MM" | null | ""
   isCurrent?: boolean;
 };
 
@@ -15,221 +18,105 @@ export type WorkExperienceErrors = {
   company?: { message?: string };
   startDate?: { message?: string };
   endDate?: { message?: string };
-} | undefined;
-
-export type ProfileFormShape = {
-  experiences: WorkExperience[];
 };
-
-const MONTHS_ES = [
-  { v: "01", l: "Enero" },
-  { v: "02", l: "Febrero" },
-  { v: "03", l: "Marzo" },
-  { v: "04", l: "Abril" },
-  { v: "05", l: "Mayo" },
-  { v: "06", l: "Junio" },
-  { v: "07", l: "Julio" },
-  { v: "08", l: "Agosto" },
-  { v: "09", l: "Septiembre" },
-  { v: "10", l: "Octubre" },
-  { v: "11", l: "Noviembre" },
-  { v: "12", l: "Diciembre" },
-];
-
-function splitYM(ym?: string | null) {
-  if (!ym || !/^\d{4}-(0[1-9]|1[0-2])$/.test(ym)) return { y: "", m: "" };
-  return { y: ym.slice(0, 4), m: ym.slice(5, 7) };
-}
-function joinYM(y: string, m: string) {
-  return y && m ? `${y}-${m}` : "";
-}
 
 export default function WorkExperienceCard({
   idx,
-  control,
-  setValue,
+  exp,
   error,
   onRemove,
+  onMakeCurrent,
 }: {
   idx: number;
-  control: Control<ProfileFormShape>;
-  setValue: UseFormSetValue<ProfileFormShape>;
-  error: WorkExperienceErrors;
-  onRemove: (idx: number) => void;
+  exp: WorkExperience;
+  error?: WorkExperienceErrors;
+  onRemove: (index: number) => void;
+  onMakeCurrent: (idx: number, checked: boolean) => void;
 }) {
-  // Observa solo estos campos
-  const startDate: string =
-    useWatch({ control, name: `experiences.${idx}.startDate` as const }) ?? "";
-  const endDate: string | null =
-    useWatch({ control, name: `experiences.${idx}.endDate` as const }) ?? null;
-  const isCurrent: boolean =
-    useWatch({ control, name: `experiences.${idx}.isCurrent` as const }) ?? false;
+  const { register, setValue, watch } = useFormContext();
+  const isCurrent = watch(`experiences.${idx}.isCurrent`) as boolean | undefined;
 
-  // Estado local para selects (evita que se "reseteen" al cambiar una parte)
-  const [sMonth, setSMonth] = useState<string>("");
-  const [sYear, setSYear] = useState<string>("");
-  const [eMonth, setEMonth] = useState<string>("");
-  const [eYear, setEYear] = useState<string>("");
-
-  // Sync estados locales cuando cambia el form (por load/reset)
+  // Si se marca "Actual", limpia endDate a null para que pase el schema
   useEffect(() => {
-    const { y, m } = splitYM(startDate);
-    setSYear(y); setSMonth(m);
-  }, [startDate]);
-  useEffect(() => {
-    const { y, m } = splitYM(endDate ?? "");
-    setEYear(y); setEMonth(m);
-  }, [endDate]);
-
-  // Años (1980..actual)
-  const YEARS = useMemo(() => {
-    const now = new Date().getFullYear();
-    const arr: string[] = [];
-    for (let y = now; y >= 1980; y--) arr.push(String(y));
-    return arr;
-  }, []);
-
-  const err = (error ?? {}) as any;
+    if (isCurrent) {
+      setValue(`experiences.${idx}.endDate`, null as any, { shouldValidate: true, shouldDirty: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCurrent]);
 
   return (
-    <div className="border rounded-xl p-3 grid md:grid-cols-12 gap-3">
-      {/* Rol */}
-      <div className="md:col-span-3">
-        <label className="text-xs">Rol / Posición</label>
-        <Controller
-          control={control}
-          name={`experiences.${idx}.role` as const}
-          render={({ field }) => (
-            <input className="border rounded-xl p-2 w-full" {...field} />
-          )}
-        />
-        {err.role?.message && <p className="text-[11px] text-red-600">{err.role.message}</p>}
+    <div className="border rounded-xl p-3">
+      <div className="grid md:grid-cols-2 gap-3">
+        <div>
+          <label className="text-sm">Rol *</label>
+          <input
+            className="border rounded-xl p-2 w-full"
+            {...register(`experiences.${idx}.role` as const)}
+            defaultValue={exp.role || ""}
+          />
+          {error?.role?.message && <p className="text-xs text-red-600">{error.role.message}</p>}
+        </div>
+
+        <div>
+          <label className="text-sm">Empresa *</label>
+          <input
+            className="border rounded-xl p-2 w-full"
+            {...register(`experiences.${idx}.company` as const)}
+            defaultValue={exp.company || ""}
+          />
+          {error?.company?.message && <p className="text-xs text-red-600">{error.company.message}</p>}
+        </div>
       </div>
 
-      {/* Empresa */}
-      <div className="md:col-span-3">
-        <label className="text-xs">Empresa</label>
-        <Controller
-          control={control}
-          name={`experiences.${idx}.company` as const}
-          render={({ field }) => (
-            <input className="border rounded-xl p-2 w-full" {...field} />
-          )}
-        />
-        {err.company?.message && <p className="text-[11px] text-red-600">{err.company.message}</p>}
-      </div>
+      <div className="grid md:grid-cols-2 gap-3 mt-3">
+        <div>
+          <label className="text-sm">Inicio *</label>
+          <input
+            type="month"
+            className="border rounded-xl p-2 w-full"
+            {...register(`experiences.${idx}.startDate` as const)}
+            defaultValue={exp.startDate || ""}
+          />
+          {error?.startDate?.message && <p className="text-xs text-red-600">{error.startDate.message}</p>}
+        </div>
 
-      {/* Inicio Mes */}
-      <div className="md:col-span-2">
-        <label className="text-xs">Inicio (Mes)</label>
-        <select
-          className="border rounded-xl p-2 w-full"
-          value={sMonth}
-          onChange={(e) => {
-            const m = e.target.value;
-            setSMonth(m);
-            const full = joinYM(sYear, m);
-            setValue(`experiences.${idx}.startDate`, full);
-          }}
-        >
-          <option value="">Mes</option>
-          {MONTHS_ES.map((mm) => (
-            <option key={mm.v} value={mm.v}>{mm.l}</option>
-          ))}
-        </select>
-      </div>
+        <div>
+          <label className="text-sm">Fin</label>
+          <div className="flex items-center gap-3">
+            <input
+              type="month"
+              className="border rounded-xl p-2 w-full"
+              {...register(`experiences.${idx}.endDate` as const, {
+                onChange: (e) => {
+                  // si lo deja vacío, guárdalo como null para pasar el schema
+                  const v = String(e.target.value || "");
+                  if (v === "") {
+                    setValue(`experiences.${idx}.endDate`, null as any, { shouldValidate: true, shouldDirty: true });
+                  }
+                },
+              })}
+              defaultValue={exp.endDate || ""}
+              disabled={!!isCurrent}
+            />
 
-      {/* Inicio Año */}
-      <div className="md:col-span-2">
-        <label className="text-xs">Inicio (Año)</label>
-        <select
-          className="border rounded-xl p-2 w-full"
-          value={sYear}
-          onChange={(e) => {
-            const y = e.target.value;
-            setSYear(y);
-            const full = joinYM(y, sMonth);
-            setValue(`experiences.${idx}.startDate`, full);
-          }}
-        >
-          <option value="">Año</option>
-          {YEARS.map((yy) => (
-            <option key={yy} value={yy}>{yy}</option>
-          ))}
-        </select>
-        {err.startDate?.message && <p className="text-[11px] text-red-600">{err.startDate.message}</p>}
-      </div>
-
-      {/* Fin Mes */}
-      <div className="md:col-span-2">
-        <label className="text-xs">Fin (Mes)</label>
-        <select
-          className="border rounded-xl p-2 w-full"
-          value={isCurrent ? "" : eMonth}
-          onChange={(e) => {
-            const m = e.target.value;
-            setEMonth(m);
-            const full = joinYM(eYear, m);
-            setValue(`experiences.${idx}.endDate`, isCurrent ? null : full || null);
-          }}
-          disabled={isCurrent}
-        >
-          <option value="">Mes</option>
-          {MONTHS_ES.map((mm) => (
-            <option key={mm.v} value={mm.v}>{mm.l}</option>
-          ))}
-        </select>
-      </div>
-
-      {/* Fin Año */}
-      <div className="md:col-span-2">
-        <label className="text-xs">Fin (Año)</label>
-        <select
-          className="border rounded-xl p-2 w-full"
-          value={isCurrent ? "" : eYear}
-          onChange={(e) => {
-            const y = e.target.value;
-            setEYear(y);
-            const full = joinYM(y, eMonth);
-            setValue(`experiences.${idx}.endDate`, isCurrent ? null : full || null);
-          }}
-          disabled={isCurrent}
-        >
-          <option value="">Año</option>
-          {YEARS.map((yy) => (
-            <option key={yy} value={yy}>{yy}</option>
-          ))}
-        </select>
-        {err.endDate?.message && <p className="text-[11px] text-red-600">{err.endDate.message}</p>}
-      </div>
-
-      {/* Fila inferior: Actual + Eliminar */}
-      <div className="md:col-span-12 flex items-center justify-between">
-        <label className="inline-flex items-center gap-2 text-sm">
-          <Controller
-            control={control}
-            name={`experiences.${idx}.isCurrent` as const}
-            render={({ field }) => (
+            <label className="inline-flex items-center gap-2 text-sm whitespace-nowrap">
               <input
                 type="checkbox"
-                checked={!!field.value}
-                onChange={(e) => {
-                  const checked = e.target.checked;
-                  field.onChange(checked);
-                  if (checked) {
-                    setValue(`experiences.${idx}.endDate`, null);
-                    setEMonth(""); setEYear("");
-                  }
-                }}
+                {...register(`experiences.${idx}.isCurrent` as const)}
+                defaultChecked={!!exp.isCurrent}
+                onChange={(e) => onMakeCurrent(idx, e.target.checked)}
               />
-            )}
-          />
-          Actual
-        </label>
+              Actual
+            </label>
+          </div>
+          {error?.endDate?.message && <p className="text-xs text-red-600">{error.endDate.message}</p>}
+        </div>
+      </div>
 
+      <div className="mt-3 flex justify-end">
         <button
           type="button"
-          className="text-xs text-red-600 hover:underline"
+          className="text-red-500 hover:text-red-700 text-sm"
           onClick={() => onRemove(idx)}
         >
           Eliminar

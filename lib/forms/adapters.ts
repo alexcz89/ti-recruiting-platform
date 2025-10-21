@@ -1,0 +1,55 @@
+// lib/forms/adapters.ts
+import { ProfileFormData } from "@/lib/schemas/profile";
+import { dateToMonth, monthToDate, stripDiacritics } from "@/lib/schemas/common";
+
+/** Defaults para RHF desde DB (centralizado) */
+export function toProfileFormDefaultsFromDb(db: any): ProfileFormData {
+  return {
+    firstName: db.firstName ?? "",
+    lastName1: db.lastName1 ?? "",
+    lastName2: db.lastName2 ?? "",
+    location: db.location ?? "",
+    birthdate: db.birthdate ? new Date(db.birthdate).toISOString().slice(0, 10) : "",
+    linkedin: db.linkedin ?? "",
+    github: db.github ?? "",
+    phoneCountry: db.phoneCountry ?? "52",
+    phoneLocal: db.phoneLocal ?? "",
+    certifications: Array.isArray(db.certifications) ? db.certifications : [],
+    experiences: (db.experiences ?? []).map((e: any) => ({
+      role: e.role ?? "",
+      company: e.company ?? "",
+      startDate: dateToMonth(e.startDate) ?? "",
+      endDate: e.isCurrent ? "" : (dateToMonth(e.endDate) ?? ""),
+      isCurrent: !!e.isCurrent,
+    })),
+    languages: (db.languages ?? []).map((l: any) => ({
+      termId: l.termId, label: l.label, level: l.level,
+    })),
+    skillsDetailed: (db.skillsDetailed ?? []).map((s: any) => ({
+      termId: s.termId, label: s.label, level: s.level,
+    })),
+  };
+}
+
+/** Normalizaciones antes de guardar (client o server) */
+export function normalizeProfileBeforeSave(values: ProfileFormData) {
+  const phoneLocalDigits = (values.phoneLocal || "").replace(/\D+/g, "");
+  return { ...values, phoneLocal: phoneLocalDigits };
+}
+
+/** Normaliza texto para índices `cityNorm/admin1Norm` */
+export function normalizeGeoParts(p: { city?: string; admin1?: string }) {
+  return {
+    ...p,
+    cityNorm: p.city ? stripDiacritics(p.city) : undefined,
+    admin1Norm: p.admin1 ? stripDiacritics(p.admin1) : undefined,
+  };
+}
+
+/** Convierte las fechas de experiencia a Date (si el server las guarda como Date) */
+export function toDbExperienceDates(e: { startDate: string; endDate?: string | null; isCurrent?: boolean }) {
+  return {
+    startDate: monthToDate(e.startDate),
+    endDate: e.isCurrent ? null : monthToDate(e.endDate || null),
+  };
+}

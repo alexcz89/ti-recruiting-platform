@@ -25,13 +25,6 @@ enum EmploymentType {
   INTERNSHIP
 }
 
-enum Seniority {
-  JUNIOR
-  MID
-  SENIOR
-  LEAD
-}
-
 enum ApplicationStatus {
   SUBMITTED
   REVIEWING
@@ -41,30 +34,79 @@ enum ApplicationStatus {
   REJECTED
 }
 
+// 👇 Interés del reclutador
+enum ApplicationInterest {
+  REVIEW
+  MAYBE
+  ACCEPTED
+  REJECTED
+}
+
+// 👇 Estatus de la vacante
+enum JobStatus {
+  OPEN
+  CLOSED
+  PAUSED
+}
+
 // Catálogo: tipo de término
 enum TaxonomyKind {
   SKILL
   CERTIFICATION
-  LANGUAGE   // 👈 NUEVO
+  LANGUAGE
 }
 
 // Nivel de idiomas
 enum LanguageProficiency {
-  NATIVE          // Nativo
-  PROFESSIONAL    // C1–C2
-  CONVERSATIONAL  // B1–B2
-  BASIC           // A1–A2
+  NATIVE
+  PROFESSIONAL
+  CONVERSATIONAL
+  BASIC
+}
+
+// =========================
+// Escolaridad (para candidatos y minDegree en Job)
+// =========================
+enum EducationLevel {
+  NONE
+  PRIMARY
+  SECONDARY
+  HIGH_SCHOOL
+  TECHNICAL
+  BACHELOR
+  MASTER
+  DOCTORATE
+  OTHER
+}
+
+enum EducationStatus {
+  ONGOING
+  COMPLETED
+  INCOMPLETE
+}
+
+// =========================
+// Ubicación de la vacante
+// =========================
+enum LocationType {
+  REMOTE
+  HYBRID
+  ONSITE
 }
 
 // =========================
 model Company {
-  id        String   @id @default(cuid())
-  name      String
-  country   String?
-  city      String?
-  domain    String?
+  id      String  @id @default(cuid())
+  name    String
+  country String?
+  city    String?
+  domain  String?
+
   users     User[]
   jobs      Job[]
+  // 👇 back-relation para plantillas
+  templates JobTemplate[] @relation("CompanyTemplates")
+
   createdAt DateTime @default(now())
 }
 
@@ -83,9 +125,21 @@ model User {
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
 
+  // EXISTENTES
   location    String?
   locationLat Float?
   locationLng Float?
+
+  // Nuevos para filtros de ubicación
+  country    String? @db.VarChar(2)
+  admin1     String?
+  city       String?
+  cityNorm   String?
+  admin1Norm String?
+
+  // Opcionales (proveedor de geodatos)
+  placeId     String?
+  placeSource String?
 
   phone     String?
   birthdate DateTime?
@@ -93,36 +147,46 @@ model User {
   github    String?
   resumeUrl String?
 
-  // Lista unificada de skills simples (fallback)
-  skills String[] @default([])
-
-  // Certificaciones simples
+  // Skills y certificaciones simples
+  skills         String[] @default([])
   certifications String[] @default([])
 
   // Relaciones detalladas
   candidateSkills      CandidateSkill[]
   candidateCredentials CandidateCredential[]
-  candidateLanguages   CandidateLanguage[]   // 👈 NUEVO
+  candidateLanguages   CandidateLanguage[]
 
   recruiterProfile RecruiterProfile?
 
-  // Historial laboral (relacional)
+  // Historial laboral
   experiences WorkExperience[]
 
+  // Escolaridad
+  highestEducationLevel EducationLevel @default(NONE)
+  education             Education[]
+
+  // 👇 back-relation para plantillas creadas por el usuario
+  createdTemplates JobTemplate[] @relation("UserCreatedTemplates")
+
   @@index([locationLat, locationLng])
+  @@index([country])
+  @@index([country, admin1])
+  @@index([country, city])
+  @@index([cityNorm])
+  @@index([admin1Norm])
 }
 
 // =========================
 model WorkExperience {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   role      String
   company   String
   startDate DateTime
   endDate   DateTime?
-  isCurrent Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isCurrent Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -131,46 +195,122 @@ model WorkExperience {
 }
 
 // =========================
+// Educación (lista)
+// =========================
+model Education {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  level  EducationLevel?
+  status EducationStatus
+
+  institution String
+  program     String?
+  country     String? @db.VarChar(2)
+  city        String?
+
+  startDate   DateTime?
+  endDate     DateTime?
+  grade       String?
+  description String?
+
+  // Orden manual para drag & drop
+  sortIndex Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, status])
+  @@index([userId, sortIndex])
+  @@index([userId, endDate])
+}
+
+// =========================
+// Vacantes
+// =========================
 model Job {
   id    String @id @default(cuid())
   title String
+
+  // Slug para URL pública (opcional)
+  slug String? @unique
 
   // Requerido (multiempresa)
   companyId String
   company   Company @relation(fields: [companyId], references: [id])
 
-  location    String
-  locationLat Float?
-  locationLng Float?
+  // Ubicación y tipo
+  location     String
+  locationLat  Float?
+  locationLng  Float?
+  locationType LocationType @default(ONSITE)
 
+  // Filtros por ubicación (estructurado)
+  country    String? @db.VarChar(2)
+  admin1     String?
+  city       String?
+  cityNorm   String?
+  admin1Norm String?
+
+  // Publicación
   employmentType EmploymentType
-  seniority      Seniority
-  description    String
+  description    String         @db.Text
+  schedule       String? // ej. "L-V 9:00–18:00"
+  publishAt      DateTime? // publicación programada
 
-  // Lista simple
-  skills String[]
-
-  // Relación opcional a catálogo
+  // Lista simple y relación catálogo
+  skills         String[]
   requiredSkills JobRequiredSkill[]
 
-  salaryMin Int?
-  salaryMax Int?
-  currency  String? @default("MXN")
-  remote    Boolean @default(false)
+  // Compensación
+  salaryMin  Int?
+  salaryMax  Int?
+  currency   String? @default("MXN")
+  showSalary Boolean @default(false)
 
+  // Remoto (compatibilidad). Preferir locationType
+  remote Boolean @default(false)
+
+  // Prestaciones y banderas de visibilidad
+  benefitsJson Json?
+  showBenefits Boolean @default(true)
+
+  // Educación / Skills / Certs (payloads del wizard)
+  educationJson Json?
+  minDegree     EducationLevel?
+  skillsJson    Json?
+  certsJson     Json?
+
+  // Privacidad
+  companyConfidential Boolean @default(false)
+
+  // Estatus de la vacante
+  status JobStatus @default(OPEN)
+
+  // Auditoría
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // Reclutador que publicó
   recruiterId String?
   recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id])
 
+  // Relaciones
   applications Application[]
 
   @@index([companyId])
   @@index([title])
   @@index([location])
-  @@index([seniority, employmentType])
   @@index([locationLat, locationLng])
+  @@index([country])
+  @@index([country, admin1])
+  @@index([country, city])
+  @@index([cityNorm])
+  @@index([admin1Norm])
+  @@index([status])
+  @@index([employmentType, status])
+  @@index([publishAt])
 }
 
 // =========================
@@ -187,6 +327,9 @@ model Application {
   rejectedAt         DateTime?
   rejectionEmailSent Boolean   @default(false)
 
+  // Interés/estado del reclutador
+  recruiterInterest ApplicationInterest @default(REVIEW)
+
   candidate User @relation(fields: [candidateId], references: [id])
   job       Job  @relation(fields: [jobId], references: [id])
 
@@ -195,6 +338,31 @@ model Application {
   @@unique([candidateId, jobId])
   @@index([status, createdAt])
   @@index([status, rejectedAt, rejectionEmailSent])
+  @@index([recruiterInterest])
+}
+
+// =========================
+// Plantillas de vacante (para “Usar vacante anterior”)
+// =========================
+model JobTemplate {
+  id String @id @default(cuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], name: "CompanyTemplates")
+
+  title   String
+  payload Json // snapshot del wizard (todos los campos)
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  lastUsedAt DateTime?
+
+  // (Opcional) quién la creó
+  creatorId String?
+  creator   User?   @relation(fields: [creatorId], references: [id], name: "UserCreatedTemplates")
+
+  @@index([companyId, updatedAt])
+  @@index([lastUsedAt])
 }
 
 // =========================
@@ -245,6 +413,7 @@ model Message {
   application Application @relation(fields: [applicationId], references: [id])
 }
 
+// Auditoría genérica
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?
@@ -267,11 +436,10 @@ model TaxonomyTerm {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  // Relaciones
   requiredByJobs  JobRequiredSkill[]
   candidateSkills CandidateSkill[]
   candidateCreds  CandidateCredential[]
-  candidateLangs  CandidateLanguage[]   // 👈 NUEVO
+  candidateLangs  CandidateLanguage[]
 
   @@unique([kind, slug])
   @@index([kind])
@@ -297,7 +465,7 @@ model CandidateSkill {
   id     String @id @default(cuid())
   userId String
   termId String
-  level  Int? // 1–5
+  level  Int?
   years  Int?
 
   user User         @relation(fields: [userId], references: [id])

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { getSessionCompanyId } from "@/lib/session"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
+import { sendApplicationEmail } from "@/lib/mailer" // 👈 NUEVO
 
 // ==============================
 // GET /api/applications?jobId=...
@@ -108,7 +109,10 @@ export async function POST(req: NextRequest) {
     }
 
     // 5) Validar vacante
-    const job = await prisma.job.findUnique({ where: { id: jobId } })
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      select: { id: true, title: true, companyId: true },
+    })
     if (!job) {
       return NextResponse.json({ error: "Vacante no encontrada" }, { status: 404 })
     }
@@ -122,15 +126,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Ya postulaste a esta vacante" }, { status: 409 })
     }
 
-    // 7) Crear postulación
+    // 7) Obtener datos del candidato (para fallback de CV y correo)
+    const candidate = await prisma.user.findUnique({
+      where: { id: candidateId },
+      select: { id: true, name: true, email: true, resumeUrl: true },
+    })
+    if (!candidate) {
+      return NextResponse.json({ error: "Candidato no encontrado" }, { status: 404 })
+    }
+
+    const effectiveResumeUrl =
+      (resumeUrl && resumeUrl.trim() !== "" ? resumeUrl : null) ??
+      (candidate.resumeUrl && candidate.resumeUrl.trim() !== "" ? candidate.resumeUrl : null)
+
+    // 8) Crear postulación
     const app = await prisma.application.create({
       data: {
         jobId,
         candidateId,
         coverLetter,
-        resumeUrl: resumeUrl && resumeUrl.trim() !== "" ? resumeUrl : null,
+        resumeUrl: effectiveResumeUrl,
       },
     })
+
+    // 9) Enviar correo de confirmación (no bloqueante)
+    ;(async () => {
+      try {
+        await sendApplicationEmail({
+          to: candidate.email,
+          candidateName: candidate.name || "Candidato",
+          jobTitle: job.title,
+          applicationId: app.id,
+        })
+      } catch (mailErr) {
+        console.warn("[POST /api/applications] sendApplicationEmail failed:", mailErr)
+      }
+    })()
 
     return NextResponse.json({ ok: true, applicationId: app.id }, { status: 201 })
   } catch (err: any) {

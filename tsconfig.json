@@ -34,7 +34,7 @@
     "**/*.tsx",
     ".next/types/**/*.ts",
     "types"
-  ],
+, "app/api/jobs/[id]/route.ts.bak"  ],
   "exclude": [
     "node_modules"
   ]

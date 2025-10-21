@@ -14,7 +14,9 @@ export default function Home() {
             <div className="max-w-2xl">
               <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs ring-1 ring-white/15">
                 <span className="text-emerald-300">Nuevo</span>
-                <span className="text-white/70">Postula con un clic y gestiona en Kanban</span>
+                <span className="text-white/70">
+                  Postula con un clic, gestiona en Kanban y crea tu CV profesional
+                </span>
               </div>
 
               <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
@@ -28,8 +30,14 @@ export default function Home() {
               {/* CTAs rápidos */}
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link
-                  href="/jobs"
+                  href="/candidate/resume"
                   className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#042229] hover:bg-emerald-300"
+                >
+                  ✨ Crea tu CV
+                </Link>
+                <Link
+                  href="/jobs"
+                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
                 >
                   Ver vacantes
                 </Link>
@@ -48,7 +56,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Avatares “hero” */}
+            {/* Avatares hero */}
             <div className="flex w-full flex-1 justify-center gap-6 lg:justify-end">
               <AvatarBubble emoji="🧑‍💻" label="Talento TI" color="emerald" />
               <AvatarBubble emoji="🧑‍💼" label="Reclutador" color="violet" />
@@ -59,6 +67,34 @@ export default function Home() {
           {/* Buscador */}
           <div className="mt-8">
             <JobSearchBar />
+          </div>
+        </div>
+      </section>
+
+      {/* Bloque promocional Resume Builder */}
+      <section className="mx-auto max-w-6xl px-6 pb-12">
+        <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-6 backdrop-blur">
+          <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Creador de CV profesional</h2>
+              <p className="mt-1 text-sm text-white/80">
+                Completa tu perfil en minutos, genera tu CV con diseño limpio y listo para descargar PDF.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link
+                href="/candidate/resume"
+                className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#042229] hover:bg-emerald-300"
+              >
+                Comenzar ahora
+              </Link>
+              <Link
+                href="/resume/builder"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+              >
+                Ver detalles
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -102,9 +138,15 @@ export default function Home() {
               <h2 className="text-lg font-semibold">Soy talento</h2>
             </div>
             <p className="mt-2 text-sm text-white/80">
-              Crea tu perfil, sube tu CV, selecciona tus skills y postúlate a vacantes en segundos.
+              Crea tu perfil, sube tu CV con nuestro constructor y postúlate a vacantes en segundos.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
+              <Link
+                href="/candidate/resume"
+                className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#042229] hover:bg-emerald-300"
+              >
+                ✨ Crea tu CV
+              </Link>
               <Link
                 href="/signin?role=CANDIDATE"
                 className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
@@ -113,7 +155,7 @@ export default function Home() {
               </Link>
               <Link
                 href="/signin?role=CANDIDATE&signup=1"
-                className="rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#042229] hover:bg-emerald-300"
+                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
               >
                 Crear cuenta
               </Link>

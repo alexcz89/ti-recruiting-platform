@@ -1,59 +1,84 @@
 // middleware.ts
-import { withAuth } from "next-auth/middleware"
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
+import { withAuth } from "next-auth/middleware";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export default withAuth(
   function middleware(req: NextRequest) {
-    const { pathname } = req.nextUrl
+    const { pathname, search } = req.nextUrl;
     const token = (req as any).nextauth?.token as
       | { role?: string; companyId?: string | null }
-      | undefined
+      | undefined;
 
-    // Si intenta acceder al dashboard y NO tiene companyId, lo llevamos a onboarding
+    const role = token?.role;
+    const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
+
+    // ===== /jobs =====
+    if (pathname.startsWith("/jobs")) {
+      // ✅ Permitir la vista pública del detalle /jobs/[id] para recruiter/admin
+      //    (app/jobs/[id]/page.tsx ya valida que solo vean vacantes de su empresa)
+      const isJobDetail = /^\/jobs\/[^/]+$/.test(pathname);
+      if (isJobDetail) {
+        return NextResponse.next();
+      }
+
+      // ❌ Si es el listado /jobs o cualquier subruta que no sea detalle,
+      //    los recruiter/admin van al dashboard
+      if (isRecruiterOrAdmin) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/dashboard/jobs";
+        url.searchParams.set("from", pathname + (search || ""));
+        return NextResponse.redirect(url);
+      }
+
+      // Público (candidatos / no logueados) pueden ver /jobs
+      return NextResponse.next();
+    }
+
+    // ===== /dashboard =====
     if (pathname.startsWith("/dashboard")) {
-      if (token && (token.role === "RECRUITER" || token.role === "ADMIN")) {
-        if (!token.companyId) {
-          const url = req.nextUrl.clone()
-          url.pathname = "/onboarding/company" // crea esta ruta si no existe
-          url.searchParams.set("from", pathname)
-          return NextResponse.redirect(url)
-        }
+      // Onboarding si no tiene companyId (solo recruiter/admin)
+      if (isRecruiterOrAdmin && !token?.companyId) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/onboarding/company";
+        url.searchParams.set("from", pathname + (search || ""));
+        return NextResponse.redirect(url);
       }
     }
 
-    // Puedes añadir aquí logs/auditoría si gustas
-    return NextResponse.next()
+    return NextResponse.next();
   },
   {
-    // usa tu página personalizada de login; si prefieres la de NextAuth, pon "/api/auth/signin"
     pages: { signIn: "/signin" },
     callbacks: {
       authorized: ({ token, req }) => {
-        const { pathname } = req.nextUrl
+        const { pathname } = req.nextUrl;
 
-        // No logueado → no pasa a las rutas protegidas
-        if (!token) return false
-
-        // /dashboard: requiere RECRUITER o ADMIN
+        // Dashboard: requiere auth + rol
         if (pathname.startsWith("/dashboard")) {
-          const role = (token as any).role
-          return role === "RECRUITER" || role === "ADMIN"
+          if (!token) return false;
+          const role = (token as any)?.role;
+          return role === "RECRUITER" || role === "ADMIN";
         }
 
-        // /profile: con estar logueado basta
+        // Perfil: requiere estar logueado
         if (pathname.startsWith("/profile")) {
-          return true
+          return !!token;
         }
 
-        // Cualquier otra ruta listada en matcher, si llegara a existir
-        return true
+        // /jobs es público; las redirecciones (si aplica) se manejan arriba
+        if (pathname.startsWith("/jobs")) {
+          return true;
+        }
+
+        // Resto de rutas del matcher
+        return true;
       },
     },
   }
-)
+);
 
-// Limita el middleware a estas rutas protegidas (no afecta /api)
+// Limita el middleware a estas rutas (no afecta /api)
 export const config = {
-  matcher: ["/dashboard/:path*", "/profile/:path*"],
-}
+  matcher: ["/dashboard/:path*", "/profile/:path*", "/jobs/:path*"],
+};

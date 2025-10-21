@@ -7,141 +7,150 @@ import {
   EmploymentType,
   Seniority,
   TaxonomyKind,
-} from '@prisma/client'
+} from "@prisma/client";
 
-const prisma = new PrismaClient()
+// ⬇ Importa el catálogo único desde lib/skills.ts
+import {
+  ALL_SKILLS,
+  CERTIFICATIONS,
+  LANGUAGES_FALLBACK,
+} from "../lib/skills";
 
-const LANGUAGES: string[] = [
-  'Inglés',
-  'Mandarín (Chino estándar)',
-  'Hindi',
-  'Español',
-  'Francés',
-  'Árabe (variedades)',
-  'Bengalí',
-  'Ruso',
-  'Portugués',
-  'Urdu',
-  'Indonesio/Malayo',
-  'Alemán',
-  'Japonés',
-  'Nigerian Pidgin',
-  'Maratí',
-  'Telugu',
-  'Turco',
-  'Tamil',
-  'Yue (Cantonés)',
-  'Italiano',
-  'Persa (Farsi/Dari/Tayiko)',
-  'Vietnamita',
-  'Hausa',
-  'Egipcio árabe',
-  'Javanés',
-  'Coreano',
-  'Punjabi occidental (Lahnda)',
-  'Wu (Shanghainés)',
-  'Gujarati',
-  'Bhojpuri',
-]
+const prisma = new PrismaClient();
+
+/** Cambia a `true` si quieres borrar términos que no estén en el catálogo de lib/skills.ts */
+const CLEAN_UNLISTED = true;
 
 function slugifyLabel(s: string) {
   return s
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
-async function seedLanguages() {
-  const rows = LANGUAGES.map((label) => ({
-    kind: TaxonomyKind.LANGUAGE,
+async function seedTaxonomy(kind: TaxonomyKind, labels: string[]) {
+  const rows = labels.map((label) => ({
+    kind,
     slug: slugifyLabel(label),
     label,
     aliases: [] as string[],
-  }))
-  // Usamos createMany con skipDuplicates — respeta @@unique([kind, slug])
+  }));
+
+  // Crea los que falten (respeta @@unique([kind, slug]) con skipDuplicates)
   await prisma.taxonomyTerm.createMany({
     data: rows,
     skipDuplicates: true,
-  })
+  });
+
+  if (CLEAN_UNLISTED) {
+    // Borra términos del mismo kind que NO estén en el catálogo
+    const allowedSlugs = new Set(rows.map((r) => r.slug));
+    await prisma.taxonomyTerm.deleteMany({
+      where: {
+        kind,
+        slug: { notIn: Array.from(allowedSlugs) },
+      },
+    });
+  }
+
+  // Devuelve lo que quedó en DB (útil para depurar)
+  const final = await prisma.taxonomyTerm.findMany({
+    where: { kind },
+    select: { id: true, label: true },
+    orderBy: { label: "asc" },
+  });
+  return final;
 }
 
-async function main() {
+async function seedLanguages() {
+  return seedTaxonomy(TaxonomyKind.LANGUAGE, LANGUAGES_FALLBACK as string[]);
+}
+
+async function seedSkills() {
+  return seedTaxonomy(TaxonomyKind.SKILL, ALL_SKILLS as string[]);
+}
+
+async function seedCertifications() {
+  return seedTaxonomy(TaxonomyKind.CERTIFICATION, CERTIFICATIONS as string[]);
+}
+
+async function seedDemoData() {
   // 1) Company
-  let company = await prisma.company.findFirst({ where: { name: 'Task Consultores' } })
+  let company = await prisma.company.findFirst({ where: { name: "Task Consultores" } });
   if (!company) {
     company = await prisma.company.create({
-      data: { name: 'Task Consultores', country: 'MX', city: 'Monterrey', domain: 'task.com.mx' },
-    })
+      data: { name: "Task Consultores", country: "MX", city: "Monterrey", domain: "task.com.mx" },
+    });
   }
 
   // 2) Recruiter
-  let recruiter = await prisma.user.findUnique({ where: { email: 'alejandro@task.com.mx' } })
+  let recruiter = await prisma.user.findUnique({ where: { email: "alejandro@task.com.mx" } });
   if (!recruiter) {
     recruiter = await prisma.user.create({
       data: {
-        email: 'alejandro@task.com.mx',
-        name: 'Alejandro Cerda',
+        email: "alejandro@task.com.mx",
+        name: "Alejandro Cerda",
         role: Role.RECRUITER,
         companyId: company.id,
         recruiterProfile: {
           create: {
             company: company.name,
-            website: 'https://task.com.mx',
-            phone: '+52 81 8162 2482',
+            website: "https://task.com.mx",
+            phone: "+52 81 8162 2482",
             status: RecruiterStatus.APPROVED,
           },
         },
       },
-    })
+    });
   }
 
   // 3) Candidate
-  let candidate = await prisma.user.findUnique({ where: { email: 'carolina@example.com' } })
+  let candidate = await prisma.user.findUnique({ where: { email: "carolina@example.com" } });
   if (!candidate) {
     candidate = await prisma.user.create({
       data: {
-        email: 'carolina@example.com',
-        name: 'Carolina Torres',
+        email: "carolina@example.com",
+        name: "Carolina Torres",
         role: Role.CANDIDATE,
-        location: 'Monterrey, NL, Mexico',
-        phone: '+528111111111',
-        linkedin: 'https://linkedin.com/in/carolinatorres',
-        github: 'https://github.com/carolinatorres',
-        resumeUrl: '/resumes/carolina.pdf',
-        // Usa arrays simples existentes en tu schema actual
-        skills: ['JavaScript', 'React', 'Node.js'],
-        certifications: ['CompTIA'],
+        location: "Monterrey, NL, Mexico",
+        phone: "+528111111111",
+        linkedin: "https://linkedin.com/in/carolinatorres",
+        github: "https://github.com/carolinatorres",
+        resumeUrl: "/resumes/carolina.pdf",
+        // Estos arrays legacy siguen siendo strings en tu schema
+        skills: ["React", "Node.js", "AWS"],
+        certifications: ["CompTIA"],
       },
-    })
+    });
   }
 
   // 4) Job
   let job = await prisma.job.findFirst({
-    where: { title: 'Frontend Developer', companyId: company.id },
-  })
+    where: { title: "Frontend Developer", companyId: company.id },
+  });
   if (!job) {
     job = await prisma.job.create({
       data: {
-        title: 'Frontend Developer',
-        description: 'React + Tailwind para plataforma TI',
-        location: 'CDMX (Híbrido)',
+        title: "Frontend Developer",
+        description: "React + Tailwind para plataforma TI",
+        location: "CDMX (Híbrido)",
         employmentType: EmploymentType.FULL_TIME,
         seniority: Seniority.MID,
-        skills: ['React', 'JavaScript', 'Node.js'],
+        skills: ["React", "JavaScript", "Node.js"],
         salaryMin: 45000,
         salaryMax: 65000,
         companyId: company.id,
         recruiterId: recruiter.id,
       },
-    })
+    });
   }
 
   // 5) Application
   const existingApp = await prisma.application.findUnique({
     where: { candidateId_jobId: { candidateId: candidate.id, jobId: job.id } },
-  })
+  });
   if (!existingApp) {
     await prisma.application.create({
       data: {
@@ -149,22 +158,35 @@ async function main() {
         jobId: job.id,
         status: ApplicationStatus.SUBMITTED,
         resumeUrl: candidate.resumeUrl ?? undefined,
-        coverLetter: 'Me interesa la vacante de Frontend Developer.',
+        coverLetter: "Me interesa la vacante de Frontend Developer.",
       },
-    })
+    });
   }
+}
 
-  // 6) Languages (TaxonomyTerm)
-  await seedLanguages()
+async function main() {
+  // Semillas de catálogos
+  const [langs, skills, certs] = await Promise.all([
+    seedLanguages(),
+    seedSkills(),
+    seedCertifications(),
+  ]);
 
-  console.log('✅ Seed completado: Company, Recruiter, Candidate, Job, Application y Languages listos.')
+  console.log(`✅ Idiomas en DB: ${langs.length}`);
+  console.log(`✅ Skills en DB: ${skills.length}`);
+  console.log(`✅ Certificaciones en DB: ${certs.length}`);
+
+  // (Opcional) datos demo
+  await seedDemoData();
+
+  console.log("✅ Seed completado: catálogos (LANGUAGE/SKILL/CERTIFICATION) y demo listos.");
 }
 
 main()
   .catch((e) => {
-    console.error(e)
-    process.exit(1)
+    console.error(e);
+    process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect()
-  })
+    await prisma.$disconnect();
+  });

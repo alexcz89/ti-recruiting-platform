@@ -1,6 +1,7 @@
 // lib/validation.ts
-import { z } from "zod";
 
+import { z } from "zod";
+export * from "@/lib/schemas/profile";
 export const EmailSchema = z.string().email("Email inválido");
 
 export const PhoneMxSchema = z

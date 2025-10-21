@@ -1,182 +1,245 @@
-"use client"
+// app/dashboard/jobs/[id]/Kanbanboard.tsx
+"use client";
 
-import * as React from "react"
-import Link from "next/link"
-
-type ApplicationStatus = "SUBMITTED" | "REVIEWING" | "INTERVIEW" | "OFFER" | "HIRED" | "REJECTED"
-
-const STATUSES: ApplicationStatus[] = ["SUBMITTED","REVIEWING","INTERVIEW","OFFER","HIRED","REJECTED"]
+import * as React from "react";
+import { useTransition, useMemo, useState } from "react";
+import { fromNow } from "@/lib/dates";
 
 type Candidate = {
-  id: string
-  name: string | null
-  email: string
-  resumeUrl: string | null
-  frontend: string[]
-  backend: string[]
-  cloud: string[]
-  database: string[]
-}
+  id: string;
+  name: string;
+  email: string;
+  resumeUrl?: string | null;
+  skills?: string[] | null;
+};
 
-type Application = {
-  id: string
-  status: ApplicationStatus
-  createdAt: string
-  candidate: Candidate
-}
+type AppCard = {
+  id: string;
+  status: string;
+  createdAt?: string | Date | null;
+  candidate: Candidate;
+};
 
-export default function KanbanBoard({
+export default function Kanbanboard({
   jobId,
-  initialApplications,
+  statuses,
+  statusLabels,
+  applications,
+  moveAction,
 }: {
-  jobId: string
-  initialApplications: Application[]
+  jobId: string;
+  statuses: string[];
+  statusLabels: Record<string, string>;
+  applications: AppCard[];
+  moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 }) {
-  const [apps, setApps] = React.useState<Application[]>(initialApplications)
-  const [loadingId, setLoadingId] = React.useState<string | null>(null)
-  const [error, setError] = React.useState<string | null>(null)
+  // Estado local (optimista)
+  const [items, setItems] = useState<AppCard[]>(applications);
+  const [isPending, startTransition] = useTransition();
+  const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  const grouped = React.useMemo(() => {
-    const map: Record<ApplicationStatus, Application[]> = {
-      SUBMITTED: [], REVIEWING: [], INTERVIEW: [], OFFER: [], HIRED: [], REJECTED: []
-    }
-    for (const a of apps) map[a.status].push(a)
-    return map
-  }, [apps])
+  const grouped = useMemo(() => {
+    const map: Record<string, AppCard[]> = {};
+    for (const st of statuses) map[st] = [];
+    for (const a of items) (map[a.status] ||= []).push(a);
+    return map;
+  }, [items, statuses]);
 
-  async function move(appId: string, to: ApplicationStatus) {
-    setLoadingId(appId)
-    setError(null)
-    try {
-      const res = await fetch(`/api/applications/${appId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: to }),
-      })
+  const handleDrop = (appId: string, toStatus: string) => {
+    if (!statuses.includes(toStatus)) return;
+    const prev = items;
+    const idx = prev.findIndex((x) => x.id === appId);
+    if (idx < 0) return;
+    if (prev[idx].status === toStatus) return;
+
+    // Optimista
+    const next = [...prev];
+    next[idx] = { ...next[idx], status: toStatus };
+    setItems(next);
+
+    // Server Action
+    const fd = new FormData();
+    fd.set("appId", appId);
+    fd.set("newStatus", toStatus);
+    startTransition(async () => {
+      const res = await moveAction(fd);
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        throw new Error(j?.error || `Error ${res.status}`)
+        // revertir
+        setItems(prev);
+        // opcional: toast
+        console.error(res.message || "No se pudo mover");
       }
-      const updated = await res.json()
-      setApps(prev => prev.map(a => (a.id === appId ? { ...a, status: updated.status } : a)))
-    } catch (e: any) {
-      setError(e.message)
-    } finally {
-      setLoadingId(null)
-    }
-  }
+    });
+  };
 
-  async function refresh() {
-    setError(null)
-    const url = new URL(`/api/applications`, window.location.origin)
-    url.searchParams.set("jobId", jobId)
-    const res = await fetch(url.toString(), { cache: "no-store" })
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}))
-      setError(j?.error || `Error ${res.status}`)
-      return
-    }
-    const data = await res.json()
-    setApps(data)
-  }
+  const onDragStart = (id: string) => setDraggingId(id);
+  const onDragEnd = () => setDraggingId(null);
+  const allowDrop = (e: React.DragEvent) => e.preventDefault();
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-3">
-        <button onClick={refresh} className="px-3 py-1 rounded bg-gray-100 border">
-          Refrescar
-        </button>
-        {error && <span className="text-sm text-red-600">⚠ {error}</span>}
-      </div>
-
-      <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${STATUSES.length}, minmax(220px, 1fr))` }}>
-        {STATUSES.map((status) => (
-          <div key={status} className="rounded-2xl border bg-white">
-            <div className="sticky top-0 p-3 border-b bg-gray-50 font-semibold text-sm">
-              {status} <span className="text-gray-500">({grouped[status].length})</span>
-            </div>
-            <div className="p-3 space-y-3">
-              {grouped[status].map(app => (
-                <AppCard
-                  key={app.id}
-                  app={app}
-                  jobId={jobId}
-                  onMove={move}
-                  loading={loadingId === app.id}
-                />
-              ))}
-              {grouped[status].length === 0 && (
-                <div className="text-xs text-gray-400 border border-dashed rounded p-3 text-center">
-                  Sin candidatos
-                </div>
-              )}
-            </div>
-          </div>
+    <section
+      className="
+        rounded-2xl border bg-white/90 p-4
+        overflow-x-auto
+      "
+    >
+      <div
+        className="
+          grid gap-4
+          md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6
+          min-w-[1000px]
+        "
+      >
+        {statuses.map((st) => (
+          <Column
+            key={st}
+            title={statusLabels[st] ?? st}
+            count={grouped[st]?.length ?? 0}
+            isLoading={isPending}
+            onDrop={(appId) => handleDrop(appId, st)}
+          >
+            {(grouped[st] || []).map((card) => (
+              <Card
+                key={card.id}
+                card={card}
+                dragging={draggingId === card.id}
+                onDragStart={() => onDragStart(card.id)}
+                onDragEnd={onDragEnd}
+              />
+            ))}
+          </Column>
         ))}
       </div>
-    </div>
-  )
-}
+    </section>
+  );
 
-function AppCard({
-  app,
-  jobId,
-  onMove,
-  loading,
-}: {
-  app: Application
-  jobId: string
-  onMove: (id: string, to: ApplicationStatus) => Promise<void>
-  loading: boolean
-}) {
-  const skills = [
-    ...(app.candidate.frontend || []),
-    ...(app.candidate.backend || []),
-    ...(app.candidate.cloud || []),
-    ...(app.candidate.database || []),
-  ].slice(0, 6)
+  /* ============ Subcomponentes ============ */
 
-  const candidateHref = `/dashboard/candidates/${app.candidate.id}?jobId=${jobId}&applicationId=${app.id}`
+  function Column({
+    title,
+    count,
+    isLoading,
+    onDrop,
+    children,
+  }: {
+    title: string;
+    count: number;
+    isLoading?: boolean;
+    onDrop: (id: string) => void;
+    children: React.ReactNode;
+  }) {
+    const handleDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      const id = e.dataTransfer.getData("text/plain");
+      if (id) onDrop(id);
+    };
 
-  return (
-    <div className="rounded-xl border p-3 shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="font-medium text-sm">
-          <Link
-            href={candidateHref}
-            className="underline underline-offset-2 hover:opacity-80"
+    return (
+      <div
+        className="
+          rounded-xl border bg-white
+          flex flex-col
+          max-h-[72vh]
+        "
+        onDragOver={allowDrop}
+        onDrop={handleDrop}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-white/95 px-3 py-2 rounded-t-xl">
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <span className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-0.5 text-[11px]">
+            {count}
+          </span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-3 space-y-3">
+          {children}
+          {count === 0 && (
+            <p className="text-xs text-zinc-500 text-center py-4">Sin candidatos</p>
+          )}
+        </div>
+
+        <div className="border-t bg-white/90 text-[11px] text-zinc-500 px-3 py-1.5 rounded-b-xl">
+          {isLoading ? "Guardando cambios…" : "Arrastra tarjetas entre columnas"}
+        </div>
+      </div>
+    );
+  }
+
+  function Card({
+    card,
+    dragging,
+    onDragStart,
+    onDragEnd,
+  }: {
+    card: AppCard;
+    dragging: boolean;
+    onDragStart: () => void;
+    onDragEnd: () => void;
+  }) {
+    const when =
+      (card as any).updatedAt ? new Date((card as any).updatedAt) : card.createdAt ? new Date(card.createdAt) : null;
+
+    return (
+      <article
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData("text/plain", card.id);
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+        className={`rounded-xl border p-3 bg-white shadow-sm hover:shadow transition
+          ${dragging ? "opacity-50" : ""}
+        `}
+      >
+        <header className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h4 className="text-sm font-medium leading-snug break-anywhere">
+              {card.candidate.name}
+            </h4>
+            <p className="text-xs text-zinc-600 break-anywhere">{card.candidate.email}</p>
+          </div>
+          {card.candidate.resumeUrl ? (
+            <a
+              href={card.candidate.resumeUrl}
+              target="_blank"
+              className="text-xs border rounded px-2 py-1 hover:bg-gray-50 shrink-0"
+              title="Ver CV"
+            >
+              CV
+            </a>
+          ) : null}
+        </header>
+
+        {Array.isArray(card.candidate.skills) && card.candidate.skills.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {card.candidate.skills.slice(0, 4).map((s) => (
+              <span
+                key={s}
+                className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-0.5 text-[11px]"
+              >
+                {s}
+              </span>
+            ))}
+            {card.candidate.skills.length > 4 && (
+              <span className="text-[11px] text-zinc-500">+{card.candidate.skills.length - 4}</span>
+            )}
+          </div>
+        )}
+
+        {when && (
+          <p className="mt-2 text-[11px] text-zinc-500">Actualizado {fromNow(when)}</p>
+        )}
+
+        <footer className="mt-2 flex items-center gap-1">
+          <a
+            href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`}
+            className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
             title="Ver detalle del candidato"
           >
-            {app.candidate.name || "Sin nombre"}
-          </Link>
-        </div>
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 border">{app.status}</span>
-      </div>
-      <div className="text-xs text-gray-500 truncate">{app.candidate.email}</div>
-
-      {skills.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {skills.map((s, i) => (
-            <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-gray-50 border">{s}</span>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-wrap gap-1">
-        {(["REVIEWING","INTERVIEW","OFFER","HIRED","REJECTED"] as ApplicationStatus[])
-          .filter(to => to !== app.status)
-          .map(to => (
-            <button
-              key={to}
-              disabled={loading}
-              onClick={() => onMove(app.id, to)}
-              className="text-[11px] px-2 py-1 rounded border bg-gray-50 hover:bg-gray-100 disabled:opacity-50"
-              title={`Mover a ${to}`}
-            >
-              → {to}
-            </button>
-          ))}
-      </div>
-    </div>
-  )
+            Detalle
+          </a>
+        </footer>
+      </article>
+    );
+  }
 }

@@ -3,15 +3,11 @@ import { Resend } from "resend";
 
 /**
  * Requisitos de entorno (.env):
- * - RESEND_API_KEY="re_xxx"                        // solo cuando quieras enviar correos reales
- * - RESEND_FROM="Bolsa TI <noreply@tu-dominio.com>"// en prod usa dominio verificado
- * - EMAIL_ENABLED="false"                          // "true" para enviar; "false"/vacío = dry-run
+ * - RESEND_API_KEY="re_xxx"
+ * - RESEND_FROM="Bolsa TI <noreply@tu-dominio.com>"
+ * - EMAIL_ENABLED="false"   // "true" = envía, "false"/vacío = dry-run
  * - NEXT_PUBLIC_BASE_URL="http://localhost:3000"
- * - NEXT_PUBLIC_APP_NAME="Bolsa TI"                // opcional
- *
- * Comportamiento:
- * - EMAIL_ENABLED !== "true"  -> DRY RUN (no envía, solo loguea)
- * - EMAIL_ENABLED === "true"  -> intenta enviar con Resend (requiere RESEND_API_KEY y RESEND_FROM)
+ * - NEXT_PUBLIC_APP_NAME="Bolsa TI"
  */
 
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Bolsa TI";
@@ -34,7 +30,6 @@ export async function sendEmail(opts: {
   text?: string;
   from?: string;
 }): Promise<SendResult> {
-  // DRY RUN si no está habilitado
   if (!EMAIL_ENABLED) {
     if (process.env.NODE_ENV !== "production") {
       console.log("[MAIL:DRYRUN]", {
@@ -46,7 +41,6 @@ export async function sendEmail(opts: {
     return { skipped: true };
   }
 
-  // Validaciones mínimas para envío real
   if (!RESEND_API_KEY) return { error: "Missing RESEND_API_KEY" };
   if (!RESEND_FROM && !opts.from) return { error: "Missing RESEND_FROM" };
 
@@ -69,9 +63,9 @@ export async function sendEmail(opts: {
 /* ----------------------------------------------------------
  * 1) Postulación enviada (notifica al CANDIDATE)
  * -------------------------------------------------------- */
-export async function sendApplicationSubmittedEmail(params: {
+export async function sendApplicationEmail(params: {
   to: string;              // email del candidato
-  candidateName?: string;  // opcional
+  candidateName?: string;
   jobTitle: string;
   companyName?: string;
   applicationId?: string;
@@ -80,7 +74,6 @@ export async function sendApplicationSubmittedEmail(params: {
     params.companyName ? " — " + params.companyName : ""
   }`;
 
-  // Llevamos al candidato a sus postulaciones (o resumen)
   const url = params.applicationId
     ? `${BASE_URL}/profile/applications`
     : `${BASE_URL}/profile/summary`;
@@ -114,13 +107,13 @@ export async function sendApplicationSubmittedEmail(params: {
  * 2) Nuevo mensaje en el hilo (notifica al destinatario)
  * -------------------------------------------------------- */
 export async function sendNewMessageEmail(params: {
-  to: string;               // email del destinatario
+  to: string;
   recipientName?: string;
-  fromName?: string;        // nombre del remitente
+  fromName?: string;
   jobTitle: string;
   applicationId: string;
-  preview?: string;         // primeras ~200 chars del mensaje
-  isRecruiterRecipient?: boolean; // para CTA adecuado
+  preview?: string;
+  isRecruiterRecipient?: boolean;
 }) {
   const subject = `Nuevo mensaje sobre: ${params.jobTitle}`;
   const url = params.isRecruiterRecipient
@@ -148,8 +141,9 @@ export async function sendNewMessageEmail(params: {
   });
 
   const text =
-    `Tienes un nuevo mensaje de ${params.fromName || "contacto"} ` +
-    `sobre la vacante ${params.jobTitle}.\n\n` +
+    `Tienes un nuevo mensaje de ${params.fromName || "contacto"} sobre la vacante ${
+      params.jobTitle
+    }.\n\n` +
     (params.preview ? `“${truncate(params.preview, 200)}”\n\n` : "") +
     `Responder: ${url}\n\n` +
     `Equipo ${APP_NAME}`;
@@ -159,11 +153,10 @@ export async function sendNewMessageEmail(params: {
 
 /* ----------------------------------------------------------
  * 3) Rechazo de candidatura (genérico)
- *    Úsalo cuando la app se mantuvo REJECTED por 5 días.
  * -------------------------------------------------------- */
 export async function sendRejectionEmail(params: {
-  to: string;              // email del candidato
-  candidateName?: string;  // opcional
+  to: string;
+  candidateName?: string;
   jobTitle: string;
   companyName?: string;
 }) {
@@ -175,7 +168,9 @@ export async function sendRejectionEmail(params: {
     <p>Hola ${escapeHtml(params.candidateName || "candidato/a")},</p>
     <p>Muchas gracias por tu tiempo y por tu interés en la vacante de <strong>${escapeHtml(
       params.jobTitle
-    )}</strong>${params.companyName ? ` en <strong>${escapeHtml(params.companyName)}</strong>` : ""}.</p>
+    )}</strong>${
+      params.companyName ? ` en <strong>${escapeHtml(params.companyName)}</strong>` : ""
+    }.</p>
     <p>Hemos recibido un gran número de solicitudes y, tras una cuidadosa revisión, hemos decidido no seguir adelante con tu candidatura en este momento.</p>
     <p>Te deseamos mucho éxito en tu búsqueda de empleo y esperamos que puedas considerar nuestras futuras ofertas.</p>
     <hr />
@@ -187,10 +182,8 @@ export async function sendRejectionEmail(params: {
     `Muchas gracias por tu tiempo y por tu interés en la vacante de ${params.jobTitle}${
       params.companyName ? ` en ${params.companyName}` : ""
     }.\n` +
-    `Hemos recibido un gran número de solicitudes y, tras una cuidadosa revisión, ` +
-    `hemos decidido no seguir adelante con tu candidatura en este momento.\n\n` +
-    `Te deseamos mucho éxito en tu búsqueda de empleo y esperamos que puedas considerar ` +
-    `nuestras futuras ofertas.\n\n` +
+    `Hemos recibido un gran número de solicitudes y, tras una cuidadosa revisión, hemos decidido no seguir adelante con tu candidatura en este momento.\n\n` +
+    `Te deseamos mucho éxito en tu búsqueda de empleo y esperamos que puedas considerar nuestras futuras ofertas.\n\n` +
     `Equipo ${APP_NAME}`;
 
   const html = htmlLayout({ title: subject, body: bodyHtml });
@@ -202,18 +195,13 @@ export async function sendRejectionEmail(params: {
 function htmlLayout({ title, body }: { title: string; body: string }) {
   return `<!doctype html>
 <html>
-  <head>
-    <meta charSet="utf-8" />
-    <title>${escapeHtml(title)}</title>
-  </head>
+  <head><meta charSet="utf-8" /><title>${escapeHtml(title)}</title></head>
   <body style="background:#f8fafc;margin:0;padding:24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica Neue,Arial;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:white;border:1px solid #e5e7eb;border-radius:12px;">
       <tr>
         <td style="padding:20px 24px;">
           <h1 style="font-size:18px;margin:0 0 8px 0;">${escapeHtml(APP_NAME)}</h1>
-          <div style="color:#111827;font-size:14px;line-height:1.6;">
-            ${body}
-          </div>
+          <div style="color:#111827;font-size:14px;line-height:1.6;">${body}</div>
           <p style="margin-top:28px;color:#6b7280;font-size:12px;">© ${new Date().getFullYear()} ${escapeHtml(
             APP_NAME
           )} — Este correo fue enviado automáticamente.</p>
@@ -225,11 +213,7 @@ function htmlLayout({ title, body }: { title: string; body: string }) {
 }
 
 function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function truncate(s: string, n: number) {
