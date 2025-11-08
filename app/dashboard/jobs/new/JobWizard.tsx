@@ -623,7 +623,7 @@ export default function JobWizard({
             key={n}
             className={clsx(
               "px-2 py-1 rounded-full",
-              n <= step ? "bg-emerald-500 text-white" : "bg-zinc-200 text-zinc-700"
+              n <= step ? "bg-emerald-500 text-white" : "glass-card p-4 md:p-6"
             )}
           >
             Paso {n}
@@ -1008,7 +1008,7 @@ export default function JobWizard({
                 />
 
                 {educationQuery && (
-                  <div className="absolute z-10 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-white shadow">
+                  <div className="absolute z-10 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
                     {/* Opción para agregar el texto tal cual */}
                     <button
                       type="button"
@@ -1100,7 +1100,7 @@ export default function JobWizard({
                             "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
                             e.required
                               ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                              : "bg-zinc-100 text-zinc-700 border-zinc-200"
+                              : "glass-card p-4 md:p-6"
                           )}
                         >
                           <span className="truncate max-w-[220px]" title={e.name}>
@@ -1112,7 +1112,7 @@ export default function JobWizard({
                               "rounded-full px-2 py-0.5 text-[11px] border",
                               e.required
                                 ? "bg-emerald-600 text-white border-emerald-600"
-                                : "bg-white text-zinc-700 border-zinc-300"
+                                : "glass-card p-4 md:p-6"
                             )}
                             onClick={() => toggleEducationType(e.name)}
                             title={`Mover a ${e.required ? "Deseable" : "Obligatoria"}`}
@@ -1167,7 +1167,7 @@ export default function JobWizard({
                 aria-expanded={!!skillQuery}
               />
               {skillQuery && (
-                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-white shadow">
+                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
                   {filteredSkills.length === 0 ? (
                     <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
                   ) : (
@@ -1196,7 +1196,7 @@ export default function JobWizard({
                       "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
                       s.required
                         ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                        : "bg-zinc-100 text-zinc-700 border-zinc-200"
+                        : "glass-card p-4 md:p-6"
                     )}
                   >
                     {s.name}
@@ -1243,7 +1243,7 @@ export default function JobWizard({
                 aria-expanded={!!certQuery}
               />
               {certQuery && (
-                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-white shadow">
+                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
                   {filteredCerts.length === 0 ? (
                     <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
                   ) : (
@@ -1391,7 +1391,7 @@ export default function JobWizard({
             </div>
           )}
 
-          <div className="sticky bottom-0 mt-2 -mx-4 border-t bg-white/90 px-4 py-3 backdrop-blur">
+          <div className="sticky bottom-0 mt-2 -mx-4 border-t glass-card p-4 md:p-6">
             <div className="flex justify-between">
               <button className="rounded-md border px-4 py-2" onClick={() => setStep(4)}>
                 Atrás

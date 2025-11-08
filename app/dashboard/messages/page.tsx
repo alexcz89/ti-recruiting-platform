@@ -188,7 +188,7 @@ export default async function MessagesPage({
       </div>
 
       {/* Hilo */}
-      <div className="border rounded-xl p-4 space-y-3 bg-white">
+      <div className="border rounded-xl p-4 space-y-3 glass-card p-4 md:p-6">
         {messages.length === 0 ? (
           <p className="text-sm text-zinc-500">No hay mensajes todavía.</p>
         ) : (

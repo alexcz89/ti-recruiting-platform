@@ -50,7 +50,7 @@ export default function InterestSelect({
 
   return (
     <select
-      className="rounded border border-zinc-300 bg-white px-2 py-1 text-sm disabled:opacity-60"
+      className="rounded border border-zinc-300 glass-card p-4 md:p-6"
       value={value}
       disabled={isPending}
       onChange={(e) => startTransition(() => updateInterest(e.target.value as InterestKey))}

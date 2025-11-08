@@ -194,26 +194,26 @@ export default async function JobsPage({
 
       {/* Métricas rápidas */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-2xl border bg-white/85 p-4">
+        <div className="rounded-2xl border glass-card p-4 md:p-6">
           <p className="text-xs text-zinc-500">Abiertas</p>
           <p className="mt-1 text-2xl font-semibold">{openCount}</p>
         </div>
-        <div className="rounded-2xl border bg-white/85 p-4">
+        <div className="rounded-2xl border glass-card p-4 md:p-6">
           <p className="text-xs text-zinc-500">Pausadas/Cerradas</p>
           <p className="mt-1 text-2xl font-semibold">{pausedCount + closedCount}</p>
         </div>
-        <div className="rounded-2xl border bg-white/85 p-4">
+        <div className="rounded-2xl border glass-card p-4 md:p-6">
           <p className="text-xs text-zinc-500">Postulaciones</p>
           <p className="mt-1 text-2xl font-semibold">{totalApplications}</p>
         </div>
-        <div className="rounded-2xl border bg-white/85 p-4">
+        <div className="rounded-2xl border glass-card p-4 md:p-6">
           <p className="text-xs text-zinc-500">Por revisar</p>
           <p className="mt-1 text-2xl font-semibold">{totalPending}</p>
         </div>
       </section>
 
       {/* Filtros (Client Component con auto-submit) */}
-      <section className="rounded-2xl border bg-white/85 p-4">
+      <section className="rounded-2xl border glass-card p-4 md:p-6">
         <JobsFilterBar
           titleOptions={titleOptions}
           locationOptions={uniqueLocations}
@@ -224,7 +224,7 @@ export default async function JobsPage({
 
       {/* Tabla */}
       {sorted.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-8 text-center bg-white/70">
+        <div className="rounded-2xl border border-dashed p-8 text-center glass-card p-4 md:p-6">
           <p className="text-base font-medium text-zinc-800">No hay vacantes con esos filtros</p>
           <p className="mt-1 text-sm text-zinc-600">Ajusta los filtros o crea una nueva vacante.</p>
           <div className="mt-4">
@@ -234,7 +234,7 @@ export default async function JobsPage({
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border bg-white/85 overflow-hidden">
+        <div className="rounded-2xl border glass-card p-4 md:p-6">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-left text-zinc-600 sticky top-0 z-10">
@@ -343,7 +343,7 @@ export default async function JobsPage({
             </table>
           </div>
 
-          <div className="flex items-center justify-between px-4 py-3 text-xs text-zinc-500 border-t bg-white/60">
+          <div className="flex items-center justify-between px-4 py-3 text-xs text-zinc-500 border-t glass-card p-4 md:p-6">
             <span>
               Mostrando <strong>{sorted.length}</strong> vacante{sorted.length === 1 ? "" : "s"}
             </span>

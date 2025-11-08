@@ -80,7 +80,7 @@ export default async function CodexAdminPage() {
             </thead>
             <tbody>
               {entries.map((e) => (
-                <tr key={e.id} className="bg-white border rounded-xl">
+                <tr key={e.id} className="glass-card p-4 md:p-6">
                   <td className="px-3 py-3">
                     <div className="font-medium">{e.title}</div>
                     <Link
@@ -99,7 +99,7 @@ export default async function CodexAdminPage() {
                   <td className="px-3 py-3">
                     <span
                       className={`text-xs px-2 py-1 rounded ${
-                        e.published ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-700"
+                        e.published ? "bg-green-100 text-green-700" : "glass-card p-4 md:p-6"
                       }`}
                     >
                       {e.published ? "Publicado" : "Borrador"}

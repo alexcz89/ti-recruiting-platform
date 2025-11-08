@@ -38,14 +38,14 @@ function Chip({
 }) {
   return (
     <span
-      className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs text-zinc-700 shadow-sm"
+      className="inline-flex items-center gap-2 badge border border-zinc-200 "
       title={title}
     >
       {children}
       <button
         type="button"
         onClick={onClear}
-        className="rounded-full p-0.5 hover:bg-zinc-100"
+        className="badge p-0.5 hover:"
         aria-label="Quitar filtro"
       >
         <X className="h-3.5 w-3.5" />

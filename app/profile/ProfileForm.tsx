@@ -2,13 +2,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useForm, useWatch, useFieldArray, FormProvider } from "react-hook-form";
+import { useForm, useWatch, useFieldArray, FormProvider, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { PhoneNumberUtil } from "google-libphonenumber";
 import { toastPromise } from "@/lib/ui/toast";
 import UploadCvButton from "@/components/upload/UploadCvButton";
-import WorkExperienceCard, { WorkExperience, WorkExperienceErrors } from "@/components/WorkExperienceCard";
 import { LANGUAGE_LEVELS } from "@/lib/skills";
 
 // ✅ Schema y tipos del perfil
@@ -34,8 +33,6 @@ type Initial = {
   experiences?: Array<WorkExperience>;
   languages?: Array<{ termId: string; label: string; level: "NATIVE"|"PROFESSIONAL"|"CONVERSATIONAL"|"BASIC" }>;
   skillsDetailed?: Array<{ termId: string; label: string; level: 1|2|3|4|5 }>;
-
-  /** 🔹 Escolaridad (solo lista; SIN highestEducationLevel) */
   education?: EducationEntry[];
 };
 
@@ -60,13 +57,21 @@ const EDUCATION_LEVEL_OPTIONS = [
 type EducationEntry = {
   id?: string;
   level: EducationLevel | null;
-  /** No se edita en UI; se deriva al guardar */
   status: EducationStatus;
   institution: string;
   program?: string | null;
   startDate?: string | null; // YYYY-MM
   endDate?: string | null;   // YYYY-MM (null si ONGOING)
   sortIndex: number;
+};
+
+type WorkExperience = {
+  id?: string;
+  role: string;
+  company: string;
+  startDate: string; // YYYY-MM
+  endDate?: string | null;   // YYYY-MM | null
+  isCurrent: boolean;
 };
 
 const SKILL_LEVELS = [
@@ -181,7 +186,6 @@ export default function ProfileForm({
       })),
       languages: (initial.languages ?? []).map((l) => ({ termId: l.termId, label: l.label, level: l.level })),
       skillsDetailed: (initial.skillsDetailed ?? []).map((s) => ({ termId: s.termId, label: s.label, level: s.level })),
-      // 🔹 Escolaridad: UI sin estado; lo derivamos al guardar
       education: (initial.education ?? []).map((ed, i) => ({
         id: ed.id,
         level: ed.level ?? null,
@@ -204,6 +208,7 @@ export default function ProfileForm({
     formState: { errors, isSubmitting },
     control,
     reset,
+    getValues,
   } = methods;
 
   // ⚠️ Aviso si hay cambios sin guardar (navegación/recarga)
@@ -257,11 +262,14 @@ export default function ProfileForm({
   const skillFA = useFieldArray({ control, name: "skillsDetailed" });
   const eduFA   = useFieldArray({ control, name: "education" });
 
+  // ✅ Observamos listas una sola vez, fuera del map
   const experiences    = useWatch({ control, name: "experiences" }) || [];
   const languages      = useWatch({ control, name: "languages" }) || [];
   const skillsDetailed = useWatch({ control, name: "skillsDetailed" }) || [];
   const certifications = useWatch({ control, name: "certifications" }) || [];
   const educationRows  = useWatch({ control, name: "education" }) || [];
+  const phoneCountry   = useWatch({ control, name: "phoneCountry" });
+  const isMX           = phoneCountry === "52";
 
   // ===== Certificaciones =====
   const [certQuery, setCertQuery] = useState("");
@@ -288,30 +296,17 @@ export default function ProfileForm({
     );
   };
 
-  // ===== Teléfono / ubicación =====
-  const phoneCountry = useWatch({ control, name: "phoneCountry" });
-  const isMX = phoneCountry === "52";
-
   // ====== EXPERIENCIAS ======
-  const handlePatchExp = useCallback((idx: number, patch: Partial<WorkExperience>) => {
-    const curr = (experiences[idx] || {}) as WorkExperience;
-    expFA.update(idx, { ...curr, ...patch });
-  }, [experiences, expFA]);
-
-  const handleMakeCurrent = useCallback((idx: number, checked: boolean) => {
-    const next = (experiences as WorkExperience[]).map((e, i) => ({
-      ...e,
-      isCurrent: i === idx ? checked : false,
-      endDate: i === idx && checked ? null : e.endDate ?? "",
-    }));
-    next.forEach((row, i) => expFA.update(i, row));
-  }, [experiences, expFA]);
-
-  // ====== IDIOMAS ======
-  const handlePatchLang = useCallback((idx: number, patch: Partial<{ termId: string; label: string; level: any }>) => {
-    const curr = (languages[idx] || { termId: "", label: "", level: "CONVERSATIONAL" });
-    langFA.update(idx, { ...curr, ...patch });
-  }, [languages, langFA]);
+  const makeCurrent = useCallback((idx: number, checked: boolean) => {
+    const total = getValues("experiences")?.length || 0;
+    for (let i = 0; i < total; i++) {
+      const path = `experiences.${i}.isCurrent` as const;
+      setValue(path, i === idx ? checked : false, { shouldDirty: true, shouldValidate: true });
+      if (i === idx && checked) {
+        setValue(`experiences.${i}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
+      }
+    }
+  }, [getValues, setValue]);
 
   // ====== SKILLS ======
   const [skillQuery, setSkillQuery] = useState("");
@@ -339,7 +334,7 @@ export default function ProfileForm({
   const addEducation = () => {
     eduFA.append({
       level: null,
-      status: "COMPLETED", // no se muestra; se recalcula al guardar
+      status: "COMPLETED",
       institution: "",
       program: "",
       startDate: "",
@@ -406,7 +401,7 @@ export default function ProfileForm({
     const cityNorm   = stripDiacritics(city || "");
     const admin1Norm = stripDiacritics(admin1 || "");
 
-    // Educación (normaliza fechas y DERIVA status por endDate)
+    // Educación
     const edu = (vals.education || []).map((row, i) => {
       const startISO = ymToISO(row.startDate);
       const endISO   = ymToISO(row.endDate);
@@ -441,7 +436,7 @@ export default function ProfileForm({
     fd.set("skillsDetailed", JSON.stringify(vals.skillsDetailed || []));
     if (initial.resumeUrl) fd.set("resumeUrl", initial.resumeUrl);
 
-    // 🔹 Escolaridad: mandamos en 3 claves por compatibilidad
+    // Escolaridad
     const eduPayload = JSON.stringify(edu);
     fd.set("education", eduPayload);
     fd.set("educations", eduPayload);
@@ -468,349 +463,51 @@ export default function ProfileForm({
   return (
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onSubmitRHF)} className="space-y-8" encType="multipart/form-data">
-        {/* Datos personales */}
-        <section id="personal" className="grid md:grid-cols-3 gap-4 scroll-mt-24">
-          <div>
-            <label className="text-sm">Nombre(s) *</label>
-            <input className="border rounded-xl p-3 w-full" {...register("firstName")} />
-            {errors.firstName && <p className="text-xs text-red-600">{errors.firstName.message}</p>}
-          </div>
-          <div>
-            <label className="text-sm">Apellido paterno *</label>
-            <input className="border rounded-xl p-3 w-full" {...register("lastName1")} />
-            {errors.lastName1 && <p className="text-xs text-red-600">{errors.lastName1.message}</p>}
-          </div>
-          <div>
-            <label className="text-sm">Apellido materno</label>
-            <input className="border rounded-xl p-3 w-full" {...register("lastName2")} />
-          </div>
-        </section>
-
-        {/* Teléfono + ubicación */}
-        <section id="contacto" className="grid md:grid-cols-2 gap-4 scroll-mt-24">
-          <div>
-            <label className="text-sm">Teléfono</label>
-            <div className="flex gap-2">
-              <select className="border rounded-xl p-3 w-40" {...register("phoneCountry")}>
-                {COUNTRY_OPTIONS.map((c) => (
-                  <option key={`${c.code}-${c.dial}`} value={c.dial}>{c.label}</option>
-                ))}
-              </select>
-              <input
-                type="tel"
-                className="border rounded-xl p-3 flex-1"
-                placeholder={isMX ? "10 dígitos (solo números)" : "solo números"}
-                {...register("phoneLocal", {
-                  onChange: (e) => { e.target.value = String(e.target.value).replace(/\D+/g, "").slice(0, 15); },
-                })}
-                inputMode="numeric"
-                autoComplete="tel-national"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm">Ubicación</label>
-            <LocationAutocomplete
-              value={useWatch({ control, name: "location" }) || ""}
-              onChange={(v) => setValue("location", v, { shouldValidate: true })}
-              countries={["mx"]}
-              className="border rounded-xl p-3 w-full"
-              fetchOnMount={false}
-              openOnFocus={true}
-              minChars={2}
-              debounceMs={250}
-              debug={true}
-            />
-          </div>
-        </section>
-
-        {/* Fecha + redes */}
-        <section className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="text-sm">Fecha de nacimiento</label>
-            <input type="date" className="border rounded-xl p-3 w-full" {...register("birthdate")} />
-          </div>
-          <div>
-            <label className="text-sm">LinkedIn</label>
-            <input className="border rounded-xl p-3 w-full" placeholder="https://www.linkedin.com/in/tu-perfil" {...register("linkedin")} />
-            {errors.linkedin && <p className="text-xs text-red-600">{errors.linkedin.message}</p>}
-          </div>
-          <div>
-            <label className="text-sm">GitHub</label>
-            <input className="border rounded-xl p-3 w-full" placeholder="https://github.com/tu-usuario" {...register("github")} />
-            {errors.github && <p className="text-xs text-red-600">{errors.github.message}</p>}
-          </div>
-        </section>
-
-        {/* CV */}
-        <section id="cv" className="grid gap-2 scroll-mt-24">
-          <label className="text-sm">Currículum (PDF/DOC/DOCX)</label>
-          <div className="flex flex-wrap items-center gap-3">
-            <UploadCvButton onUploaded={(url) => setValue("resumeUrl" as any, url, { shouldDirty: true })} />
-            {initial.resumeUrl ? (
-              <a href={initial.resumeUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">
-                Ver CV actual
-              </a>
-            ) : (
-              <span className="text-xs text-zinc-500">Aún no has subido un CV.</span>
-            )}
-          </div>
-        </section>
-
-        {/* === Certificaciones === */}
-        <section id="certs" className="space-y-2 scroll-mt-24">
-          <label className="text-sm font-semibold">Certificaciones</label>
-
-          {certifications.length ? (
-            <div className="flex flex-wrap gap-2">
-              {(certifications as string[]).map((c) => (
-                <span key={c} className="inline-flex items-center gap-1 text-xs bg-gray-100 border rounded-full px-2 py-1">
-                  {c}
-                  <button type="button" onClick={() => removeCert(c)} className="hover:text-red-600">×</button>
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-500">Aún no has agregado certificaciones.</p>
-          )}
-
-          <div className="relative">
-            <input
-              className="border rounded-xl p-3 w-full"
-              placeholder="Ej. AWS SAA, CKA, ITIL Foundation…"
-              value={certQuery}
-              onChange={(e) => setCertQuery(e.target.value)}
-            />
-            {certQuery.trim().length > 0 && (
-              <ul className="absolute z-10 mt-1 w-full bg-white border rounded-xl shadow max-h-60 overflow-auto">
-                {filteredCerts.length === 0 ? (
-                  <li className="px-3 py-2 text-sm text-zinc-500">Sin coincidencias</li>
-                ) : (
-                  filteredCerts.map((opt) => (
-                    <li
-                      key={opt}
-                      className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                      onMouseDown={(e) => { e.preventDefault(); addCert(opt); }}
-                    >
-                      {opt}
-                    </li>
-                  ))
-                )}
-              </ul>
-            )}
-          </div>
-        </section>
-
-        {/* === Skills con nivel === */}
-        <section id="skills" className="space-y-3 scroll-mt-24">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold">Skills con nivel</label>
-            <button
-              type="button"
-              className="text-sm border rounded-lg px-3 py-1 hover:bg-gray-50"
-              onClick={() => {
-                const first = (filteredSkillOptions[0] || null);
-                if (first) addSkillWithLevel(first);
-              }}
-            >
-              + Añadir skill
-            </button>
-          </div>
-
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                className="border rounded-xl p-3 w-full"
-                placeholder="Ej. React, Node.js, AWS..."
-                value={skillQuery}
-                onChange={(e) => setSkillQuery(e.target.value)}
-              />
-              {skillQuery.trim().length > 0 && (
-                <ul className="absolute z-10 mt-1 w-full bg-white border rounded-xl shadow max-h-60 overflow-auto">
-                  {filteredSkillOptions.length === 0 ? (
-                    <li className="px-3 py-2 text-sm text-zinc-500">Sin coincidencias</li>
-                  ) : filteredSkillOptions.map((opt) => (
-                    <li
-                      key={opt.id}
-                      className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
-                      onMouseDown={(e) => { e.preventDefault(); addSkillWithLevel(opt); }}
-                    >
-                      {opt.label}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <select
-              className="border rounded-xl p-3 w-44"
-              value={pendingLevel}
-              onChange={(e) => setPendingLevel(parseInt(e.target.value, 10))}
-              aria-label="Nivel del skill a agregar"
-            >
-              {SKILL_LEVELS.map((lvl) => (
-                <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {skillsDetailed.length === 0 ? (
-            <p className="text-xs text-zinc-500">Aún no has agregado skills.</p>
-          ) : (
-            <ul className="space-y-2">
-              {skillsDetailed.map((s: any, idx: number) => (
-                <li key={s.termId} className="flex items-center gap-2">
-                  <span className="text-sm flex-1">{s.label}</span>
-                  <select
-                    className="border rounded-xl p-2 w-40"
-                    value={s.level}
-                    onChange={(e) => skillFA.update(idx, { ...s, level: parseInt(e.target.value,10) })}
-                  >
-                    {SKILL_LEVELS.map((lvl) => (
-                      <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
-                    ))}
-                  </select>
-                  <button type="button" className="text-red-500 hover:text-red-700 text-sm" onClick={() => removeSkillWithLevel(s.termId)}>×</button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {/* Idiomas */}
-        <section id="languages" className="space-y-3 scroll-mt-24">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold">Idiomas</label>
-            <button
-              type="button"
-              className="text-sm border rounded-lg px-3 py-1 hover:bg-gray-50"
-              onClick={() => langFA.append({
-                termId: languageOptions[0]?.id || "",
-                label: languageOptions[0]?.label || "",
-                level: "CONVERSATIONAL",
-              })}
-            >
-              + Añadir idioma
-            </button>
-          </div>
-
-          {langFA.fields.length === 0 ? (
-            <p className="text-xs text-zinc-500">Aún no has agregado idiomas.</p>
-          ) : (
-            <div className="space-y-3">
-              {langFA.fields.map((f, idx) => {
-                const item = (languages[idx] || { termId: "", label: "", level: "CONVERSATIONAL" });
-                return (
-                  <div key={f.id} className="flex gap-2 items-center">
-                    <select
-                      className="border rounded-xl p-2 flex-1"
-                      value={item.termId}
-                      onChange={(e) => {
-                        const term = languageOptions.find((o) => o.id === e.target.value);
-                        handlePatchLang(idx, { termId: term?.id || "", label: term?.label || "" });
-                      }}
-                    >
-                      <option value="">Selecciona idioma</option>
-                      {languageOptions.map((opt) => (
-                        <option key={opt.id} value={opt.id}>{opt.label}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      className="border rounded-xl p-2"
-                      value={item.level}
-                      onChange={(e) => handlePatchLang(idx, { level: e.target.value as any })}
-                    >
-                      {LANGUAGE_LEVELS.map((lvl) => (
-                        <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
-                      ))}
-                    </select>
-
-                    <button type="button" onClick={() => langFA.remove(idx)} className="text-red-500 hover:text-red-700 text-sm">×</button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* 🔹 Escolaridad — Nivel antes que institución/programa */}
-        <section id="education" className="space-y-3 scroll-mt-24">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold">Educación</label>
-            <button
-              type="button"
-              className="text-sm border rounded-lg px-3 py-1 hover:bg-gray-50"
-              onClick={addEducation}
-            >
-              + Añadir educación
-            </button>
-          </div>
-
-          {eduFA.fields.length === 0 ? (
-            <p className="text-xs text-zinc-500">Aún no has agregado educación.</p>
-          ) : (
-            <div className="space-y-4">
-              {eduFA.fields.map((f, idx) => {
-                return (
-                  <div key={f.id} className="border rounded-xl p-4 space-y-3 bg-white">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm font-medium">Entrada #{idx + 1}</div>
-                      <div className="flex items-center gap-2">
-                        <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => moveEducation(idx, idx - 1)}>↑</button>
-                        <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => moveEducation(idx, idx + 1)}>↓</button>
-                        <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => eduFA.remove(idx)}>Eliminar</button>
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-3">
-                      {/* 1) Nivel primero */}
-                      <div>
-                        <label className="text-sm">Nivel</label>
-                        <select className="border rounded-xl p-3 w-full" {...register(`education.${idx}.level` as const)}>
-                          <option value="">—</option>
-                          {EDUCATION_LEVEL_OPTIONS.map(opt => (
-                            <option key={opt.value} value={opt.value}>{opt.label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* 2) Institución */}
-                      <div>
-                        <label className="text-sm">Institución *</label>
-                        <input className="border rounded-xl p-3 w-full" {...register(`education.${idx}.institution` as const)} />
-                      </div>
-
-                      {/* 3) Programa */}
-                      <div>
-                        <label className="text-sm">Programa</label>
-                        <input className="border rounded-xl p-3 w-full" placeholder="Ej. Ingeniería en Sistemas" {...register(`education.${idx}.program` as const)} />
-                      </div>
-
-                      {/* 4) Fechas */}
-                      <div>
-                        <label className="text-sm">Inicio</label>
-                        <input type="month" className="border rounded-xl p-3 w-full" {...register(`education.${idx}.startDate` as const)} />
-                      </div>
-                      <div>
-                        <label className="text-sm">Fin</label>
-                        <input
-                          type="month"
-                          className="border rounded-xl p-3 w-full"
-                          {...register(`education.${idx}.endDate` as const)}
-                        />
-                        <p className="text-[11px] text-zinc-500 mt-1">
-                          Déjalo vacío si sigues cursando (se marcará como “en curso”).
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        <SectionPersonal />
+        <SectionContact COUNTRY_OPTIONS={COUNTRY_OPTIONS} isMX={isMX} />
+        <SectionNetworks />
+        <SectionCV initialResumeUrl={initial.resumeUrl} />
+        <SectionExperience
+          expFA={expFA}
+          register={register}
+          setValue={setValue}
+          experiences={experiences as WorkExperience[]}
+          makeCurrent={makeCurrent}
+        />
+        <SectionCerts
+          certifications={certifications as string[]}
+          certQuery={certQuery}
+          setCertQuery={setCertQuery}
+          filteredCerts={filteredCerts}
+          addCert={addCert}
+          removeCert={removeCert}
+        />
+        <SectionSkills
+          skillsDetailed={skillsDetailed}
+          filteredSkillOptions={filteredSkillOptions}
+          skillFA={skillFA}
+          pendingLevel={pendingLevel}
+          setPendingLevel={setPendingLevel}
+          skillQuery={skillQuery}
+          setSkillQuery={setSkillQuery}
+          addSkillWithLevel={addSkillWithLevel}
+          removeSkillWithLevel={removeSkillWithLevel}
+        />
+        <SectionLanguages
+          langFA={langFA}
+          languages={languages}
+          languageOptions={languageOptions}
+          handlePatchLang={(idx, patch) => {
+            const curr = (languages[idx] || { termId: "", label: "", level: "CONVERSATIONAL" });
+            langFA.update(idx, { ...curr, ...patch });
+          }}
+        />
+        <SectionEducation
+          eduFA={eduFA}
+          addEducation={addEducation}
+          moveEducation={moveEducation}
+          EDUCATION_LEVEL_OPTIONS={EDUCATION_LEVEL_OPTIONS}
+        />
 
         {errors.root?.message && (
           <div className="border border-red-300 bg-red-50 text-red-700 text-sm rounded-xl px-3 py-2">
@@ -825,5 +522,545 @@ export default function ProfileForm({
         </div>
       </form>
     </FormProvider>
+  );
+}
+
+/* =========================
+   Sub-secciones internas
+   ========================= */
+
+function SectionPersonal() {
+  const { register, formState: { errors } } = useFormContext<ProfileFormData>();
+  return (
+    <section id="personal" className="grid md:grid-cols-3 gap-4 scroll-mt-24">
+      <div>
+        <label className="text-sm">Nombre(s) *</label>
+        <input className="border rounded-xl p-3 w-full" {...register("firstName")} />
+        {errors.firstName && <p className="text-xs text-red-600">{errors.firstName.message}</p>}
+      </div>
+      <div>
+        <label className="text-sm">Apellido paterno *</label>
+        <input className="border rounded-xl p-3 w-full" {...register("lastName1")} />
+        {errors.lastName1 && <p className="text-xs text-red-600">{errors.lastName1.message}</p>}
+      </div>
+      <div>
+        <label className="text-sm">Apellido materno</label>
+        <input className="border rounded-xl p-3 w-full" {...register("lastName2")} />
+      </div>
+    </section>
+  );
+}
+
+function SectionContact({ COUNTRY_OPTIONS, isMX }: { COUNTRY_OPTIONS: { code: string; dial: string; label: string }[]; isMX: boolean; }) {
+  const { register, control, setValue } = useFormContext<ProfileFormData>();
+  const locationValue = useWatch({ control, name: "location" }) || "";
+  return (
+    <section id="contacto" className="grid md:grid-cols-2 gap-4 scroll-mt-24">
+      <div>
+        <label className="text-sm">Teléfono</label>
+        <div className="flex gap-2">
+          <select className="border rounded-xl p-3 w-40" {...register("phoneCountry")}>
+            {COUNTRY_OPTIONS.map((c) => (
+              <option key={`${c.code}-${c.dial}`} value={c.dial}>{c.label}</option>
+            ))}
+          </select>
+          <input
+            type="tel"
+            className="border rounded-xl p-3 flex-1"
+            placeholder={isMX ? "10 dígitos (solo números)" : "solo números"}
+            {...register("phoneLocal", {
+              onChange: (e) => { e.target.value = String(e.target.value).replace(/\D+/g, "").slice(0, 15); },
+            })}
+            inputMode="numeric"
+            autoComplete="tel-national"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="text-sm">Ubicación</label>
+        <LocationAutocomplete
+          value={locationValue}
+          onChange={(v) => setValue("location", v, { shouldValidate: true })}
+          countries={["mx"]}
+          className="border rounded-xl p-3 w-full"
+          fetchOnMount={false}
+          openOnFocus={true}
+          minChars={2}
+          debounceMs={250}
+          debug={true}
+        />
+      </div>
+    </section>
+  );
+}
+
+function SectionNetworks() {
+  const { register, formState: { errors } } = useFormContext<ProfileFormData>();
+  return (
+    <section className="grid md:grid-cols-2 gap-4">
+      <div>
+        <label className="text-sm">Fecha de nacimiento</label>
+        <input type="date" className="border rounded-xl p-3 w-full" {...register("birthdate")} />
+      </div>
+      <div>
+        <label className="text-sm">LinkedIn</label>
+        <input className="border rounded-xl p-3 w-full" placeholder="https://www.linkedin.com/in/tu-perfil" {...register("linkedin")} />
+        {errors.linkedin && <p className="text-xs text-red-600">{errors.linkedin.message}</p>}
+      </div>
+      <div>
+        <label className="text-sm">GitHub</label>
+        <input className="border rounded-xl p-3 w-full" placeholder="https://github.com/tu-usuario" {...register("github")} />
+        {errors.github && <p className="text-xs text-red-600">{errors.github.message}</p>}
+      </div>
+    </section>
+  );
+}
+
+function SectionCV({ initialResumeUrl }: { initialResumeUrl?: string }) {
+  const { setValue } = useFormContext<ProfileFormData>();
+  return (
+    <section id="cv" className="grid gap-2 scroll-mt-24">
+      <label className="text-sm">Currículum (PDF/DOC/DOCX)</label>
+      <div className="flex flex-wrap items-center gap-3">
+        <UploadCvButton onUploaded={(url) => setValue("resumeUrl" as any, url, { shouldDirty: true })} />
+        {initialResumeUrl ? (
+          <a href={initialResumeUrl} target="_blank" rel="noreferrer" className="text-sm text-blue-600 hover:underline">
+            Ver CV actual
+          </a>
+        ) : (
+          <span className="text-xs text-zinc-500">Aún no has subido un CV.</span>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SectionExperience({
+  expFA,
+  register,
+  setValue,
+  experiences,
+  makeCurrent,
+}: {
+  expFA: ReturnType<typeof useFieldArray<ProfileFormData>>;
+  register: ReturnType<typeof useForm<ProfileFormData>>["register"];
+  setValue: ReturnType<typeof useForm<ProfileFormData>>["setValue"];
+  experiences: WorkExperience[];
+  makeCurrent: (idx: number, checked: boolean) => void;
+}) {
+  return (
+    <section id="experiencia" className="space-y-3 scroll-mt-24">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-semibold">Experiencia laboral</label>
+        <button
+          type="button"
+          className="text-sm border rounded-lg px-3 py-1 hover:bg-gray-50"
+          onClick={() =>
+            expFA.append({ role: "", company: "", startDate: "", endDate: "", isCurrent: false })
+          }
+        >
+          + Añadir experiencia
+        </button>
+      </div>
+
+      {expFA.fields.length === 0 ? (
+        <p className="text-xs text-zinc-500">Aún no has agregado experiencia.</p>
+      ) : (
+        <div className="space-y-3">
+          {expFA.fields.map((fItem, idx) => {
+            const item = (experiences[idx] || {
+              role: "", company: "", startDate: "", endDate: "", isCurrent: false,
+            }) as WorkExperience;
+            const isCurrent = !!item.isCurrent;
+
+            return (
+              <div key={fItem.id ?? `${idx}`} className="border rounded-xl p-4 space-y-3 glass-card p-4 md:p-6">
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm">Puesto</label>
+                    <input
+                      className="border rounded-xl p-3 w-full"
+                      placeholder="Ej. Desarrollador Frontend"
+                      {...register(`experiences.${idx}.role` as const)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm">Empresa</label>
+                    <input
+                      className="border rounded-xl p-3 w-full"
+                      placeholder="Ej. Acme Inc."
+                      {...register(`experiences.${idx}.company` as const)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm">Inicio (YYYY-MM)</label>
+                    <input
+                      type="month"
+                      className="border rounded-xl p-3 w-full"
+                      {...register(`experiences.${idx}.startDate` as const)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm">Fin (YYYY-MM)</label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="month"
+                        className="border rounded-xl p-3 w-full"
+                        disabled={isCurrent}
+                        {...register(`experiences.${idx}.endDate` as const, {
+                          onChange: (e) => {
+                            if (String(e.target.value || "") === "") {
+                              setValue(`experiences.${idx}.endDate` as const, null as any, {
+                                shouldDirty: true, shouldValidate: true,
+                              });
+                            }
+                          },
+                        })}
+                      />
+                      <label className="text-xs inline-flex items-center gap-1">
+                        <input
+                          type="checkbox"
+                          {...register(`experiences.${idx}.isCurrent` as const, {
+                            onChange: (e) => makeCurrent(idx, e.target.checked),
+                          })}
+                        />
+                        Actual
+                      </label>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="text-sm text-red-600 hover:underline"
+                    onClick={() => expFA.remove(idx)}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SectionCerts({
+  certifications,
+  certQuery,
+  setCertQuery,
+  filteredCerts,
+  addCert,
+  removeCert,
+}: {
+  certifications: string[];
+  certQuery: string;
+  setCertQuery: (s: string) => void;
+  filteredCerts: string[];
+  addCert: (label: string) => void;
+  removeCert: (label: string) => void;
+}) {
+  return (
+    <section id="certs" className="space-y-2 scroll-mt-24">
+      <label className="text-sm font-semibold">Certificaciones</label>
+
+      {certifications.length ? (
+        <div className="flex flex-wrap gap-2">
+          {certifications.map((c) => (
+            <span key={c} className="inline-flex items-center gap-1 text-xs bg-gray-100 border rounded-full px-2 py-1">
+              {c}
+              <button type="button" onClick={() => removeCert(c)} className="hover:text-red-600">×</button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-zinc-500">Aún no has agregado certificaciones.</p>
+      )}
+
+      <div className="relative">
+        <input
+          className="border rounded-xl p-3 w-full"
+          placeholder="Ej. AWS SAA, CKA, ITIL Foundation…"
+          value={certQuery}
+          onChange={(e) => setCertQuery(e.target.value)}
+        />
+        {certQuery.trim().length > 0 && (
+          <ul className="absolute z-10 mt-1 w-full glass-card p-4 md:p-6">
+            {filteredCerts.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-zinc-500">Sin coincidencias</li>
+            ) : (
+              filteredCerts.map((opt) => (
+                <li
+                  key={opt}
+                  className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                  onMouseDown={(e) => { e.preventDefault(); addCert(opt); }}
+                >
+                  {opt}
+                </li>
+              ))
+            )}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SectionSkills({
+  skillsDetailed,
+  filteredSkillOptions,
+  skillFA,
+  pendingLevel,
+  setPendingLevel,
+  skillQuery,
+  setSkillQuery,
+  addSkillWithLevel,
+  removeSkillWithLevel,
+}: {
+  skillsDetailed: any[];
+  filteredSkillOptions: { id: string; label: string }[];
+  skillFA: ReturnType<typeof useFieldArray<ProfileFormData>>;
+  pendingLevel: number;
+  setPendingLevel: (n: number) => void;
+  skillQuery: string;
+  setSkillQuery: (s: string) => void;
+  addSkillWithLevel: (opt: { id: string; label: string }) => void;
+  removeSkillWithLevel: (termId: string) => void;
+}) {
+  return (
+    <section id="skills" className="space-y-3 scroll-mt-24">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-semibold">Skills con nivel</label>
+        <button
+          type="button"
+          className="text-sm border rounded-lg px-3 py-1 hover:bg-gray-50"
+          onClick={() => {
+            const first = (filteredSkillOptions[0] || null);
+            if (first) addSkillWithLevel(first);
+          }}
+        >
+          + Añadir skill
+        </button>
+      </div>
+
+      <div className="flex gap-2">
+        <div className="relative flex-1">
+          <input
+            className="border rounded-xl p-3 w-full"
+            placeholder="Ej. React, Node.js, AWS..."
+            value={skillQuery}
+            onChange={(e) => setSkillQuery(e.target.value)}
+          />
+          {skillQuery.trim().length > 0 && (
+            <ul className="absolute z-10 mt-1 w-full glass-card p-4 md:p-6">
+              {filteredSkillOptions.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-zinc-500">Sin coincidencias</li>
+              ) : filteredSkillOptions.map((opt) => (
+                <li
+                  key={opt.id}
+                  className="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer"
+                  onMouseDown={(e) => { e.preventDefault(); addSkillWithLevel(opt); }}
+                >
+                  {opt.label}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <select
+          className="border rounded-xl p-3 w-44"
+          value={pendingLevel}
+          onChange={(e) => setPendingLevel(parseInt(e.target.value, 10))}
+          aria-label="Nivel del skill a agregar"
+        >
+          {SKILL_LEVELS.map((lvl) => (
+            <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
+          ))}
+        </select>
+      </div>
+
+      {skillsDetailed.length === 0 ? (
+        <p className="text-xs text-zinc-500">Aún no has agregado skills.</p>
+      ) : (
+        <ul className="space-y-2">
+          {skillsDetailed.map((s: any, idx: number) => (
+            <li key={s.termId} className="flex items-center gap-2">
+              <span className="text-sm flex-1">{s.label}</span>
+              <select
+                className="border rounded-xl p-2 w-40"
+                value={s.level}
+                onChange={(e) => skillFA.update(idx, { ...s, level: parseInt(e.target.value,10) })}
+              >
+                {SKILL_LEVELS.map((lvl) => (
+                  <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
+                ))}
+              </select>
+              <button type="button" className="text-red-500 hover:text-red-700 text-sm" onClick={() => removeSkillWithLevel(s.termId)}>×</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SectionLanguages({
+  langFA,
+  languages,
+  languageOptions,
+  handlePatchLang,
+}: {
+  langFA: ReturnType<typeof useFieldArray<ProfileFormData>>;
+  languages: any[];
+  languageOptions: { id: string; label: string }[];
+  handlePatchLang: (idx: number, patch: Partial<{ termId: string; label: string; level: any }>) => void;
+}) {
+  return (
+    <section id="languages" className="space-y-3 scroll-mt-24">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-semibold">Idiomas</label>
+        <button
+          type="button"
+          className="text-sm border rounded-lg px-3 py-1 hover:bg-gray-50"
+          onClick={() => langFA.append({
+            termId: languageOptions[0]?.id || "",
+            label: languageOptions[0]?.label || "",
+            level: "CONVERSATIONAL",
+          })}
+        >
+          + Añadir idioma
+        </button>
+      </div>
+
+      {langFA.fields.length === 0 ? (
+        <p className="text-xs text-zinc-500">Aún no has agregado idiomas.</p>
+      ) : (
+        <div className="space-y-3">
+          {langFA.fields.map((f, idx) => {
+            const item = (languages[idx] || { termId: "", label: "", level: "CONVERSATIONAL" });
+            return (
+              <div key={f.id} className="flex gap-2 items-center">
+                <select
+                  className="border rounded-xl p-2 flex-1"
+                  value={item.termId}
+                  onChange={(e) => {
+                    const term = languageOptions.find((o) => o.id === e.target.value);
+                    handlePatchLang(idx, { termId: term?.id || "", label: term?.label || "" });
+                  }}
+                >
+                  <option value="">Selecciona idioma</option>
+                  {languageOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="border rounded-xl p-2"
+                  value={item.level}
+                  onChange={(e) => handlePatchLang(idx, { level: e.target.value as any })}
+                >
+                  {LANGUAGE_LEVELS.map((lvl) => (
+                    <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
+                  ))}
+                </select>
+
+                <button type="button" onClick={() => langFA.remove(idx)} className="text-red-500 hover:text-red-700 text-sm">×</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SectionEducation({
+  eduFA,
+  addEducation,
+  moveEducation,
+  EDUCATION_LEVEL_OPTIONS,
+}: {
+  eduFA: ReturnType<typeof useFieldArray<ProfileFormData>>;
+  addEducation: () => void;
+  moveEducation: (from: number, to: number) => void;
+  EDUCATION_LEVEL_OPTIONS: typeof EDUCATION_LEVEL_OPTIONS;
+}) {
+  const { register } = useFormContext<ProfileFormData>();
+  return (
+    <section id="education" className="space-y-3 scroll-mt-24">
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-semibold">Educación</label>
+        <button
+          type="button"
+          className="text-sm border rounded-lg px-3 py-1 hover:bg-gray-50"
+          onClick={addEducation}
+        >
+          + Añadir educación
+        </button>
+      </div>
+
+      {eduFA.fields.length === 0 ? (
+        <p className="text-xs text-zinc-500">Aún no has agregado educación.</p>
+      ) : (
+        <div className="space-y-4">
+          {eduFA.fields.map((f, idx) => {
+            return (
+              <div key={f.id} className="border rounded-xl p-4 space-y-3 glass-card p-4 md:p-6">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium">Entrada #{idx + 1}</div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => moveEducation(idx, idx - 1)}>↑</button>
+                    <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => moveEducation(idx, idx + 1)}>↓</button>
+                    <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => eduFA.remove(idx)}>Eliminar</button>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm">Nivel</label>
+                    <select className="border rounded-xl p-3 w-full" {...register(`education.${idx}.level` as const)}>
+                      <option value="">—</option>
+                      {EDUCATION_LEVEL_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm">Institución *</label>
+                    <input className="border rounded-xl p-3 w-full" {...register(`education.${idx}.institution` as const)} />
+                  </div>
+
+                  <div>
+                    <label className="text-sm">Programa</label>
+                    <input className="border rounded-xl p-3 w-full" placeholder="Ej. Ingeniería en Sistemas" {...register(`education.${idx}.program` as const)} />
+                  </div>
+
+                  <div>
+                    <label className="text-sm">Inicio</label>
+                    <input type="month" className="border rounded-xl p-3 w-full" {...register(`education.${idx}.startDate` as const)} />
+                  </div>
+                  <div>
+                    <label className="text-sm">Fin</label>
+                    <input
+                      type="month"
+                      className="border rounded-xl p-3 w-full"
+                      {...register(`education.${idx}.endDate` as const)}
+                    />
+                    <p className="text-[11px] text-zinc-500 mt-1">
+                      Déjalo vacío si sigues cursando (se marcará como “en curso”).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

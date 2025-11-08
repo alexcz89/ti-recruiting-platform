@@ -95,7 +95,7 @@ export default async function PublicJobsPage({
           <p className="text-base font-medium">No hay vacantes que coincidan.</p>
         </div>
       ) : (
-        <ul className="divide-y rounded-xl border bg-white/70">
+        <ul className="divide-y rounded-xl border glass-card p-4 md:p-6">
           {items.map((j) => (
             <li key={j.id} className="p-4">
               <div className="flex items-start justify-between gap-3">

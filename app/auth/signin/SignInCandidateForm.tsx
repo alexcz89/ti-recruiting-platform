@@ -1,17 +1,15 @@
-// app/signin/SignInForm.tsx
 "use client";
 
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
-import { toastSuccess, toastError, toastInfo, toastPromise } from "@/lib/ui/toast";
 import { Field, TextInput } from "@/components/form/RhfFields";
 import { SignInSchema } from "@/lib/validation";
 
 type FormData = z.infer<typeof SignInSchema>;
 
-export default function SignInForm({
+export default function SignInCandidateForm({
   initialRole,
   isSignup,
   callbackUrl,
@@ -36,7 +34,6 @@ export default function SignInForm({
   });
 
   const onSubmit = async (data: FormData) => {
-    // Usamos redirect:false para capturar errores y mostrar toast
     const res = await signIn("credentials", {
       redirect: false,
       email: data.email,
@@ -46,14 +43,9 @@ export default function SignInForm({
     });
 
     if (res?.error) {
-      // Marca error de formulario y muestra toast
       setError("root", { type: "auth", message: "No se pudo iniciar sesión. Verifica tus datos." });
-      toastError("No se pudo iniciar sesión. Verifica tus datos.");
       return;
     }
-
-    // Éxito: redirige manualmente
-    toastSuccess("¡Bienvenido!");
     window.location.href = res?.url || callbackUrl || (isRecruiter ? "/dashboard/overview" : "/jobs");
   };
 
@@ -64,37 +56,24 @@ export default function SignInForm({
         {isRecruiter ? "Acceso para reclutadores." : "Acceso para talento."}
       </p>
 
-      {/* Botones sociales (deshabilitados en demo, visibles solo para candidate) */}
       {!isRecruiter && (
         <>
           <div className="mt-6 space-y-3">
-            <button
-              type="button"
-              disabled
-              className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500"
-              title="(Demo) Integración social deshabilitada"
-            >
+            <button type="button" disabled className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500">
               Continuar con Google
             </button>
-            <button
-              type="button"
-              disabled
-              className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500"
-              title="(Demo) Integración social deshabilitada"
-            >
+            <button type="button" disabled className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500">
               Continuar con GitHub
             </button>
           </div>
-
           <div className="my-6 flex items-center gap-3">
-            <div className="h-px flex-1 bg-zinc-200" />
+            <div className="h-px flex-1 bg-zinc-200/60 dark:bg-zinc-700/50 rounded" />
             <span className="text-xs text-zinc-500">o con tu correo</span>
-            <div className="h-px flex-1 bg-zinc-200" />
+            <div className="h-px flex-1 bg-zinc-200/60 dark:bg-zinc-700/50 rounded" />
           </div>
         </>
       )}
 
-      {/* Formulario email/password con RHF + Zod */}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Field label="Email" error={errors.email}>
           <TextInput
@@ -106,12 +85,7 @@ export default function SignInForm({
         </Field>
 
         <Field label="Password" error={errors.password}>
-          <TextInput
-            register={register}
-            name="password"
-            type="password"
-            placeholder="••••••••"
-          />
+          <TextInput register={register} name="password" type="password" placeholder="••••••••" />
         </Field>
 
         {errors.root?.message && (
@@ -128,7 +102,6 @@ export default function SignInForm({
           {isSubmitting ? "Ingresando..." : "Ingresar"}
         </button>
 
-        {/* Nota demo */}
         <div className="mt-4 space-y-1 text-xs text-zinc-500">
           {isRecruiter ? (
             <div>

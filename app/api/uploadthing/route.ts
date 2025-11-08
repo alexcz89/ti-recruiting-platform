@@ -2,7 +2,7 @@
 import { createRouteHandler } from "uploadthing/next";
 import { ourFileRouter } from "./core";
 
-// Forzar Node runtime para que process.env esté disponible
+// Sugerido por UploadThing para App Router
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 

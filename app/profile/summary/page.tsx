@@ -2,6 +2,7 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { fromNow, formatDate } from "@/lib/dates";
 
@@ -11,7 +12,9 @@ function formatMonthYear(d: Date | string | null | undefined) {
   if (!d) return "—";
   const date = d instanceof Date ? d : new Date(d);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("es-MX", { month: "short", year: "numeric" }).replace(".", "");
+  return date
+    .toLocaleDateString("es-MX", { month: "short", year: "numeric" })
+    .replace(".", "");
 }
 
 // Idiomas
@@ -72,9 +75,9 @@ export default async function ProfileSummaryPage({
       linkedin: true,
       github: true,
       resumeUrl: true,
-      skills: true,            // legacy chips (texto plano)
+      skills: true, // legacy
       certifications: true,
-      highestEducationLevel: true, // no se muestra en mini resumen
+      highestEducationLevel: true,
     },
   });
 
@@ -85,7 +88,14 @@ export default async function ProfileSummaryPage({
   const experiences = await prisma.workExperience.findMany({
     where: { userId: me.id },
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
-    select: { id: true, role: true, company: true, startDate: true, endDate: true, isCurrent: true },
+    select: {
+      id: true,
+      role: true,
+      company: true,
+      startDate: true,
+      endDate: true,
+      isCurrent: true,
+    },
   });
 
   // Educación (lista)
@@ -131,12 +141,30 @@ export default async function ProfileSummaryPage({
     orderBy: { createdAt: "desc" },
     take: 20,
     include: {
-      job: { select: { id: true, title: true, company: { select: { name: true } }, updatedAt: true } },
+      job: {
+        select: { id: true, title: true, company: { select: { name: true } }, updatedAt: true },
+      },
     },
   });
 
+  // KPI: años totales aproximados
+  const totalYears = (() => {
+    try {
+      const sumYears = experiences.reduce((acc, e) => {
+        const start = e.startDate ? new Date(e.startDate) : null;
+        const end = e.isCurrent || !e.endDate ? new Date() : new Date(e.endDate!);
+        if (!start || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return acc;
+        const years = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+        return acc + Math.max(0, years);
+      }, 0);
+      return Math.round(sumYears * 10) / 10;
+    } catch {
+      return null;
+    }
+  })();
+
   const Pill = ({ children }: { children: React.ReactNode }) => (
-    <span className="inline-block text-xs bg-gray-100 rounded-full px-2 py-1 mr-2 mb-2">{children}</span>
+    <span className="badge">{children}</span>
   );
 
   const appliedMsg =
@@ -151,7 +179,7 @@ export default async function ProfileSummaryPage({
       {/* Notifs */}
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-6 space-y-3">
         {searchParams?.updated === "1" && (
-          <div className="border border-emerald-300 bg-emerald-50 text-emerald-800 text-sm rounded-xl px-3 py-2">
+          <div className="border text-sm rounded-xl px-3 py-2 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
             Perfil actualizado correctamente.
           </div>
         )}
@@ -159,8 +187,8 @@ export default async function ProfileSummaryPage({
           <div
             className={`border text-sm rounded-xl px-3 py-2 ${
               appliedMsg.tone === "emerald"
-                ? "border-emerald-300 bg-emerald-50 text-emerald-800"
-                : "border-amber-300 bg-amber-50 text-amber-800"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+                : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
             }`}
           >
             {appliedMsg.text}
@@ -170,25 +198,46 @@ export default async function ProfileSummaryPage({
 
       {/* Header */}
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
-        <header className="border rounded-2xl p-5 flex flex-col gap-2 bg-white">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-bold leading-tight">{me.name ?? "Candidato"}</h1>
-              <p className="text-sm text-zinc-600">
+        <header className="glass-card p-4 md:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-3xl font-bold leading-tight text-zinc-900 dark:text-zinc-100">
+                {me.name ?? "Candidato"}
+              </h1>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300 truncate">
                 {me.location ?? "Ubicación no especificada"}
                 {topStack.length ? ` · ${topStack.join(" · ")}` : ""}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <a href="/profile/edit" className="text-sm border rounded-xl px-3 py-2" title="Editar mi perfil">
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/profile/edit" className="btn-ghost" title="Editar mi perfil">
                 Editar perfil
-              </a>
+              </Link>
+
               {me.resumeUrl ? (
-                <a href={me.resumeUrl} target="_blank" rel="noreferrer" className="text-sm border rounded-xl px-3 py-2" title="Ver/descargar CV">
-                  Ver CV
-                </a>
+                <>
+                  <a
+                    href={me.resumeUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-ghost"
+                    title="Ver/descargar CV"
+                  >
+                    Ver / descargar PDF
+                  </a>
+                  <Link
+                    href="/cv/builder"
+                    className="btn btn-primary"
+                    title="Editar/crear tu CV con el constructor"
+                  >
+                    Editar en CV Builder
+                  </Link>
+                </>
               ) : (
-                <span className="text-xs text-zinc-400">Sin CV</span>
+                <Link href="/cv/builder" className="btn btn-primary" title="Crear tu CV con el constructor">
+                  Crear CV en CV Builder
+                </Link>
               )}
             </div>
           </div>
@@ -201,26 +250,26 @@ export default async function ProfileSummaryPage({
           {/* ===== Izquierda (8/12) ===== */}
           <div className="lg:col-span-8 space-y-6">
             {/* Información */}
-            <section className="border rounded-xl p-4 bg-white">
-              <h2 className="font-semibold">Información</h2>
-              <div className="mt-2 text-sm grid sm:grid-cols-2 gap-y-1 gap-x-6">
-                <div><span className="text-zinc-500">Nombre:</span> {me.name ?? "—"}</div>
-                <div><span className="text-zinc-500">Email:</span> {me.email}</div>
-                <div><span className="text-zinc-500">Teléfono:</span> {me.phone ?? "—"}</div>
-                <div><span className="text-zinc-500">Ubicación:</span> {me.location ?? "—"}</div>
-                <div><span className="text-zinc-500">Fecha de nacimiento:</span> {me.birthdate ? formatDate(me.birthdate) : "—"}</div>
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Información</h2>
+              <div className="mt-3 text-sm grid sm:grid-cols-2 gap-y-1.5 gap-x-6">
+                <div><span className="text-muted">Nombre:</span> {me.name ?? "—"}</div>
+                <div><span className="text-muted">Email:</span> {me.email}</div>
+                <div><span className="text-muted">Teléfono:</span> {me.phone ?? "—"}</div>
+                <div><span className="text-muted">Ubicación:</span> {me.location ?? "—"}</div>
+                <div><span className="text-muted">Fecha de nacimiento:</span> {me.birthdate ? formatDate(me.birthdate) : "—"}</div>
                 <div>
-                  <span className="text-zinc-500">LinkedIn:</span>{" "}
+                  <span className="text-muted">LinkedIn:</span>{" "}
                   {me.linkedin ? (
-                    <a className="text-blue-600 hover:underline break-all" href={me.linkedin} target="_blank" rel="noreferrer">
+                    <a className="text-blue-600 dark:text-blue-400 underline break-all" href={me.linkedin} target="_blank" rel="noreferrer">
                       {me.linkedin}
                     </a>
                   ) : "—"}
                 </div>
                 <div className="sm:col-span-2">
-                  <span className="text-zinc-500">GitHub:</span>{" "}
+                  <span className="text-muted">GitHub:</span>{" "}
                   {me.github ? (
-                    <a className="text-blue-600 hover:underline break-all" href={me.github} target="_blank" rel="noreferrer">
+                    <a className="text-blue-600 dark:text-blue-400 underline break-all" href={me.github} target="_blank" rel="noreferrer">
                       {me.github}
                     </a>
                   ) : "—"}
@@ -229,62 +278,57 @@ export default async function ProfileSummaryPage({
             </section>
 
             {/* Escolaridad */}
-            <section className="border rounded-xl p-4 bg-white">
-              <h2 className="font-semibold mb-2">Escolaridad</h2>
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100 mb-2">Escolaridad</h2>
               {education.length === 0 ? (
-                <p className="text-sm text-zinc-500">Aún no has agregado educación.</p>
+                <div className="soft-panel p-4 flex items-center justify-between">
+                  <p className="text-sm text-muted">Aún no has agregado educación.</p>
+                  <Link href="/profile/edit#education" className="btn-ghost text-xs">Agregar</Link>
+                </div>
               ) : (
                 <ul className="space-y-3">
                   {education.map((ed) => (
-                    <li key={ed.id} className="border rounded-lg p-3 bg-white/60">
+                    <li key={ed.id} className="soft-panel p-3">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-default truncate">
                             {ed.institution}{ed.program ? ` — ${ed.program}` : ""}
-                          </div>
-                          <div className="text-xs text-zinc-600">
+                          </p>
+                          <p className="text-xs text-muted">
                             {formatMonthYear(ed.startDate)} — {ed.status === "ONGOING" ? "actual" : formatMonthYear(ed.endDate)}
                             {ed.city ? ` · ${ed.city}` : ""}{ed.country ? `, ${ed.country}` : ""}
-                          </div>
+                          </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs px-2 py-1 rounded-full border bg-gray-50">
-                            {EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level}
-                          </span>
-                          <span className="text-xs px-2 py-1 rounded-full border bg-gray-50">
-                            {EDUCATION_STATUS_LABEL[ed.status] ?? ed.status}
-                          </span>
+                          <span className="badge">{EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level}</span>
+                          <span className="badge">{EDUCATION_STATUS_LABEL[ed.status] ?? ed.status}</span>
                         </div>
                       </div>
-
-                      {ed.description && (
-                        <p className="text-sm text-zinc-700 whitespace-pre-wrap break-anywhere mt-2">
-                          {ed.description}
-                        </p>
-                      )}
-                      {ed.grade && (
-                        <p className="text-xs text-zinc-600 mt-1">Promedio/Grado: {ed.grade}</p>
-                      )}
+                      {ed.description && <p className="text-sm text-default whitespace-pre-wrap mt-2">{ed.description}</p>}
+                      {ed.grade && <p className="text-xs text-muted mt-1">Promedio/Grado: {ed.grade}</p>}
                     </li>
                   ))}
                 </ul>
               )}
             </section>
 
-            {/* Historial de trabajo */}
-            <section className="border rounded-xl p-4 bg-white">
-              <h2 className="font-semibold mb-2">Historial de trabajo</h2>
+            {/* Historial de trabajo (timeline) */}
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100 mb-2">Historial de trabajo</h2>
               {experiences.length === 0 ? (
-                <p className="text-sm text-zinc-500">Aún no has agregado experiencias.</p>
+                <div className="soft-panel p-4 flex items-center justify-between">
+                  <p className="text-sm text-muted">Aún no has agregado experiencias.</p>
+                  <Link href="/profile/edit#experience" className="btn-ghost text-xs">Agregar</Link>
+                </div>
               ) : (
-                <ul className="space-y-3">
+                <ul className="timeline space-y-3">
                   {experiences.map((e) => (
-                    <li key={e.id} className="border rounded-lg p-3">
-                      <div className="text-sm font-medium">
-                        {e.role} — {e.company}
-                      </div>
-                      <div className="text-xs text-zinc-600">
-                        {formatMonthYear(e.startDate)} — {e.isCurrent ? "actual" : formatMonthYear(e.endDate)}
+                    <li key={e.id} className="timeline-item">
+                      <div className="soft-panel p-3">
+                        <p className="text-sm font-medium text-default">{e.role} — {e.company}</p>
+                        <p className="text-xs text-muted">
+                          {formatMonthYear(e.startDate)} — {e.isCurrent ? "actual" : formatMonthYear(e.endDate)}
+                        </p>
                       </div>
                     </li>
                   ))}
@@ -295,54 +339,106 @@ export default async function ProfileSummaryPage({
 
           {/* ===== Derecha (4/12) ===== */}
           <aside className="lg:col-span-4 space-y-6">
+            {/* KPI rápido */}
+            <section className="stat">
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <p className="stat-label">Experiencia total</p>
+                  <p className="stat-value">{typeof totalYears === "number" ? `${totalYears} años` : "—"}</p>
+                </div>
+                <div>
+                  <p className="stat-label">Trabajos</p>
+                  <p className="stat-value">{experiences.length}</p>
+                </div>
+                <div>
+                  <p className="stat-label">Postulaciones</p>
+                  <p className="stat-value">{myApps.length}</p>
+                </div>
+              </div>
+            </section>
+
+            {/* CV */}
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">CV</h2>
+              <div className="mt-3 space-y-2">
+                {me.resumeUrl ? (
+                  <>
+                    <a href={me.resumeUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost w-full justify-center">
+                      Ver / descargar PDF
+                    </a>
+                    <Link href="/cv/builder" className="btn btn-primary w-full justify-center">
+                      Reemplazar en CV Builder
+                    </Link>
+                  </>
+                ) : (
+                  <Link href="/cv/builder" className="btn btn-primary w-full justify-center">
+                    Crear CV en CV Builder
+                  </Link>
+                )}
+              </div>
+            </section>
+
             {/* Certificaciones */}
-            <section className="border rounded-xl p-4 bg-white">
-              <h2 className="font-semibold">Certificaciones</h2>
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Certificaciones</h2>
               {me.certifications?.length ? (
-                <div className="mt-3">
-                  {me.certifications.map((c) => (
-                    <Pill key={c}>{c}</Pill>
-                  ))}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {me.certifications.map((c) => <Pill key={c}>{c}</Pill>)}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500 mt-2">—</p>
+                <div className="soft-panel p-4 flex items-center justify-between mt-3">
+                  <p className="text-sm text-muted">—</p>
+                  <Link href="/profile/edit#certifications" className="btn-ghost text-xs">Agregar</Link>
+                </div>
               )}
             </section>
 
-            {/* Skills */}
-            <section className="border rounded-xl p-4 bg-white">
-              <h2 className="font-semibold">Skills</h2>
+            {/* Skills con barra de nivel */}
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Skills</h2>
               {candidateSkills.length > 0 ? (
-                <ul className="mt-3 space-y-2">
-                  {candidateSkills.map((s) => (
-                    <li key={s.id} className="flex items-center justify-between text-sm border rounded-lg px-3 py-2">
-                      <span className="font-medium">{s.term.label}</span>
-                      <span className="text-xs text-zinc-600">{SKILL_LEVEL_LABEL[s.level] ?? `Nivel ${s.level}`}</span>
-                    </li>
-                  ))}
+                <ul className="mt-3 space-y-3">
+                  {candidateSkills.map((s) => {
+                    const pct = Math.max(0, Math.min(100, Math.round((s.level ?? 0) * 20)));
+                    return (
+                      <li key={s.id} className="soft-panel px-3 py-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">{s.term.label}</span>
+                          <span className="text-xs text-muted">{SKILL_LEVEL_LABEL[s.level] ?? `Nivel ${s.level}`}</span>
+                        </div>
+                        <div className="mt-2 progress" aria-label={`Nivel ${s.level} de 5 en ${s.term.label}`} role="progressbar" aria-valuemin={0} aria-valuemax={5} aria-valuenow={s.level ?? 0}>
+                          <div className="progress-bar" style={{ width: `${pct}%` }} />
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               ) : me.skills?.length ? (
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {me.skills.map((s) => (
-                    <Pill key={s}>{s}</Pill>
-                  ))}
+                  {me.skills.map((s) => <Pill key={s}>{s}</Pill>)}
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500 mt-2">—</p>
+                <div className="soft-panel p-4 flex items-center justify-between mt-3">
+                  <p className="text-sm text-muted">—</p>
+                  <Link href="/profile/edit#skills" className="btn-ghost text-xs">Agregar</Link>
+                </div>
               )}
             </section>
 
             {/* Idiomas */}
-            <section className="border rounded-xl p-4 bg-white">
-              <h2 className="font-semibold">Idiomas</h2>
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Idiomas</h2>
               {languages.length === 0 ? (
-                <p className="text-sm text-zinc-500 mt-2">—</p>
+                <div className="soft-panel p-4 flex items-center justify-between mt-3">
+                  <p className="text-sm text-muted">—</p>
+                  <Link href="/profile/edit#languages" className="btn-ghost text-xs">Agregar</Link>
+                </div>
               ) : (
-                <ul className="mt-2 space-y-2">
+                <ul className="mt-2 space-y-2 text-sm">
                   {languages.map((l) => (
-                    <li key={l.id} className="flex items-center justify-between text-sm">
+                    <li key={l.id} className="flex items-center justify-between">
                       <span>{l.term.label}</span>
-                      <span className="text-xs text-zinc-600">{LEVEL_LABEL[l.level] ?? l.level}</span>
+                      <span className="text-xs text-muted">{LEVEL_LABEL[l.level] ?? l.level}</span>
                     </li>
                   ))}
                 </ul>
@@ -350,24 +446,27 @@ export default async function ProfileSummaryPage({
             </section>
 
             {/* Postulaciones */}
-            <section className="border rounded-xl p-4 bg-white">
-              <h2 className="font-semibold mb-2">Mis postulaciones</h2>
+            <section className="glass-card p-4 md:p-6">
+              <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Mis postulaciones</h2>
               {myApps.length === 0 ? (
-                <p className="text-sm text-zinc-500">Aún no has postulado a ninguna vacante.</p>
+                <div className="soft-panel p-4 flex items-center justify-between mt-3">
+                  <p className="text-sm text-muted">Aún no has postulado a ninguna vacante.</p>
+                  <Link href="/jobs" className="btn-ghost text-xs">Buscar vacantes</Link>
+                </div>
               ) : (
-                <ul className="space-y-2">
+                <ul className="space-y-2 mt-2">
                   {myApps.map((a) => (
-                    <li key={a.id} className="border rounded-lg p-3">
-                      <div className="text-sm font-medium">
+                    <li key={a.id} className="soft-panel p-3">
+                      <p className="text-sm font-medium">
                         {a.job?.title ?? "—"} — {a.job?.company?.name ?? "—"}
-                      </div>
-                      <div className="text-xs text-zinc-500">
-                        <time title={new Date(a.createdAt).toLocaleString()}>{fromNow(a.createdAt)}</time>
-                      </div>
+                      </p>
+                      <p className="text-xs text-muted">
+                        <time title={new Date(a.createdAt).toLocaleString()}>
+                          {fromNow(a.createdAt)}
+                        </time>
+                      </p>
                       <div className="mt-2">
-                        <a href={`/jobs/${a.job?.id}`} className="text-xs border rounded px-2 py-1 hover:bg-gray-50">
-                          Ver vacante
-                        </a>
+                        <a href={`/jobs/${a.job?.id}`} className="btn-ghost text-xs">Ver vacante</a>
                       </div>
                     </li>
                   ))}
@@ -379,8 +478,8 @@ export default async function ProfileSummaryPage({
 
         {/* Acciones inferiores */}
         <div className="flex items-center gap-3 mt-6">
-          <a href="/jobs" className="text-sm text-blue-600 hover:underline">← Buscar vacantes</a>
-          <a href="/profile/edit" className="text-sm text-blue-600 hover:underline">Editar mi perfil</a>
+          <a href="/jobs" className="text-sm text-blue-600 hover:underline dark:text-blue-400">← Buscar vacantes</a>
+          <a href="/profile/edit" className="text-sm text-blue-600 hover:underline dark:text-blue-400">Editar mi perfil</a>
         </div>
       </div>
     </main>

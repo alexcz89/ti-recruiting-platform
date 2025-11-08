@@ -13,7 +13,7 @@ type AppStatus = typeof STATUSES[number];
 
 // Colores por estado (badge)
 const STATUS_STYLES: Record<AppStatus, string> = {
-  SUBMITTED: "bg-zinc-50 border-zinc-200 text-zinc-700",
+  SUBMITTED: "glass-card p-4 md:p-6",
   REVIEWING: "bg-sky-50 border-sky-200 text-sky-700",
   INTERVIEW: "bg-indigo-50 border-indigo-200 text-indigo-700",
   OFFER: "bg-emerald-50 border-emerald-200 text-emerald-700",

@@ -1,40 +1,19 @@
 // app/signin/page.tsx
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import SignInForm from "./SignInForm";
 
-type Role = "RECRUITER" | "CANDIDATE";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export default async function SignInPage({
+export default function LegacySignin({
   searchParams,
 }: {
-  searchParams?: { callbackUrl?: string; role?: Role; signup?: string };
+  searchParams?: Record<string, string | string[] | undefined>;
 }) {
-  const session = await getServerSession(authOptions);
-
-  // Si ya hay sesión, redirige según el rol
-  if (session?.user) {
-    const role = (session.user as any).role as Role | undefined;
-    const cb = searchParams?.callbackUrl;
-    if (cb) redirect(cb);
-    if (role === "RECRUITER" || role === "ADMIN") redirect("/dashboard/overview");
-    if (role === "CANDIDATE") redirect("/jobs");
-    redirect("/");
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(searchParams ?? {})) {
+    if (Array.isArray(v)) v.forEach((x) => x != null && params.append(k, x));
+    else if (v != null) params.set(k, v);
   }
-
-  // Normaliza params
-  const roleFromQS: Role = searchParams?.role === "RECRUITER" ? "RECRUITER" : "CANDIDATE";
-  const isSignup = Boolean(searchParams?.signup);
-  const callbackUrl = searchParams?.callbackUrl;
-
-  return (
-    <SignInForm
-      initialRole={roleFromQS}
-      isSignup={isSignup}
-      callbackUrl={callbackUrl}
-      // 👇 importante: cuando sea RECRUITER, oculta métodos OAuth y deja solo email
-      showEmailOnly={roleFromQS === "RECRUITER"}
-    />
-  );
+  const qs = params.toString();
+  redirect(`/auth/signin${qs ? `?${qs}` : ""}`);
 }

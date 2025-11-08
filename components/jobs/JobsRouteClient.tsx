@@ -112,14 +112,14 @@ export default function JobsRouteClient({
         {/* Encabezado */}
         <header className="space-y-1">
           <h1 className="text-3xl font-bold">Vacantes</h1>
-          <p className="text-sm text-zinc-600">
+          <p className="text-sm text-muted">
             Usa el buscador para texto/ubicación y los filtros avanzados para precisar resultados.
           </p>
         </header>
 
         {/* Filtros avanzados */}
-        <details className="rounded-2xl border bg-white open:bg-white transition">
-          <summary className="cursor-pointer select-none rounded-2xl px-4 py-3 text-sm font-medium hover:bg-gray-50">
+        <details className="rounded-2xl border glass-card p-0">
+          <summary className="cursor-pointer select-none rounded-2xl px-4 py-3 text-sm font-medium hover:bg-zinc-50/60 dark:hover:bg-zinc-900/60">
             Filtros avanzados
           </summary>
 
@@ -128,8 +128,12 @@ export default function JobsRouteClient({
             <input type="hidden" name="location" defaultValue={location} />
 
             <div className="lg:col-span-4">
-              <label className="block text-xs text-zinc-500 mb-1">Tipo</label>
-              <select name="employmentType" defaultValue={employmentType || ""} className="w-full border rounded-xl p-3">
+              <label className="block text-xs text-muted mb-1">Tipo</label>
+              <select
+                name="employmentType"
+                defaultValue={employmentType || ""}
+                className="field"
+              >
                 <option value="">Todos</option>
                 {EMP_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -140,8 +144,12 @@ export default function JobsRouteClient({
             </div>
 
             <div className="lg:col-span-4">
-              <label className="block text-xs text-zinc-500 mb-1">Seniority</label>
-              <select name="seniority" defaultValue={seniority || ""} className="w-full border rounded-xl p-3">
+              <label className="block text-xs text-muted mb-1">Seniority</label>
+              <select
+                name="seniority"
+                defaultValue={seniority || ""}
+                className="field"
+              >
                 <option value="">Todos</option>
                 {SENIORITIES.map((s) => (
                   <option key={s} value={s}>
@@ -152,24 +160,30 @@ export default function JobsRouteClient({
             </div>
 
             <div className="lg:col-span-2">
-              <label className="block text-xs text-zinc-500 mb-1">Orden</label>
-              <select name="sort" defaultValue={sort} className="w-full border rounded-xl p-3">
+              <label className="block text-xs text-muted mb-1">Orden</label>
+              <select name="sort" defaultValue={sort} className="field">
                 <option value="recent">Más recientes</option>
                 <option value="relevance">Más relevantes</option>
               </select>
             </div>
 
             <div className="lg:col-span-2 flex items-end">
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input type="checkbox" name="remote" value="true" defaultChecked={remote === true} />
+              <label className="inline-flex items-center gap-2 text-sm text-default">
+                <input
+                  type="checkbox"
+                  name="remote"
+                  value="true"
+                  defaultChecked={remote === true}
+                  className="h-4 w-4 rounded border border-zinc-300 dark:border-zinc-700 text-emerald-600 focus:ring-emerald-400"
+                />
                 Solo remoto
               </label>
             </div>
 
             <div className="lg:col-span-12 flex items-center gap-3">
-              <button className="border rounded-xl px-4 py-2">Aplicar filtros</button>
+              <button className="btn btn-ghost">Aplicar filtros</button>
               {hasAnyFilter && (
-                <a href="/jobs" className="text-sm text-zinc-600 hover:underline">
+                <a href="/jobs" className="text-sm text-muted hover:underline">
                   Limpiar
                 </a>
               )}
@@ -184,7 +198,11 @@ export default function JobsRouteClient({
               <a
                 key={c.label}
                 href={c.href}
-                className="text-xs px-2 py-1 rounded-full border bg-gray-50 hover:bg-gray-100 text-zinc-700"
+                className="inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-medium
+                           border-zinc-200/70 dark:border-zinc-700/60
+                           bg-zinc-50/80 dark:bg-zinc-900/60
+                           text-zinc-700 dark:text-zinc-200
+                           hover:bg-zinc-100/80 dark:hover:bg-zinc-800/70 transition"
                 title="Quitar filtro"
               >
                 {c.label} <span className="ml-1">×</span>

@@ -40,7 +40,7 @@ function Chip({
   className?: string;
 }) {
   const tones: Record<string, string> = {
-    zinc: outline ? "border-zinc-300 text-zinc-700" : "bg-zinc-100 text-zinc-800",
+    zinc: outline ? "border-zinc-300 text-zinc-700" : "glass-card p-4 md:p-6",
     blue: outline ? "border-blue-300 text-blue-700" : "bg-blue-50 text-blue-700",
     emerald: outline ? "border-emerald-300 text-emerald-700" : "bg-emerald-50 text-emerald-700",
     amber: outline ? "border-amber-300 text-amber-700" : "bg-amber-50 text-amber-700",
@@ -49,7 +49,7 @@ function Chip({
   };
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium border ${tones[tone]} ${outline ? "bg-white" : ""} ${className}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium border ${tones[tone]} ${outline ? "glass-card p-4 md:p-6" : ""} ${className}`}
     >
       {children}
     </span>
@@ -88,7 +88,7 @@ export default function EducationCard({
     edu.status === "ONGOING" ? "Marcar como completado" : "Marcar como en curso";
 
   return (
-    <div className="border rounded-xl p-4 bg-white flex flex-col gap-2">
+    <div className="border rounded-xl p-4 glass-card p-4 md:p-6">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-medium break-anywhere">

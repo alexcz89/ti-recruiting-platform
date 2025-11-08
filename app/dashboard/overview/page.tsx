@@ -1,8 +1,12 @@
-// app/dashboard/overview/page.tsx
 import { prisma } from "@/lib/prisma";
 import { getSessionCompanyId } from "@/lib/session";
 import Link from "next/link";
+import Image from "next/image";
 import { fromNow } from "@/lib/dates";
+import SetupChecklist from "../components/SetupChecklist";
+import BannerEmailUnverified from "../components/BannerEmailUnverified";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
 const d7 = 7 * 24 * 60 * 60 * 1000;
@@ -25,6 +29,30 @@ export default async function OverviewPage() {
     );
   }
 
+  // Sesión y datos para banner/checklist
+  const session = await getServerSession(authOptions);
+  const sessionEmail = session?.user?.email || null;
+
+  const dbUser = sessionEmail
+    ? await prisma.user.findUnique({
+        where: { email: sessionEmail },
+        select: { id: true, name: true, emailVerified: true },
+      })
+    : null;
+
+  const [profile, company] = await Promise.all([
+    dbUser?.id
+      ? prisma.recruiterProfile.findUnique({
+          where: { userId: dbUser.id },
+          select: { status: true, phone: true, website: true },
+        })
+      : Promise.resolve(null),
+    prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, name: true, size: true, logoUrl: true }, // 👈 traemos logo
+    }),
+  ]);
+
   // KPIs
   const [openJobs, appsTotal, apps7d, candidates] = await Promise.all([
     prisma.job.count({ where: { companyId } }),
@@ -40,7 +68,14 @@ export default async function OverviewPage() {
     orderBy: { createdAt: "desc" },
     take: 8,
     include: {
-      job: { select: { id: true, title: true, company: { select: { name: true } }, updatedAt: true } },
+      job: {
+        select: {
+          id: true,
+          title: true,
+          company: { select: { name: true } },
+          updatedAt: true,
+        },
+      },
       candidate: { select: { name: true, email: true } },
     },
   });
@@ -56,22 +91,37 @@ export default async function OverviewPage() {
       employmentType: true,
       remote: true,
       updatedAt: true,
+      company: { select: { name: true, logoUrl: true } }, // 👈 logo por vacante
       _count: { select: { applications: true } },
     },
   });
+
+  const emailUnverified = !dbUser?.emailVerified;
 
   return (
     <main className="max-w-none p-0">
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-10 space-y-10">
         {/* Header */}
         <div className="sticky top-16 z-30 -mx-2 px-2">
-          <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 px-4 py-3 shadow-sm">
-            <div>
+          <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border glass-card p-4 md:p-6">
+            <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold leading-tight">Overview</h1>
-              <p className="text-sm text-zinc-600">
-                Resumen de vacantes y postulaciones de tu empresa.
-              </p>
+
+              {/* 👇 Badge con logo + nombre de la empresa */}
+              {company?.logoUrl && (
+                <span className="inline-flex items-center gap-2 badge border ">
+                  <Image
+                    src={company.logoUrl}
+                    alt={company?.name ?? "Logo"}
+                    width={20}
+                    height={20}
+                    className="h-5 w-5 rounded-sm object-contain"
+                  />
+                  <span className="text-zinc-700">{company?.name}</span>
+                </span>
+              )}
             </div>
+
             <div className="flex items-center gap-2">
               <Link
                 href="/dashboard/jobs/new"
@@ -89,6 +139,16 @@ export default async function OverviewPage() {
           </header>
         </div>
 
+        {/* 🔔 Banner si el correo NO está verificado */}
+        {emailUnverified && <BannerEmailUnverified />}
+
+        {/* ✅ Checklist de configuración */}
+        <SetupChecklist
+          user={{ name: (session?.user as any)?.name ?? null }}
+          profile={profile}
+          company={company}
+        />
+
         {/* KPIs */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <KpiCard label="Vacantes abiertas" value={nf(openJobs)} tone="emerald" />
@@ -100,7 +160,7 @@ export default async function OverviewPage() {
         {/* Grids */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           {/* Vacantes recientes */}
-          <div className="lg:col-span-8 rounded-2xl border bg-white/85 p-5">
+          <div className="lg:col-span-8 rounded-2xl border glass-card p-4 md:p-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Vacantes recientes</h2>
               <Link href="/dashboard/jobs" className="text-sm text-blue-600 hover:underline">
@@ -122,6 +182,16 @@ export default async function OverviewPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
+                          {/* 👇 mini logo de la empresa en la línea del título */}
+                          {j.company?.logoUrl && (
+                            <Image
+                              src={j.company.logoUrl}
+                              alt={j.company?.name ?? "Logo"}
+                              width={16}
+                              height={16}
+                              className="h-4 w-4 rounded-sm object-contain"
+                            />
+                          )}
                           <Link href={`/dashboard/jobs/${j.id}`} className="font-medium hover:underline">
                             {j.title}
                           </Link>
@@ -170,7 +240,7 @@ export default async function OverviewPage() {
           </div>
 
           {/* Postulaciones recientes */}
-          <div className="lg:col-span-4 rounded-2xl border bg-white/85 p-5">
+          <div className="lg:col-span-4 rounded-2xl border glass-card p-4 md:p-6">
             <div className="flex items-center justify-between mb-3">
               <h2 className="font-semibold">Postulaciones recientes</h2>
               <Link href="/dashboard/applications" className="text-sm text-blue-600 hover:underline">
@@ -179,10 +249,7 @@ export default async function OverviewPage() {
             </div>
 
             {recent.length === 0 ? (
-              <EmptyState
-                title="Sin postulaciones"
-                body="Cuando lleguen postulaciones las verás aquí."
-              />
+              <EmptyState title="Sin postulaciones" body="Cuando lleguen postulaciones las verás aquí." />
             ) : (
               <div className="overflow-x-auto rounded-lg border">
                 <table className="w-full text-sm">
@@ -201,15 +268,16 @@ export default async function OverviewPage() {
                         <td className="py-2 px-3">{r.candidate?.email || "—"}</td>
                         <td className="py-2 px-3">
                           {r.job?.id ? (
-                            <Link href={`/dashboard/jobs/${r.job.id}/applications`} className="hover:underline">
+                            <Link
+                              href={`/dashboard/jobs/${r.job.id}/applications`}
+                              className="hover:underline"
+                            >
                               {r.job?.title ?? "—"}
                             </Link>
                           ) : (
                             r.job?.title ?? "—"
                           )}
-                          <span className="ml-1 text-xs text-zinc-500">
-                            ({r.job?.company?.name ?? "—"})
-                          </span>
+                          <span className="ml-1 text-xs text-zinc-500">({r.job?.company?.name ?? "—"})</span>
                         </td>
                         <td className="py-2 px-3" title={new Date(r.createdAt).toLocaleString()}>
                           {fromNow(r.createdAt)}
@@ -238,7 +306,7 @@ function KpiCard({
   tone?: "zinc" | "emerald" | "amber" | "blue" | "violet";
 }) {
   const tones: Record<string, string> = {
-    zinc: "border-zinc-200 bg-white/90",
+    zinc: "border-zinc-200 glass-card p-4 md:p-6",
     emerald: "border-emerald-200 bg-emerald-50",
     amber: "border-amber-200 bg-amber-50",
     blue: "border-blue-200 bg-blue-50",
@@ -264,7 +332,7 @@ function EmptyState({
   ctaLabel?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed p-8 text-center bg-white/70">
+    <div className="rounded-2xl border border-dashed p-8 text-center glass-card p-4 md:p-6">
       <p className="text-base font-medium text-zinc-800">{title}</p>
       {body && <p className="mt-1 text-sm text-zinc-600">{body}</p>}
       {ctaHref && ctaLabel && (

@@ -41,7 +41,6 @@ export default function ApplyButton({
 
       if (res.error === "AUTH") {
         toastInfo("Inicia sesión como candidato para postular");
-        // redirigimos inmediatamente
         window.location.href = res.signinUrl;
         return;
       }
@@ -55,16 +54,27 @@ export default function ApplyButton({
     });
   };
 
+  const btnBase =
+    "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium shadow-sm transition " +
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 " +
+    "focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-zinc-900";
+
+  const btnState = pending
+    ? "cursor-not-allowed bg-emerald-600/85 text-white"
+    : justApplied
+    ? "bg-emerald-700 text-white hover:bg-emerald-700"
+    : "bg-emerald-600 text-white hover:bg-emerald-700";
+
   return (
-    <div className={`inline-flex items-center gap-2 ${className}`}>
+    <div className={`inline-flex items-center gap-3 ${className}`}>
       <button
+        type="button"
         onClick={onClick}
         disabled={pending}
-        className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white shadow transition
-        focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2
-        ${pending ? "bg-emerald-500/80 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"}`}
+        aria-disabled={pending ? "true" : "false"}
         aria-busy={pending ? "true" : "false"}
         aria-live="polite"
+        className={`${btnBase} ${btnState}`}
       >
         {pending ? (
           <>
@@ -84,8 +94,8 @@ export default function ApplyButton({
         )}
       </button>
 
-      {/* Texto auxiliar accesible */}
-      <span className="text-xs text-zinc-500" aria-live="polite">
+      {/* Texto auxiliar con color “muted” que funciona en claro/oscuro */}
+      <span className="text-[12px] text-muted" aria-live="polite">
         {pending ? "Procesando tu postulación…" : "Se enviará sin carta ni adjuntos."}
       </span>
     </div>

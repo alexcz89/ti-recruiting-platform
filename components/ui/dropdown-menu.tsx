@@ -24,8 +24,8 @@ export const DropdownMenuContent = React.forwardRef<
         sideOffset={sideOffset}
         className={clsx(
           // base
-          "z-50 min-w-[12rem] rounded-2xl border bg-white p-1.5 shadow-lg",
-          "border-zinc-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80",
+          "z-50 min-w-[12rem] rounded-2xl border glass-card p-4 md:p-6",
+          "border-zinc-200 glass-card p-4 md:p-6",
           // animación (scale + fade)
           "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
           "opacity-0 scale-95 data-[state=open]:opacity-100 data-[state=open]:scale-100",
@@ -48,7 +48,7 @@ export const DropdownMenuItem = React.forwardRef<
       className={clsx(
         "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none",
         "text-zinc-800 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        "hover:bg-zinc-50 focus:bg-zinc-50",
+        "hover:glass-card p-4 md:p-6",
         className
       )}
       {...props}
@@ -65,7 +65,7 @@ export const DropdownMenuCheckboxItem = React.forwardRef<
       ref={ref}
       className={clsx(
         "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none",
-        "text-zinc-800 hover:bg-zinc-50 focus:bg-zinc-50",
+        "text-zinc-800 hover:glass-card p-4 md:p-6",
         className
       )}
       checked={checked}
@@ -90,7 +90,7 @@ export const DropdownMenuRadioItem = React.forwardRef<
       ref={ref}
       className={clsx(
         "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none",
-        "text-zinc-800 hover:bg-zinc-50 focus:bg-zinc-50",
+        "text-zinc-800 hover:glass-card p-4 md:p-6",
         className
       )}
       {...props}
@@ -125,7 +125,7 @@ export const DropdownMenuSeparator = React.forwardRef<
   return (
     <DropdownMenuPrimitive.Separator
       ref={ref}
-      className={clsx("my-1 h-px bg-zinc-200", className)}
+      className={clsx("my-1 h-px glass-card p-4 md:p-6", className)}
       {...props}
     />
   );
@@ -153,7 +153,7 @@ export const DropdownMenuSubTrigger = React.forwardRef<
       ref={ref}
       className={clsx(
         "flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none",
-        "text-zinc-800 hover:bg-zinc-50 focus:bg-zinc-50 data-[state=open]:bg-zinc-50",
+        "text-zinc-800 hover:glass-card p-4 md:p-6",
         inset && "pl-8",
         className
       )}
@@ -173,8 +173,8 @@ export const DropdownMenuSubContent = React.forwardRef<
     <DropdownMenuPrimitive.SubContent
       ref={ref}
       className={clsx(
-        "z-50 min-w-[12rem] rounded-2xl border bg-white p-1.5 shadow-lg",
-        "border-zinc-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80",
+        "z-50 min-w-[12rem] rounded-2xl border glass-card p-4 md:p-6",
+        "border-zinc-200 glass-card p-4 md:p-6",
         "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
         "opacity-0 scale-95 data-[state=open]:opacity-100 data-[state=open]:scale-100",
         "transition duration-150 will-change-[opacity,transform]",

@@ -1,13 +1,10 @@
 // app/layout.tsx
 import "./globals.css";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import Link from "next/link";
-import SignOutButton from "@/components/SignOutButton";
-import ThemeToggle from "@/components/ThemeToggle";
 import { Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import Providers from "@/components/Providers";
+import Header from "@/components/Header";
+import { ThemeScript } from "@/components/ThemeProvider"; // ⬅️ Script anti-flash de tema
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -16,16 +13,18 @@ export const metadata = {
   description: "Bolsa de trabajo TI minimal Next.js + PostgreSQL",
 };
 
-export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await getServerSession(authOptions);
-  const user = session?.user as any | undefined;
-
-  const isRecruiter = user?.role === "RECRUITER";
-  const isCandidate = user?.role === "CANDIDATE";
-  const isAdmin = user?.role === "ADMIN";
-
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className={`${inter.className} h-full`}>
+    <html
+      lang="es"
+      suppressHydrationWarning
+      className={`${inter.className} h-full`}
+    >
+      <head>
+        {/* Aplica el tema (dark/light) antes de hidratar para evitar “flash” */}
+        <ThemeScript />
+      </head>
+
       <body
         className="
           min-h-screen antialiased 
@@ -33,84 +32,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           dark:bg-gradient-to-b dark:from-[#041B1F] dark:via-[#06262C] dark:to-[#082B33] dark:text-zinc-100
         "
       >
+        {/* Proveedores globales de sesión, tema, etc. */}
         <Providers>
-          {/* HEADER a lo ancho, con contenedor interno más ANCHO */}
-          <header className="sticky top-0 z-50 border-b bg-white/90 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/85">
-            <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
-              <div className="flex items-center justify-between py-4">
-                <h1 className="text-2xl font-bold">
-                  <Link href="/" className="hover:opacity-90">Bolsa TI</Link>
-                </h1>
+          {/* HEADER (cliente, reactivo a la sesión actual) */}
+          <Header />
 
-                <nav className="flex items-center gap-4 sm:gap-6">
-                  <Link href="/" className="hover:underline">Inicio</Link>
-                  <Link href="/jobs" className="hover:underline">Vacantes</Link>
-
-                  {!session ? (
-                    <div className="relative group">
-                      <button
-                        className="rounded-md border px-3 py-1 text-sm hover:bg-gray-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
-                        aria-haspopup="menu"
-                        aria-expanded="false"
-                      >
-                        Login / Signup
-                      </button>
-                      <div
-                        className="
-                          invisible absolute right-0 top-full z-50 w-56 translate-y-1 rounded-md border
-                          bg-white shadow-lg ring-1 ring-black/5 opacity-0 transition
-                          group-hover:visible group-hover:translate-y-0 group-hover:opacity-100
-                          focus-within:visible focus-within:translate-y-0 focus-within:opacity-100
-                          dark:border-zinc-800 dark:bg-zinc-900
-                        "
-                        role="menu"
-                      >
-                        <div className="p-1">
-                          <Link href="/signin?role=CANDIDATE" className="block rounded px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800" role="menuitem">
-                            Login Candidato
-                          </Link>
-                          <Link href="/signin?role=CANDIDATE&signup=1" className="block rounded px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800" role="menuitem">
-                            Signup Candidato
-                          </Link>
-                          <div className="my-1 h-px bg-zinc-100 dark:bg-zinc-800" />
-                          <Link href="/signin?role=RECRUITER" className="block rounded px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800" role="menuitem">
-                            Employers Login
-                          </Link>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {(isAdmin || isRecruiter) && (
-                        <Link href="/dashboard" className="hover:underline">Panel</Link>
-                      )}
-                      {isCandidate && (
-                        <Link href="/profile/summary" className="hover:underline">Perfil</Link>
-                      )}
-                      <span className="hidden sm:inline text-sm text-zinc-600 dark:text-zinc-400">
-                        {user?.email || "Sesión activa"}
-                      </span>
-                      <SignOutButton />
-                    </>
-                  )}
-
-                  <ThemeToggle />
-                </nav>
-              </div>
-            </div>
-          </header>
-
-          {/* MAIN con contenedor más ANCHO y paddings laterales cómodos */}
-          <main className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
+          {/* MAIN */}
+          <main
+            id="main-content"
+            className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-4 pb-10"
+          >
             {children}
           </main>
 
-          {/* FOOTER con el mismo ancho del main */}
-          <footer className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-10 text-sm text-zinc-500 dark:text-zinc-400">
-            © {new Date().getFullYear()} Bolsa TI
+          {/* FOOTER */}
+          <footer className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-8 text-sm text-zinc-500 dark:text-zinc-400 border-t border-zinc-200/60 dark:border-zinc-800/60">
+            © {new Date().getFullYear()} Bolsa TI. Todos los derechos reservados.
           </footer>
         </Providers>
 
+        {/* Toasts globales */}
         <Toaster richColors position="top-right" />
       </body>
     </html>

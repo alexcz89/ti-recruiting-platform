@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useFormContext } from "react-hook-form";
+import { useFormContext, useWatch } from "react-hook-form";
 
 export type WorkExperience = {
   id?: string;
@@ -22,7 +22,7 @@ export type WorkExperienceErrors = {
 
 export default function WorkExperienceCard({
   idx,
-  exp,
+  exp, // solo para placeholder inicial; RHF controla los values
   error,
   onRemove,
   onMakeCurrent,
@@ -33,13 +33,21 @@ export default function WorkExperienceCard({
   onRemove: (index: number) => void;
   onMakeCurrent: (idx: number, checked: boolean) => void;
 }) {
-  const { register, setValue, watch } = useFormContext();
-  const isCurrent = watch(`experiences.${idx}.isCurrent`) as boolean | undefined;
+  const { register, setValue, control } = useFormContext();
 
-  // Si se marca "Actual", limpia endDate a null para que pase el schema
+  // Observa SOLO el flag de "Actual" para deshabilitar el fin sin reinyectar valores
+  const isCurrent = !!useWatch({
+    control,
+    name: `experiences.${idx}.isCurrent`,
+  });
+
+  // Si se marca "Actual", limpia endDate a null (sin tocar foco)
   useEffect(() => {
     if (isCurrent) {
-      setValue(`experiences.${idx}.endDate`, null as any, { shouldValidate: true, shouldDirty: true });
+      setValue(`experiences.${idx}.endDate`, null as any, {
+        shouldValidate: true,
+        shouldDirty: true,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCurrent]);
@@ -51,20 +59,26 @@ export default function WorkExperienceCard({
           <label className="text-sm">Rol *</label>
           <input
             className="border rounded-xl p-2 w-full"
+            placeholder={exp.role ? undefined : "Ej. Desarrollador Frontend"}
+            autoComplete="off"
             {...register(`experiences.${idx}.role` as const)}
-            defaultValue={exp.role || ""}
           />
-          {error?.role?.message && <p className="text-xs text-red-600">{error.role.message}</p>}
+          {error?.role?.message && (
+            <p className="text-xs text-red-600">{error.role.message}</p>
+          )}
         </div>
 
         <div>
           <label className="text-sm">Empresa *</label>
           <input
             className="border rounded-xl p-2 w-full"
+            placeholder={exp.company ? undefined : "Ej. Acme Inc."}
+            autoComplete="off"
             {...register(`experiences.${idx}.company` as const)}
-            defaultValue={exp.company || ""}
           />
-          {error?.company?.message && <p className="text-xs text-red-600">{error.company.message}</p>}
+          {error?.company?.message && (
+            <p className="text-xs text-red-600">{error.company.message}</p>
+          )}
         </div>
       </div>
 
@@ -75,9 +89,10 @@ export default function WorkExperienceCard({
             type="month"
             className="border rounded-xl p-2 w-full"
             {...register(`experiences.${idx}.startDate` as const)}
-            defaultValue={exp.startDate || ""}
           />
-          {error?.startDate?.message && <p className="text-xs text-red-600">{error.startDate.message}</p>}
+          {error?.startDate?.message && (
+            <p className="text-xs text-red-600">{error.startDate.message}</p>
+          )}
         </div>
 
         <div>
@@ -86,30 +101,33 @@ export default function WorkExperienceCard({
             <input
               type="month"
               className="border rounded-xl p-2 w-full"
+              disabled={isCurrent}
               {...register(`experiences.${idx}.endDate` as const, {
                 onChange: (e) => {
-                  // si lo deja vacío, guárdalo como null para pasar el schema
-                  const v = String(e.target.value || "");
-                  if (v === "") {
-                    setValue(`experiences.${idx}.endDate`, null as any, { shouldValidate: true, shouldDirty: true });
+                  // si queda vacío, manda null para pasar el schema
+                  if (String(e.target.value || "") === "") {
+                    setValue(`experiences.${idx}.endDate`, null as any, {
+                      shouldValidate: true,
+                      shouldDirty: true,
+                    });
                   }
                 },
               })}
-              defaultValue={exp.endDate || ""}
-              disabled={!!isCurrent}
             />
 
             <label className="inline-flex items-center gap-2 text-sm whitespace-nowrap">
               <input
                 type="checkbox"
-                {...register(`experiences.${idx}.isCurrent` as const)}
-                defaultChecked={!!exp.isCurrent}
-                onChange={(e) => onMakeCurrent(idx, e.target.checked)}
+                {...register(`experiences.${idx}.isCurrent` as const, {
+                  onChange: (e) => onMakeCurrent(idx, e.target.checked),
+                })}
               />
               Actual
             </label>
           </div>
-          {error?.endDate?.message && <p className="text-xs text-red-600">{error.endDate.message}</p>}
+          {error?.endDate?.message && (
+            <p className="text-xs text-red-600">{error.endDate.message}</p>
+          )}
         </div>
       </div>
 

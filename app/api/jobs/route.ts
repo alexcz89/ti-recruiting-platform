@@ -71,16 +71,31 @@ export async function GET(req: NextRequest) {
           createdAt: true,
           updatedAt: true,
           companyConfidential: true,
-          company: { select: { name: true } },
+          company: { select: { name: true, logoUrl: true } },
         },
       });
       if (!job) return NextResponse.json({ job: null });
+
+      // Si es confidencial: NO exponer objeto de compañía ni logos
+      const companyObj = job.companyConfidential
+        ? null
+        : job.company
+        ? { name: job.company.name ?? null, logoUrl: job.company.logoUrl ?? null }
+        : null;
 
       return NextResponse.json({
         job: {
           id: job.id,
           title: job.title,
-          company: job.companyConfidential ? "Confidencial" : job.company?.name ?? null,
+          // Texto “Confidencial” solo para mostrar; el objeto va en companyObj
+          company: job.companyConfidential
+            ? "Confidencial"
+            : companyObj?.name ?? null,
+
+          companyObj, // <- objeto solo si NO es confidencial
+          companyLogoUrl: job.companyConfidential ? null : companyObj?.logoUrl ?? null,
+          logoUrl: job.companyConfidential ? null : companyObj?.logoUrl ?? null,
+
           location: job.location,
           locationType: job.locationType,
           locationLat: job.locationLat,
@@ -91,6 +106,7 @@ export async function GET(req: NextRequest) {
           remote: job.remote,
           employmentType: job.employmentType,
           description: job.description,
+
           // para compatibilidad y también estructurado
           skills: job.skills,
           skillsJson: job.skillsJson,
@@ -106,6 +122,7 @@ export async function GET(req: NextRequest) {
           currency: job.currency,
           createdAt: job.createdAt,
           updatedAt: job.updatedAt,
+          companyConfidential: job.companyConfidential,
         },
       });
     }
@@ -132,11 +149,10 @@ export async function GET(req: NextRequest) {
       where.OR = [
         { title: { contains: q, mode: "insensitive" } },
         { description: { contains: q, mode: "insensitive" } },
-        { skills: { hasSome: [q] } }, // compat text array
+        { skills: { hasSome: [q] } },
       ];
     }
     if (location) {
-      // match por string legible o por campos estructurados
       where.OR = [
         ...(where.OR || []),
         { location: { contains: location, mode: "insensitive" } },
@@ -175,30 +191,44 @@ export async function GET(req: NextRequest) {
         createdAt: true,
         updatedAt: true,
         companyConfidential: true,
-        company: { select: { name: true } },
+        company: { select: { name: true, logoUrl: true } },
       },
     });
 
-    const items = page.slice(0, limit).map((j) => ({
-      id: j.id,
-      title: j.title,
-      company: j.companyConfidential ? "Confidencial" : j.company?.name ?? null,
-      location: j.location,
-      locationType: j.locationType,
-      country: j.country,
-      admin1: j.admin1,
-      city: j.city,
-      remote: j.remote,
-      employmentType: j.employmentType,
-      description: j.description,
-      skills: j.skills,
-      salaryMin: j.salaryMin,
-      salaryMax: j.salaryMax,
-      showSalary: j.showSalary,
-      currency: j.currency,
-      createdAt: j.createdAt,
-      updatedAt: j.updatedAt,
-    }));
+    const items = page.slice(0, limit).map((j) => {
+      const companyObj = j.companyConfidential
+        ? null
+        : j.company
+        ? { name: j.company.name ?? null, logoUrl: j.company.logoUrl ?? null }
+        : null;
+
+      return {
+        id: j.id,
+        title: j.title,
+
+        company: j.companyConfidential ? "Confidencial" : companyObj?.name ?? null,
+        companyObj, // solo si NO es confidencial
+        companyLogoUrl: j.companyConfidential ? null : companyObj?.logoUrl ?? null,
+        logoUrl: j.companyConfidential ? null : companyObj?.logoUrl ?? null,
+
+        location: j.location,
+        locationType: j.locationType,
+        country: j.country,
+        admin1: j.admin1,
+        city: j.city,
+        remote: j.remote,
+        employmentType: j.employmentType,
+        description: j.description,
+        skills: j.skills,
+        salaryMin: j.salaryMin,
+        salaryMax: j.salaryMax,
+        showSalary: j.showSalary,
+        currency: j.currency,
+        createdAt: j.createdAt,
+        updatedAt: j.updatedAt,
+        companyConfidential: j.companyConfidential,
+      };
+    });
 
     let nextCursor: string | null = null;
     if (page.length > limit) nextCursor = page[limit].id;
@@ -212,13 +242,7 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/jobs
- * Crea una vacante y la liga al recruiter autenticado y a su companyId.
- * Acepta FormData (desde JobWizard).
- *
- * BLINDAJES ANTI-DUPLICADOS:
- *  - Si llega 'jobId' en el FormData => 409 (esto viene del editor; no se permite crear).
- *  - Idempotencia por ventana corta: si existe una vacante OPEN con mismo (title, companyId, recruiterId)
- *    creada en los últimos 3 minutos, devolvemos esa misma en lugar de crear otra.
+ * Crea una vacante…
  */
 export async function POST(req: NextRequest) {
   try {
@@ -239,10 +263,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // ---- FormData
     const formData = await req.formData();
 
-    // 1) Si viene desde el editor, no permitimos crear
     const incomingJobId = getFormString(formData, "jobId");
     if (incomingJobId) {
       return NextResponse.json(
@@ -251,23 +273,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Requeridos mínimos
     const title = getFormString(formData, "title");
     const description = getFormString(formData, "description");
     let employmentType = getFormString(formData, "employmentType") as EmploymentType;
-    const locationType = (getFormString(formData, "locationType") ||
-      "ONSITE") as LocationType;
+    const locationType = (getFormString(formData, "locationType") || "ONSITE") as LocationType;
 
     if (!title || !description) {
       return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
     }
 
-    // Fallback seguro para employmentType
     if (!["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"].includes(employmentType)) {
       employmentType = "FULL_TIME";
     }
 
-    // Ubicación legible + estructurada (opcionales)
     const city = getFormString(formData, "city");
     const country = getFormString(formData, "country") || null;
     const admin1 = getFormString(formData, "admin1") || null;
@@ -279,13 +297,11 @@ export async function POST(req: NextRequest) {
     const safeLng = Number.isFinite(locationLng as number) ? (locationLng as number) : null;
     const remote = locationType === "REMOTE";
 
-    // Compensación
     const currency = getFormString(formData, "currency") || "MXN";
     const salaryMin = getFormNumber(formData, "salaryMin");
     const salaryMax = getFormNumber(formData, "salaryMax");
     const showSalary = getFormBool(formData, "showSalary");
 
-    // Validación: rango de sueldo coherente
     if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
       return NextResponse.json(
         { error: "El sueldo mínimo no puede ser mayor que el sueldo máximo." },
@@ -293,17 +309,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Extras
     const schedule = getFormString(formData, "schedule") || null;
     const showBenefits = getFormBool(formData, "showBenefits");
     const benefitsJson = getFormJSON<any>(formData, "benefitsJson");
     const educationJson = getFormJSON<any>(formData, "educationJson");
-    const minDegree = (getFormString(formData, "minDegree") ||
-      null) as EducationLevel | null;
+    const minDegree = (getFormString(formData, "minDegree") || null) as EducationLevel | null;
     const skillsJson = getFormJSON<any>(formData, "skillsJson");
     const certsJson = getFormJSON<any>(formData, "certsJson");
 
-    // Compat: array de skills legible para búsquedas simples (a partir de skillsJson)
     const skillsList: string[] = Array.isArray(skillsJson)
       ? skillsJson
           .map((s: any) =>
@@ -314,11 +327,9 @@ export async function POST(req: NextRequest) {
           .filter(Boolean)
       : [];
 
-    // Confidencial
     const companyMode = getFormString(formData, "companyMode"); // "own" | "confidential"
     const companyConfidential = companyMode === "confidential";
 
-    // 2) Idempotencia por ventana corta
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
     const existing = await prisma.job.findFirst({
       where: {
@@ -334,18 +345,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, id: existing.id, deduped: true });
     }
 
-    // 3) Crear
     const job = await prisma.job.create({
       data: {
         title,
         description,
-        // Ubicación legible (fallback a "Remoto" o ciudad/cadena)
-        location:
-          locationType === "REMOTE"
-            ? "Remoto"
-            : city
-            ? city
-            : "—",
+        location: locationType === "REMOTE" ? "Remoto" : city ? city : "—",
         locationType,
         locationLat: safeLat ?? undefined,
         locationLng: safeLng ?? undefined,
@@ -367,7 +371,7 @@ export async function POST(req: NextRequest) {
 
         skillsJson: skillsJson ?? undefined,
         certsJson: certsJson ?? undefined,
-        skills: skillsList, // compat
+        skills: skillsList,
 
         salaryMin: salaryMin ?? undefined,
         salaryMax: salaryMax ?? undefined,
@@ -383,10 +387,8 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
 
-    // 4) Auto-guardar/actualizar plantilla (no bloquear si falla)
     try {
       const payloadForTemplate = {
-        // Paso 1
         title,
         locationType,
         city,
@@ -400,23 +402,20 @@ export async function POST(req: NextRequest) {
         salaryMin,
         salaryMax,
         showSalary,
-        // Paso 2
         employmentType,
         schedule,
-        // Paso 3
         benefitsJson: benefitsJson ?? {},
-        // Paso 4
         description,
         education: educationJson ?? [],
         minDegree,
         skills: Array.isArray(skillsJson) ? skillsJson : [],
         certs: Array.isArray(certsJson) ? certsJson : [],
-        // metadatos opcionales
         _v: 1,
       };
 
+      const companyIdTpl = companyId;
       const existingTpl = await prisma.jobTemplate.findFirst({
-        where: { companyId, title },
+        where: { companyId: companyIdTpl, title },
         select: { id: true },
       });
 
@@ -432,7 +431,7 @@ export async function POST(req: NextRequest) {
       } else {
         await prisma.jobTemplate.create({
           data: {
-            companyId,
+            companyId: companyIdTpl,
             title,
             payload: payloadForTemplate,
             creatorId: userId,

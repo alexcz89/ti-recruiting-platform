@@ -129,7 +129,7 @@ export default async function JobApplicationsPage({
     return (
       <main className="max-w-none p-0">
         <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-10">
-          <div className="rounded-2xl border border-dashed p-8 text-center bg-white/70">
+          <div className="rounded-2xl border border-dashed p-8 text-center glass-card p-4 md:p-6">
             <p className="text-base font-medium text-zinc-800">No hay empresa asociada a tu sesión.</p>
             <p className="mt-1 text-sm text-zinc-600">Pide al administrador que asigne tu usuario a una empresa.</p>
           </div>
@@ -242,7 +242,7 @@ export default async function JobApplicationsPage({
         </header>
 
         {/* Tabs por interés */}
-        <section className="rounded-2xl border bg-white/80 p-3">
+        <section className="rounded-2xl border glass-card p-4 md:p-6">
           <div className="flex flex-wrap items-center gap-2">
             <FilterPill active={interestParam === "ALL"} href={buildInterestHref("ALL")} label={`Todos (${total})`} />
             <FilterPill active={chosenInterest === "REVIEW"}   href={buildInterestHref("REVIEW")}   label={`En revisión (${counters.REVIEW})`} />
@@ -254,14 +254,14 @@ export default async function JobApplicationsPage({
 
         {/* Tabla / Lista */}
         {apps.length === 0 ? (
-          <div className="rounded-2xl border border-dashed p-10 text-center bg-white/70">
+          <div className="rounded-2xl border border-dashed p-10 text-center glass-card p-4 md:p-6">
             <p className="text-base font-medium text-zinc-800">
               {chosenInterest ? `Sin candidatos en “${INTEREST_LABEL[chosenInterest]}”.` : "Aún no hay postulaciones para esta vacante."}
             </p>
             <p className="mt-1 text-sm text-zinc-600">Cuando lleguen postulaciones las verás aquí.</p>
           </div>
         ) : (
-          <div className="rounded-2xl border bg-white/85 p-0 overflow-visible">
+          <div className="rounded-2xl border glass-card p-4 md:p-6">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-left text-zinc-600">
@@ -314,7 +314,7 @@ export default async function JobApplicationsPage({
                           <div className="min-w-[88px]">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold">{score}%</span>
-                              <div className="h-1.5 w-20 rounded bg-zinc-200 overflow-hidden">
+                              <div className="h-1.5 w-20 rounded bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
                                 <div
                                   className="h-1.5 bg-emerald-500"
                                   style={{ width: `${Math.max(0, Math.min(score, 100))}%` }}
@@ -331,7 +331,7 @@ export default async function JobApplicationsPage({
                               {shown.map((s, i) => {
                                 const cls = s.required
                                   ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                                  : "bg-zinc-100 text-zinc-700 border-zinc-200";
+                                  : "glass-card p-4 md:p-6";
                                 return (
                                   <span
                                     key={`${s.name}-${i}`}
@@ -386,7 +386,7 @@ function FilterPill({ active, href, label }: { active?: boolean; href: string; l
       className={`inline-flex items-center rounded-full border px-3 py-1.5 text-sm transition ${
         active
           ? "bg-emerald-600 border-emerald-600 text-white hover:bg-emerald-700"
-          : "bg-white border-zinc-200 text-zinc-700 hover:bg-gray-50"
+          : "glass-card p-4 md:p-6"
       }`}
     >
       {label}
@@ -396,7 +396,7 @@ function FilterPill({ active, href, label }: { active?: boolean; href: string; l
 
 function MetricBadge({ label, value }: { label: string; value: number }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-white px-2 py-0.5">
+    <span className="inline-flex items-center gap-1 badge border border-zinc-200 ">
       <span className="text-[11px] text-zinc-500">{label}</span>
       <span className="text-xs font-semibold text-zinc-800">{value}</span>
     </span>

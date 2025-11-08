@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import Image from "next/image";
 import { fromNow } from "@/lib/dates";
 import { useJobs } from "@/lib/hooks/useJobs";
 import { useRouter } from "next/navigation";
@@ -48,7 +49,6 @@ export default function JobsFeed({
     [jobs]
   );
 
-  // Auto seleccionar primera vacante al cargar
   useEffect(() => {
     if (visibleJobs.length > 0 && !selectedId && onFirstLoad) {
       onFirstLoad(visibleJobs[0]);
@@ -67,7 +67,7 @@ export default function JobsFeed({
         const first = entries[0];
         if (first.isIntersecting) setSize((s) => s + 1);
       },
-      { rootMargin: "200px" } // pre‐carga anticipada
+      { rootMargin: "200px" }
     );
 
     observer.observe(el);
@@ -75,16 +75,38 @@ export default function JobsFeed({
   }, [hasMore, setSize]);
 
   // ---------- UI helpers ----------
-  const companyLabel = (j: any) => j.company?.name ?? j.company ?? "—";
+  const companyNameRaw = (j: any) => j.company?.name ?? j.company ?? "—";
+  const companyLogo = (j: any) =>
+    j.company?.logoUrl ?? j.companyLogoUrl ?? j.logoUrl ?? null;
+
+  const isConfidential = (j: any) =>
+    j.companyConfidential ??
+    j.confidential ??
+    j.isConfidential ??
+    j.meta?.confidential ??
+    false;
+
+  const displayCompany = (j: any) =>
+    isConfidential(j) ? "Empresa confidencial" : companyNameRaw(j);
+
+  // Chips con soporte claro/oscuro
+  const chipBase =
+    "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium";
+  const chipBlue =
+    "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/50";
+  const chipEmerald =
+    "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/50";
 
   const SalaryBadge = ({ j }: { j: any }) => {
     const has = j.salaryMin != null || j.salaryMax != null;
     if (!has) return null;
     const currency = j.currency ?? "MXN";
-    const min = j.salaryMin != null ? Number(j.salaryMin).toLocaleString("es-MX") : "—";
-    const max = j.salaryMax != null ? Number(j.salaryMax).toLocaleString("es-MX") : "—";
+    const min =
+      j.salaryMin != null ? Number(j.salaryMin).toLocaleString("es-MX") : "—";
+    const max =
+      j.salaryMax != null ? Number(j.salaryMax).toLocaleString("es-MX") : "—";
     return (
-      <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] font-medium">
+      <span className={`${chipBase} ${chipEmerald}`}>
         {min} – {max} {currency}
       </span>
     );
@@ -92,33 +114,14 @@ export default function JobsFeed({
 
   const TypeChip = ({ j }: { j: any }) =>
     j.employmentType ? (
-      <span className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 text-[11px] font-medium">
-        {j.employmentType}
-      </span>
+      <span className={`${chipBase} ${chipBlue}`}>{j.employmentType}</span>
     ) : null;
 
   const ModeChip = ({ j }: { j: any }) => (
-    <span className="inline-flex items-center rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 text-[11px] font-medium">
+    <span className={`${chipBase} ${chipEmerald}`}>
       {j.remote ? "Remoto" : "Presencial / Híbrido"}
     </span>
   );
-
-  const skillsPreview = (j: any): string[] => {
-    if (!Array.isArray(j?.skills)) return [];
-    const clean = j.skills
-      .map((s: string) => s.replace(/^Req\s*:\s*/i, "").replace(/^Nice\s*:\s*/i, "").trim())
-      .filter(Boolean);
-    return clean.slice(0, 4);
-  };
-
-  const salaryLine = (j: any) => {
-    const has = j.salaryMin != null || j.salaryMax != null;
-    if (!has) return "Oculto";
-    const currency = j.currency ?? "MXN";
-    const min = j.salaryMin != null ? Number(j.salaryMin).toLocaleString("es-MX") : "—";
-    const max = j.salaryMax != null ? Number(j.salaryMax).toLocaleString("es-MX") : "—";
-    return `${min} – ${max} ${currency}`;
-  };
 
   // ---------- States ----------
   if (isError)
@@ -132,15 +135,13 @@ export default function JobsFeed({
 
   if (isLoading && visibleJobs.length === 0) {
     return (
-      <div
-        className={`md:max-w-[560px] mx-auto rounded-2xl border bg-white/70 backdrop-blur p-2 sm:p-3 h-[78vh] overflow-hidden ${className}`}
-      >
+      <div className={`md:max-w-[560px] mx-auto glass-card p-4 md:p-6 ${className}`}>
         <ul className="mt-1 space-y-3 animate-pulse">
           {Array.from({ length: 6 }).map((_, i) => (
-            <li key={i} className="border rounded-xl p-4">
-              <div className="h-4 w-2/3 bg-zinc-200 rounded mb-2" />
-              <div className="h-3 w-4/5 bg-zinc-200 rounded mb-1" />
-              <div className="h-3 w-3/5 bg-zinc-200 rounded" />
+            <li key={i} className="glass-card p-4">
+              <div className="h-4 w-2/3 rounded-md bg-zinc-200/60 dark:bg-zinc-700/50" />
+              <div className="mt-2 h-3 w-4/5 rounded-md bg-zinc-200/60 dark:bg-zinc-700/50" />
+              <div className="mt-2 h-3 w-3/5 rounded-md bg-zinc-200/60 dark:bg-zinc-700/50" />
             </li>
           ))}
         </ul>
@@ -150,10 +151,8 @@ export default function JobsFeed({
 
   if (visibleJobs.length === 0)
     return (
-      <div
-        className={`md:max-w-[560px] mx-auto rounded-2xl border bg-white/70 backdrop-blur p-6 ${className}`}
-      >
-        <p className="text-sm text-zinc-600">
+      <div className={`md:max-w-[560px] mx-auto glass-card p-4 md:p-6 ${className}`}>
+        <p className="text-sm text-muted">
           No hay vacantes que coincidan con los filtros.
         </p>
       </div>
@@ -161,14 +160,13 @@ export default function JobsFeed({
 
   // ---------- Main list ----------
   return (
-    <div
-      className={`md:max-w-[560px] mx-auto rounded-2xl border bg-white/70 backdrop-blur p-2 sm:p-3 h-[78vh] overflow-y-auto ${className}`}
-    >
+    <div className={`md:max-w-[560px] mx-auto ${className}`}>
       <ul className="space-y-3">
         {visibleJobs.map((j: any) => {
           const isSelected = j.id === selectedId;
           const onActivate = () => onSelect(j);
-          const skillList = skillsPreview(j);
+          const logo = companyLogo(j);
+          const confidential = isConfidential(j);
 
           return (
             <li
@@ -185,18 +183,34 @@ export default function JobsFeed({
               }}
               onMouseEnter={() => router.prefetch?.(`/jobs/${j.id}`)}
               className={[
-                "group relative cursor-pointer border rounded-xl p-4 transition",
-                "hover:shadow-sm hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-blue-500/40",
+                "group relative cursor-pointer transition",
                 isSelected
-                  ? "ring-2 ring-blue-500/40 border-blue-400 bg-blue-50/70"
-                  : "bg-white",
+                  ? "ring-2 ring-blue-500/40 border-blue-400 bg-blue-50/70 dark:bg-blue-950/30 rounded-xl p-4 border"
+                  : "glass-card p-4",
               ].join(" ")}
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h3 className="font-semibold truncate">{j.title ?? "Sin título"}</h3>
-                  <p className="text-sm text-zinc-600 truncate">
-                    {companyLabel(j)} — {j.location ?? "—"}
+                {/* Logo: solo si hay y NO es confidencial */}
+                {logo && !confidential && (
+                  <div className="shrink-0 mt-0.5">
+                    <div className="h-9 w-9 rounded-lg border border-zinc-200/70 dark:border-zinc-700/60 bg-white/70 dark:bg-zinc-900/60 flex items-center justify-center">
+                      <Image
+                        src={logo}
+                        alt={companyNameRaw(j)}
+                        width={36}
+                        height={36}
+                        className="h-9 w-9 object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold truncate text-default">
+                    {j.title ?? "Sin título"}
+                  </h3>
+                  <p className="text-sm text-muted truncate">
+                    {displayCompany(j)} — {j.location ?? "—"}
                   </p>
 
                   <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -206,14 +220,14 @@ export default function JobsFeed({
                   </div>
 
                   {j.description ? (
-                    <p className="text-xs text-zinc-500 mt-2 line-clamp-2">
+                    <p className="text-xs text-muted mt-2 line-clamp-2">
                       {String(j.description).replace(/\s+/g, " ").trim()}
                     </p>
                   ) : null}
                 </div>
 
                 <time
-                  className="text-[11px] text-zinc-500 shrink-0 whitespace-nowrap"
+                  className="text-[11px] text-muted shrink-0 whitespace-nowrap"
                   title={new Date(j.updatedAt ?? j.createdAt).toLocaleString()}
                 >
                   {fromNow(new Date(j.updatedAt ?? j.createdAt))}
@@ -225,7 +239,10 @@ export default function JobsFeed({
       </ul>
 
       {/* Sentinel para el scroll infinito */}
-      <div ref={sentinelRef} className="h-10 flex items-center justify-center text-xs text-zinc-400">
+      <div
+        ref={sentinelRef}
+        className="h-10 flex items-center justify-center text-xs text-muted"
+      >
         {isValidating ? "Cargando más vacantes…" : hasMore ? "" : "No hay más resultados."}
       </div>
     </div>

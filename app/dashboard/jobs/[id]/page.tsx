@@ -129,7 +129,7 @@ export default async function JobKanbanPage({ params }: { params: { id: string }
             return (
               <div
                 key={st}
-                className="rounded-xl border bg-white/90 p-3 text-center"
+                className="rounded-xl border glass-card p-4 md:p-6"
                 title={st}
               >
                 <p className="text-[11px] text-zinc-500">{STATUS_LABEL[st]}</p>
@@ -137,7 +137,7 @@ export default async function JobKanbanPage({ params }: { params: { id: string }
               </div>
             );
           })}
-          <div className="rounded-xl border bg-white/90 p-3 text-center">
+          <div className="rounded-xl border glass-card p-4 md:p-6">
             <p className="text-[11px] text-zinc-500">Total</p>
             <p className="text-2xl font-semibold">{apps.length}</p>
           </div>

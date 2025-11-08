@@ -26,7 +26,7 @@ export default function AvatarBubble({ className, label, emoji, color = "cyan" }
 
         {/* chip flotante */}
         <div className="absolute left-1/2 top-full z-10 mt-3 -translate-x-1/2">
-          <div className="rounded-xl border border-white/10 bg-white/95 px-3 py-2 text-xs text-[#082B33] shadow-md">
+          <div className="rounded-xl border border-white/10 glass-card p-4 md:p-6">
             {label}
           </div>
         </div>

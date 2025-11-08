@@ -24,12 +24,12 @@ export default function ClientSplitView({
   filters: Filters;
   isCandidate?: boolean;
 }) {
-  // Volvemos a manejar el objeto job para respetar la API actual de JobsFeed/JobDetailPanel
+  // Mantiene el job seleccionado
   const [selectedJob, setSelectedJob] = React.useState<any | null>(null);
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-      {/* Lista (5/12) */}
+      {/* Lista de vacantes (5/12) */}
       <aside className="md:col-span-5 space-y-3">
         <JobsFeed
           initial={filters}
@@ -42,14 +42,21 @@ export default function ClientSplitView({
         />
       </aside>
 
-      {/* Detalle (7/12) */}
+      {/* Detalle de vacante (7/12) */}
       <section className="md:col-span-7">
         <div className="sticky top-24">
           {selectedJob ? (
             <JobDetailPanel job={selectedJob} isCandidate={isCandidate} />
           ) : (
-            <div className="border rounded-2xl p-6 bg-white/70 text-sm text-zinc-600 min-h-[50vh] flex items-center">
-              Selecciona una vacante de la lista para ver el detalle aquí.
+            <div
+              className="glass-card p-6 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm"
+            >
+              <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">
+                Selecciona una vacante
+              </p>
+              <p className="text-sm text-muted mt-1">
+                Aquí verás los detalles completos de la vacante seleccionada.
+              </p>
             </div>
           )}
         </div>

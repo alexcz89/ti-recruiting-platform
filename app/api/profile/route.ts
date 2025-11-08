@@ -1,76 +1,85 @@
 // app/api/profile/route.ts
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
-import prisma from "@/lib/prisma";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
 import {
   EducationSchema,
   EducationLevel,
+  LanguageSchema,
+  SkillDetailedSchema,
 } from "@/lib/schemas/profile";
 
-/** Zod: valida los campos básicos que guardamos en User */
-const ProfilePayloadSchema = z.object({
-  location: z.string().min(2).optional(),
-  phone: z.string().optional().or(z.literal("")),
-  birthdate: z.string().optional().or(z.literal("")),
-  linkedin: z.string().url().optional().or(z.literal("")),
-  github: z.string().url().optional().or(z.literal("")),
-  resumeUrl: z.string().url().optional().or(z.literal("")),
-  countryCode: z.string().min(2).max(2).optional(),
-  admin1: z.string().optional(),
-  city: z.string().optional(),
-  cityNorm: z.string().optional(),
-  admin1Norm: z.string().optional(),
-
-  // 🔹 nuevos
-  highestEducationLevel: EducationLevel.optional(),
-  education: z.any().optional(), // lo validaremos con EducationSchema[]
-});
-
-/** Convierte strings vacíos a null para guardar más limpio en DB */
-function nullIfEmpty(v: unknown) {
-  return typeof v === "string" && v.trim() === "" ? null : v;
-}
-function parseBirthdate(iso?: string | null) {
-  if (!iso) return null;
-  const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : d;
-}
-
-/** Ranking simple para decidir el "máximo" académico */
+/* Helpers */
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const educationRank: Record<string, number> = {
-  NONE: 0,
-  PRIMARY: 1,
-  SECONDARY: 2,
-  HIGH_SCHOOL: 3,
-  TECHNICAL: 4,
-  BACHELOR: 5,
-  MASTER: 6,
-  DOCTORATE: 7,
-  OTHER: 2,
+  NONE: 0, PRIMARY: 1, SECONDARY: 2, HIGH_SCHOOL: 3,
+  TECHNICAL: 4, BACHELOR: 5, MASTER: 6, DOCTORATE: 7, OTHER: 2,
 };
-function pickHighestEducation(levels: (string | null | undefined)[] | null | undefined) {
+const pickHighestEducation = (levels?: (string | null | undefined)[]) => {
   if (!levels?.length) return null;
   let best: string | null = null;
   let bestScore = -1;
   for (const lv of levels) {
     const key = String(lv ?? "NONE").toUpperCase();
     const score = educationRank[key] ?? -1;
-    if (score > bestScore) {
-      bestScore = score;
-      best = key;
-    }
+    if (score > bestScore) { bestScore = score; best = key; }
   }
   return best;
-}
+};
+const nullIfEmpty = (v: unknown) => (typeof v === "string" && v.trim() === "" ? null : v);
+const parseBirthdate = (iso?: string | null) => {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+};
+const toMonthStartDate = (ym?: string | null) =>
+  ym && MONTH_RE.test(ym) ? new Date(`${ym}-01T00:00:00.000Z`) : null;
 
-/** Lee el body como JSON o FormData y regresa un objeto plano */
+/* Schemas */
+const WorkExperienceSchema = z.object({
+  id: z.string().optional(),
+  role: z.string().min(1),
+  company: z.string().min(1),
+  startDate: z.string().regex(MONTH_RE),
+  endDate: z.string().regex(MONTH_RE).optional().or(z.literal("")).or(z.null()),
+  isCurrent: z.boolean().default(false),
+});
+
+const ProfilePayloadSchema = z.object({
+  firstName: z.string().optional().or(z.literal("")),
+  lastName1: z.string().optional().or(z.literal("")),
+  lastName2: z.string().optional().or(z.literal("")),
+  location: z.string().min(2).optional(),
+  phone: z.string().optional().or(z.literal("")),
+  birthdate: z.string().optional().or(z.literal("")),
+  linkedin: z.string().optional().or(z.literal("")),
+  github: z.string().optional().or(z.literal("")),
+  resumeUrl: z.string().optional().or(z.literal("")),
+  countryCode: z.string().min(2).max(2).optional(),
+  admin1: z.string().optional(),
+  city: z.string().optional(),
+  cityNorm: z.string().optional(),
+  admin1Norm: z.string().optional(),
+  certifications: z.string().optional(), // CSV
+  experiences: z.any().optional(),
+  languages: z.any().optional(),
+  skillsDetailed: z.any().optional(),
+  highestEducationLevel: EducationLevel.optional(),
+  education: z.any().optional(),
+});
+
+/* Read payload JSON/FormData */
 async function readPayload(req: Request) {
   const ctype = req.headers.get("content-type") || "";
   if (ctype.includes("multipart/form-data")) {
     const form = await req.formData();
     return {
+      firstName: form.get("firstName")?.toString(),
+      lastName1: form.get("lastName1")?.toString(),
+      lastName2: form.get("lastName2")?.toString(),
       location: form.get("location")?.toString(),
       phone: form.get("phone")?.toString(),
       birthdate: form.get("birthdate")?.toString(),
@@ -82,109 +91,173 @@ async function readPayload(req: Request) {
       city: form.get("city")?.toString(),
       cityNorm: form.get("cityNorm")?.toString(),
       admin1Norm: form.get("admin1Norm")?.toString(),
-
+      certifications: form.get("certifications")?.toString(),
+      experiences: form.get("experiences")?.toString(),
+      languages: form.get("languages")?.toString(),
+      skillsDetailed: form.get("skillsDetailed")?.toString(),
       highestEducationLevel: form.get("highestEducationLevel")?.toString(),
-      education: form.get("education")?.toString(), // JSON string
+      education: form.get("educationJson")?.toString()
+        ?? form.get("educations")?.toString()
+        ?? form.get("education")?.toString(),
     };
   }
-
-  const json = await req.json().catch(() => ({}));
+  const json: any = await req.json().catch(() => ({}));
   return {
-    location: typeof json.location === "string" ? json.location : undefined,
-    phone: typeof json.phone === "string" ? json.phone : undefined,
-    birthdate: typeof json.birthdate === "string" ? json.birthdate : undefined,
-    linkedin: typeof json.linkedin === "string" ? json.linkedin : undefined,
-    github: typeof json.github === "string" ? json.github : undefined,
-    resumeUrl: typeof json.resumeUrl === "string" ? json.resumeUrl : undefined,
-    countryCode: typeof json.countryCode === "string" ? json.countryCode : undefined,
-    admin1: typeof json.admin1 === "string" ? json.admin1 : undefined,
-    city: typeof json.city === "string" ? json.city : undefined,
-    cityNorm: typeof json.cityNorm === "string" ? json.cityNorm : undefined,
-    admin1Norm: typeof json.admin1Norm === "string" ? json.admin1Norm : undefined,
-
-    highestEducationLevel: typeof json.highestEducationLevel === "string" ? json.highestEducationLevel : undefined,
-    education: json.education, // array o string
+    firstName: json.firstName, lastName1: json.lastName1, lastName2: json.lastName2,
+    location: json.location, phone: json.phone, birthdate: json.birthdate,
+    linkedin: json.linkedin, github: json.github, resumeUrl: json.resumeUrl,
+    countryCode: json.countryCode, admin1: json.admin1, city: json.city,
+    cityNorm: json.cityNorm, admin1Norm: json.admin1Norm,
+    certifications: json.certifications,
+    experiences: json.experiences,
+    languages: json.languages,
+    skillsDetailed: json.skillsDetailed,
+    highestEducationLevel: json.highestEducationLevel,
+    education: json.education ?? json.educations ?? json.educationJson,
   };
 }
 
-export async function PATCH(req: Request) {
-  const session = await auth();
+/* ===== GET ===== */
+export async function GET() {
+  const session = await getServerSession(authOptions);
   const email = session?.user?.email;
-  if (!email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: {
+      id: true, name: true, email: true, phone: true, location: true, birthdate: true,
+      linkedin: true, github: true, resumeUrl: true,
+      education: { orderBy: { sortIndex: "asc" } },
+      workExperience: { orderBy: [{ startDate: "desc" }, { createdAt: "desc" }] },
+      candidateLanguages: { include: { term: { select: { label: true } } } },
+      candidateSkills: { include: { term: { select: { label: true } } } },
+      certifications: true,
+    },
+  });
+  if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const resp = {
+    personal: {
+      fullName: user.name ?? "",
+      email: user.email,
+      phone: user.phone ?? "",
+      location: user.location ?? "",
+      birthDate: user.birthdate ? user.birthdate.toISOString().slice(0, 10) : "",
+      linkedin: user.linkedin ?? "",
+      github: user.github ?? "",
+    },
+    about: "", // tu modelo no tiene 'about'; lo dejamos vacío
+    education: user.education.map((e) => ({
+      institution: e.institution ?? "",
+      program: e.program ?? "",
+      level: (e.level as any) ?? null,
+      status: (e.status as any) ?? null,
+      startDate: e.startDate ? e.startDate.toISOString().slice(0, 10) : "",
+      endDate: e.endDate ? e.endDate.toISOString().slice(0, 10) : "",
+    })),
+    experience: user.workExperience.map((w) => ({
+      company: w.company,
+      role: w.role,
+      startDate: w.startDate ? w.startDate.toISOString().slice(0, 10) : "",
+      endDate: w.endDate ? w.endDate.toISOString().slice(0, 10) : "",
+      isCurrent: w.isCurrent,
+    })),
+    skills: user.candidateSkills.map((s) => ({
+      name: s.term?.label || "",
+      level: s.level,
+    })),
+    languages: user.candidateLanguages.map((l) => ({
+      name: l.term?.label || "",
+      level: l.level as any,
+    })),
+    certifications: (user.certifications ?? []).map((c) => ({
+      name: c, issuer: null, date: "", url: null,
+    })),
+  };
+
+  return NextResponse.json(resp);
+}
+
+/* ===== PATCH (sin cambios respecto a la versión previa que ya te pasé) ===== */
+export async function PATCH(req: Request) {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email;
+  if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   try {
     const raw = await readPayload(req);
+    const base = ProfilePayloadSchema.parse(raw);
 
-    // Valida lo base (User)
-    const parsed = ProfilePayloadSchema.parse(raw);
+    const parseMaybeJson = (v: unknown) => {
+      if (typeof v === "string") { try { return JSON.parse(v); } catch { return undefined; } }
+      return v;
+    };
 
-    // Parse/valida educación (puede venir como string JSON o como arreglo)
-    let eduInput: unknown = parsed.education;
-    if (typeof eduInput === "string") {
-      try { eduInput = JSON.parse(eduInput); } catch { eduInput = []; }
-    }
+    let experiences = parseMaybeJson(base.experiences);
+    experiences = z.array(WorkExperienceSchema).parse(experiences ?? []);
+
+    let languages = parseMaybeJson(base.languages);
+    languages = z.array(LanguageSchema).parse(languages ?? []);
+
+    let skillsDetailed = parseMaybeJson(base.skillsDetailed);
+    skillsDetailed = z.array(SkillDetailedSchema).parse(skillsDetailed ?? []);
+
+    let eduInput = parseMaybeJson(base.education);
     const education = z.array(EducationSchema).parse(eduInput ?? []);
-
-    // Normaliza educación: endDate = null si ONGOING
     const normalizedEducation = education.map((e, i) => ({
       ...e,
       startDate: e.startDate ? e.startDate.slice(0, 7) : null,
       endDate: e.status === "ONGOING" ? null : (e.endDate ? e.endDate.slice(0, 7) : null),
       sortIndex: typeof e.sortIndex === "number" ? e.sortIndex : i,
     }));
-
-    // 🔹 Deriva nivel máximo desde la lista normalizada (si el payload no lo manda)
     const highestFromList = normalizedEducation.length
-      ? pickHighestEducation(normalizedEducation.map(e => e.level as string))
+      ? pickHighestEducation(normalizedEducation.map((e) => e.level as string))
       : null;
 
-    // Prepara update de User
-    const data: any = {};
-    if (parsed.location !== undefined) data.location = parsed.location;
-    if (parsed.phone !== undefined) data.phone = nullIfEmpty(parsed.phone);
-    if (parsed.linkedin !== undefined) data.linkedin = nullIfEmpty(parsed.linkedin);
-    if (parsed.github !== undefined) data.github = nullIfEmpty(parsed.github);
-    if (parsed.resumeUrl !== undefined) data.resumeUrl = nullIfEmpty(parsed.resumeUrl);
+    const certificationsArr = (base.certifications || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-    if (parsed.birthdate !== undefined) {
-      const bd = parseBirthdate(parsed.birthdate || null);
-      data.birthdate = bd;
-    }
-    if (parsed.countryCode !== undefined) data.country = parsed.countryCode;
-    if (parsed.admin1 !== undefined) data.admin1 = nullIfEmpty(parsed.admin1);
-    if (parsed.city !== undefined) data.city = nullIfEmpty(parsed.city);
-    if (parsed.cityNorm !== undefined) data.cityNorm = nullIfEmpty(parsed.cityNorm);
-    if (parsed.admin1Norm !== undefined) data.admin1Norm = nullIfEmpty(parsed.admin1Norm);
+    const fullName = [base.firstName, base.lastName1, base.lastName2]
+      .map((x) => (x || "").trim())
+      .filter(Boolean)
+      .join(" ");
 
-    // Si el front lo manda, se respeta; si no, lo derivamos
-    if (parsed.highestEducationLevel !== undefined) {
-      data.highestEducationLevel = parsed.highestEducationLevel;
+    const dataUser: any = {};
+    if (fullName) dataUser.name = fullName;
+    if (base.location !== undefined) dataUser.location = base.location;
+    if (base.phone !== undefined) dataUser.phone = nullIfEmpty(base.phone);
+    if (base.linkedin !== undefined) dataUser.linkedin = nullIfEmpty(base.linkedin);
+    if (base.github !== undefined) dataUser.github = nullIfEmpty(base.github);
+    if (base.resumeUrl !== undefined) dataUser.resumeUrl = nullIfEmpty(base.resumeUrl);
+    if (base.birthdate !== undefined) dataUser.birthdate = parseBirthdate(base.birthdate || null);
+    if (base.countryCode !== undefined) dataUser.country = base.countryCode;
+    if (base.admin1 !== undefined) dataUser.admin1 = nullIfEmpty(base.admin1);
+    if (base.city !== undefined) dataUser.city = nullIfEmpty(base.city);
+    if (base.cityNorm !== undefined) dataUser.cityNorm = nullIfEmpty(base.cityNorm);
+    if (base.admin1Norm !== undefined) dataUser.admin1Norm = nullIfEmpty(base.admin1Norm);
+    if (base.highestEducationLevel !== undefined) {
+      dataUser.highestEducationLevel = base.highestEducationLevel;
     } else if (highestFromList) {
-      data.highestEducationLevel = highestFromList;
+      dataUser.highestEducationLevel = highestFromList;
     }
+    dataUser.certifications = certificationsArr;
 
-    // Transacción: update user + upsert educación
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.update({
         where: { email },
-        data,
-        select: { id: true, email: true }
+        data: dataUser,
+        select: { id: true },
       });
 
-      const keepIds = normalizedEducation.map(e => e.id).filter(Boolean) as string[];
-
-      // Borra lo que no viene
-      if (keepIds.length > 0) {
-        await tx.education.deleteMany({
-          where: { userId: user.id, id: { notIn: keepIds } },
-        });
+      const keepEduIds = normalizedEducation.map(e => e.id).filter(Boolean) as string[];
+      if (keepEduIds.length > 0) {
+        await tx.education.deleteMany({ where: { userId: user.id, id: { notIn: keepEduIds } } });
       } else {
         await tx.education.deleteMany({ where: { userId: user.id } });
       }
-
-      // Upsert / create/update
       for (const row of normalizedEducation) {
         const eduData = {
           userId: user.id,
@@ -194,48 +267,59 @@ export async function PATCH(req: Request) {
           program: row.program ?? null,
           country: row.country ?? null,
           city: row.city ?? null,
-          startDate: row.startDate ? new Date(`${row.startDate}-01T00:00:00.000Z`) : null,
-          endDate: row.endDate ? new Date(`${row.endDate}-01T00:00:00.000Z`) : null,
+          startDate: row.startDate ? toMonthStartDate(row.startDate) : null,
+          endDate: row.endDate ? toMonthStartDate(row.endDate) : null,
           grade: row.grade ?? null,
           description: row.description ?? null,
           sortIndex: row.sortIndex,
         };
-
         if (row.id) {
-          await tx.education.update({
-            where: { id: row.id },
-            data: eduData,
-          });
+          await tx.education.update({ where: { id: row.id }, data: eduData });
         } else {
           await tx.education.create({ data: eduData });
         }
       }
 
-      // Regresa snapshot
-      const full = await tx.user.findUnique({
-        where: { email },
-        select: {
-          id: true,
-          email: true,
-          location: true,
-          phone: true,
-          birthdate: true,
-          linkedin: true,
-          github: true,
-          resumeUrl: true,
-          country: true,
-          admin1: true,
-          city: true,
-          cityNorm: true,
-          admin1Norm: true,
-          highestEducationLevel: true,
-          candidateEducation: {
-            orderBy: { sortIndex: "asc" },
-          },
-        },
-      });
+      const normalizedExp = (experiences as z.infer<typeof WorkExperienceSchema>[])
+        .map((e) => ({ ...e, startDate: e.startDate || "", endDate: e.isCurrent ? null : (e.endDate || null) }));
+      const keepExpIds = normalizedExp.map(e => e.id).filter(Boolean) as string[];
+      if (keepExpIds.length > 0) {
+        await tx.workExperience.deleteMany({ where: { userId: user.id, id: { notIn: keepExpIds } } });
+      } else {
+        await tx.workExperience.deleteMany({ where: { userId: user.id } });
+      }
+      for (const row of normalizedExp) {
+        const data = {
+          userId: user.id,
+          role: row.role,
+          company: row.company,
+          startDate: toMonthStartDate(row.startDate)!,
+          endDate: row.endDate ? toMonthStartDate(row.endDate) : null,
+          isCurrent: !!row.isCurrent,
+        };
+        if (row.id) {
+          await tx.workExperience.update({ where: { id: row.id }, data });
+        } else {
+          await tx.workExperience.create({ data });
+        }
+      }
 
-      return full;
+      await tx.candidateLanguage.deleteMany({ where: { userId: user.id } });
+      for (const l of (languages as z.infer<typeof LanguageSchema>[])) {
+        if (!l.termId) continue;
+        await tx.candidateLanguage.create({ data: { userId: user.id, termId: l.termId, level: l.level } });
+      }
+
+      await tx.candidateSkill.deleteMany({ where: { userId: user.id } });
+      for (const s of (skillsDetailed as z.infer<typeof SkillDetailedSchema>[])) {
+        if (!s.termId) continue;
+        await tx.candidateSkill.create({ data: { userId: user.id, termId: s.termId, level: s.level as any } });
+      }
+
+      return tx.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, email: true, name: true },
+      });
     });
 
     return NextResponse.json({ ok: true, user: result });
@@ -244,9 +328,6 @@ export async function PATCH(req: Request) {
       return NextResponse.json({ error: e.flatten() }, { status: 400 });
     }
     console.error(e);
-    return NextResponse.json(
-      { error: "Update failed", detail: e?.message ?? "Unknown error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Update failed", detail: e?.message ?? "Unknown error" }, { status: 500 });
   }
 }

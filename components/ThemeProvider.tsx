@@ -1,59 +1,79 @@
 // components/ThemeProvider.tsx
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 type Theme = "light" | "dark";
-type Ctx = { theme: Theme; setTheme: (t: Theme) => void; toggle: () => void };
+type Ctx = { theme: Theme; toggle: () => void; setTheme: (t: Theme) => void };
 
-const ThemeContext = createContext<Ctx | null>(null);
+const ThemeCtx = createContext<Ctx>({
+  theme: "light",
+  toggle: () => {},
+  setTheme: () => {},
+});
 
-export default function AppThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("light");
+function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, _setTheme] = useState<Theme>("light");
 
-  // Lee preferencia guardada o media-query en primer render del cliente
+  const apply = (t: Theme) => {
+    _setTheme(t);
+    const root = document.documentElement;
+    root.classList.toggle("dark", t === "dark");
+    root.dataset.theme = t;
+    localStorage.setItem("theme", t);
+  };
+
   useEffect(() => {
-    const stored = (typeof window !== "undefined" && localStorage.getItem("theme")) as Theme | null;
-    if (stored === "light" || stored === "dark") {
-      setThemeState(stored);
-      applyTheme(stored);
-      return;
-    }
-    // fallback: respeta prefers-color-scheme
-    const prefersDark =
-      typeof window !== "undefined" &&
-      window.matchMedia &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initial: Theme = prefersDark ? "dark" : "light";
-    setThemeState(initial);
-    applyTheme(initial);
+    const stored = (localStorage.getItem("theme") as Theme | null) || null;
+    const preferred: Theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    apply(stored ?? preferred);
   }, []);
 
-  const applyTheme = (t: Theme) => {
-    const root = document.documentElement; // <html>
-    root.classList.toggle("dark", t === "dark");
-    // opcional: color de fondo del body si quieres
-    document.body.classList.toggle("bg-zinc-950", t === "dark");
-    document.body.classList.toggle("text-zinc-100", t === "dark");
-  };
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem("theme")) apply(e.matches ? "dark" : "light");
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
-  const setTheme = (t: Theme) => {
-    setThemeState(t);
-    localStorage.setItem("theme", t);
-    applyTheme(t);
-  };
-
-  const toggle = () => setTheme(theme === "dark" ? "light" : "dark");
-
-  return (
-    <ThemeContext.Provider value={{ theme, setTheme, toggle }}>
-      {children}
-    </ThemeContext.Provider>
+  const value = useMemo(
+    () => ({
+      theme,
+      toggle: () => apply(theme === "dark" ? "light" : "dark"),
+      setTheme: (t: Theme) => apply(t),
+    }),
+    [theme]
   );
+
+  return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }
 
 export function useTheme() {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used within AppThemeProvider");
-  return ctx;
+  return useContext(ThemeCtx);
 }
+
+export function ThemeScript() {
+  return (
+    <script
+      suppressHydrationWarning
+      dangerouslySetInnerHTML={{
+        __html: `
+(function(){
+  try {
+    var stored = localStorage.getItem('theme');
+    var t = stored ? stored : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    var root = document.documentElement;
+    if (t === 'dark') root.classList.add('dark');
+    root.dataset.theme = t;
+  } catch(e) {}
+})();`,
+      }}
+    />
+  );
+}
+
+// ⬅️ Export por default para que Providers.tsx pueda importarlo como AppThemeProvider
+export default ThemeProvider;
+export { ThemeProvider };

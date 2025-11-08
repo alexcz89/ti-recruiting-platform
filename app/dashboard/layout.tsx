@@ -33,7 +33,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               ${
                 isActive(item.href)
                   ? "bg-emerald-600 text-white border-emerald-600"
-                  : "hover:bg-gray-50 dark:hover:bg-zinc-800 border-zinc-200 dark:border-zinc-700"
+                  : "hover:bg-gray-50 dark:hover:glass-card p-4 md:p-6"
               }`}
           >
             {item.label}
@@ -44,7 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 lg:gap-8">
         <aside className="hidden lg:block">
           <div className="sticky top-[72px] space-y-5">
-            <div className="rounded-2xl border bg-white/80 dark:bg-zinc-900/60 p-4">
+            <div className="rounded-2xl border glass-card p-4 md:p-6">
               <h1 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Panel</h1>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                 Administra vacantes y postulaciones.
@@ -53,7 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <nav
               aria-label="Secciones del panel"
-              className="rounded-2xl border bg-white/80 dark:bg-zinc-900/60 p-2"
+              className="rounded-2xl border glass-card p-4 md:p-6"
             >
               {NAV_ITEMS.map((item) => (
                 <Link
@@ -64,18 +64,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     ${
                       isActive(item.href)
                         ? "bg-emerald-600 text-white"
-                        : "hover:bg-gray-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200"
+                        : "hover:bg-gray-50 dark:hover:glass-card p-4 md:p-6"
                     }`}
                 >
                   <span>{item.label}</span>
                   {isActive(item.href) && (
-                    <span className="ml-2 inline-block h-2 w-2 rounded-full bg-white/90" />
+                    <span className="ml-2 inline-block h-2 w-2 badge " />
                   )}
                 </Link>
               ))}
             </nav>
 
-            <div className="rounded-2xl border bg-white/80 dark:bg-zinc-900/60 p-3 space-y-2">
+            <div className="rounded-2xl border glass-card p-4 md:p-6">
               <Link
                 href="/jobs/new"
                 className="block w-full rounded-lg bg-emerald-600 text-white text-sm font-medium px-3 py-2 text-center hover:bg-emerald-700"
@@ -84,7 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
               <Link
                 href="/dashboard/jobs"
-                className="block w-full rounded-lg border text-sm px-3 py-2 text-center hover:bg-gray-50 dark:hover:bg-zinc-800"
+                className="block w-full rounded-lg border text-sm px-3 py-2 text-center hover:bg-gray-50 dark:hover:glass-card p-4 md:p-6"
               >
                 Administrar vacantes
               </Link>

@@ -10,6 +10,32 @@ if (process.env.NODE_ENV !== "production" && !process.env.UPLOADTHING_TOKEN) {
 }
 
 export const ourFileRouter = {
+  // ✅ Subida de LOGO de empresa (imágenes)
+  logoUploader: f({
+    "image/png": { maxFileSize: "4MB" },
+    "image/jpeg": { maxFileSize: "4MB" },
+    "image/webp": { maxFileSize: "4MB" },
+    "image/svg+xml": { maxFileSize: "1MB" },
+  })
+    .middleware(async () => {
+      const session = await getServerSession(authOptions);
+      if (!session?.user?.email) throw new Error("UNAUTHORIZED");
+      return { userEmail: session.user.email! };
+    })
+    .onUploadComplete(async ({ metadata, file }) => {
+      // v9+: usa ufsUrl; mantiene `url` por compatibilidad
+      const ufsUrl = (file as any).ufsUrl || (file as any).url;
+      return {
+        ok: true,
+        url: ufsUrl,
+        key: file.key,
+        name: file.name,
+        size: file.size,
+        uploadedBy: metadata.userEmail,
+      };
+    }),
+
+  // ✅ Subida de CV/Resumes (PDF/DOC/DOCX)
   resumeUploader: f({
     "application/pdf": { maxFileSize: "8MB" },
     "application/msword": { maxFileSize: "8MB" }, // .doc
@@ -23,9 +49,10 @@ export const ourFileRouter = {
       return { userEmail: session.user.email! };
     })
     .onUploadComplete(async ({ metadata, file }) => {
+      const ufsUrl = (file as any).ufsUrl || (file as any).url;
       return {
         ok: true,
-        url: file.url,
+        url: ufsUrl,
         key: file.key,
         name: file.name,
         size: file.size,

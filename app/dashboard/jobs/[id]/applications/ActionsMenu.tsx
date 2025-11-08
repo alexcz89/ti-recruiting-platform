@@ -72,7 +72,7 @@ export default function ActionsMenu({
         <div
           role="menu"
           aria-orientation="vertical"
-          className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-lg"
+          className="absolute right-0 z-20 mt-1 w-44 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-200/60 dark:bg-zinc-700/50 rounded"
         >
           {candidateHref && (
             <a
@@ -101,7 +101,7 @@ export default function ActionsMenu({
           >
             Copiar email
           </button>
-          <div className="my-1 h-px bg-zinc-100" />
+          <div className="my-1 h-px bg-zinc-200/60 dark:bg-zinc-700/50 rounded" />
           <button
             className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
             onClick={() => {

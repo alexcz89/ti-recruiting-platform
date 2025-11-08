@@ -457,7 +457,7 @@ export default function LocationAutocomplete({
             }
           : undefined
       }
-      className="mt-1 bg-white border rounded-xl shadow max-h-72 overflow-auto dark:bg-neutral-900 dark:border-neutral-800"
+      className="mt-1 glass-card p-4 md:p-6"
     >
       {loading ? (
         <li className="px-3 py-2 text-sm text-zinc-500">Buscando…</li>
@@ -470,7 +470,7 @@ export default function LocationAutocomplete({
             role="option"
             aria-selected={i === hoverIdx}
             className={`px-3 py-2 text-sm cursor-pointer ${
-              i === hoverIdx ? "bg-gray-100 dark:bg-neutral-800" : "hover:bg-gray-50 dark:hover:bg-neutral-800/70"
+              i === hoverIdx ? "bg-gray-100 dark:glass-card p-4 md:p-6" : "hover:bg-gray-50 dark:hover:glass-card p-4 md:p-6"
             }`}
             onMouseEnter={() => setHoverIdx(i)}
             onMouseDown={(e) => e.preventDefault()}

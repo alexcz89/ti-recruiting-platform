@@ -53,7 +53,7 @@ export default function SkillsPicker({ value, onChange, placeholder = "Busca y s
           placeholder={placeholder}
         />
         {open && filtered.length > 0 && (
-          <div className="absolute z-10 mt-1 w-full bg-white border rounded-xl shadow">
+          <div className="absolute z-10 mt-1 w-full glass-card p-4 md:p-6">
             {filtered.map(s => (
               <button
                 key={s}

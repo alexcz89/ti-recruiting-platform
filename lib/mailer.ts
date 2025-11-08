@@ -1,11 +1,11 @@
 // lib/mailer.ts
-import { Resend } from "resend";
+import type { Resend } from "resend";
 
 /**
  * Requisitos de entorno (.env):
- * - RESEND_API_KEY="re_xxx"
+ * - RESEND_API_KEY="re_xxx"                  // Solo si EMAIL_ENABLED=true
  * - RESEND_FROM="Bolsa TI <noreply@tu-dominio.com>"
- * - EMAIL_ENABLED="false"   // "true" = envía, "false"/vacío = dry-run
+ * - EMAIL_ENABLED="false" | "true"           // false => dry-run (no usa Resend)
  * - NEXT_PUBLIC_BASE_URL="http://localhost:3000"
  * - NEXT_PUBLIC_APP_NAME="Bolsa TI"
  */
@@ -18,11 +18,25 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
 const RESEND_FROM =
   process.env.RESEND_FROM || process.env.EMAIL_FROM || "Bolsa TI <noreply@example.com>";
 
-const resend = new Resend(RESEND_API_KEY);
+// ⚠️ No instancies Resend globalmente si no vas a enviar emails reales.
+let resend: Resend | null = null;
+function getResend(): Resend | null {
+  if (!EMAIL_ENABLED) return null; // dry-run: no uses Resend
+  if (!RESEND_API_KEY) return null; // sin API key -> no instanciar
+  if (!resend) {
+    // import dinámico para evitar require fallido
+    const { Resend } = require("resend");
+    resend = new Resend(RESEND_API_KEY);
+  }
+  return resend;
+}
 
-type SendResult = { ok: true; id?: string } | { skipped: true } | { error: string };
+type SendResult =
+  | { ok: true; id?: string }
+  | { skipped: true }
+  | { error: string };
 
-/** Envío base con soporte de DRY-RUN si EMAIL_ENABLED !== "true". */
+/** Envío base con soporte DRY-RUN si EMAIL_ENABLED !== "true". */
 export async function sendEmail(opts: {
   to: string | string[];
   subject: string;
@@ -30,9 +44,10 @@ export async function sendEmail(opts: {
   text?: string;
   from?: string;
 }): Promise<SendResult> {
+  // Modo dry-run: imprime y no usa Resend
   if (!EMAIL_ENABLED) {
     if (process.env.NODE_ENV !== "production") {
-      console.log("[MAIL:DRYRUN]", {
+      console.log("📨 [MAIL:DRYRUN]", {
         from: opts.from || RESEND_FROM,
         to: opts.to,
         subject: opts.subject,
@@ -41,11 +56,15 @@ export async function sendEmail(opts: {
     return { skipped: true };
   }
 
+  // Modo real: requiere API key y from
   if (!RESEND_API_KEY) return { error: "Missing RESEND_API_KEY" };
   if (!RESEND_FROM && !opts.from) return { error: "Missing RESEND_FROM" };
 
+  const client = getResend();
+  if (!client) return { error: "Email client not initialized" };
+
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await client.emails.send({
       from: opts.from || RESEND_FROM,
       to: opts.to,
       subject: opts.subject,
@@ -60,11 +79,29 @@ export async function sendEmail(opts: {
   }
 }
 
-/* ----------------------------------------------------------
- * 1) Postulación enviada (notifica al CANDIDATE)
- * -------------------------------------------------------- */
+/** Correo de verificación simple (wrapper) */
+export async function sendVerificationEmail(to: string, verifyUrl: string) {
+  const subject = `Verifica tu correo — ${APP_NAME}`;
+  const html = htmlLayout({
+    title: subject,
+    body: `
+      <p>Hola,</p>
+      <p>Para activar tu cuenta en <strong>${escapeHtml(APP_NAME)}</strong>, verifica tu correo:</p>
+      <p><a href="${verifyUrl}" target="_blank" rel="noreferrer">Verificar mi correo</a></p>
+      <p style="color:#6b7280;font-size:12px;margin-top:16px;">Si no solicitaste este registro, ignora este mensaje.</p>
+    `,
+  });
+  const text =
+    `Verifica tu correo en ${APP_NAME}:\n${verifyUrl}\n\n` +
+    `Si no solicitaste este registro, puedes ignorar este mensaje.`;
+
+  return sendEmail({ to, subject, html, text });
+}
+
+/* ====================== Otros templates ======================= */
+
 export async function sendApplicationEmail(params: {
-  to: string;              // email del candidato
+  to: string;
   candidateName?: string;
   jobTitle: string;
   companyName?: string;
@@ -103,9 +140,6 @@ export async function sendApplicationEmail(params: {
   return sendEmail({ to: params.to, subject, html, text });
 }
 
-/* ----------------------------------------------------------
- * 2) Nuevo mensaje en el hilo (notifica al destinatario)
- * -------------------------------------------------------- */
 export async function sendNewMessageEmail(params: {
   to: string;
   recipientName?: string;
@@ -151,9 +185,6 @@ export async function sendNewMessageEmail(params: {
   return sendEmail({ to: params.to, subject, html, text });
 }
 
-/* ----------------------------------------------------------
- * 3) Rechazo de candidatura (genérico)
- * -------------------------------------------------------- */
 export async function sendRejectionEmail(params: {
   to: string;
   candidateName?: string;
@@ -164,30 +195,29 @@ export async function sendRejectionEmail(params: {
     params.companyName ? " · " + params.companyName : ""
   }`;
 
-  const bodyHtml = `
-    <p>Hola ${escapeHtml(params.candidateName || "candidato/a")},</p>
-    <p>Muchas gracias por tu tiempo y por tu interés en la vacante de <strong>${escapeHtml(
-      params.jobTitle
-    )}</strong>${
-      params.companyName ? ` en <strong>${escapeHtml(params.companyName)}</strong>` : ""
-    }.</p>
-    <p>Hemos recibido un gran número de solicitudes y, tras una cuidadosa revisión, hemos decidido no seguir adelante con tu candidatura en este momento.</p>
-    <p>Te deseamos mucho éxito en tu búsqueda de empleo y esperamos que puedas considerar nuestras futuras ofertas.</p>
-    <hr />
-    <p>Equipo ${escapeHtml(APP_NAME)}</p>
-  `;
+  const html = htmlLayout({
+    title: subject,
+    body: `
+      <p>Hola ${escapeHtml(params.candidateName || "candidato/a")},</p>
+      <p>Gracias por tu interés en <strong>${escapeHtml(params.jobTitle)}</strong>${
+        params.companyName ? ` en <strong>${escapeHtml(params.companyName)}</strong>` : ""
+      }.</p>
+      <p>Tras una cuidadosa revisión, no avanzaremos con tu candidatura en este momento.</p>
+      <p>¡Te deseamos éxito en tu búsqueda y esperamos verte en futuras vacantes!</p>
+      <hr />
+      <p>Equipo ${escapeHtml(APP_NAME)}</p>
+    `,
+  });
 
-  const bodyText =
+  const text =
     `Hola ${params.candidateName || "candidato/a"},\n\n` +
-    `Muchas gracias por tu tiempo y por tu interés en la vacante de ${params.jobTitle}${
+    `Gracias por tu interés en ${params.jobTitle}${
       params.companyName ? ` en ${params.companyName}` : ""
     }.\n` +
-    `Hemos recibido un gran número de solicitudes y, tras una cuidadosa revisión, hemos decidido no seguir adelante con tu candidatura en este momento.\n\n` +
-    `Te deseamos mucho éxito en tu búsqueda de empleo y esperamos que puedas considerar nuestras futuras ofertas.\n\n` +
-    `Equipo ${APP_NAME}`;
+    `Tras una revisión, no avanzaremos con tu candidatura en este momento.\n\n` +
+    `Éxito en tu búsqueda.\n\nEquipo ${APP_NAME}`;
 
-  const html = htmlLayout({ title: subject, body: bodyHtml });
-  return sendEmail({ to: params.to, subject, html, text: bodyText });
+  return sendEmail({ to: params.to, subject, html, text });
 }
 
 /* ====================== helpers ======================= */
@@ -213,7 +243,11 @@ function htmlLayout({ title, body }: { title: string; body: string }) {
 }
 
 function escapeHtml(s: string) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function truncate(s: string, n: number) {

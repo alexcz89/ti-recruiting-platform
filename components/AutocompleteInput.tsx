@@ -130,7 +130,7 @@ export default function AutocompleteInput({
           ref={listRef}
           id={listId}
           className={[
-            "absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-xl border bg-white shadow",
+            "absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-xl border glass-card p-4 md:p-6",
             dropdownClassName,
           ].filter(Boolean).join(" ")}
           role="listbox"

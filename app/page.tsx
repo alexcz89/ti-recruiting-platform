@@ -12,7 +12,7 @@ export default function Home() {
           <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:gap-14">
             {/* Copy */}
             <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs ring-1 ring-white/15">
+              <div className="inline-flex items-center gap-2 badge ">
                 <span className="text-emerald-300">Nuevo</span>
                 <span className="text-white/70">
                   Postula con un clic, gestiona en Kanban y crea tu CV profesional
@@ -37,19 +37,19 @@ export default function Home() {
                 </Link>
                 <Link
                   href="/jobs"
-                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                  className="rounded-xl border border-white/15 glass-card p-4 md:p-6"
                 >
                   Ver vacantes
                 </Link>
                 <Link
-                  href="/signin?role=CANDIDATE&signup=1"
-                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                  href="/auth/signup/candidate"
+                  className="rounded-xl border border-white/15 glass-card p-4 md:p-6"
                 >
                   Crear cuenta (Candidato)
                 </Link>
                 <Link
-                  href="/signin?role=RECRUITER&signup=1"
-                  className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                  href="/auth/signup/recruiter"
+                  className="rounded-xl border border-white/15 glass-card p-4 md:p-6"
                 >
                   Crear cuenta (Reclutador)
                 </Link>
@@ -58,8 +58,8 @@ export default function Home() {
 
             {/* Avatares hero */}
             <div className="flex w-full flex-1 justify-center gap-6 lg:justify-end">
-              <AvatarBubble emoji="🧑‍💻" label="Talento TI" color="emerald" />
-              <AvatarBubble emoji="🧑‍💼" label="Reclutador" color="violet" />
+              <AvatarBubble emoji="🧑💻" label="Talento TI" color="emerald" />
+              <AvatarBubble emoji="🧑💼" label="Reclutador" color="violet" />
               <AvatarBubble emoji="🤝" label="Match" color="sky" className="hidden sm:block" />
             </div>
           </div>
@@ -90,7 +90,7 @@ export default function Home() {
               </Link>
               <Link
                 href="/resume/builder"
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                className="rounded-xl border border-white/15 glass-card p-4 md:p-6"
               >
                 Ver detalles
               </Link>
@@ -103,7 +103,7 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-16">
         <div className="grid gap-6 md:grid-cols-2">
           {/* Reclutadores */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+          <div className="rounded-2xl border border-white/10 glass-card p-4 md:p-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-400/90 text-[#081F26]">
                 👔
@@ -115,13 +115,13 @@ export default function Home() {
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link
-                href="/signin?role=RECRUITER"
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                href="/auth/signin?role=RECRUITER"
+                className="rounded-xl border border-white/15 glass-card p-4 md:p-6"
               >
                 Iniciar sesión
               </Link>
               <Link
-                href="/signin?role=RECRUITER&signup=1"
+                href="/auth/signup/recruiter"
                 className="rounded-xl bg-violet-400 px-4 py-2 text-sm font-semibold text-[#082B33] hover:bg-violet-300"
               >
                 Crear cuenta
@@ -130,7 +130,7 @@ export default function Home() {
           </div>
 
           {/* Candidatos */}
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur">
+          <div className="rounded-2xl border border-white/10 glass-card p-4 md:p-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-400/90 text-[#081F26]">
                 💼
@@ -148,14 +148,14 @@ export default function Home() {
                 ✨ Crea tu CV
               </Link>
               <Link
-                href="/signin?role=CANDIDATE"
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                href="/auth/signin?role=CANDIDATE"
+                className="rounded-xl border border-white/15 glass-card p-4 md:p-6"
               >
                 Iniciar sesión
               </Link>
               <Link
-                href="/signin?role=CANDIDATE&signup=1"
-                className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
+                href="/auth/signup/candidate"
+                className="rounded-xl border border-white/15 glass-card p-4 md:p-6"
               >
                 Crear cuenta
               </Link>
@@ -164,24 +164,24 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Highlights cortos */}
+      {/* Highlights */}
       <section className="mx-auto max-w-6xl px-6 pb-20">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-2xl border border-white/10 glass-card p-4 md:p-6">
             <div className="text-2xl">⚡</div>
             <h3 className="mt-2 font-semibold">Postulación rápida</h3>
             <p className="mt-1 text-sm text-white/75">
               Aplica con un clic y gestiona tu perfil con skills buscables.
             </p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-2xl border border-white/10 glass-card p-4 md:p-6">
             <div className="text-2xl">🎯</div>
             <h3 className="mt-2 font-semibold">Búsqueda precisa</h3>
             <p className="mt-1 text-sm text-white/75">
               Filtra por título, tecnología y ubicación. Encuentra el mejor match.
             </p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+          <div className="rounded-2xl border border-white/10 glass-card p-4 md:p-6">
             <div className="text-2xl">📊</div>
             <h3 className="mt-2 font-semibold">Kanban de procesos</h3>
             <p className="mt-1 text-sm text-white/75">

@@ -25,6 +25,14 @@ enum EmploymentType {
   INTERNSHIP
 }
 
+// 👇 NUEVO: seniority para vacantes
+enum Seniority {
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+}
+
 enum ApplicationStatus {
   SUBMITTED
   REVIEWING
@@ -101,6 +109,9 @@ model Company {
   country String?
   city    String?
   domain  String?
+  size    String?
+  logoUrl String?
+  logoKey String?
 
   users     User[]
   jobs      Job[]
@@ -114,10 +125,16 @@ model Company {
 model User {
   id           String   @id @default(cuid())
   name         String?
+  firstName    String?
+  middleName   String?
+  lastName     String?
   email        String   @unique
   passwordHash String?
   role         Role     @default(CANDIDATE)
   createdAt    DateTime @default(now())
+  
+  // ✅ nuevo (requerido por tu flujo de verificación)
+  emailVerified DateTime?
 
   applications Application[]
   jobs         Job[]         @relation("PostedJobs")
@@ -167,6 +184,9 @@ model User {
 
   // 👇 back-relation para plantillas creadas por el usuario
   createdTemplates JobTemplate[] @relation("UserCreatedTemplates")
+
+  // 👇 NUEVO: versiones de CV guardadas
+  resumes Resume[]
 
   @@index([locationLat, locationLng])
   @@index([country])
@@ -255,9 +275,10 @@ model Job {
 
   // Publicación
   employmentType EmploymentType
-  description    String         @db.Text
-  schedule       String? // ej. "L-V 9:00–18:00"
-  publishAt      DateTime? // publicación programada
+  seniority      Seniority?        // 👈 NUEVO (lo usa tu seed.ts)
+  description    String            @db.Text
+  schedule       String?           // ej. "L-V 9:00–18:00"
+  publishAt      DateTime?         // publicación programada
 
   // Lista simple y relación catálogo
   skills         String[]
@@ -505,4 +526,20 @@ model CandidateCredential {
 
   @@index([termId])
   @@index([userId, termId])
+}
+
+// =========================
+// NUEVO: Versiones de CV (para snapshots y PDF)
+// =========================
+model Resume {
+  id           String   @id @default(cuid())
+  userId       String
+  title        String   @default("Mi CV")
+  data         Json
+  htmlSnapshot String   @db.Text
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

@@ -119,7 +119,7 @@ function Month({ value, onChange }: { value?: string | null; onChange: (v: strin
   return <input type="month" value={value ?? ""} onChange={(e) => onChange(e.target.value)} className="rounded-md border p-2" />;
 }
 function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex items-center rounded-full bg-zinc-100 border border-zinc-200 px-2 py-0.5 text-[11px]">{children}</span>;
+  return <span className="inline-flex items-center badge ">{children}</span>;
 }
 
 /** =========================
@@ -128,7 +128,7 @@ function Chip({ children }: { children: React.ReactNode }) {
 function Preview({ data }: { data: ResumeData }) {
   const b = data.basics;
   return (
-    <div className="rounded-xl border bg-white p-5 text-sm leading-relaxed">
+    <div className="rounded-xl border glass-card p-4 md:p-6">
       <div className="border-b pb-2">
         <h1 className="text-2xl font-bold">{b.firstName} {b.lastName}</h1>
         {b.headline && <p className="text-zinc-600">{b.headline}</p>}
@@ -387,7 +387,7 @@ export default function PublicResumeBuilderPage() {
       <div className="space-y-6">
         <ol className="flex items-center gap-2 text-xs">
           {["Perfil", "Resumen", "Experiencia", "Educación", "Skills", "Proyectos", "Listo"].map((label, i) => (
-            <li key={label} className={clsx("px-2 py-1 rounded-full", i + 1 <= step ? "bg-emerald-600 text-white" : "bg-zinc-200 text-zinc-700")}>
+            <li key={label} className={clsx("px-2 py-1 rounded-full", i + 1 <= step ? "bg-emerald-600 text-white" : "glass-card p-4 md:p-6")}>
               {i + 1}. {label}
             </li>
           ))}
@@ -646,7 +646,7 @@ export default function PublicResumeBuilderPage() {
       {/* Modal de registro suave */}
       {showSignup && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl p-5 max-w-md w-full space-y-3">
+          <div className="glass-card p-4 md:p-6">
             <h3 className="font-semibold">Crea tu cuenta gratis</h3>
             <p className="text-sm text-zinc-600">
               Guardaremos tu CV y podrás postularte a vacantes en 1 clic. Tu contenido ya se quedó en esta sesión.

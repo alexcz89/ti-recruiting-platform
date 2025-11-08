@@ -1,69 +1,57 @@
 // app/candidate/resume/page.tsx
-import { getCandidateResume } from "@/lib/db/candidate";
 import ResumeWizard from "@/components/resume/ResumeWizard";
-import { auth } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
+
+export const metadata = { title: "Creador de CV | Bolsa TI" };
+
+function getBaseUrl() {
+  // Prioriza variable de entorno si la tienes definida (útil en prod)
+  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
+
+  // En dev/SSR construimos desde los headers
+  const h = headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  if (!host) throw new Error("No host header found");
+  return `${proto}://${host}`;
+}
+
+async function loadResume() {
+  const base = getBaseUrl();
+  const res = await fetch(`${base}/api/resume`, { method: "GET", cache: "no-store" });
+  if (!res.ok) {
+    return {
+      about: "",
+      education: [],
+      experience: [],
+      skills: [],
+      languages: [],
+      certifications: [],
+    };
+  }
+  return res.json();
+}
 
 export default async function CandidateResumePage() {
-  const session = await auth();
+  const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
-    // redirige a login si aplica
-    return null;
+    redirect("/api/auth/signin?callbackUrl=/candidate/resume");
   }
-  const data = await getCandidateResume(session.user.id);
 
-  // Adaptar a props iniciales del wizard
-  const initial = {
-    base: {
-      name: data?.name ?? "",
-      location: data?.location ?? "",
-      highestEducationLevel: data?.highestEducationLevel ?? "NONE",
-      linkedin: data?.linkedin ?? "",
-      github: data?.github ?? "",
-      phone: data?.phone ?? "",
-    },
-    experiences: (data?.experiences ?? []).map((e) => ({
-      id: e.id,
-      company: e.company,
-      role: e.role,
-      startDate: e.startDate.toISOString(),
-      endDate: e.endDate ? e.endDate.toISOString() : null,
-      isCurrent: e.isCurrent,
-    })),
-    education: (data?.education ?? []).map((ed) => ({
-      id: ed.id,
-      institution: ed.institution,
-      program: ed.program,
-      level: ed.level,
-      status: ed.status,
-      startDate: ed.startDate ? ed.startDate.toISOString() : null,
-      endDate: ed.endDate ? ed.endDate.toISOString() : null,
-      country: ed.country,
-      city: ed.city,
-      grade: ed.grade,
-      description: ed.description,
-      sortIndex: ed.sortIndex,
-    })),
-    skills: (data?.candidateSkills ?? []).map((s) => ({
-      id: s.id,
-      name: s.term.label,
-      level: s.level,
-      years: s.years,
-    })),
-    languages: (data?.candidateLanguages ?? []).map((l) => ({
-      id: l.id,
-      name: l.term.label,
-      level: l.level,
-    })),
-    certifications: (data?.candidateCredentials ?? []).map((c) => ({
-      id: c.id,
-      name: c.term.label,
-      issuer: c.issuer,
-      issuedAt: c.issuedAt ? c.issuedAt.toISOString() : null,
-      expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
-      credentialId: c.credentialId,
-      url: c.url,
-    })),
-  };
+  const initialData = await loadResume();
 
-  return <ResumeWizard initial={initial} />;
+  return (
+    <main className="min-h-screen bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
+      <div className="mx-auto max-w-4xl px-4 py-8">
+        <h1 className="mb-2 text-2xl font-semibold">Creador de CV Profesional</h1>
+        <p className="mb-6 text-sm text-neutral-600">
+          Completa tu experiencia, educación, habilidades e idiomas. Puedes guardar y continuar después.
+        </p>
+        <ResumeWizard initialData={initialData} />
+      </div>
+    </main>
+  );
 }

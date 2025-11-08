@@ -48,7 +48,7 @@ export default function EducationList({
 
   if (!items?.length && !highest) {
     return (
-      <section className="rounded-2xl border bg-white p-4">
+      <section className="rounded-2xl border glass-card p-4 md:p-6">
         <h3 className="text-sm font-semibold mb-2">Educación</h3>
         <p className="text-sm text-zinc-600">Sin información de escolaridad.</p>
       </section>
@@ -56,7 +56,7 @@ export default function EducationList({
   }
 
   return (
-    <section className="rounded-2xl border bg-white p-4">
+    <section className="rounded-2xl border glass-card p-4 md:p-6">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">Educación</h3>
         {highest && (

@@ -15,15 +15,11 @@ export default withAuth(
 
     // ===== /jobs =====
     if (pathname.startsWith("/jobs")) {
-      // ✅ Permitir la vista pública del detalle /jobs/[id] para recruiter/admin
-      //    (app/jobs/[id]/page.tsx ya valida que solo vean vacantes de su empresa)
+      // ✅ Permitir ver /jobs/[id] siempre
       const isJobDetail = /^\/jobs\/[^/]+$/.test(pathname);
-      if (isJobDetail) {
-        return NextResponse.next();
-      }
+      if (isJobDetail) return NextResponse.next();
 
-      // ❌ Si es el listado /jobs o cualquier subruta que no sea detalle,
-      //    los recruiter/admin van al dashboard
+      // ❌ Si es listado /jobs y el usuario es recruiter/admin → mandar a dashboard/jobs
       if (isRecruiterOrAdmin) {
         const url = req.nextUrl.clone();
         url.pathname = "/dashboard/jobs";
@@ -36,14 +32,11 @@ export default withAuth(
     }
 
     // ===== /dashboard =====
+    // Antes redirigíamos a /onboarding/company si no había companyId.
+    // Lo quitamos para evitar el 404, dejando que el dashboard cargue.
+    // (Si después creas la página de onboarding, puedes reactivar la redirección.)
     if (pathname.startsWith("/dashboard")) {
-      // Onboarding si no tiene companyId (solo recruiter/admin)
-      if (isRecruiterOrAdmin && !token?.companyId) {
-        const url = req.nextUrl.clone();
-        url.pathname = "/onboarding/company";
-        url.searchParams.set("from", pathname + (search || ""));
-        return NextResponse.redirect(url);
-      }
+      return NextResponse.next();
     }
 
     return NextResponse.next();
@@ -54,7 +47,7 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl;
 
-        // Dashboard: requiere auth + rol
+        // Dashboard: requiere auth + rol recruiter/admin
         if (pathname.startsWith("/dashboard")) {
           if (!token) return false;
           const role = (token as any)?.role;
@@ -66,7 +59,7 @@ export default withAuth(
           return !!token;
         }
 
-        // /jobs es público; las redirecciones (si aplica) se manejan arriba
+        // /jobs es público; las redirecciones se manejan arriba
         if (pathname.startsWith("/jobs")) {
           return true;
         }

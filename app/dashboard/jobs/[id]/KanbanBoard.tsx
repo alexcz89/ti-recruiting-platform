@@ -79,7 +79,7 @@ export default function Kanbanboard({
   return (
     <section
       className="
-        rounded-2xl border bg-white/90 p-4
+        rounded-2xl border glass-card p-4 md:p-6
         overflow-x-auto
       "
     >
@@ -137,14 +137,14 @@ export default function Kanbanboard({
     return (
       <div
         className="
-          rounded-xl border bg-white
+          rounded-xl border glass-card p-4 md:p-6
           flex flex-col
           max-h-[72vh]
         "
         onDragOver={allowDrop}
         onDrop={handleDrop}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-white/95 px-3 py-2 rounded-t-xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b glass-card p-4 md:p-6">
           <h3 className="text-sm font-semibold">{title}</h3>
           <span className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-0.5 text-[11px]">
             {count}
@@ -158,7 +158,7 @@ export default function Kanbanboard({
           )}
         </div>
 
-        <div className="border-t bg-white/90 text-[11px] text-zinc-500 px-3 py-1.5 rounded-b-xl">
+        <div className="border-t glass-card p-4 md:p-6">
           {isLoading ? "Guardando cambios…" : "Arrastra tarjetas entre columnas"}
         </div>
       </div>
@@ -187,7 +187,7 @@ export default function Kanbanboard({
           onDragStart();
         }}
         onDragEnd={onDragEnd}
-        className={`rounded-xl border p-3 bg-white shadow-sm hover:shadow transition
+        className={`rounded-xl border p-3 glass-card p-4 md:p-6
           ${dragging ? "opacity-50" : ""}
         `}
       >
