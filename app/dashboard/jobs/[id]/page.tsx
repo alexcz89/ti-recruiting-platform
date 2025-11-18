@@ -5,33 +5,29 @@ import { prisma } from "@/lib/prisma";
 import { getSessionCompanyId } from "@/lib/session";
 import { fromNow } from "@/lib/dates";
 import Kanbanboard from "./Kanbanboard";
+import { ApplicationInterest } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES = [
-  "SUBMITTED",
-  "REVIEW",
-  "INTERVIEW",
-  "OFFER",
-  "HIRED",
-  "REJECTED",
-] as const;
-type AppStatus = (typeof STATUSES)[number];
+// Pipeline del reclutador (ApplicationInterest)
+const STATUSES = ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"] as const;
+type ColumnStatus = (typeof STATUSES)[number];
 
-const STATUS_LABEL: Record<AppStatus, string> = {
-  SUBMITTED: "Recibidas",
+const STATUS_LABEL: Record<ColumnStatus, string> = {
   REVIEW: "En revisión",
-  INTERVIEW: "Entrevista",
-  OFFER: "Oferta",
-  HIRED: "Contratado",
-  REJECTED: "Rechazado",
+  MAYBE: "En duda",
+  ACCEPTED: "Aceptados",
+  REJECTED: "Rechazados",
 };
 
-export default async function JobKanbanPage({ params }: { params: { id: string } }) {
+export default async function JobKanbanPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) notFound();
 
-  // ❗️Fix: quitamos `select` para no pedir campos que quizá no existen (ej. seniority)
   const job = await prisma.job.findFirst({
     where: { id: params.id, companyId },
   });
@@ -48,18 +44,22 @@ export default async function JobKanbanPage({ params }: { params: { id: string }
           email: true,
           resumeUrl: true,
           skills: true,
+          firstName: true,
+          lastName: true,
         },
       },
     },
   });
 
+  // Server Action: mover tarjeta entre columnas (usa recruiterInterest)
   async function moveApplicationAction(formData: FormData) {
     "use server";
+
     const companyIdAct = await getSessionCompanyId().catch(() => null);
     if (!companyIdAct) return { ok: false, message: "Empresa no válida" };
 
     const appId = String(formData.get("appId") || "");
-    const newStatus = String(formData.get("newStatus") || "") as AppStatus;
+    const newStatus = String(formData.get("newStatus") || "") as ColumnStatus;
 
     if (!STATUSES.includes(newStatus)) {
       return { ok: false, message: "Estado inválido" };
@@ -73,14 +73,14 @@ export default async function JobKanbanPage({ params }: { params: { id: string }
 
     await prisma.application.update({
       where: { id: appId },
-      data: { status: newStatus },
+      data: { recruiterInterest: newStatus as ApplicationInterest },
     });
 
     return { ok: true };
   }
 
   const employmentType = (job as any)?.employmentType ?? "—";
-  const seniority = (job as any)?.seniority ?? "—"; // si no existe en tu schema quedará "—"
+  const seniority = (job as any)?.seniority ?? "—";
   const remote = (job as any)?.remote ? "Remoto" : "Presencial/Híbrido";
   const updatedAt = (job as any)?.updatedAt ?? job.createdAt;
 
@@ -93,53 +93,63 @@ export default async function JobKanbanPage({ params }: { params: { id: string }
             <h1 className="text-2xl sm:text-3xl font-bold leading-tight break-anywhere">
               Kanban — {job.title}
             </h1>
-            <p className="text-sm text-zinc-600">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
               {employmentType} · {seniority} · {remote} ·{" "}
-              <span className="text-zinc-500">Actualizada {fromNow(updatedAt)}</span>
+              <span className="text-zinc-500 dark:text-zinc-400">
+                Actualizada {fromNow(updatedAt)}
+              </span>
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href={`/dashboard/jobs/${job.id}/applications`}
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900 dark:border-zinc-700"
               title="Ver lista de postulaciones"
             >
               Ver postulaciones
             </Link>
             <Link
               href={`/dashboard/jobs/${job.id}/edit`}
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900 dark:border-zinc-700"
               title="Editar vacante"
             >
               Editar vacante
             </Link>
             <Link
               href="/dashboard/jobs"
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900 dark:border-zinc-700"
             >
               Volver a vacantes
             </Link>
           </div>
         </header>
 
-        {/* Resumen */}
+        {/* Resumen por columnas (usa recruiterInterest) */}
         <section className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-6 gap-3">
           {STATUSES.map((st) => {
-            const count = apps.filter((a) => a.status === st).length;
+            const count = apps.filter(
+              (a) => (a.recruiterInterest ?? "REVIEW") === st,
+            ).length;
             return (
               <div
                 key={st}
                 className="rounded-xl border glass-card p-4 md:p-6"
                 title={st}
               >
-                <p className="text-[11px] text-zinc-500">{STATUS_LABEL[st]}</p>
-                <p className="text-2xl font-semibold">{count}</p>
+                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                  {STATUS_LABEL[st]}
+                </p>
+                <p className="text-2xl font-semibold text-default">{count}</p>
               </div>
             );
           })}
           <div className="rounded-xl border glass-card p-4 md:p-6">
-            <p className="text-[11px] text-zinc-500">Total</p>
-            <p className="text-2xl font-semibold">{apps.length}</p>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+              Total
+            </p>
+            <p className="text-2xl font-semibold text-default">
+              {apps.length}
+            </p>
           </div>
         </section>
 
@@ -148,18 +158,27 @@ export default async function JobKanbanPage({ params }: { params: { id: string }
           jobId={job.id}
           statuses={STATUSES as unknown as string[]}
           statusLabels={STATUS_LABEL as Record<string, string>}
-          applications={apps.map((a) => ({
-            id: a.id,
-            status: a.status,
-            createdAt: a.createdAt,
-            candidate: {
-              id: a.candidate?.id ?? "",
-              name: a.candidate?.name ?? "—",
-              email: a.candidate?.email ?? "—",
-              resumeUrl: a.candidate?.resumeUrl ?? "",
-              skills: a.candidate?.skills ?? [],
-            },
-          }))}
+          applications={apps.map((a) => {
+            const candidateName =
+              a.candidate?.name ||
+              [a.candidate?.firstName, a.candidate?.lastName]
+                .filter(Boolean)
+                .join(" ") ||
+              "—";
+
+            return {
+              id: a.id,
+              status: (a.recruiterInterest ?? "REVIEW") as string,
+              createdAt: a.createdAt,
+              candidate: {
+                id: a.candidate?.id ?? "",
+                name: candidateName,
+                email: a.candidate?.email ?? "—",
+                resumeUrl: a.candidate?.resumeUrl ?? "",
+                skills: (a.candidate as any)?.skills ?? [],
+              },
+            };
+          })}
           moveAction={moveApplicationAction}
         />
       </div>

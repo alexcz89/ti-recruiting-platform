@@ -1,4 +1,3 @@
-// app/dashboard/components/BannerEmailUnverified.tsx
 "use client";
 
 import { useTransition } from "react";
@@ -17,18 +16,35 @@ export default function BannerEmailUnverified() {
   };
 
   return (
-    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+    <div
+      className="
+        glass-card rounded-2xl border px-4 py-3 md:px-5 md:py-4
+        border-amber-200/70 bg-amber-50/70
+        dark:border-amber-900/40 dark:bg-amber-950/30
+      "
+      role="region"
+      aria-label="Correo no verificado"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-medium text-amber-900">Tu correo aún no está verificado</p>
-          <p className="text-sm text-amber-800/90">
+          <p className="font-semibold text-amber-900 dark:text-amber-200">
+            Tu correo aún no está verificado
+          </p>
+          <p className="text-sm text-amber-800/90 dark:text-amber-200/80">
             Verifica tu email para habilitar todas las funciones y proteger tu cuenta.
           </p>
         </div>
+
         <button
           onClick={onResend}
           disabled={pending}
-          className="shrink-0 rounded-md border border-amber-300 glass-card p-4 md:p-6"
+          aria-busy={pending}
+          className="
+            btn-ghost h-8 px-3 text-xs md:h-9 md:px-3.5 md:text-sm
+            border-amber-300/70 dark:border-amber-800/70
+            hover:bg-amber-100/50 dark:hover:bg-amber-900/30
+            text-amber-900 dark:text-amber-100
+          "
         >
           {pending ? "Enviando..." : "Reenviar verificación"}
         </button>

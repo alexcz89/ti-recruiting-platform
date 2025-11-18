@@ -1,21 +1,28 @@
 // app/dashboard/jobs/new/JobWizard.tsx
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
+import DOMPurify from "dompurify";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { createStringFuse, searchStrings } from "@/lib/search/fuse";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
+/* =============================
+   Tipos
+============================= */
 type PresetCompany = { id: string | null; name: string | null };
 
-// ➕ Tipo de plantilla mínima (vacantes anteriores)
+type LocationType = "REMOTE" | "HYBRID" | "ONSITE";
+type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP";
+type Currency = "MXN" | "USD";
+type DegreeLevel = "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD";
+
 type TemplateJob = {
   id: string;
   title?: string;
-  locationType?: "REMOTE" | "HYBRID" | "ONSITE";
-  // Ubicación
+  locationType?: LocationType;
   city?: string | null;
   country?: string | null;
   admin1?: string | null;
@@ -23,15 +30,15 @@ type TemplateJob = {
   admin1Norm?: string | null;
   locationLat?: number | null;
   locationLng?: number | null;
-
-  currency?: "MXN" | "USD";
+  currency?: Currency;
   salaryMin?: number | null;
   salaryMax?: number | null;
   showSalary?: boolean | null;
-  employmentType?: "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP";
+  employmentType?: EmploymentType;
   schedule?: string | null;
   benefitsJson?: any | null;
-  description?: string | null;
+  description?: string | null; // legacy plain
+  descriptionHtml?: string | null;
   education?: Array<{ name: string; required: boolean }> | null;
   minDegree?: DegreeLevel | null;
   skills?: Array<{ name: string; required: boolean }> | null;
@@ -50,8 +57,7 @@ type Props = {
     title?: string;
     companyMode?: "own" | "other" | "confidential";
     companyOtherName?: string;
-    locationType?: "REMOTE" | "HYBRID" | "ONSITE";
-    // Ubicación estructurada
+    locationType?: LocationType;
     city?: string;
     country?: string | null;
     admin1?: string | null;
@@ -59,20 +65,19 @@ type Props = {
     admin1Norm?: string | null;
     locationLat?: number | null;
     locationLng?: number | null;
-
-    currency?: "MXN" | "USD";
+    currency?: Currency;
     salaryMin?: number | string | null;
     salaryMax?: number | string | null;
     showSalary?: boolean;
     // Paso 2
-    employmentType?: "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP";
+    employmentType?: EmploymentType;
     schedule?: string;
     // Paso 3
     showBenefits?: boolean;
     benefitsJson?: Record<string, any>;
     // Paso 4
-    description?: string;
-    responsibilities?: string; // legacy
+    description?: string; // legacy plain
+    descriptionHtml?: string | null;
     education?: Array<{ name: string; required: boolean }>;
     minDegree?: DegreeLevel;
     // Paso 4 (skills/certs)
@@ -81,11 +86,246 @@ type Props = {
   };
 };
 
-type LocationType = "REMOTE" | "HYBRID" | "ONSITE";
-type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP";
-type Currency = "MXN" | "USD";
-type DegreeLevel = "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD";
+/* =============================
+   Utils
+============================= */
+function sanitizeHtml(html: string) {
+  if (!html) return "";
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ["b", "i", "strong", "em", "ul", "ol", "li", "p", "br"],
+    ALLOWED_ATTR: [],
+  });
+}
 
+function htmlToPlain(html: string) {
+  if (!html) return "";
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return (div.textContent || div.innerText || "").trim();
+}
+
+const EDUCATION_SUGGESTIONS = [
+  "Ingeniería en Sistemas",
+  "Ingeniería en Tecnologías Computacionales",
+  "Ingeniería en Robótica",
+  "Licenciatura en Informática",
+  "Licenciatura en Ciencias de la Computación",
+  "Maestría en Tecnologías de Información",
+  "Maestría en Ciencia de Datos",
+  "MBA con enfoque en TI",
+  "Técnico en Programación",
+  "Técnico en Redes",
+];
+
+// --- Draft utils ---
+const DRAFT_VERSION = 1;
+const draftKeyFor = (initial?: Props["initial"]) =>
+  `jobwizard:draft:${initial?.id ?? "new"}`;
+
+type DraftPayload = {
+  __v: number;
+  step: number;
+  tab4: "desc" | "skills" | "edu";
+  // p1
+  title: string;
+  companyMode: "own" | "confidential";
+  companyOtherName: string;
+  locationType: LocationType;
+  city: string;
+  country: string;
+  admin1: string;
+  cityNorm: string;
+  admin1Norm: string;
+  locationLat: number | null;
+  locationLng: number | null;
+  currency: Currency;
+  salaryMin: string;
+  salaryMax: string;
+  showSalary: boolean;
+  // p2
+  employmentType: EmploymentType;
+  schedule: string;
+  // p3
+  showBenefits: boolean;
+  benefits: Record<string, boolean>;
+  aguinaldoDias: number;
+  vacacionesDias: number;
+  primaVacPct: number;
+  // p4
+  descriptionHtml: string;
+  descriptionPlain: string;
+  minDegree: DegreeLevel;
+  eduRequired: string[];
+  eduNice: string[];
+  requiredSkills: string[];
+  niceSkills: string[];
+  certs: string[];
+};
+
+/* =============================
+   Stepper (sin sticky)
+============================= */
+function Stepper({
+  step,
+  total = 5,
+  onJump,
+}: {
+  step: number;
+  total?: number;
+  onJump?: (n: number) => void;
+}) {
+  const items = Array.from({ length: total }, (_, i) => i + 1);
+  return (
+    <ol className="-mx-1 mb-3 flex items-center gap-2 px-1">
+      {items.map((n) => {
+        const done = n < step;
+        const active = n === step;
+        return (
+          <li key={n}>
+            <button
+              type="button"
+              onClick={() => onJump?.(n)}
+              className={[
+                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
+                done &&
+                  "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                active &&
+                  "border-emerald-600 bg-emerald-600 text-white shadow-sm",
+                !done &&
+                  !active &&
+                  "border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/50 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/70",
+              ].join(" ")}
+              aria-current={active ? "step" : undefined}
+            >
+              <span
+                className={[
+                  "grid h-5 w-5 place-content-center rounded-full text-[11px] font-semibold",
+                  active
+                    ? "bg-white/20 text-white"
+                    : done
+                    ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
+                    : "bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300",
+                ].join(" ")}
+              >
+                {n}
+              </span>
+              <span className="hidden sm:inline">Paso {n}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/* =============================
+   Editor con B/I/• (contenteditable)
+============================= */
+function RichTextBox({
+  valueHtml,
+  onChangeHtml,
+}: {
+  valueHtml: string;
+  onChangeHtml: (html: string, plain: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (sanitizeHtml(ref.current.innerHTML) !== sanitizeHtml(valueHtml)) {
+      ref.current.innerHTML = sanitizeHtml(valueHtml || "");
+    }
+  }, [valueHtml]);
+
+  function exec(cmd: "bold" | "italic" | "insertUnorderedList") {
+    if (!ref.current) return;
+    ref.current.focus();
+    document.execCommand(cmd, false);
+    handleInput();
+    ref.current.focus();
+  }
+
+  function handleInput() {
+    if (!ref.current) return;
+    const html = sanitizeHtml(
+      ref.current.innerHTML.replace(/<div>/g, "<p>").replace(/<\/div>/g, "</p>")
+    );
+    const plain = htmlToPlain(html);
+    onChangeHtml(html, plain);
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text/plain");
+    document.execCommand("insertText", false, text);
+    handleInput();
+  }
+
+  return (
+    <div className="w-full">
+      {/* Toolbar */}
+      <div className="mb-2 flex items-center gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/40">
+        <button
+          type="button"
+          className="rounded px-2 py-1 text-sm font-semibold hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:hover:bg-zinc-800"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            exec("bold");
+          }}
+          aria-label="Negritas"
+          title="Negritas"
+        >
+          B
+        </button>
+        <button
+          type="button"
+          className="rounded px-2 py-1 text-sm italic hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:hover:bg-zinc-800"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            exec("italic");
+          }}
+          aria-label="Itálicas"
+          title="Itálicas"
+        >
+          /
+        </button>
+        <button
+          type="button"
+          className="rounded px-2 py-1 text-sm hover:bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:hover:bg-zinc-800"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            exec("insertUnorderedList");
+          }}
+          aria-label="Viñetas"
+          title="Viñetas"
+        >
+          •
+        </button>
+      </div>
+
+      <div
+        ref={ref}
+        contentEditable
+        onInput={handleInput}
+        onPaste={handlePaste}
+        className="
+          min-h-[220px] w-full rounded-md border border-zinc-300 bg-white p-3
+          text-[15px] leading-relaxed outline-none dark:border-zinc-700 dark:bg-zinc-900
+          whitespace-pre-wrap
+          [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:list-item
+          [&_p]:mb-2
+          focus:ring-2 focus:ring-emerald-400/50
+        "
+        suppressContentEditableWarning
+        aria-multiline
+      />
+    </div>
+  );
+}
+
+/* =============================
+   Datos constantes
+============================= */
 const BENEFITS = [
   { key: "aguinaldo", label: "Aguinaldo", def: true },
   { key: "vacaciones", label: "Vacaciones", def: true },
@@ -104,85 +344,11 @@ const BENEFITS = [
 ];
 
 const reviewBox =
-  "mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words break-all rounded border bg-gray-50 p-2";
+  "mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border bg-zinc-50 p-2 dark:bg-zinc-900/40";
 
-// Sugerencias rápidas para Educación
-const EDUCATION_SUGGESTIONS = [
-  "Ingeniería en Sistemas",
-  "Ingeniería en Tecnologías Computacionales",
-  "Ingeniería en Robótica",
-  "Licenciatura en Informática",
-  "Licenciatura en Ciencias de la Computación",
-  "Maestría en Tecnologías de Información",
-  "Maestría en Ciencia de Datos",
-  "MBA con enfoque en TI",
-  "Técnico en Programación",
-  "Técnico en Redes",
-];
-
-/* ---------------------------
-   Utils de enriquecimiento
-----------------------------*/
-const norm = (s: string) =>
-  s.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-
-/** Sugerir skills/educación desde un texto cruzando catálogos */
-function suggestFromText({
-  text,
-  skillsCatalog = [],
-  educationCatalog = [],
-}: {
-  text: string;
-  skillsCatalog?: string[];
-  educationCatalog?: string[];
-}) {
-  const hay = norm(text)
-    .split(/[^a-z0-9#+.]/gi)
-    .filter(Boolean);
-
-  const matchList = (catalog: string[]) =>
-    catalog.filter((item) => {
-      const tokens = norm(item).split(/\s+/);
-      return tokens.every((t) => hay.some((w) => w.includes(t)));
-    });
-
-  return {
-    skills: matchList(skillsCatalog).slice(0, 12),
-    education: matchList(educationCatalog).slice(0, 8),
-  };
-}
-
-/** Ring de progreso de caracteres */
-function CharProgress({ current, min = 50 }: { current: number; min?: number }) {
-  const pct = Math.min(100, Math.round((current / min) * 100));
-  return (
-    <div className="flex items-center gap-2 text-xs">
-      <div className="relative h-5 w-5">
-        <svg viewBox="0 0 36 36" className="h-5 w-5">
-          <path
-            className="text-zinc-200"
-            stroke="currentColor"
-            strokeWidth="4"
-            fill="none"
-            d="M18 2 a16 16 0 1 1 0 32 a16 16 0 1 1 0 -32"
-          />
-          <path
-            className={pct >= 100 ? "text-emerald-500" : "text-zinc-400"}
-            stroke="currentColor"
-            strokeWidth="4"
-            fill="none"
-            strokeDasharray={`${pct}, 100`}
-            d="M18 2 a16 16 0 1 1 0 32 a16 16 0 1 1 0 -32"
-          />
-        </svg>
-      </div>
-      <span className={pct >= 100 ? "text-emerald-600" : "text-zinc-500"}>
-        {current} / {min}
-      </span>
-    </div>
-  );
-}
-
+/* =============================
+   Componente principal
+============================= */
 export default function JobWizard({
   onSubmit,
   presetCompany,
@@ -192,8 +358,16 @@ export default function JobWizard({
   initial,
 }: Props) {
   const router = useRouter();
-
   const [step, setStep] = useState(1);
+
+  // Subtabs del paso 4
+  const [tab4, setTab4] = useState<"desc" | "skills" | "edu">("desc");
+
+  // --- Draft state/refs ---
+  const draftKey = useMemo(() => draftKeyFor(initial), [initial?.id]);
+  const [hasDraft, setHasDraft] = useState(false);
+  const pendingSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadedDraftRef = useRef<DraftPayload | null>(null);
 
   // ---------- Paso 1 ----------
   const [title, setTitle] = useState("");
@@ -203,9 +377,9 @@ export default function JobWizard({
   const [companyOtherName, setCompanyOtherName] = useState("");
 
   const [locationType, setLocationType] = useState<LocationType>("ONSITE");
-  const [city, setCity] = useState(""); // etiqueta legible
+  const [city, setCity] = useState("");
 
-  // ➕ Ubicación estructurada
+  // Ubicación estructurada
   const [country, setCountry] = useState<string>("");
   const [admin1, setAdmin1] = useState<string>("");
   const [cityNorm, setCityNorm] = useState<string>("");
@@ -218,46 +392,53 @@ export default function JobWizard({
   const [salaryMax, setSalaryMax] = useState<string>("");
   const [showSalary, setShowSalary] = useState(false);
 
-  // ➕ Plantilla seleccionada
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   // ---------- Paso 2 ----------
-  const [employmentType, setEmploymentType] = useState<EmploymentType>("FULL_TIME");
+  const [employmentType, setEmploymentType] =
+    useState<EmploymentType>("FULL_TIME");
   const [schedule, setSchedule] = useState("");
 
   // ---------- Paso 3 ----------
   const [showBenefits, setShowBenefits] = useState(true);
   const [benefits, setBenefits] = useState<Record<string, boolean>>(
-    BENEFITS.reduce((acc, b) => ((acc[b.key] = b.def), acc), {} as Record<string, boolean>)
+    BENEFITS.reduce(
+      (acc, b) => ((acc[b.key] = b.def), acc),
+      {} as Record<string, boolean>
+    )
   );
   const [aguinaldoDias, setAguinaldoDias] = useState<number>(15);
   const [vacacionesDias, setVacacionesDias] = useState<number>(12);
   const [primaVacPct, setPrimaVacPct] = useState<number>(25);
 
   // ---------- Paso 4 ----------
-  const [description, setDescription] = useState("");
-  // EDUCACIÓN
+  const [descriptionHtml, setDescriptionHtml] = useState<string>("");
+  const [descriptionPlain, setDescriptionPlain] = useState<string>("");
+
   const [minDegree, setMinDegree] = useState<DegreeLevel>("BACHELOR");
+
+  // Educación DnD
+  const [eduRequired, setEduRequired] = useState<string[]>([]);
+  const [eduNice, setEduNice] = useState<string[]>([]);
   const [educationQuery, setEducationQuery] = useState("");
-  const [educationAddAsRequired, setEducationAddAsRequired] = useState(true);
-  const [education, setEducation] = useState<Array<{ name: string; required: boolean }>>([]);
 
-  // Skills
+  // Skills DnD
+  const [requiredSkills, setRequiredSkills] = useState<string[]>([]);
+  const [niceSkills, setNiceSkills] = useState<string[]>([]);
   const [skillQuery, setSkillQuery] = useState("");
-  const [addAsRequired, setAddAsRequired] = useState(true);
-  const [skills, setSkills] = useState<Array<{ name: string; required: boolean }>>([]);
 
-  // Certs
+  // Certs (simples)
   const [certQuery, setCertQuery] = useState("");
   const [certs, setCerts] = useState<string[]>([]);
 
-  // Prefill cuando venga initial (modo edición)
+  // Prefill initial
   useEffect(() => {
     if (!initial) return;
 
     // Paso 1
     setTitle(initial.title ?? "");
-    const cm = initial.companyMode ?? (presetCompany?.id ? "own" : "confidential");
+    const cm =
+      initial.companyMode ?? (presetCompany?.id ? "own" : "confidential");
     setCompanyMode(cm === "other" ? "own" : cm);
     setCompanyOtherName(initial.companyOtherName ?? "");
 
@@ -269,13 +450,16 @@ export default function JobWizard({
     setAdmin1Norm(initial.admin1Norm ?? "");
     setLocationLat(initial.locationLat ?? null);
     setLocationLng(initial.locationLng ?? null);
-
     setCurrency((initial.currency as Currency) ?? "MXN");
     setSalaryMin(
-      initial.salaryMin === null || initial.salaryMin === undefined ? "" : String(initial.salaryMin)
+      initial.salaryMin === null || initial.salaryMin === undefined
+        ? ""
+        : String(initial.salaryMin)
     );
     setSalaryMax(
-      initial.salaryMax === null || initial.salaryMax === undefined ? "" : String(initial.salaryMax)
+      initial.salaryMax === null || initial.salaryMax === undefined
+        ? ""
+        : String(initial.salaryMax)
     );
     setShowSalary(!!initial.showSalary);
 
@@ -284,7 +468,9 @@ export default function JobWizard({
     setSchedule(initial.schedule ?? "");
 
     // Paso 3
-    setShowBenefits(typeof initial.showBenefits === "boolean" ? initial.showBenefits : true);
+    setShowBenefits(
+      typeof initial.showBenefits === "boolean" ? initial.showBenefits : true
+    );
     if (initial.benefitsJson && typeof initial.benefitsJson === "object") {
       const b = initial.benefitsJson as any;
       const base = BENEFITS.reduce((acc, item) => {
@@ -294,120 +480,258 @@ export default function JobWizard({
       }, {} as Record<string, boolean>);
       setBenefits(base);
       if (typeof b.aguinaldoDias === "number") setAguinaldoDias(b.aguinaldoDias);
-      if (typeof b.vacacionesDias === "number") setVacacionesDias(b.vacacionesDias);
+      if (typeof b.vacacionesDias === "number")
+        setVacacionesDias(b.vacacionesDias);
       if (typeof b.primaVacPct === "number") setPrimaVacPct(b.primaVacPct);
     }
 
     // Paso 4
-    setDescription(initial.description ?? "");
-    if (Array.isArray(initial.education)) setEducation(initial.education);
-    if (initial.minDegree) setMinDegree(initial.minDegree);
-    setSkills(Array.isArray(initial.skills) ? initial.skills : []);
+    const html = sanitizeHtml(initial.descriptionHtml || "");
+    const plain = initial.description
+      ? initial.description
+      : html
+      ? htmlToPlain(html)
+      : "";
+    setDescriptionHtml(html);
+    setDescriptionPlain(plain);
+
+    setMinDegree(initial.minDegree ?? "BACHELOR");
+
+    const initEdu = Array.isArray(initial.education) ? initial.education : [];
+    setEduRequired(initEdu.filter((e) => e.required).map((e) => e.name));
+    setEduNice(initEdu.filter((e) => !e.required).map((e) => e.name));
+
+    const initSkills = Array.isArray(initial.skills) ? initial.skills : [];
+    setRequiredSkills(initSkills.filter((s) => s.required).map((s) => s.name));
+    setNiceSkills(initSkills.filter((s) => !s.required).map((s) => s.name));
+
     setCerts(Array.isArray(initial.certs) ? initial.certs : []);
   }, [initial, presetCompany?.id]);
 
-  const canNext1 = useMemo(() => {
-    if (!title.trim()) return false;
-    if ((locationType === "HYBRID" || locationType === "ONSITE") && !city.trim()) return false;
-    if (salaryMin && salaryMax && Number(salaryMin) > Number(salaryMax)) return false;
-    return true;
-  }, [title, locationType, city, salaryMin, salaryMax]);
+  // --- Cargar borrador si existe al montar (separado del prefill) ---
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as DraftPayload;
+      if (!parsed || parsed.__v !== DRAFT_VERSION) return;
+      loadedDraftRef.current = parsed;
+      setHasDraft(true); // mostrará banner para restaurar
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
 
-  const canNext2 = true;
-  const canNext4 = description.replace(/\s+/g, "").length >= 50;
-
-  // ---- Buscadores Fuse ----
-  const skillsFuse = useMemo(() => createStringFuse(skillsOptions || []), [skillsOptions]);
+  // Fuse filters
+  const skillsFuse = useMemo(
+    () => createStringFuse(skillsOptions || []),
+    [skillsOptions]
+  );
   const filteredSkills = useMemo(() => {
     const q = skillQuery.trim();
     if (!q) return (skillsOptions || []).slice(0, 30);
     return searchStrings(skillsFuse, q, 50);
   }, [skillQuery, skillsOptions, skillsFuse]);
 
-  const educationFuse = useMemo(() => createStringFuse(EDUCATION_SUGGESTIONS), []);
+  const educationFuse = useMemo(
+    () => createStringFuse(EDUCATION_SUGGESTIONS),
+    []
+  );
   const filteredEducation = useMemo(() => {
     const q = educationQuery.trim();
     if (!q) return EDUCATION_SUGGESTIONS.slice(0, 30);
     return searchStrings(educationFuse, q, 50);
   }, [educationQuery, educationFuse]);
 
-  const certsFuse = useMemo(() => createStringFuse(certOptions || []), [certOptions]);
+  const certsFuse = useMemo(
+    () => createStringFuse(certOptions || []),
+    [certOptions]
+  );
   const filteredCerts = useMemo(() => {
     const q = certQuery.trim();
     if (!q) return (certOptions || []).slice(0, 30);
     return searchStrings(certsFuse, q, 50);
   }, [certQuery, certsFuse, certOptions]);
 
-  // ---- Mutadores (skills/education/certs) ----
-  const addSkill = (name: string, required = addAsRequired) => {
-    const n = name.trim();
-    if (!n) return;
-    if (skills.some((s) => s.name.toLowerCase() === n.toLowerCase())) return;
-    setSkills((prev) => [...prev, { name: n, required }]);
-    setSkillQuery("");
-  };
-  const toggleSkillType = (name: string) =>
-    setSkills((prev) => prev.map((s) => (s.name === name ? { ...s, required: !s.required } : s)));
-  const removeSkill = (name: string) => setSkills((prev) => prev.filter((s) => s.name !== name));
+  // Validaciones básicas
+  const canNext1 = useMemo(() => {
+    if (!title.trim()) return false;
+    if (
+      (locationType === "HYBRID" || locationType === "ONSITE") &&
+      !city.trim()
+    )
+      return false;
+    if (salaryMin && salaryMax && Number(salaryMin) > Number(salaryMax))
+      return false;
+    return true;
+  }, [title, locationType, city, salaryMin, salaryMax]);
 
-  const addEducation = (name: string, required = educationAddAsRequired) => {
-    const n = name.trim();
-    if (!n) return;
-    if (education.some((e) => e.name.toLowerCase() === n.toLowerCase())) return;
-    setEducation((prev) => [...prev, { name: n, required }]);
-    setEducationQuery("");
-  };
-  const toggleEducationType = (name: string) =>
-    setEducation((prev) =>
-      prev.map((e) => (e.name === name ? { ...e, required: !e.required } : e))
-    );
-  const removeEducation = (name: string) =>
-    setEducation((prev) => prev.filter((e) => e.name !== name));
+  const descLength = descriptionPlain.replace(/\s+/g, "").length;
+  const canNext4 = descLength >= 50;
 
-  const addCert = (c: string) => {
-    const n = c.trim();
-    if (!n) return;
-    if (certs.some((x) => x.toLowerCase() === n.toLowerCase())) return;
-    setCerts((prev) => [...prev, n]);
-    setCertQuery("");
-  };
-  const removeCert = (c: string) => setCerts((prev) => prev.filter((x) => x !== c));
-
-  // ➕ Handler para ubicación estructurada (funciona si tu LocationAutocomplete lo soporta)
-  function handlePlaceChange(next: any) {
-    if (typeof next === "string") {
-      setCity(next);
-      return;
-    }
-    if (next && typeof next === "object") {
-      setCity(next.label || next.city || "");
-      setCountry(next.country || "");
-      setAdmin1(next.admin1 || "");
-      setCityNorm(next.cityNorm || "");
-      setAdmin1Norm(next.admin1Norm || "");
-      setLocationLat(typeof next.lat === "number" && Number.isFinite(next.lat) ? next.lat : null);
-      setLocationLng(typeof next.lng === "number" && Number.isFinite(next.lng) ? next.lng : null);
-      return;
-    }
-    setCity("");
-    setCountry("");
-    setAdmin1("");
-    setCityNorm("");
-    setAdmin1Norm("");
-    setLocationLat(null);
-    setLocationLng(null);
+  // ---------- Draft: snapshot + autosave ----------
+  function snapshot(): DraftPayload {
+    return {
+      __v: DRAFT_VERSION,
+      step,
+      tab4,
+      // p1
+      title,
+      companyMode,
+      companyOtherName,
+      locationType,
+      city,
+      country,
+      admin1,
+      cityNorm,
+      admin1Norm,
+      locationLat,
+      locationLng,
+      currency,
+      salaryMin,
+      salaryMax,
+      showSalary,
+      // p2
+      employmentType,
+      schedule,
+      // p3
+      showBenefits,
+      benefits,
+      aguinaldoDias,
+      vacacionesDias,
+      primaVacPct,
+      // p4
+      descriptionHtml,
+      descriptionPlain,
+      minDegree,
+      eduRequired,
+      eduNice,
+      requiredSkills,
+      niceSkills,
+      certs,
+    };
   }
 
-  // ➕ Aplicar plantilla completa por id (incluye ubicación estructurada si viene)
+  // Autosave con debounce
+  useEffect(() => {
+    if (pendingSaveRef.current) clearTimeout(pendingSaveRef.current);
+    pendingSaveRef.current = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify(snapshot()));
+      } catch {}
+    }, 800);
+    return () => {
+      if (pendingSaveRef.current) clearTimeout(pendingSaveRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    step,
+    tab4,
+    title,
+    companyMode,
+    companyOtherName,
+    locationType,
+    city,
+    country,
+    admin1,
+    cityNorm,
+    admin1Norm,
+    locationLat,
+    locationLng,
+    currency,
+    salaryMin,
+    salaryMax,
+    showSalary,
+    employmentType,
+    schedule,
+    showBenefits,
+    benefits,
+    aguinaldoDias,
+    vacacionesDias,
+    primaVacPct,
+    descriptionHtml,
+    descriptionPlain,
+    minDegree,
+    eduRequired,
+    eduNice,
+    requiredSkills,
+    niceSkills,
+    certs,
+  ]);
+
+  // Guardar al salir
+  useEffect(() => {
+    const handler = () => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify(snapshot()));
+      } catch {}
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  function restoreDraft() {
+    const d = loadedDraftRef.current;
+    if (!d) return;
+    // navegación
+    setStep(d.step);
+    setTab4(d.tab4);
+    // p1
+    setTitle(d.title);
+    setCompanyMode(d.companyMode);
+    setCompanyOtherName(d.companyOtherName);
+    setLocationType(d.locationType);
+    setCity(d.city);
+    setCountry(d.country);
+    setAdmin1(d.admin1);
+    setCityNorm(d.cityNorm);
+    setAdmin1Norm(d.admin1Norm);
+    setLocationLat(d.locationLat);
+    setLocationLng(d.locationLng);
+    setCurrency(d.currency);
+    setSalaryMin(d.salaryMin);
+    setSalaryMax(d.salaryMax);
+    setShowSalary(d.showSalary);
+    // p2
+    setEmploymentType(d.employmentType);
+    setSchedule(d.schedule);
+    // p3
+    setShowBenefits(d.showBenefits);
+    setBenefits(d.benefits);
+    setAguinaldoDias(d.aguinaldoDias);
+    setVacacionesDias(d.vacacionesDias);
+    setPrimaVacPct(d.primaVacPct);
+    // p4
+    setDescriptionHtml(d.descriptionHtml);
+    setDescriptionPlain(d.descriptionPlain);
+    setMinDegree(d.minDegree);
+    setEduRequired(d.eduRequired);
+    setEduNice(d.eduNice);
+    setRequiredSkills(d.requiredSkills);
+    setNiceSkills(d.niceSkills);
+    setCerts(d.certs);
+
+    setHasDraft(false);
+    toast.success("Borrador restaurado");
+  }
+
+  function discardDraft() {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {}
+    setHasDraft(false);
+    loadedDraftRef.current = null;
+    toast.message("Borrador descartado");
+  }
+
+  // Template apply
   function applyTemplateById(id: string) {
     if (!id) return;
     const tpl = templates.find((t) => t.id === id);
     if (!tpl) return;
 
-    // Paso 1
-    if (tpl.title) setTitle(tpl.title);
+    setTitle(tpl.title ?? "");
     if (tpl.locationType) setLocationType(tpl.locationType);
-
     setCity(tpl.city ?? "");
     setCountry(tpl.country ?? "");
     setAdmin1(tpl.admin1 ?? "");
@@ -421,11 +745,9 @@ export default function JobWizard({
     setSalaryMax(tpl.salaryMax != null ? String(tpl.salaryMax) : "");
     setShowSalary(!!tpl.showSalary);
 
-    // Paso 2
     if (tpl.employmentType) setEmploymentType(tpl.employmentType);
     setSchedule(tpl.schedule ?? "");
 
-    // Paso 3
     if (tpl.benefitsJson && typeof tpl.benefitsJson === "object") {
       const b = tpl.benefitsJson as any;
       setShowBenefits(Boolean(b.showBenefits ?? true));
@@ -435,23 +757,33 @@ export default function JobWizard({
         return next;
       });
       if (typeof b.aguinaldoDias === "number") setAguinaldoDias(b.aguinaldoDias);
-      if (typeof b.vacacionesDias === "number") setVacacionesDias(b.vacacionesDias);
+      if (typeof b.vacacionesDias === "number")
+        setVacacionesDias(b.vacacionesDias);
       if (typeof b.primaVacPct === "number") setPrimaVacPct(b.primaVacPct);
     }
 
-    // Paso 4
-    setDescription(tpl.description ?? "");
-    if (Array.isArray(tpl.education)) setEducation(tpl.education);
+    const html = sanitizeHtml(tpl.descriptionHtml || "");
+    setDescriptionHtml(html);
+    setDescriptionPlain(
+      tpl.description ? tpl.description : html ? htmlToPlain(html) : ""
+    );
+
+    if (Array.isArray(tpl.education)) {
+      setEduRequired(tpl.education.filter((e) => e.required).map((e) => e.name));
+      setEduNice(tpl.education.filter((e) => !e.required).map((e) => e.name));
+    }
     if (tpl.minDegree) setMinDegree(tpl.minDegree);
-    if (Array.isArray(tpl.skills)) setSkills(tpl.skills);
+    if (Array.isArray(tpl.skills)) {
+      setRequiredSkills(tpl.skills.filter((s) => s.required).map((s) => s.name));
+      setNiceSkills(tpl.skills.filter((s) => !s.required).map((s) => s.name));
+    }
     if (Array.isArray(tpl.certs)) setCerts(tpl.certs);
 
     toast.success("Plantilla aplicada");
   }
 
-  // ---------- Submit ----------
+  // Submit
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   function clampNonNegative(n: string) {
     const v = Math.max(0, Number(n || 0));
@@ -459,11 +791,12 @@ export default function JobWizard({
     return String(v);
   }
 
-  async function handlePublish() {
-    setError(null);
-    setBusy(true);
+async function handlePublish() {
+  setBusy(true);
 
+  try {
     const fd = new FormData();
+
     // p1
     fd.set("title", title.trim());
     fd.set("companyMode", companyMode);
@@ -471,7 +804,6 @@ export default function JobWizard({
     fd.set("locationType", locationType);
     fd.set("city", city.trim());
 
-    // Ubicación estructurada
     if (country) fd.set("country", country);
     if (admin1) fd.set("admin1", admin1);
     if (cityNorm) fd.set("cityNorm", cityNorm);
@@ -483,9 +815,11 @@ export default function JobWizard({
     if (salaryMin) fd.set("salaryMin", clampNonNegative(salaryMin));
     if (salaryMax) fd.set("salaryMax", clampNonNegative(salaryMax));
     fd.set("showSalary", String(showSalary));
+
     // p2
     fd.set("employmentType", employmentType);
     if (schedule) fd.set("schedule", schedule);
+
     // p3
     const benefitsPayload = {
       ...benefits,
@@ -496,153 +830,260 @@ export default function JobWizard({
     };
     fd.set("showBenefits", String(showBenefits));
     fd.set("benefitsJson", JSON.stringify(benefitsPayload));
-    // p4
-    fd.set("description", description.trim());
-    fd.set("responsibilities", ""); // legacy
-    fd.set("educationJson", JSON.stringify(education));
+
+    // p4 — HTML + Plain
+    const safeHtml = sanitizeHtml(descriptionHtml.trim());
+    const safePlain = descriptionPlain.trim() || htmlToPlain(safeHtml);
+
+    fd.set("descriptionHtml", safeHtml);
+    fd.set("description", safePlain); // compatibilidad / búsqueda
+
     fd.set("minDegree", minDegree);
-    fd.set("skillsJson", JSON.stringify(skills));
+
+    const eduPack = [
+      ...eduRequired.map((name) => ({ name, required: true })),
+      ...eduNice.map((name) => ({ name, required: false })),
+    ];
+    fd.set("educationJson", JSON.stringify(eduPack));
+
+    const skillsPack = [
+      ...requiredSkills.map((name) => ({ name, required: true })),
+      ...niceSkills.map((name) => ({ name, required: false })),
+    ];
+    fd.set("skillsJson", JSON.stringify(skillsPack));
+
     fd.set("certsJson", JSON.stringify(certs));
 
     const isEditing = !!initial?.id;
+
+    // 🔁 MODO EDICIÓN
     if (isEditing && initial?.id) {
       fd.set("jobId", initial.id);
-      try {
-        const result = await onSubmit(fd);
-        if (result?.error) {
-          toast.error(result.error);
-        } else {
-          toast.success("Cambios guardados correctamente");
-          if (result?.redirectTo) router.push(result.redirectTo);
-          else router.refresh();
-        }
-      } catch (e) {
-        console.error("[JobWizard] update error", e);
-        toast.error("No se pudo guardar la vacante");
-      } finally {
-        setBusy(false);
+
+      const result = await onSubmit(fd);
+
+      if (result?.error) {
+        // Un solo lugar que lanza el error; el catch muestra el toast
+        throw new Error(result.error);
       }
+
+      toast.success("Cambios guardados correctamente");
+      try {
+        localStorage.removeItem(draftKey);
+      } catch {}
+
+      if (result?.redirectTo) {
+        router.push(result.redirectTo);
+      } else {
+        router.refresh();
+      }
+
       return;
     }
 
-    try {
-      const res = await fetch("/api/jobs", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) {
-        console.error("Error al crear vacante:", data);
-        toast.error(data?.error || "Error al publicar la vacante");
-        setBusy(false);
+    // 🆕 CREACIÓN (incluye límite por plan)
+    const res = await fetch("/api/jobs", { method: "POST", body: fd });
+    const data = await res.json();
+
+    if (!res.ok) {
+      console.error("Error al crear vacante:", data);
+
+      // Caso especial: límite de vacantes activas por plan
+      if (res.status === 402 && data?.code === "PLAN_LIMIT_REACHED") {
+        toast.error(
+          data?.error ||
+            "Has alcanzado el límite de vacantes activas para tu plan.",
+          {
+            description:
+              typeof data?.maxActiveJobs === "number"
+                ? `Vacantes activas: ${data.currentActiveJobs ?? "?"} / ${
+                    data.maxActiveJobs
+                  }. Cierra una vacante o mejora tu plan para publicar más.`
+                : undefined,
+          }
+        );
+        // ⛔️ Importante: NO lanzamos error aquí para no duplicar toast
         return;
       }
-      toast.success("Vacante publicada correctamente 🎉");
-      router.push(`/dashboard/jobs/${data.id}/applications`);
-    } catch (err) {
-      console.error("Error de red:", err);
-      toast.error("No se pudo conectar con el servidor");
-    } finally {
-      setBusy(false);
+
+      // Para otros errores, lanzamos y dejamos que el catch muestre el toast
+      throw new Error(data?.error || "Error al publicar la vacante");
+    }
+
+    toast.success("Vacante publicada correctamente 🎉");
+    try {
+      localStorage.removeItem(draftKey);
+    } catch {}
+    router.push(`/dashboard/jobs/${data.id}/applications`);
+  } catch (err: any) {
+    console.error("Error en handlePublish:", err);
+
+    const msg =
+      (err && typeof err.message === "string" && err.message) ||
+      "Ocurrió un error al guardar la vacante";
+
+    toast.error(msg);
+  } finally {
+    setBusy(false);
+  }
+}
+
+  // DnD helpers
+  function onDragStart(
+    e: React.DragEvent<HTMLSpanElement>,
+    payload: { kind: "skill" | "edu"; name: string; from: "req" | "nice" }
+  ) {
+    e.dataTransfer.setData("application/json", JSON.stringify(payload));
+    e.dataTransfer.effectAllowed = "move";
+  }
+  function onDropSkills(e: React.DragEvent<HTMLDivElement>, to: "req" | "nice") {
+    const data = e.dataTransfer.getData("application/json");
+    if (!data) return;
+    const payload = JSON.parse(data) as {
+      kind: "skill" | "edu";
+      name: string;
+      from: "req" | "nice";
+    };
+    if (payload.kind !== "skill" || payload.from === to) return;
+
+    if (to === "req") {
+      if (!requiredSkills.includes(payload.name)) {
+        setRequiredSkills((p) => [...p, payload.name]);
+      }
+      setNiceSkills((p) => p.filter((n) => n !== payload.name));
+    } else {
+      if (!niceSkills.includes(payload.name)) {
+        setNiceSkills((p) => [...p, payload.name]);
+      }
+      setRequiredSkills((p) => p.filter((n) => n !== payload.name));
+    }
+  }
+  function onDropEdu(e: React.DragEvent<HTMLDivElement>, to: "req" | "nice") {
+    const data = e.dataTransfer.getData("application/json");
+    if (!data) return;
+    const payload = JSON.parse(data) as {
+      kind: "skill" | "edu";
+      name: string;
+      from: "req" | "nice";
+    };
+    if (payload.kind !== "edu" || payload.from === to) return;
+
+    if (to === "req") {
+      if (!eduRequired.includes(payload.name)) {
+        setEduRequired((p) => [...p, payload.name]);
+      }
+      setEduNice((p) => p.filter((n) => n !== payload.name));
+    } else {
+      if (!eduNice.includes(payload.name)) {
+        setEduNice((p) => [...p, payload.name]);
+      }
+      setEduRequired((p) => p.filter((n) => n !== payload.name));
     }
   }
 
-  /* --------- Helpers UI: sugerir desde descripción + pegado masivo --------- */
-  const handleSuggestFromDesc = () => {
-    if (!description.trim()) {
-      toast.message("Agrega una descripción primero");
+  // adders
+  function addSkillByName(name: string, to: "req" | "nice" = "req") {
+    const n = name.trim();
+    if (!n) return;
+    if (requiredSkills.includes(n) || niceSkills.includes(n)) return;
+    if (to === "req") setRequiredSkills((p) => [...p, n]);
+    else setNiceSkills((p) => [...p, n]);
+    setSkillQuery("");
+  }
+  function addEduByName(name: string, to: "req" | "nice" = "req") {
+    const n = name.trim();
+    if (!n) return;
+    if (eduRequired.includes(n) || eduNice.includes(n)) return;
+    if (to === "req") setEduRequired((p) => [...p, n]);
+    else setEduNice((p) => [...p, n]);
+    setEducationQuery("");
+  }
+  function addCert(c: string) {
+    const n = c.trim();
+    if (!n) return;
+    if (certs.includes(n)) return;
+    setCerts((p) => [...p, n]);
+    setCertQuery("");
+  }
+
+  // location structured handler
+  function handlePlaceChange(next: any) {
+    if (typeof next === "string") {
+      setCity(next);
       return;
     }
-    const { skills: s, education: e } = suggestFromText({
-      text: description,
-      skillsCatalog: skillsOptions,
-      educationCatalog: EDUCATION_SUGGESTIONS,
-    });
-
-    if (e.length) {
-      setEducation((prev) => {
-        const exists = new Set(prev.map((p) => p.name.toLowerCase()));
-        const add = e
-          .filter((x) => !exists.has(x.toLowerCase()))
-          .map((name) => ({ name, required: educationAddAsRequired }));
-        return [...prev, ...add];
-      });
+    if (next && typeof next === "object") {
+      setCity(next.label || next.city || "");
+      setCountry(next.country || "");
+      setAdmin1(next.admin1 || "");
+      setCityNorm(next.cityNorm || "");
+      setAdmin1Norm(next.admin1Norm || "");
+      setLocationLat(
+        typeof next.lat === "number" && Number.isFinite(next.lat) ? next.lat : null
+      );
+      setLocationLng(
+        typeof next.lng === "number" && Number.isFinite(next.lng) ? next.lng : null
+      );
+      return;
     }
-    if (s.length) {
-      setSkills((prev) => {
-        const exists = new Set(prev.map((p) => p.name.toLowerCase()));
-        const add = s
-          .filter((x) => !exists.has(x.toLowerCase()))
-          .map((name) => ({ name, required: addAsRequired }));
-        return [...prev, ...add];
-      });
-    }
-    if (!e.length && !s.length) toast.message("No encontré coincidencias claras");
-    else toast.success("Sugerencias agregadas");
-  };
+    setCity("");
+    setCountry("");
+    setAdmin1("");
+    setCityNorm("");
+    setAdmin1Norm("");
+    setLocationLat(null);
+    setLocationLng(null);
+  }
 
-  const handleEduBulkPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const raw = e.clipboardData.getData("text");
-    if (!raw || !raw.includes("\n")) return;
-    e.preventDefault();
-    const lines = Array.from(
-      new Set(raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))
-    ).slice(0, 50);
-    setEducation((prev) => {
-      const exists = new Set(prev.map((p) => p.name.toLowerCase()));
-      const add = lines
-        .filter((x) => !exists.has(x.toLowerCase()))
-        .map((name) => ({ name, required: educationAddAsRequired }));
-      return [...prev, ...add];
-    });
-    setEducationQuery("");
-    toast.success("Formaciones agregadas");
-  };
-
-  const handleSkillBulkPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
-    const raw = e.clipboardData.getData("text");
-    if (!raw || !raw.includes("\n")) return;
-    e.preventDefault();
-    const lines = Array.from(
-      new Set(raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean))
-    ).slice(0, 80);
-    setSkills((prev) => {
-      const exists = new Set(prev.map((p) => p.name.toLowerCase()));
-      const add = lines
-        .filter((x) => !exists.has(x.toLowerCase()))
-        .map((name) => ({ name, required: addAsRequired }));
-      return [...prev, ...add];
-    });
-    setSkillQuery("");
-    toast.success("Skills agregadas");
-  };
-
+  /* =============================
+     RENDER
+  ============================= */
   return (
     <div className="space-y-6">
-      {/* pasos */}
-      <ol className="flex items-center gap-2 text-xs">
-        {[1, 2, 3, 4, 5].map((n) => (
-          <li
-            key={n}
-            className={clsx(
-              "px-2 py-1 rounded-full",
-              n <= step ? "bg-emerald-500 text-white" : "glass-card p-4 md:p-6"
-            )}
-          >
-            Paso {n}
-          </li>
-        ))}
-      </ol>
+      <Stepper step={step} onJump={(n) => setStep(n)} />
+
+      {/* Banner de borrador */}
+      {hasDraft && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-300/70 bg-amber-50 px-3 py-2 text-sm dark:border-amber-800/70 dark:bg-amber-900/20">
+          <span>Tienes un borrador sin publicar. ¿Deseas restaurarlo?</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1 hover:bg-white/60 dark:border-amber-700"
+              onClick={restoreDraft}
+            >
+              Restaurar
+            </button>
+            <button
+              type="button"
+              className="rounded-md border px-3 py-1 hover:bg-white/60 dark:border-amber-700"
+              onClick={discardDraft}
+            >
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Paso 1 */}
       {step === 1 && (
-        <section className="grid gap-4 rounded-xl border p-4">
+        <section
+          className="
+            grid gap-4 rounded-2xl
+            border border-zinc-200/70 dark:border-zinc-800/70
+            bg-white/70 dark:bg-zinc-900/50 backdrop-blur
+            p-4 md:p-6
+          "
+        >
           <h3 className="font-semibold">1) Datos básicos</h3>
 
-          {/* ➕ Plantillas (si hay) */}
+          {/* Plantillas */}
           {templates.length > 0 && (
             <div className="grid gap-1">
               <label className="text-sm">Usar vacante anterior (plantilla)</label>
               <div className="flex gap-2">
                 <select
-                  className="min-w-0 flex-1 rounded-md border p-2"
+                  className="min-w-0 flex-1 rounded-md border border-zinc-300 p-2 dark:border-zinc-700 dark:bg-zinc-900"
                   value={selectedTemplateId}
                   onChange={(e) => setSelectedTemplateId(e.target.value)}
                 >
@@ -655,23 +1096,20 @@ export default function JobWizard({
                 </select>
                 <button
                   type="button"
-                  className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-md border px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                   disabled={!selectedTemplateId}
                   onClick={() => applyTemplateById(selectedTemplateId)}
                 >
                   Aplicar
                 </button>
               </div>
-              <p className="text-xs text-zinc-500">
-                Rellena automáticamente título, ubicación, sueldo, tipo, prestaciones, descripción, educación, skills y certs.
-              </p>
             </div>
           )}
 
           <div className="grid gap-1">
             <label className="text-sm">Nombre de la vacante *</label>
             <input
-              className="rounded-md border p-2"
+              className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
@@ -690,7 +1128,8 @@ export default function JobWizard({
                   disabled={!presetCompany?.id}
                 />
                 <span>
-                  Mi empresa {presetCompany?.name ? `(${presetCompany.name})` : "(no asignada)"}
+                  Mi empresa{" "}
+                  {presetCompany?.name ? `(${presetCompany.name})` : "(no asignada)"}
                 </span>
               </label>
               <label className="flex items-center gap-2">
@@ -710,7 +1149,7 @@ export default function JobWizard({
             <div className="grid gap-1">
               <label className="text-sm">Ubicación *</label>
               <select
-                className="rounded-md border p-2"
+                className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                 value={locationType}
                 onChange={(e) => setLocationType(e.target.value as LocationType)}
               >
@@ -718,9 +1157,9 @@ export default function JobWizard({
                 <option value="HYBRID">Híbrido</option>
                 <option value="ONSITE">Presencial</option>
               </select>
+
               {(locationType === "HYBRID" || locationType === "ONSITE") && (
                 <div className="mt-2">
-                  {/* Soporta onChange(string) y onPlace(objeto) */}
                   <LocationAutocomplete
                     value={city}
                     onChange={handlePlaceChange as any}
@@ -732,12 +1171,12 @@ export default function JobWizard({
               )}
             </div>
 
+            {/* Sueldo */}
             <div className="grid gap-1">
               <label className="text-sm">Sueldo (opcional)</label>
-              {/* Layout robusto para evitar desbordes */}
               <div className="grid grid-cols-[minmax(84px,96px)_1fr_1fr] gap-2 items-center">
                 <select
-                  className="rounded-md border p-2 w-full"
+                  className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                   value={currency}
                   onChange={(e) => setCurrency(e.target.value as Currency)}
                 >
@@ -745,7 +1184,7 @@ export default function JobWizard({
                   <option value="USD">USD</option>
                 </select>
                 <input
-                  className="rounded-md border p-2 w-full min-w-0"
+                  className="min-w-0 rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                   type="number"
                   placeholder="Mín."
                   value={salaryMin}
@@ -753,7 +1192,7 @@ export default function JobWizard({
                   min={0}
                 />
                 <input
-                  className="rounded-md border p-2 w-full min-w-0"
+                  className="min-w-0 rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                   type="number"
                   placeholder="Máx."
                   value={salaryMax}
@@ -792,13 +1231,20 @@ export default function JobWizard({
 
       {/* Paso 2 */}
       {step === 2 && (
-        <section className="grid gap-4 rounded-xl border p-4">
+        <section
+          className="
+            grid gap-4 rounded-2xl
+            border border-zinc-200/70 dark:border-zinc-800/70
+            bg-white/70 dark:bg-zinc-900/50 backdrop-blur
+            p-4 md:p-6
+          "
+        >
           <h3 className="font-semibold">2) Tipo de empleo</h3>
           <div className="grid md:grid-cols-2 gap-3">
             <div className="grid gap-1">
               <label className="text-sm">Tipo *</label>
               <select
-                className="rounded-md border p-2"
+                className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                 value={employmentType}
                 onChange={(e) => setEmploymentType(e.target.value as EmploymentType)}
               >
@@ -811,7 +1257,7 @@ export default function JobWizard({
             <div className="grid gap-1">
               <label className="text-sm">Horario (opcional)</label>
               <input
-                className="rounded-md border p-2"
+                className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                 placeholder="Ej. L-V 9:00–18:00"
                 value={schedule}
                 onChange={(e) => setSchedule(e.target.value)}
@@ -835,10 +1281,24 @@ export default function JobWizard({
 
       {/* Paso 3 */}
       {step === 3 && (
-        <section className="grid gap-4 rounded-xl border p-4">
+        <section
+          className="
+            grid gap-4 rounded-2xl
+            border border-zinc-200/70 dark:border-zinc-800/70
+            bg-white/70 dark:bg-zinc-900/50 backdrop-blur
+            p-4 md:p-6
+          "
+        >
           <h3 className="font-semibold">3) Prestaciones</h3>
 
-          <div className="rounded-lg border-2 border-emerald-300 bg-emerald-50 p-3 flex items-center justify-between">
+          <div
+            className="
+              rounded-lg border
+              border-emerald-300/70 dark:border-emerald-800/70
+              bg-emerald-50/80 dark:bg-emerald-900/20
+              p-3 flex items-center justify-between
+            "
+          >
             <div className="text-sm">
               <strong>Visibilidad:</strong> Mostrar prestaciones en la publicación
             </div>
@@ -852,7 +1312,6 @@ export default function JobWizard({
             </label>
           </div>
 
-          {/* Tarjetas con inputs alineados a la derecha */}
           <div className="mt-3 grid sm:grid-cols-2 gap-3">
             {BENEFITS.map((b) => {
               const checked = !!benefits[b.key];
@@ -860,7 +1319,15 @@ export default function JobWizard({
                 setBenefits((prev) => ({ ...prev, [b.key]: val }));
 
               return (
-                <div key={b.key} className="rounded-md border p-3">
+                <div
+                  key={b.key}
+                  className="
+                    rounded-md border
+                    border-zinc-200/70 dark:border-zinc-800/70
+                    bg-white/60 dark:bg-zinc-900/40
+                    p-3
+                  "
+                >
                   <div className="flex items-center gap-2">
                     <input
                       id={`benefit-${b.key}`}
@@ -881,7 +1348,7 @@ export default function JobWizard({
                         <input
                           type="number"
                           min={0}
-                          className="w-20 rounded border p-1 text-sm"
+                          className="w-20 rounded border border-zinc-300 bg-white p-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
                           value={aguinaldoDias}
                           onChange={(e) => setAguinaldoDias(Number(e.target.value || 0))}
                         />
@@ -894,7 +1361,7 @@ export default function JobWizard({
                         <input
                           type="number"
                           min={0}
-                          className="w-20 rounded border p-1 text-sm"
+                          className="w-20 rounded border border-zinc-300 bg-white p-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
                           value={vacacionesDias}
                           onChange={(e) => setVacacionesDias(Number(e.target.value || 0))}
                         />
@@ -908,7 +1375,7 @@ export default function JobWizard({
                           type="number"
                           min={0}
                           max={100}
-                          className="w-20 rounded border p-1 text-sm"
+                          className="w-20 rounded border border-zinc-300 bg-white p-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
                           value={primaVacPct}
                           onChange={(e) => setPrimaVacPct(Number(e.target.value || 0))}
                         />
@@ -934,359 +1401,416 @@ export default function JobWizard({
         </section>
       )}
 
-      {/* Paso 4 */}
+      {/* Paso 4 con Tabs reales */}
       {step === 4 && (
-        <section className="grid gap-4 rounded-xl border p-4">
-          <div className="flex items-start justify-between">
-            <div className="space-y-1">
-              <h3 className="font-semibold">4) Descripción, educación y skills</h3>
-              <p className="text-xs text-zinc-500">Cuéntanos del rol y perfila lo que necesitas</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <CharProgress current={description.replace(/\s+/g, "").length} />
+        <section
+          className="
+            grid gap-4 rounded-2xl
+            border border-zinc-200/70 dark:border-zinc-800/70
+            bg-white/70 dark:bg-zinc-900/50 backdrop-blur
+            p-4 md:p-6
+          "
+        >
+          {/* Tabs */}
+          <div className="flex items-center gap-2">
+            {[
+              { k: "desc", lbl: "Descripción" },
+              { k: "skills", lbl: "Skills / Certs" },
+              { k: "edu", lbl: "Educación" },
+            ].map((t) => (
               <button
-                type="button"
-                className="text-xs rounded border px-2 py-1 hover:bg-gray-50"
-                onClick={handleSuggestFromDesc}
-                title="Sugerir skills y educación desde la descripción"
+                key={t.k}
+                className={clsx(
+                  "rounded-md px-3 py-1.5",
+                  tab4 === (t.k as any)
+                    ? "bg-emerald-600 text-white"
+                    : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                )}
+                onClick={() => setTab4(t.k as any)}
               >
-                Sugerir desde descripción
+                {t.lbl}
               </button>
-            </div>
+            ))}
           </div>
 
-          {/* Descripción */}
-          <div className="grid gap-1">
-            <label className="text-sm">Descripción de la vacante *</label>
-            <textarea
-              className="min-h-[140px] rounded-md border p-3"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Describe la posición, equipo, retos, etc."
-            />
-            <div className={clsx("text-xs", canNext4 ? "text-emerald-600" : "text-zinc-500")}>
-              {description.replace(/\s+/g, "").length} / 50
-            </div>
-          </div>
-
-          {/* Educación — layout en 2 columnas */}
-          <div className="grid md:grid-cols-2 gap-3">
-            <div className="grid gap-1">
-              <label className="text-sm">Nivel mínimo</label>
-              <select
-                className="rounded-md border p-2"
-                value={minDegree}
-                onChange={(e) => setMinDegree(e.target.value as DegreeLevel)}
+          {/* DESCRIPCIÓN */}
+          {tab4 === "desc" && (
+            <div className="grid gap-2">
+              <label className="text-sm">Descripción de la vacante *</label>
+              <RichTextBox
+                valueHtml={descriptionHtml}
+                onChangeHtml={(html, plain) => {
+                  setDescriptionHtml(html);
+                  setDescriptionPlain(plain);
+                }}
+              />
+              <div
+                className={clsx(
+                  "text-xs",
+                  descLength < 20 && "text-red-500",
+                  descLength >= 20 && descLength < 50 && "text-amber-600",
+                  descLength >= 50 && "text-emerald-600"
+                )}
               >
-                <option value="HIGHSCHOOL">Bachillerato</option>
-                <option value="TECH">Técnico</option>
-                <option value="BACHELOR">Licenciatura / Ingeniería</option>
-                <option value="MASTER">Maestría</option>
-                <option value="PHD">Doctorado</option>
-              </select>
+                {descLength} / 50
+              </div>
             </div>
+          )}
 
-            <div className="grid gap-1">
-              <label className="text-sm">Agregar educación (programa / carrera)</label>
-              <div className="relative">
-                <input
-                  className="w-full rounded-md border p-2"
-                  placeholder="Ej. Ingeniería en Sistemas, Maestría en TI…"
-                  value={educationQuery}
-                  onChange={(e) => setEducationQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if ((e.key === "Enter" || e.key === "Tab") && educationQuery.trim()) {
-                      e.preventDefault();
-                      const req =
-                        e.metaKey || e.ctrlKey ? !educationAddAsRequired : educationAddAsRequired;
-                      addEducation(filteredEducation[0] || educationQuery.trim(), req);
-                    }
-                  }}
-                  onPaste={handleEduBulkPaste}
-                  aria-autocomplete="list"
-                  aria-expanded={!!educationQuery}
-                />
+          {/* SKILLS / CERTS */}
+          {tab4 === "skills" && (
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm">Skills / Lenguajes</label>
+                </div>
 
-                {educationQuery && (
-                  <div className="absolute z-10 mt-1 max-h-72 w-full overflow-auto rounded-md border bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
-                    {/* Opción para agregar el texto tal cual */}
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
-                      onClick={() => addEducation(educationQuery.trim(), educationAddAsRequired)}
+                <div className="relative">
+                  <input
+                    className="w-full rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                    placeholder="Busca (ej. Python, AWS, React Native...) y presiona Enter"
+                    value={skillQuery}
+                    onChange={(e) => setSkillQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === "Tab") && skillQuery.trim()) {
+                        e.preventDefault();
+                        addSkillByName(
+                          filteredSkills[0] || skillQuery.trim(),
+                          "req"
+                        );
+                      }
+                    }}
+                    aria-autocomplete="list"
+                    aria-expanded={!!skillQuery}
+                  />
+                  {skillQuery && (
+                    <div
+                      className="
+                        absolute z-20 mt-1 max-h-60 w-full overflow-auto
+                        rounded-md border border-zinc-200 dark:border-zinc-800
+                        bg-white dark:bg-zinc-900 shadow-lg
+                      "
                     >
-                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border">
-                        +
-                      </span>
-                      Agregar “{educationQuery.trim()}”
-                      <span className="ml-auto text-xs text-zinc-500">
-                        {educationAddAsRequired ? "Obligatoria" : "Deseable"}
-                      </span>
-                    </button>
+                      {filteredSkills.length === 0 ? (
+                        <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
+                      ) : (
+                        filteredSkills.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                            onClick={() => addSkillByName(s, "req")}
+                            role="option"
+                          >
+                            {s}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
 
-                    {/* Sugerencias del catálogo */}
-                    {filteredEducation.length === 0 ? (
-                      <div className="px-3 py-2 text-sm text-zinc-500">Sin resultados</div>
-                    ) : (
-                      filteredEducation.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
-                          onClick={() => addEducation(s, educationAddAsRequired)}
-                          role="option"
-                        >
-                          {s}
-                        </button>
-                      ))
-                    )}
+                {/* bins */}
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onDropSkills(e, "req")}
+                    className="rounded-md border border-zinc-200/70 bg-white/60 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/40"
+                  >
+                    <p className="mb-2 text-xs font-medium text-zinc-600">Obligatoria</p>
+                    <div className="flex flex-wrap gap-2 min-h-[32px]">
+                      {requiredSkills.length === 0 ? (
+                        <span className="text-xs text-zinc-400">Arrastra aquí</span>
+                      ) : (
+                        requiredSkills.map((name) => (
+                          <span
+                            key={name}
+                            draggable
+                            onDragStart={(e) =>
+                              onDragStart(e, { kind: "skill", name, from: "req" })
+                            }
+                            className="
+                              inline-flex items-center gap-2 rounded-full border
+                              border-zinc-200 bg-zinc-50 px-3 py-1 text-xs
+                              dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200
+                            "
+                          >
+                            {name}
+                            <button
+                              type="button"
+                              className="text-zinc-500 hover:text-red-600"
+                              onClick={() =>
+                                setRequiredSkills((p) => p.filter((x) => x !== name))
+                              }
+                              title="Quitar"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
                   </div>
+
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => onDropSkills(e, "nice")}
+                    className="rounded-md border border-zinc-200/70 bg-white/60 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/40"
+                  >
+                    <p className="mb-2 text-xs font-medium text-zinc-600">Deseable</p>
+                    <div className="flex flex-wrap gap-2 min-h-[32px]">
+                      {niceSkills.length === 0 ? (
+                        <span className="text-xs text-zinc-400">Sin elementos</span>
+                      ) : (
+                        niceSkills.map((name) => (
+                          <span
+                            key={name}
+                            draggable
+                            onDragStart={(e) =>
+                              onDragStart(e, { kind: "skill", name, from: "nice" })
+                            }
+                            className="
+                              inline-flex items-center gap-2 rounded-full border
+                              border-zinc-200 bg-zinc-50 px-3 py-1 text-xs
+                              dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200
+                            "
+                          >
+                            {name}
+                            <button
+                              type="button"
+                              className="text-zinc-500 hover:text-red-600"
+                              onClick={() =>
+                                setNiceSkills((p) => p.filter((x) => x !== name))
+                              }
+                              title="Quitar"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Certificaciones */}
+              <div className="grid gap-2">
+                <label className="text-sm">Certificaciones (opcional)</label>
+                <div className="relative">
+                  <input
+                    className="w-full rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                    placeholder="Busca y selecciona (ej. AWS SAA, CCNA...)"
+                    value={certQuery}
+                    onChange={(e) => setCertQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if ((e.key === "Enter" || e.key === "Tab") && certQuery.trim()) {
+                        e.preventDefault();
+                        addCert(filteredCerts[0] || certQuery.trim());
+                      }
+                    }}
+                    aria-autocomplete="list"
+                    aria-expanded={!!certQuery}
+                  />
+                  {certQuery && (
+                    <div
+                      className="
+                        absolute z-20 mt-1 max-h-60 w-full overflow-auto
+                        rounded-md border border-zinc-200 dark:border-zinc-800
+                        bg-white dark:bg-zinc-900 shadow-lg
+                      "
+                    >
+                      {filteredCerts.length === 0 ? (
+                        <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
+                      ) : (
+                        filteredCerts.map((c) => (
+                          <button
+                            key={c}
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                            onClick={() => addCert(c)}
+                            role="option"
+                          >
+                            {c}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {certs.length ? (
+                  <div className="flex flex-wrap gap-2">
+                    {certs.map((c) => (
+                      <span
+                        key={c}
+                        className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                      >
+                        {c}
+                        <button
+                          type="button"
+                          className="text-zinc-500 hover:text-red-600"
+                          onClick={() => setCerts((p) => p.filter((x) => x !== c))}
+                          title="Quitar"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-500">Opcional.</p>
                 )}
               </div>
+            </div>
+          )}
 
-              <div className="mt-1 flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={educationAddAsRequired}
-                    onChange={(e) => setEducationAddAsRequired(e.target.checked)}
-                  />
-                  Agregar como <b>{educationAddAsRequired ? "Obligatoria" : "Deseable"}</b>
-                </label>
-                <span className="text-xs text-zinc-500">
-                  Tip: <kbd>Enter</kbd> agrega; <kbd>Ctrl/⌘+Enter</kbd> agrega como{" "}
-                  {educationAddAsRequired ? "Deseable" : "Obligatoria"}.
-                </span>
+          {/* EDUCACIÓN */}
+          {tab4 === "edu" && (
+            <div className="grid gap-2">
+              <div className="grid md:grid-cols-2 gap-3">
+                <div className="grid gap-1">
+                  <label className="text-sm">Nivel mínimo</label>
+                  <select
+                    className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                    value={minDegree}
+                    onChange={(e) => setMinDegree(e.target.value as DegreeLevel)}
+                  >
+                    <option value="HIGHSCHOOL">Bachillerato</option>
+                    <option value="TECH">Técnico</option>
+                    <option value="BACHELOR">Licenciatura / Ingeniería</option>
+                    <option value="MASTER">Maestría</option>
+                    <option value="PHD">Doctorado</option>
+                  </select>
+                </div>
+
+                <div className="grid gap-1">
+                  <label className="text-sm">Agregar educación (programa / carrera)</label>
+                  <div className="relative">
+                    <input
+                      className="w-full rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                      placeholder="Ej. Ingeniería en Sistemas, Maestría en TI... (Enter agrega)"
+                      value={educationQuery}
+                      onChange={(e) => setEducationQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if ((e.key === "Enter" || e.key === "Tab") && educationQuery.trim()) {
+                          e.preventDefault();
+                          addEduByName(
+                            filteredEducation[0] || educationQuery.trim(),
+                            "req"
+                          );
+                        }
+                      }}
+                      aria-autocomplete="list"
+                      aria-expanded={!!educationQuery}
+                    />
+                    {educationQuery && (
+                      <div
+                        className="
+                          absolute z-20 mt-1 max-h-72 w-full overflow-auto
+                          rounded-md border border-zinc-200 dark:border-zinc-800
+                          bg-white dark:bg-zinc-900 shadow-lg
+                        "
+                      >
+                        {filteredEducation.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-zinc-500">
+                            Sin resultados
+                          </div>
+                        ) : (
+                          filteredEducation.map((s) => (
+                            <button
+                              key={s}
+                              type="button"
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                              onClick={() => addEduByName(s, "req")}
+                              role="option"
+                            >
+                              {s}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Sugeridos (chips) */}
-          <div className="grid gap-2">
-            <span className="text-xs font-medium text-zinc-600">Sugeridos</span>
-            <div className="flex flex-wrap gap-2">
-              {EDUCATION_SUGGESTIONS.slice(0, 12).map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => addEducation(s, educationAddAsRequired)}
-                  className="rounded-full border px-3 py-1 text-xs hover:bg-gray-50"
-                  title="Agregar"
+              {/* bins educación */}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => onDropEdu(e, "req")}
+                  className="rounded-md border border-zinc-200/70 bg-white/60 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/40"
                 >
-                  {s}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Seleccionados (grupos Req/Dese) */}
-          <div className="grid sm:grid-cols-2 gap-3">
-            {[
-              { title: "Obligatoria", filter: (e: any) => e.required },
-              { title: "Deseable", filter: (e: any) => !e.required },
-            ].map(({ title, filter }) => (
-              <div key={title} className="rounded-md border p-3">
-                <p className="text-xs font-medium text-zinc-600 mb-2">{title}</p>
-                <div className="flex flex-wrap gap-2 min-h-[32px]">
-                  {education.filter(filter).length === 0 ? (
-                    <span className="text-xs text-zinc-400">Sin elementos</span>
-                  ) : (
-                    education
-                      .filter(filter)
-                      .map((e) => (
+                  <p className="mb-2 text-xs font-medium text-zinc-600">Obligatoria</p>
+                  <div className="flex flex-wrap gap-2 min-h-[32px]">
+                    {eduRequired.length === 0 ? (
+                      <span className="text-xs text-zinc-400">Sin elementos</span>
+                    ) : (
+                      eduRequired.map((name) => (
                         <span
-                          key={e.name}
-                          className={clsx(
-                            "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
-                            e.required
-                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                              : "glass-card p-4 md:p-6"
-                          )}
+                          key={name}
+                          draggable
+                          onDragStart={(e) =>
+                            onDragStart(e, { kind: "edu", name, from: "req" })
+                          }
+                          className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
                         >
-                          <span className="truncate max-w-[220px]" title={e.name}>
-                            {e.name}
-                          </span>
+                          {name}
                           <button
                             type="button"
-                            className={clsx(
-                              "rounded-full px-2 py-0.5 text-[11px] border",
-                              e.required
-                                ? "bg-emerald-600 text-white border-emerald-600"
-                                : "glass-card p-4 md:p-6"
-                            )}
-                            onClick={() => toggleEducationType(e.name)}
-                            title={`Mover a ${e.required ? "Deseable" : "Obligatoria"}`}
-                          >
-                            {e.required ? "Req" : "Dese"}
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-full border px-2 py-0.5 text-[11px] hover:bg-red-50 hover:text-red-600"
-                            onClick={() => removeEducation(e.name)}
+                            className="text-zinc-500 hover:text-red-600"
+                            onClick={() =>
+                              setEduRequired((p) => p.filter((x) => x !== name))
+                            }
                             title="Quitar"
                           >
                             ×
                           </button>
                         </span>
                       ))
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Skills */}
-          <div className="grid gap-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm">Skills / Lenguajes</label>
-              <label className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={addAsRequired}
-                  onChange={(e) => setAddAsRequired(e.target.checked)}
-                />
-                Agregar como <b>{addAsRequired ? "Obligatoria" : "Deseable"}</b>
-              </label>
-            </div>
-
-            <div className="relative">
-              <input
-                className="w-full rounded-md border p-2"
-                placeholder="Busca (ej. Python, AWS, React Native...) y selecciona"
-                value={skillQuery}
-                onChange={(e) => setSkillQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.key === "Enter" || e.key === "Tab") && skillQuery.trim()) {
-                    e.preventDefault();
-                    const req = e.metaKey || e.ctrlKey ? !addAsRequired : addAsRequired;
-                    addSkill(filteredSkills[0] || skillQuery.trim(), req);
-                  }
-                }}
-                onPaste={handleSkillBulkPaste}
-                aria-autocomplete="list"
-                aria-expanded={!!skillQuery}
-              />
-              {skillQuery && (
-                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
-                  {filteredSkills.length === 0 ? (
-                    <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
-                  ) : (
-                    filteredSkills.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
-                        onClick={() => addSkill(s, addAsRequired)}
-                        role="option"
-                      >
-                        {s}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {skills.length ? (
-              <div className="flex flex-wrap gap-2">
-                {skills.map((s) => (
-                  <span
-                    key={s.name}
-                    className={clsx(
-                      "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs",
-                      s.required
-                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                        : "glass-card p-4 md:p-6"
                     )}
-                  >
-                    {s.name}
-                    <label className="flex items-center gap-1">
-                      <input
-                        type="checkbox"
-                        checked={s.required}
-                        onChange={() => toggleSkillType(s.name)}
-                      />
-                      Obligatoria
-                    </label>
-                    <button
-                      type="button"
-                      className="text-red-600"
-                      onClick={() => removeSkill(s.name)}
-                      title="Quitar"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-zinc-500">Aún no has agregado skills.</p>
-            )}
-          </div>
-
-          {/* Certificaciones */}
-          <div className="grid gap-2">
-            <label className="text-sm">Certificaciones (opcional)</label>
-            <div className="relative">
-              <input
-                className="w-full rounded-md border p-2"
-                placeholder="Busca y selecciona (ej. AWS SAA, CCNA...)"
-                value={certQuery}
-                onChange={(e) => setCertQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.key === "Enter" || e.key === "Tab") && certQuery.trim()) {
-                    e.preventDefault();
-                    addCert(filteredCerts[0] || certQuery.trim());
-                  }
-                }}
-                aria-autocomplete="list"
-                aria-expanded={!!certQuery}
-              />
-              {certQuery && (
-                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
-                  {filteredCerts.length === 0 ? (
-                    <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
-                  ) : (
-                    filteredCerts.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
-                        onClick={() => addCert(c)}
-                        role="option"
-                      >
-                        {c}
-                      </button>
-                    ))
-                  )}
+                  </div>
                 </div>
-              )}
-            </div>
 
-            {certs.length ? (
-              <div className="flex flex-wrap gap-2">
-                {certs.map((c) => (
-                  <span
-                    key={c}
-                    className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs"
-                  >
-                    {c}
-                    <button
-                      type="button"
-                      className="text-red-600"
-                      onClick={() => removeCert(c)}
-                      title="Quitar"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => onDropEdu(e, "nice")}
+                  className="rounded-md border border-zinc-200/70 bg-white/60 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/40"
+                >
+                  <p className="mb-2 text-xs font-medium text-zinc-600">Deseable</p>
+                  <div className="flex flex-wrap gap-2 min-h-[32px]">
+                    {eduNice.length === 0 ? (
+                      <span className="text-xs text-zinc-400">Sin elementos</span>
+                    ) : (
+                      eduNice.map((name) => (
+                        <span
+                          key={name}
+                          draggable
+                          onDragStart={(e) =>
+                            onDragStart(e, { kind: "edu", name, from: "nice" })
+                          }
+                          className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                        >
+                          {name}
+                          <button
+                            type="button"
+                            className="text-zinc-500 hover:text-red-600"
+                            onClick={() => setEduNice((p) => p.filter((x) => x !== name))}
+                            title="Quitar"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <p className="text-xs text-zinc-500">Opcional.</p>
-            )}
-          </div>
+            </div>
+          )}
 
+          {/* Navegación */}
           <div className="flex justify-between">
             <button className="rounded-md border px-4 py-2" onClick={() => setStep(3)}>
               Atrás
@@ -1305,9 +1829,16 @@ export default function JobWizard({
         </section>
       )}
 
-      {/* Paso 5 */}
+      {/* Paso 5 (Revisión) */}
       {step === 5 && (
-        <section className="grid gap-4 rounded-xl border p-4">
+        <section
+          className="
+            grid gap-4 rounded-2xl
+            border border-zinc-200/70 dark:border-zinc-800/70
+            bg-white/70 dark:bg-zinc-950/50 backdrop-blur
+            p-4 md:p-6
+          "
+        >
           <h3 className="font-semibold">5) Revisión y publicación</h3>
 
           <div className="grid gap-3 text-sm">
@@ -1316,7 +1847,9 @@ export default function JobWizard({
             </div>
             <div>
               <strong>Empresa:</strong>{" "}
-              {companyMode === "confidential" ? "Confidencial" : presetCompany?.name || "Mi empresa"}
+              {companyMode === "confidential"
+                ? "Confidencial"
+                : presetCompany?.name || "Mi empresa"}
             </div>
             <div>
               <strong>Ubicación:</strong>{" "}
@@ -1348,7 +1881,8 @@ export default function JobWizard({
                 {Object.entries(benefits)
                   .filter(([, v]) => v)
                   .map(([k]) => {
-                    if (k === "aguinaldo") return <li key={k}>Aguinaldo: {aguinaldoDias} días</li>;
+                    if (k === "aguinaldo")
+                      return <li key={k}>Aguinaldo: {aguinaldoDias} días</li>;
                     if (k === "vacaciones")
                       return <li key={k}>Vacaciones: {vacacionesDias} días</li>;
                     if (k === "primaVac")
@@ -1361,7 +1895,10 @@ export default function JobWizard({
 
             <div>
               <strong>Descripción:</strong>
-              <div className={reviewBox}>{description || "—"}</div>
+              <div
+                className={`${reviewBox} prose prose-zinc dark:prose-invert`}
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(descriptionHtml) }}
+              />
             </div>
 
             <div>
@@ -1369,29 +1906,32 @@ export default function JobWizard({
             </div>
             <div>
               <strong>Formación académica:</strong>{" "}
-              {education.length
-                ? education.map((e) => `${e.required ? "Req" : "Dese"}: ${e.name}`).join(", ")
-                : "—"}
+              {[
+                ...eduRequired.map((n) => `Req: ${n}`),
+                ...eduNice.map((n) => `Dese: ${n}`),
+              ].join(", ") || "—"}
             </div>
 
             <div>
               <strong>Skills:</strong>{" "}
-              {skills.length
-                ? skills.map((s) => `${s.required ? "Req" : "Dese"}: ${s.name}`).join(", ")
-                : "—"}
+              {[
+                ...requiredSkills.map((n) => `Req: ${n}`),
+                ...niceSkills.map((n) => `Dese: ${n}`),
+              ].join(", ") || "—"}
             </div>
             <div>
               <strong>Certificaciones:</strong> {certs.length ? certs.join(", ") : "—"}
             </div>
           </div>
 
-          {error && (
-            <div className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="sticky bottom-0 mt-2 -mx-4 border-t glass-card p-4 md:p-6">
+          <div
+            className="
+              sticky bottom-0 mt-2 -mx-4
+              border-t border-zinc-200/70 dark:border-zinc-800/70
+              bg-white/80 dark:bg-zinc-950/50 backdrop-blur
+              p-4 md:p-6
+            "
+          >
             <div className="flex justify-between">
               <button className="rounded-md border px-4 py-2" onClick={() => setStep(4)}>
                 Atrás
@@ -1417,6 +1957,9 @@ export default function JobWizard({
   );
 }
 
+/* =============================
+   Helpers de labels
+============================= */
 function labelEmployment(e: EmploymentType) {
   switch (e) {
     case "FULL_TIME":

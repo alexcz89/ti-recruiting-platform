@@ -1,3 +1,4 @@
+// app/dashboard/overview/page.tsx
 import { prisma } from "@/lib/prisma";
 import { getSessionCompanyId } from "@/lib/session";
 import Link from "next/link";
@@ -49,7 +50,7 @@ export default async function OverviewPage() {
       : Promise.resolve(null),
     prisma.company.findUnique({
       where: { id: companyId },
-      select: { id: true, name: true, size: true, logoUrl: true }, // 👈 traemos logo
+      select: { id: true, name: true, size: true, logoUrl: true },
     }),
   ]);
 
@@ -91,7 +92,7 @@ export default async function OverviewPage() {
       employmentType: true,
       remote: true,
       updatedAt: true,
-      company: { select: { name: true, logoUrl: true } }, // 👈 logo por vacante
+      company: { select: { name: true, logoUrl: true } },
       _count: { select: { applications: true } },
     },
   });
@@ -100,16 +101,16 @@ export default async function OverviewPage() {
 
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-10 space-y-10">
+      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-4 space-y-6">
         {/* Header */}
-        <div className="sticky top-16 z-30 -mx-2 px-2">
+        <div className="sticky top-12 z-30">
           <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border glass-card p-4 md:p-6">
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold leading-tight">Overview</h1>
+              <h1 className="text-3xl font-bold leading-tight text-default">Overview</h1>
 
-              {/* 👇 Badge con logo + nombre de la empresa */}
+              {/* Badge con logo + nombre de la empresa */}
               {company?.logoUrl && (
-                <span className="inline-flex items-center gap-2 badge border ">
+                <span className="inline-flex items-center gap-2 badge">
                   <Image
                     src={company.logoUrl}
                     alt={company?.name ?? "Logo"}
@@ -117,32 +118,29 @@ export default async function OverviewPage() {
                     height={20}
                     className="h-5 w-5 rounded-sm object-contain"
                   />
-                  <span className="text-zinc-700">{company?.name}</span>
+                  <span className="text-default">{company?.name}</span>
                 </span>
               )}
             </div>
 
             <div className="flex items-center gap-2">
-              <Link
-                href="/dashboard/jobs/new"
-                className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm hover:bg-emerald-700"
-              >
+              <Link href="/dashboard/jobs/new" className="btn btn-primary">
                 + Publicar vacante
               </Link>
-              <Link
-                href="/dashboard/jobs"
-                className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
-              >
+              <Link href="/dashboard/jobs" className="btn-ghost">
                 Administrar vacantes
+              </Link>
+              <Link href="/dashboard/billing" className="btn-ghost">
+                Facturación y plan
               </Link>
             </div>
           </header>
         </div>
 
-        {/* 🔔 Banner si el correo NO está verificado */}
+        {/* Banner si el correo NO está verificado */}
         {emailUnverified && <BannerEmailUnverified />}
 
-        {/* ✅ Checklist de configuración */}
+        {/* Checklist de configuración */}
         <SetupChecklist
           user={{ name: (session?.user as any)?.name ?? null }}
           profile={profile}
@@ -154,7 +152,7 @@ export default async function OverviewPage() {
           <KpiCard label="Vacantes abiertas" value={nf(openJobs)} tone="emerald" />
           <KpiCard label="Postulaciones totales" value={nf(appsTotal)} tone="blue" />
           <KpiCard label="Postulaciones últimos 7 días" value={nf(apps7d)} tone="violet" />
-          <KpiCard label="Candidatos registrados" value={nf(candidates)} />
+          <KpiCard label="Candidatos registrados" value={nf(candidates)} tone="zinc" />
         </section>
 
         {/* Grids */}
@@ -162,8 +160,11 @@ export default async function OverviewPage() {
           {/* Vacantes recientes */}
           <div className="lg:col-span-8 rounded-2xl border glass-card p-4 md:p-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Vacantes recientes</h2>
-              <Link href="/dashboard/jobs" className="text-sm text-blue-600 hover:underline">
+              <h2 className="font-semibold text-default">Vacantes recientes</h2>
+              <Link
+                href="/dashboard/jobs"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
                 Ver todas →
               </Link>
             </div>
@@ -176,13 +177,13 @@ export default async function OverviewPage() {
                 ctaLabel="Publicar vacante"
               />
             ) : (
-              <ul className="divide-y">
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
                 {myJobs.map((j) => (
                   <li key={j.id} className="py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          {/* 👇 mini logo de la empresa en la línea del título */}
+                          {/* mini logo en la línea del título */}
                           {j.company?.logoUrl && (
                             <Image
                               src={j.company.logoUrl}
@@ -192,40 +193,46 @@ export default async function OverviewPage() {
                               className="h-4 w-4 rounded-sm object-contain"
                             />
                           )}
-                          <Link href={`/dashboard/jobs/${j.id}`} className="font-medium hover:underline">
+                          <Link
+                            href={`/dashboard/jobs/${j.id}`}
+                            className="font-medium hover:underline text-default"
+                          >
                             {j.title}
                           </Link>
-                          <span className="text-[11px] text-zinc-500">· {j.location ?? "—"}</span>
+                          <span className="text-[11px] text-muted">
+                            · {j.location ?? "—"}
+                          </span>
                         </div>
-                        <p className="text-xs text-zinc-600 mt-0.5">
-                          {j.employmentType ?? "—"} · {j.remote ? "Remoto" : "Presencial/Híbrido"}
+                        <p className="text-xs text-muted mt-0.5">
+                          {j.employmentType ?? "—"} ·{" "}
+                          {j.remote ? "Remoto" : "Presencial/Híbrido"}
                         </p>
-                        <p className="text-[11px] text-zinc-500 mt-1">
+                        <p className="text-[11px] text-muted mt-1">
                           Actualizada {fromNow(j.updatedAt)}
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <span className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-1 text-[11px]">
+                        <span className="inline-flex items-center rounded-full border px-2 py-1 text-[11px] badge">
                           {j._count.applications} postul.
                         </span>
                         <div className="mt-2 flex items-center gap-1">
                           <Link
                             href={`/dashboard/jobs/${j.id}`}
-                            className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
-                            title="Ver Kanban"
+                            className="btn-ghost text-xs"
+                            title="Ver Pipeline"
                           >
                             Ver
                           </Link>
                           <Link
                             href={`/dashboard/jobs/${j.id}/applications`}
-                            className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                            className="btn-ghost text-xs"
                             title="Ver candidatos"
                           >
                             Candidatos
                           </Link>
                           <Link
                             href={`/dashboard/jobs/${j.id}/edit`}
-                            className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                            className="btn-ghost text-xs"
                             title="Editar"
                           >
                             Editar
@@ -242,31 +249,48 @@ export default async function OverviewPage() {
           {/* Postulaciones recientes */}
           <div className="lg:col-span-4 rounded-2xl border glass-card p-4 md:p-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold">Postulaciones recientes</h2>
-              <Link href="/dashboard/applications" className="text-sm text-blue-600 hover:underline">
+              <h2 className="font-semibold text-default">Postulaciones recientes</h2>
+              <Link
+                href="/dashboard/applications"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
                 Ver todas →
               </Link>
             </div>
 
             {recent.length === 0 ? (
-              <EmptyState title="Sin postulaciones" body="Cuando lleguen postulaciones las verás aquí." />
+              <EmptyState
+                title="Sin postulaciones"
+                body="Cuando lleguen postulaciones las verás aquí."
+              />
             ) : (
-              <div className="overflow-x-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 text-left text-zinc-600">
-                    <tr>
-                      <th className="py-2 px-3">Candidato</th>
-                      <th className="py-2 px-3">Email</th>
-                      <th className="py-2 px-3">Vacante</th>
-                      <th className="py-2 px-3">Fecha</th>
+              <div className="overflow-x-auto rounded-xl soft-panel p-0 border-0">
+                <table className="w-full min-w-[720px] text-sm">
+                  <thead className="text-left">
+                    <tr className="text-muted">
+                      <th className="py-2.5 px-3.5 font-medium">Candidato</th>
+                      <th className="py-2.5 px-3.5 font-medium">Email</th>
+                      <th className="py-2.5 px-3.5 font-medium">Vacante</th>
+                      <th className="py-2.5 px-3.5 font-medium">Fecha</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {recent.map((r) => (
-                      <tr key={r.id} className="border-t">
-                        <td className="py-2 px-3">{r.candidate?.name || "—"}</td>
-                        <td className="py-2 px-3">{r.candidate?.email || "—"}</td>
-                        <td className="py-2 px-3">
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {recent.map((r, idx) => (
+                      <tr
+                        key={r.id}
+                        className={`transition hover:bg-zinc-50 dark:hover:bg-zinc-900/40 ${
+                          idx % 2 === 1
+                            ? "bg-zinc-50/50 dark:bg-zinc-900/30"
+                            : ""
+                        }`}
+                      >
+                        <td className="py-2.5 px-3.5 text-default">
+                          {r.candidate?.name || "—"}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-default whitespace-nowrap">
+                          {r.candidate?.email || "—"}
+                        </td>
+                        <td className="py-2.5 px-3.5 text-default">
                           {r.job?.id ? (
                             <Link
                               href={`/dashboard/jobs/${r.job.id}/applications`}
@@ -277,9 +301,14 @@ export default async function OverviewPage() {
                           ) : (
                             r.job?.title ?? "—"
                           )}
-                          <span className="ml-1 text-xs text-zinc-500">({r.job?.company?.name ?? "—"})</span>
+                          <span className="ml-1 text-xs text-muted">
+                            ({r.job?.company?.name ?? "—"})
+                          </span>
                         </td>
-                        <td className="py-2 px-3" title={new Date(r.createdAt).toLocaleString()}>
+                        <td
+                          className="py-2.5 px-3.5 text-default whitespace-nowrap"
+                          title={new Date(r.createdAt).toLocaleString()}
+                        >
                           {fromNow(r.createdAt)}
                         </td>
                       </tr>
@@ -306,16 +335,20 @@ function KpiCard({
   tone?: "zinc" | "emerald" | "amber" | "blue" | "violet";
 }) {
   const tones: Record<string, string> = {
-    zinc: "border-zinc-200 glass-card p-4 md:p-6",
-    emerald: "border-emerald-200 bg-emerald-50",
-    amber: "border-amber-200 bg-amber-50",
-    blue: "border-blue-200 bg-blue-50",
-    violet: "border-violet-200 bg-violet-50",
+    zinc: "glass-card p-4 md:p-6",
+    emerald:
+      "glass-card p-4 md:p-6 border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-900/20",
+    amber:
+      "glass-card p-4 md:p-6 border-amber-300/50 dark:border-amber-400/20 bg-amber-50/60 dark:bg-amber-900/20",
+    blue:
+      "glass-card p-4 md:p-6 border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
+    violet:
+      "glass-card p-4 md:p-6 border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
   };
   return (
-    <div className={`rounded-2xl border p-6 shadow-sm hover:shadow-md transition ${tones[tone]}`}>
-      <p className="text-sm text-zinc-500">{label}</p>
-      <p className="mt-2 text-4xl font-bold text-zinc-800">{value}</p>
+    <div className={`rounded-2xl border shadow-sm hover:shadow-md transition ${tones[tone]}`}>
+      <p className="text-sm text-muted">{label}</p>
+      <p className="mt-2 text-4xl font-bold text-default">{value}</p>
     </div>
   );
 }
@@ -332,12 +365,12 @@ function EmptyState({
   ctaLabel?: string;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed p-8 text-center glass-card p-4 md:p-6">
-      <p className="text-base font-medium text-zinc-800">{title}</p>
-      {body && <p className="mt-1 text-sm text-zinc-600">{body}</p>}
+    <div className="rounded-2xl border border-dashed text-center glass-card p-6 md:p-8">
+      <p className="text-base font-medium text-default">{title}</p>
+      {body && <p className="mt-1 text-sm text-muted">{body}</p>}
       {ctaHref && ctaLabel && (
         <div className="mt-4">
-          <Link href={ctaHref} className="text-sm border rounded px-3 py-1 hover:bg-gray-50">
+          <Link href={ctaHref} className="btn-ghost text-sm">
             {ctaLabel}
           </Link>
         </div>

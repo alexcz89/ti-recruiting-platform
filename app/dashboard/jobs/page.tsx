@@ -50,7 +50,7 @@ function toggleSortLink(sp: SearchParams, field: NonNullable<SearchParams["sort"
 function sortIndicator(sp: SearchParams, field: NonNullable<SearchParams["sort"]>) {
   if (sp.sort !== field) return null;
   return (
-    <span className="ml-1 text-[10px] align-middle text-zinc-500">
+    <span className="ml-1 text-[10px] align-middle text-zinc-500 dark:text-zinc-400">
       {sp.dir === "asc" ? "▲" : "▼"}
     </span>
   );
@@ -65,9 +65,13 @@ export default async function JobsPage({
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) {
     return (
-      <main className="mx-auto max-w-[1600px] px-6 lg:px-10 py-10">
-        <h2 className="text-2xl font-bold mb-2">Vacantes</h2>
-        <p className="text-sm text-zinc-500">No hay empresa asociada a tu sesión.</p>
+      <main className="max-w-none p-0">
+        <div className="mx-auto max-w-[1600px] px-6 lg:px-10 py-10">
+          <h2 className="text-2xl font-bold mb-2">Vacantes</h2>
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">
+            No hay empresa asociada a tu sesión.
+          </p>
+        </div>
       </main>
     );
   }
@@ -177,180 +181,237 @@ export default async function JobsPage({
   });
 
   return (
-    <main className="mx-auto max-w-[1600px] px-6 lg:px-10 py-10 space-y-6">
-      {/* Header */}
+    <main className="max-w-none p-0">
+      <div className="mx-auto max-w-[1600px] px-6 lg:px-10 py-8 space-y-8">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-1">
+            <p className="text-[11px] tracking-[0.18em] uppercase text-zinc-500 dark:text-zinc-400">
+              Panel de reclutador
+            </p>
+            <h1 className="text-3xl font-bold leading-tight text-zinc-900 dark:text-zinc-50">
+              Vacantes
+            </h1>
+            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+              Gestiona y monitorea tus vacantes en Bolsa TI.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/jobs/new"
+            className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/80 focus-visible:ring-offset-2"
+          >
+            + Publicar vacante
+          </Link>
+        </div>
+
+        {/* Métricas rápidas */}
+        <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <MetricCard label="Abiertas" value={openCount} />
+          <MetricCard label="Pausadas/Cerradas" value={pausedCount + closedCount} />
+          <MetricCard label="Postulaciones" value={totalApplications} />
+          <MetricCard label="Por revisar" value={totalPending} accent />
+        </section>
+
+        {/* Filtros (Client Component con auto-submit) */}
+        <section className="rounded-2xl border glass-card p-4 md:p-6">
+          <JobsFilterBar
+            titleOptions={titleOptions}
+            locationOptions={uniqueLocations}
+            sp={sp}
+            dateWindows={DATE_WINDOWS.map(({ value, label }) => ({ value, label }))}
+          />
+        </section>
+
+        {/* Tabla */}
+        {sorted.length === 0 ? (
+          <div className="rounded-2xl border border-dashed glass-card p-8 text-center">
+            <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
+              No hay vacantes con esos filtros
+            </p>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+              Ajusta los filtros o crea una nueva vacante.
+            </p>
+            <div className="mt-4">
+              <Link
+                href="/dashboard/jobs/new"
+                className="text-sm border rounded-full px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-900"
+              >
+                Publicar vacante
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border glass-card p-0">
+            <div className="overflow-x-auto rounded-2xl">
+              <table className="w-full text-sm min-w-[960px]">
+                <thead className="bg-gray-50/90 dark:bg-zinc-900/70 text-left text-zinc-600 dark:text-zinc-300 sticky top-0 z-10 backdrop-blur">
+                  <tr>
+                    <th className="py-3.5 px-4 w-[40%]">
+                      <a href={toggleSortLink(sp, "title")} className="inline-flex items-center">
+                        Vacante {sortIndicator(sp, "title")}
+                      </a>
+                    </th>
+                    <th className="py-3.5 px-4 text-center">
+                      <a href={toggleSortLink(sp, "total")} className="inline-flex items-center">
+                        Postulaciones {sortIndicator(sp, "total")}
+                      </a>
+                    </th>
+                    <th className="py-3.5 px-4 text-center">
+                      <a href={toggleSortLink(sp, "pending")} className="inline-flex items-center">
+                        Por revisar {sortIndicator(sp, "pending")}
+                      </a>
+                    </th>
+                    <th className="py-3.5 px-4">
+                      <a
+                        href={toggleSortLink(sp, "createdAt")}
+                        className="inline-flex items-center"
+                      >
+                        Fecha {sortIndicator(sp, "createdAt")}
+                      </a>
+                    </th>
+                    <th className="py-3.5 px-4">
+                      <a href={toggleSortLink(sp, "status")} className="inline-flex items-center">
+                        Estatus {sortIndicator(sp, "status")}
+                      </a>
+                    </th>
+                    <th className="py-3.5 px-4 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {sorted.map((j) => {
+                    const total = j._count.applications || 0;
+                    const pending = pendingMap.get(j.id) || 0;
+
+                    return (
+                      <tr
+                        key={j.id}
+                        className="transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/70"
+                      >
+                        <td className="py-3.5 px-4 align-top">
+                          <Link
+                            href={`/dashboard/jobs/${j.id}/applications`}
+                            className="font-medium text-zinc-900 dark:text-zinc-50 hover:underline break-anywhere"
+                            title="Ver postulaciones"
+                          >
+                            {j.title}
+                          </Link>
+                          <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                            {j.remote ? "Remoto" : j.location || "—"}
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center align-top">
+                          <span className="inline-flex min-w-[2.2rem] justify-center rounded-full border bg-gray-50 px-2 py-0.5 text-[12px] text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+                            {total}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 text-center align-top">
+                          <span className="inline-flex min-w-[2.2rem] justify-center rounded-full border bg-amber-50 px-2 py-0.5 text-[12px] text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:border-amber-500/60 dark:text-amber-100">
+                            {pending}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-4 align-top text-zinc-800 dark:text-zinc-100">
+                          {new Date(j.createdAt).toLocaleDateString("es-MX", {
+                            day: "2-digit",
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </td>
+
+                        <td className="py-3.5 px-4 align-top">
+                          <AutoSubmitJobStatus
+                            jobId={j.id}
+                            defaultValue={j.status}
+                            updateAction={async (fd) => {
+                              "use server";
+                              const companyId2 = await getSessionCompanyId().catch(() => null);
+                              if (!companyId2) return;
+                              const jobId = String(fd.get("jobId") || "");
+                              const nextStatus = String(fd.get("status") || "");
+                              if (!jobId || !nextStatus) return;
+                              await prisma.job.update({
+                                where: { id: jobId, companyId: companyId2 },
+                                data: { status: nextStatus as any },
+                              });
+                            }}
+                            labels={STATUS_LABEL}
+                          />
+                        </td>
+
+                        <td className="py-3.5 px-4 align-top">
+                          <div className="flex items-center justify-end">
+                            <JobActionsMenu
+                              jobId={j.id}
+                              editHref={`/dashboard/jobs/${j.id}/edit`}
+                              applicationsHref={`/dashboard/jobs/${j.id}/applications`}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex items-center justify-between px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400 border-t border-zinc-100 dark:border-zinc-800">
+              <span>
+                Mostrando <strong>{sorted.length}</strong> vacante
+                {sorted.length === 1 ? "" : "s"}
+              </span>
+              <span>Página 1 / 1</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+/* ─────────────────── Subcomponentes métricas ─────────────────── */
+
+function MetricCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: number;
+  accent?: boolean;
+}) {
+  return (
+    <article className="rounded-2xl border glass-card p-4 md:p-6 flex flex-col justify-between">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold leading-tight">Vacantes</h1>
-          <p className="text-sm text-zinc-600">Gestiona y monitorea tus vacantes.</p>
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
+            {label}
+          </p>
+          <p
+            className={`mt-1 text-2xl font-semibold ${
+              accent ? "text-emerald-600 dark:text-emerald-300" : "text-zinc-900 dark:text-zinc-50"
+            }`}
+          >
+            {value}
+          </p>
         </div>
-        <Link
-          href="/dashboard/jobs/new"
-          className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm hover:bg-emerald-700"
-        >
-          + Publicar vacante
-        </Link>
+        {accent && (
+          <span className="inline-flex h-7 items-center rounded-full bg-emerald-500/10 px-3 text-[11px] font-medium text-emerald-700 border border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-100">
+            Prioritario
+          </span>
+        )}
       </div>
-
-      {/* Métricas rápidas */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="rounded-2xl border glass-card p-4 md:p-6">
-          <p className="text-xs text-zinc-500">Abiertas</p>
-          <p className="mt-1 text-2xl font-semibold">{openCount}</p>
-        </div>
-        <div className="rounded-2xl border glass-card p-4 md:p-6">
-          <p className="text-xs text-zinc-500">Pausadas/Cerradas</p>
-          <p className="mt-1 text-2xl font-semibold">{pausedCount + closedCount}</p>
-        </div>
-        <div className="rounded-2xl border glass-card p-4 md:p-6">
-          <p className="text-xs text-zinc-500">Postulaciones</p>
-          <p className="mt-1 text-2xl font-semibold">{totalApplications}</p>
-        </div>
-        <div className="rounded-2xl border glass-card p-4 md:p-6">
-          <p className="text-xs text-zinc-500">Por revisar</p>
-          <p className="mt-1 text-2xl font-semibold">{totalPending}</p>
-        </div>
-      </section>
-
-      {/* Filtros (Client Component con auto-submit) */}
-      <section className="rounded-2xl border glass-card p-4 md:p-6">
-        <JobsFilterBar
-          titleOptions={titleOptions}
-          locationOptions={uniqueLocations}
-          sp={sp}
-          dateWindows={DATE_WINDOWS.map(({ value, label }) => ({ value, label }))}
-        />
-      </section>
-
-      {/* Tabla */}
-      {sorted.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-8 text-center glass-card p-4 md:p-6">
-          <p className="text-base font-medium text-zinc-800">No hay vacantes con esos filtros</p>
-          <p className="mt-1 text-sm text-zinc-600">Ajusta los filtros o crea una nueva vacante.</p>
-          <div className="mt-4">
-            <Link href="/dashboard/jobs/new" className="text-sm border rounded px-3 py-1 hover:bg-gray-50">
-              Publicar vacante
-            </Link>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border glass-card p-4 md:p-6">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-left text-zinc-600 sticky top-0 z-10">
-                <tr>
-                  <th className="py-3 px-4 w-[40%]">
-                    <a href={toggleSortLink(sp, "title")} className="inline-flex items-center">
-                      Vacante {sortIndicator(sp, "title")}
-                    </a>
-                  </th>
-                  <th className="py-3 px-4 text-center">
-                    <a href={toggleSortLink(sp, "total")} className="inline-flex items-center">
-                      Postulaciones {sortIndicator(sp, "total")}
-                    </a>
-                  </th>
-                  <th className="py-3 px-4 text-center">
-                    <a href={toggleSortLink(sp, "pending")} className="inline-flex items-center">
-                      Por revisar {sortIndicator(sp, "pending")}
-                    </a>
-                  </th>
-                  <th className="py-3 px-4">
-                    <a href={toggleSortLink(sp, "createdAt")} className="inline-flex items-center">
-                      Fecha {sortIndicator(sp, "createdAt")}
-                    </a>
-                  </th>
-                  <th className="py-3 px-4">
-                    <a href={toggleSortLink(sp, "status")} className="inline-flex items-center">
-                      Estatus {sortIndicator(sp, "status")}
-                    </a>
-                  </th>
-                  <th className="py-3 px-4 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((j) => {
-                  const total = j._count.applications || 0;
-                  const pending = pendingMap.get(j.id) || 0;
-
-                  return (
-                    <tr key={j.id} className="border-t">
-                      <td className="py-3 px-4 align-top">
-                        <Link
-                          href={`/dashboard/jobs/${j.id}/applications`}
-                          className="font-medium hover:underline"
-                          title="Ver postulaciones"
-                        >
-                          {j.title}
-                        </Link>
-                        <div className="text-xs text-zinc-500 mt-0.5">
-                          {j.remote ? "Remoto" : j.location || "—"}
-                        </div>
-                      </td>
-
-                      <td className="py-3 px-4 text-center align-top">
-                        <span className="inline-flex justify-center rounded-full border bg-gray-50 px-2 py-0.5 text-[12px]">
-                          {total}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4 text-center align-top">
-                        <span className="inline-flex justify-center rounded-full border bg-amber-50 px-2 py-0.5 text-[12px] text-amber-800 border-amber-200">
-                          {pending}
-                        </span>
-                      </td>
-
-                      <td className="py-3 px-4 align-top">
-                        {new Date(j.createdAt).toLocaleDateString("es-MX", {
-                          day: "2-digit",
-                          month: "long",
-                          year: "numeric",
-                        })}
-                      </td>
-
-                      <td className="py-3 px-4 align-top">
-                        <AutoSubmitJobStatus
-                          jobId={j.id}
-                          defaultValue={j.status}
-                          updateAction={async (fd) => {
-                            "use server";
-                            const companyId2 = await getSessionCompanyId().catch(() => null);
-                            if (!companyId2) return;
-                            const jobId = String(fd.get("jobId") || "");
-                            const nextStatus = String(fd.get("status") || "");
-                            if (!jobId || !nextStatus) return;
-                            await prisma.job.update({
-                              where: { id: jobId, companyId: companyId2 },
-                              data: { status: nextStatus as any },
-                            });
-                          }}
-                          labels={STATUS_LABEL}
-                        />
-                      </td>
-
-                      <td className="py-3 px-4 align-top">
-                        <div className="flex items-center justify-end">
-                          <JobActionsMenu
-                            jobId={j.id}
-                            editHref={`/dashboard/jobs/${j.id}/edit`}
-                            applicationsHref={`/dashboard/jobs/${j.id}/applications`}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="flex items-center justify-between px-4 py-3 text-xs text-zinc-500 border-t glass-card p-4 md:p-6">
-            <span>
-              Mostrando <strong>{sorted.length}</strong> vacante{sorted.length === 1 ? "" : "s"}
-            </span>
-            <span>Página 1 / 1</span>
-          </div>
-        </div>
-      )}
-    </main>
+      <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+        {label === "Abiertas" &&
+          "Vacantes activas recibiendo postulaciones."}
+        {label === "Pausadas/Cerradas" &&
+          "Vacantes que ya no reciben nuevas postulaciones."}
+        {label === "Postulaciones" &&
+          "Total de CVs recibidos en todas tus vacantes."}
+        {label === "Por revisar" &&
+          "Candidatos marcados como pendientes por revisar."}
+      </p>
+    </article>
   );
 }

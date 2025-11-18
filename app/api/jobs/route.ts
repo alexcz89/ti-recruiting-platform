@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/session";
+import { PLANS, type PlanId } from "@/config/plans";
 import {
   EmploymentType,
   JobStatus,
@@ -9,7 +10,9 @@ import {
   LocationType,
 } from "@prisma/client";
 
-// Helpers
+/* -------------------------------------------------
+   Helpers
+--------------------------------------------------*/
 function getFormString(fd: FormData, key: string): string {
   const v = fd.get(key);
   return (typeof v === "string" ? v : v?.toString() || "").trim();
@@ -22,7 +25,14 @@ function getFormNumber(fd: FormData, key: string): number | null {
 }
 function getFormBool(fd: FormData, key: string): boolean {
   const v = getFormString(fd, key).toLowerCase();
-  return v === "true" || v === "1" || v === "on" || v === "yes" || v === "sí" || v === "si";
+  return (
+    v === "true" ||
+    v === "1" ||
+    v === "on" ||
+    v === "yes" ||
+    v === "sí" ||
+    v === "si"
+  );
 }
 function getFormJSON<T>(fd: FormData, key: string): T | null {
   const raw = getFormString(fd, key);
@@ -34,11 +44,14 @@ function getFormJSON<T>(fd: FormData, key: string): T | null {
   }
 }
 
+/* -------------------------------------------------
+   GET /api/jobs
+--------------------------------------------------*/
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
 
-    // -------- Detalle por ID --------
+    /* ---------- Detalle por ID ---------- */
     const id = searchParams.get("id");
     if (id) {
       const job = await prisma.job.findFirst({
@@ -74,27 +87,33 @@ export async function GET(req: NextRequest) {
           company: { select: { name: true, logoUrl: true } },
         },
       });
+
       if (!job) return NextResponse.json({ job: null });
 
-      // Si es confidencial: NO exponer objeto de compañía ni logos
+      // Si es confidencial, ocultamos el objeto de compañía
       const companyObj = job.companyConfidential
         ? null
         : job.company
-        ? { name: job.company.name ?? null, logoUrl: job.company.logoUrl ?? null }
+        ? {
+            name: job.company.name ?? null,
+            logoUrl: job.company.logoUrl ?? null,
+          }
         : null;
 
       return NextResponse.json({
         job: {
           id: job.id,
           title: job.title,
-          // Texto “Confidencial” solo para mostrar; el objeto va en companyObj
           company: job.companyConfidential
             ? "Confidencial"
             : companyObj?.name ?? null,
-
-          companyObj, // <- objeto solo si NO es confidencial
-          companyLogoUrl: job.companyConfidential ? null : companyObj?.logoUrl ?? null,
-          logoUrl: job.companyConfidential ? null : companyObj?.logoUrl ?? null,
+          companyObj,
+          companyLogoUrl: job.companyConfidential
+            ? null
+            : companyObj?.logoUrl ?? null,
+          logoUrl: job.companyConfidential
+            ? null
+            : companyObj?.logoUrl ?? null,
 
           location: job.location,
           locationType: job.locationType,
@@ -107,7 +126,6 @@ export async function GET(req: NextRequest) {
           employmentType: job.employmentType,
           description: job.description,
 
-          // para compatibilidad y también estructurado
           skills: job.skills,
           skillsJson: job.skillsJson,
           educationJson: job.educationJson,
@@ -127,21 +145,26 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // -------- Lista + filtros --------
+    /* ---------- Listado ---------- */
     const limit = Math.min(parseInt(searchParams.get("limit") || "10", 10), 50);
     const cursor = searchParams.get("cursor") ?? undefined;
 
     const q = (searchParams.get("q") || "").trim();
     const location = (searchParams.get("location") || "").trim();
-
     const remoteParam = searchParams.get("remote");
+
     const remote =
-      remoteParam === "true" ? true : remoteParam === "false" ? false : undefined;
+      remoteParam === "true"
+        ? true
+        : remoteParam === "false"
+        ? false
+        : undefined;
 
     const employmentType = (searchParams.get("employmentType") ||
-      "") as "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP" | "";
+      "") as EmploymentType | "";
 
-    const sort = (searchParams.get("sort") as "recent" | "updated") || "recent";
+    const sort =
+      (searchParams.get("sort") as "recent" | "updated") || "recent";
 
     const where: any = { status: JobStatus.OPEN };
 
@@ -152,6 +175,7 @@ export async function GET(req: NextRequest) {
         { skills: { hasSome: [q] } },
       ];
     }
+
     if (location) {
       where.OR = [
         ...(where.OR || []),
@@ -161,11 +185,14 @@ export async function GET(req: NextRequest) {
         { country: { contains: location, mode: "insensitive" } },
       ];
     }
+
     if (remote !== undefined) where.remote = remote;
     if (employmentType) where.employmentType = employmentType;
 
     const orderBy =
-      sort === "updated" ? [{ updatedAt: "desc" as const }] : [{ createdAt: "desc" as const }];
+      sort === "updated"
+        ? [{ updatedAt: "desc" }]
+        : [{ createdAt: "desc" }];
 
     const page = await prisma.job.findMany({
       where,
@@ -205,12 +232,16 @@ export async function GET(req: NextRequest) {
       return {
         id: j.id,
         title: j.title,
-
-        company: j.companyConfidential ? "Confidencial" : companyObj?.name ?? null,
-        companyObj, // solo si NO es confidencial
-        companyLogoUrl: j.companyConfidential ? null : companyObj?.logoUrl ?? null,
-        logoUrl: j.companyConfidential ? null : companyObj?.logoUrl ?? null,
-
+        company: j.companyConfidential
+          ? "Confidencial"
+          : companyObj?.name ?? null,
+        companyObj,
+        companyLogoUrl: j.companyConfidential
+          ? null
+          : companyObj?.logoUrl ?? null,
+        logoUrl: j.companyConfidential
+          ? null
+          : companyObj?.logoUrl ?? null,
         location: j.location,
         locationType: j.locationType,
         country: j.country,
@@ -236,19 +267,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items, nextCursor });
   } catch (err) {
     console.error("[GET /api/jobs]", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
 
-/**
- * POST /api/jobs
- * Crea una vacante…
- */
+/* -------------------------------------------------
+   POST /api/jobs — Crear vacante
+--------------------------------------------------*/
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionOrThrow();
-    // @ts-ignore
-    const role = session.user?.role as "RECRUITER" | "ADMIN" | string | undefined;
+
+    const role = session.user?.role as
+      | "RECRUITER"
+      | "ADMIN"
+      | string
+      | undefined;
+
     if (role !== "RECRUITER" && role !== "ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -268,21 +306,37 @@ export async function POST(req: NextRequest) {
     const incomingJobId = getFormString(formData, "jobId");
     if (incomingJobId) {
       return NextResponse.json(
-        { error: "Esta operación es de edición. Usa el endpoint de actualización." },
+        {
+          error:
+            "Esta operación es de edición. Usa el endpoint de actualización.",
+        },
         { status: 409 }
       );
     }
 
+    /* ---------- Campos ---------- */
     const title = getFormString(formData, "title");
     const description = getFormString(formData, "description");
-    let employmentType = getFormString(formData, "employmentType") as EmploymentType;
-    const locationType = (getFormString(formData, "locationType") || "ONSITE") as LocationType;
+    let employmentType = getFormString(
+      formData,
+      "employmentType"
+    ) as EmploymentType;
+
+    const locationType = (getFormString(formData, "locationType") ||
+      "ONSITE") as LocationType;
 
     if (!title || !description) {
-      return NextResponse.json({ error: "Faltan campos obligatorios" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Faltan campos obligatorios" },
+        { status: 400 }
+      );
     }
 
-    if (!["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"].includes(employmentType)) {
+    if (
+      !["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"].includes(
+        employmentType
+      )
+    ) {
       employmentType = "FULL_TIME";
     }
 
@@ -291,10 +345,17 @@ export async function POST(req: NextRequest) {
     const admin1 = getFormString(formData, "admin1") || null;
     const cityNorm = getFormString(formData, "cityNorm") || null;
     const admin1Norm = getFormString(formData, "admin1Norm") || null;
+
     const locationLat = getFormNumber(formData, "locationLat");
     const locationLng = getFormNumber(formData, "locationLng");
-    const safeLat = Number.isFinite(locationLat as number) ? (locationLat as number) : null;
-    const safeLng = Number.isFinite(locationLng as number) ? (locationLng as number) : null;
+
+    const safeLat = Number.isFinite(locationLat as number)
+      ? (locationLat as number)
+      : null;
+    const safeLng = Number.isFinite(locationLng as number)
+      ? (locationLng as number)
+      : null;
+
     const remote = locationType === "REMOTE";
 
     const currency = getFormString(formData, "currency") || "MXN";
@@ -302,7 +363,11 @@ export async function POST(req: NextRequest) {
     const salaryMax = getFormNumber(formData, "salaryMax");
     const showSalary = getFormBool(formData, "showSalary");
 
-    if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
+    if (
+      salaryMin != null &&
+      salaryMax != null &&
+      salaryMin > salaryMax
+    ) {
       return NextResponse.json(
         { error: "El sueldo mínimo no puede ser mayor que el sueldo máximo." },
         { status: 400 }
@@ -312,8 +377,11 @@ export async function POST(req: NextRequest) {
     const schedule = getFormString(formData, "schedule") || null;
     const showBenefits = getFormBool(formData, "showBenefits");
     const benefitsJson = getFormJSON<any>(formData, "benefitsJson");
+
     const educationJson = getFormJSON<any>(formData, "educationJson");
-    const minDegree = (getFormString(formData, "minDegree") || null) as EducationLevel | null;
+    const minDegree = (getFormString(formData, "minDegree") ||
+      null) as EducationLevel | null;
+
     const skillsJson = getFormJSON<any>(formData, "skillsJson");
     const certsJson = getFormJSON<any>(formData, "certsJson");
 
@@ -330,7 +398,11 @@ export async function POST(req: NextRequest) {
     const companyMode = getFormString(formData, "companyMode"); // "own" | "confidential"
     const companyConfidential = companyMode === "confidential";
 
+    /* -------------------------------------------------
+       🔁 ANTI-DUPLICADOS (antes del límite del plan)
+    --------------------------------------------------*/
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
+
     const existing = await prisma.job.findFirst({
       where: {
         status: JobStatus.OPEN,
@@ -341,15 +413,62 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true },
     });
+
     if (existing) {
-      return NextResponse.json({ ok: true, id: existing.id, deduped: true });
+      return NextResponse.json({
+        ok: true,
+        id: existing.id,
+        deduped: true,
+      });
     }
 
+    /* -------------------------------------------------
+       🔐 LÍMITE DE VACANTES POR PLAN
+    --------------------------------------------------*/
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { billingPlan: true },
+    });
+
+    const billingPlan = (company?.billingPlan as PlanId | undefined) ?? "FREE";
+
+    const plan =
+      PLANS.find((p) => p.id === billingPlan) ??
+      PLANS.find((p) => p.id === "FREE") ??
+      PLANS[0];
+
+    const maxActiveJobs = plan.limits.maxActiveJobs;
+
+    const activeJobsCount = await prisma.job.count({
+      where: { companyId, status: JobStatus.OPEN },
+    });
+
+    if (maxActiveJobs !== null && activeJobsCount >= maxActiveJobs) {
+      return NextResponse.json(
+        {
+          error: `Has alcanzado el límite de ${maxActiveJobs} vacantes activas para tu plan (${plan.name}).`,
+          code: "PLAN_LIMIT_REACHED",
+          planId: plan.id,
+          currentActiveJobs: activeJobsCount,
+          maxActiveJobs,
+        },
+        { status: 402 }
+      );
+    }
+
+    /* -------------------------------------------------
+       Crear la vacante
+    --------------------------------------------------*/
     const job = await prisma.job.create({
       data: {
         title,
         description,
-        location: locationType === "REMOTE" ? "Remoto" : city ? city : "—",
+        location:
+          locationType === "REMOTE"
+            ? "Remoto"
+            : city
+            ? city
+            : "—",
         locationType,
         locationLat: safeLat ?? undefined,
         locationLng: safeLng ?? undefined,
@@ -361,7 +480,6 @@ export async function POST(req: NextRequest) {
 
         remote,
         employmentType,
-
         schedule,
         benefitsJson: benefitsJson ?? undefined,
         showBenefits,
@@ -387,6 +505,9 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
 
+    /* -------------------------------------------------
+       Guardar plantilla (JobTemplate)
+    --------------------------------------------------*/
     try {
       const payloadForTemplate = {
         title,
@@ -413,9 +534,8 @@ export async function POST(req: NextRequest) {
         _v: 1,
       };
 
-      const companyIdTpl = companyId;
       const existingTpl = await prisma.jobTemplate.findFirst({
-        where: { companyId: companyIdTpl, title },
+        where: { companyId, title },
         select: { id: true },
       });
 
@@ -431,7 +551,7 @@ export async function POST(req: NextRequest) {
       } else {
         await prisma.jobTemplate.create({
           data: {
-            companyId: companyIdTpl,
+            companyId,
             title,
             payload: payloadForTemplate,
             creatorId: userId,
@@ -446,6 +566,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, id: job.id });
   } catch (err) {
     console.error("[POST /api/jobs]", err);
-    return NextResponse.json({ error: "Error al crear la vacante" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error al crear la vacante" },
+      { status: 500 }
+    );
   }
 }

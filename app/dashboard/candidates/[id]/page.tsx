@@ -176,9 +176,9 @@ export default async function CandidateDetailPage({
               <Link
                 href={`/dashboard/jobs/${fromJobId}`}
                 className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
-                title="Abrir Kanban"
+                title="Abrir Pipeline"
               >
-                Ver Kanban
+                Ver Pipeline
               </Link>
             </>
           )}

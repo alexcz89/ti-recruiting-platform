@@ -76,9 +76,7 @@ function AuthArea() {
         <>
           <Link
             href="/dashboard/jobs/new"
-            className="
-              btn btn-primary h-9 px-3 md:h-9 md:px-3.5
-            "
+            className="btn btn-primary h-9 px-3 md:h-9 md:px-3.5"
           >
             Publicar vacante
           </Link>
@@ -126,10 +124,15 @@ function AuthArea() {
   );
 }
 
-/** Menú de login/signup con hover */
+/** Menú de login/signup con hover (fix: “puente” anti-gap + focus-within) */
 function AuthHoverMenu() {
   return (
-    <div className="group relative">
+    <div
+      className="
+        group relative
+        before:absolute before:inset-x-0 before:top-full before:h-2 before:content-['']
+      "
+    >
       <button
         className="
           btn btn-ghost h-9 px-3
@@ -145,9 +148,10 @@ function AuthHoverMenu() {
       <div
         role="menu"
         className="
-          invisible absolute right-0 top-[calc(100%+6px)] z-50 w-64
+          invisible absolute right-0 top-full mt-1 z-50 w-64
           translate-y-1 opacity-0 transition
           group-hover:visible group-hover:translate-y-0 group-hover:opacity-100
+          group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100
         "
       >
         <div className="soft-panel shadow-md">

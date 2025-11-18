@@ -66,7 +66,6 @@ export default function Kanbanboard({
       if (!res.ok) {
         // revertir
         setItems(prev);
-        // opcional: toast
         console.error(res.message || "No se pudo mover");
       }
     });
@@ -77,19 +76,9 @@ export default function Kanbanboard({
   const allowDrop = (e: React.DragEvent) => e.preventDefault();
 
   return (
-    <section
-      className="
-        rounded-2xl border glass-card p-4 md:p-6
-        overflow-x-auto
-      "
-    >
-      <div
-        className="
-          grid gap-4
-          md:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-6
-          min-w-[1000px]
-        "
-      >
+    <section className="rounded-2xl border glass-card p-3 sm:p-4 overflow-x-auto">
+      {/* Contenedor horizontal de columnas */}
+      <div className="flex gap-4 lg:gap-5 min-w-[900px] pb-1">
         {statuses.map((st) => (
           <Column
             key={st}
@@ -97,11 +86,13 @@ export default function Kanbanboard({
             count={grouped[st]?.length ?? 0}
             isLoading={isPending}
             onDrop={(appId) => handleDrop(appId, st)}
+            allowDrop={allowDrop}
           >
             {(grouped[st] || []).map((card) => (
               <Card
                 key={card.id}
                 card={card}
+                jobId={jobId}
                 dragging={draggingId === card.id}
                 onDragStart={() => onDragStart(card.id)}
                 onDragEnd={onDragEnd}
@@ -120,12 +111,14 @@ export default function Kanbanboard({
     count,
     isLoading,
     onDrop,
+    allowDrop,
     children,
   }: {
     title: string;
     count: number;
     isLoading?: boolean;
     onDrop: (id: string) => void;
+    allowDrop: (e: React.DragEvent) => void;
     children: React.ReactNode;
   }) {
     const handleDrop = (e: React.DragEvent) => {
@@ -137,29 +130,37 @@ export default function Kanbanboard({
     return (
       <div
         className="
-          rounded-xl border glass-card p-4 md:p-6
-          flex flex-col
-          max-h-[72vh]
+          w-[240px] lg:w-[260px] shrink-0
+          rounded-2xl border glass-card
+          flex flex-col max-h-[72vh]
         "
         onDragOver={allowDrop}
         onDrop={handleDrop}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b glass-card p-4 md:p-6">
-          <h3 className="text-sm font-semibold">{title}</h3>
-          <span className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-0.5 text-[11px]">
+        {/* Header columna */}
+        <div className="sticky top-0 z-10 bg-[rgb(var(--card))] border-b border-zinc-100 px-3 pt-3 pb-2 flex items-center justify-between gap-2 dark:border-zinc-800">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
+            {title}
+          </h3>
+          <span className="inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full bg-zinc-100 text-[11px] font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
             {count}
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-3 space-y-3">
-          {children}
-          {count === 0 && (
-            <p className="text-xs text-zinc-500 text-center py-4">Sin candidatos</p>
+        {/* Lista de tarjetas */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+          {count === 0 ? (
+            <p className="text-[11px] text-muted text-center py-3">
+              Sin candidatos
+            </p>
+          ) : (
+            children
           )}
         </div>
 
-        <div className="border-t glass-card p-4 md:p-6">
-          {isLoading ? "Guardando cambios…" : "Arrastra tarjetas entre columnas"}
+        {/* Footer columna */}
+        <div className="px-3 pb-3 pt-2 border-t border-zinc-100 text-[10px] text-muted text-center dark:border-zinc-800">
+          {isLoading ? "Guardando cambios…" : "Arrastra candidatos para moverlos de etapa"}
         </div>
       </div>
     );
@@ -167,17 +168,23 @@ export default function Kanbanboard({
 
   function Card({
     card,
+    jobId,
     dragging,
     onDragStart,
     onDragEnd,
   }: {
     card: AppCard;
+    jobId: string;
     dragging: boolean;
     onDragStart: () => void;
     onDragEnd: () => void;
   }) {
     const when =
-      (card as any).updatedAt ? new Date((card as any).updatedAt) : card.createdAt ? new Date(card.createdAt) : null;
+      (card as any).updatedAt
+        ? new Date((card as any).updatedAt)
+        : card.createdAt
+        ? new Date(card.createdAt)
+        : null;
 
     return (
       <article
@@ -187,22 +194,28 @@ export default function Kanbanboard({
           onDragStart();
         }}
         onDragEnd={onDragEnd}
-        className={`rounded-xl border p-3 glass-card p-4 md:p-6
-          ${dragging ? "opacity-50" : ""}
-        `}
+        className={[
+          "group rounded-xl border border-zinc-200/70 bg-white px-3 py-2.5 text-xs shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
+          "hover:border-emerald-500/70 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900",
+          dragging ? "opacity-60 ring-2 ring-emerald-500/40" : "",
+        ].join(" ")}
       >
         <header className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h4 className="text-sm font-medium leading-snug break-anywhere">
+            <h4 className="text-xs font-medium leading-snug text-zinc-900 truncate max-w-[170px] dark:text-zinc-50">
               {card.candidate.name}
             </h4>
-            <p className="text-xs text-zinc-600 break-anywhere">{card.candidate.email}</p>
+            <p className="mt-0.5 text-[11px] text-zinc-500 truncate max-w-[170px] dark:text-zinc-400">
+              {card.candidate.email}
+            </p>
           </div>
+
           {card.candidate.resumeUrl ? (
             <a
               href={card.candidate.resumeUrl}
               target="_blank"
-              className="text-xs border rounded px-2 py-1 hover:bg-gray-50 shrink-0"
+              rel="noopener noreferrer"
+              className="inline-flex items-center rounded-full border border-emerald-500/60 px-2 py-0.5 text-[11px] font-medium text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-500/10 shrink-0"
               title="Ver CV"
             >
               CV
@@ -210,30 +223,35 @@ export default function Kanbanboard({
           ) : null}
         </header>
 
-        {Array.isArray(card.candidate.skills) && card.candidate.skills.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {card.candidate.skills.slice(0, 4).map((s) => (
-              <span
-                key={s}
-                className="inline-flex items-center rounded-full border bg-gray-50 px-2 py-0.5 text-[11px]"
-              >
-                {s}
-              </span>
-            ))}
-            {card.candidate.skills.length > 4 && (
-              <span className="text-[11px] text-zinc-500">+{card.candidate.skills.length - 4}</span>
-            )}
-          </div>
-        )}
+        {Array.isArray(card.candidate.skills) &&
+          card.candidate.skills.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {card.candidate.skills.slice(0, 4).map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                >
+                  {s}
+                </span>
+              ))}
+              {card.candidate.skills.length > 4 && (
+                <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                  +{card.candidate.skills.length - 4}
+                </span>
+              )}
+            </div>
+          )}
 
         {when && (
-          <p className="mt-2 text-[11px] text-zinc-500">Actualizado {fromNow(when)}</p>
+          <p className="mt-2 text-[10px] text-zinc-500 dark:text-zinc-400">
+            Actualizado {fromNow(when)}
+          </p>
         )}
 
-        <footer className="mt-2 flex items-center gap-1">
+        <footer className="mt-2 flex items-center justify-between gap-1">
           <a
             href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`}
-            className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+            className="inline-flex items-center rounded-full border border-zinc-300 px-2 py-0.5 text-[11px] text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
             title="Ver detalle del candidato"
           >
             Detalle

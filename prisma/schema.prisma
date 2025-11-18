@@ -103,6 +103,69 @@ enum LocationType {
 }
 
 // =========================
+// Plan de facturación de la empresa (para límites de vacantes)
+// =========================
+enum BillingPlan {
+  FREE
+  PRO
+  BUSINESS
+  AGENCY
+}
+
+// =========================
+// CFDI / Facturas
+// =========================
+
+enum InvoiceStatus {
+  PENDING      // Creada en tu sistema, aún sin timbrar
+  ISSUED       // Timbrada correctamente
+  CANCELED     // Cancelada en el SAT
+  ERROR        // Error al timbrar o al comunicarse con el PAC
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+
+  // Relación con la empresa que está usando Bolsa TI
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+
+  // Datos del receptor (tu cliente)
+  customerName  String
+  customerRfc   String   @db.VarChar(13)
+  customerEmail String?
+
+  // Campos CFDI típicos
+  cfdiUse       String?  @db.VarChar(5)  // p.ej. "G03"
+  paymentMethod String?  @db.VarChar(3)  // p.ej. "PUE"
+  paymentForm   String?  @db.VarChar(3)  // p.ej. "03" transferencia
+  currency      String   @default("MXN")
+
+  // Importes
+  subtotal Decimal @db.Decimal(10, 2)
+  tax      Decimal @db.Decimal(10, 2)
+  total    Decimal @db.Decimal(10, 2)
+
+  // Relación con Factura.com / CFDI
+  externalId String?      // id de factura.com (si lo maneja)
+  uuid       String? @unique // UUID del CFDI una vez timbrado
+  series     String?
+  folio      String?
+
+  // Enlaces a archivos (puedes guardarlos en S3 luego)
+  pdfUrl String?
+  xmlUrl String?
+
+  status    InvoiceStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+  issuedAt  DateTime?
+  updatedAt DateTime      @updatedAt
+
+  @@index([companyId, status])
+  @@index([uuid])
+}
+
+// =========================
 model Company {
   id      String  @id @default(cuid())
   name    String
@@ -113,10 +176,27 @@ model Company {
   logoUrl String?
   logoKey String?
 
+  // Plan de facturación actual (lo usa /api/jobs con config/plans.ts)
+  billingPlan BillingPlan @default(FREE)
+
+  // ✅ Datos fiscales para CFDI (facturación)
+  taxLegalName    String?       // Razón social
+  taxRfc          String? @db.VarChar(13)
+  taxRegime       String? @db.VarChar(3)   // Código de régimen (ej. "601", "612", etc.)
+  taxZip          String? @db.VarChar(5)   // C.P. domicilio fiscal
+  taxAddressLine1 String?                 // Calle y número
+  taxAddressLine2 String?                 // Colonia / interior / detalles
+  taxEmail        String?                 // Correo para envío de CFDI
+  cfdiUseDefault  String? @db.VarChar(5)  // Uso CFDI preferido (ej. "G03")
+  taxDataCompleted Boolean @default(false)
+
   users     User[]
   jobs      Job[]
   // 👇 back-relation para plantillas
   templates JobTemplate[] @relation("CompanyTemplates")
+
+  // 👇 back-relation con facturas CFDI
+  invoices  Invoice[]
 
   createdAt DateTime @default(now())
 }
@@ -132,7 +212,7 @@ model User {
   passwordHash String?
   role         Role     @default(CANDIDATE)
   createdAt    DateTime @default(now())
-  
+
   // ✅ nuevo (requerido por tu flujo de verificación)
   emailVerified DateTime?
 
@@ -275,10 +355,10 @@ model Job {
 
   // Publicación
   employmentType EmploymentType
-  seniority      Seniority?        // 👈 NUEVO (lo usa tu seed.ts)
-  description    String            @db.Text
-  schedule       String?           // ej. "L-V 9:00–18:00"
-  publishAt      DateTime?         // publicación programada
+  seniority      Seniority?       // 👈 NUEVO (lo usa tu seed.ts)
+  description    String   @db.Text
+  schedule       String?  // ej. "L-V 9:00–18:00"
+  publishAt      DateTime? // publicación programada
 
   // Lista simple y relación catálogo
   skills         String[]
@@ -360,6 +440,49 @@ model Application {
   @@index([status, createdAt])
   @@index([status, rejectedAt, rejectionEmailSent])
   @@index([recruiterInterest])
+}
+
+// ==========================
+// Planes de suscripción (tabla genérica, para cuando quieras Stripe, etc.)
+// ==========================
+
+model Plan {
+  id                String   @id @default(cuid())
+  name              String   // "Gratis", "Pro", etc.
+  slug              String   @unique // "free", "pro", "business", "agency"
+  monthlyPriceCents Int      // en centavos: 99900 = $999.00
+  currency          String   // "MXN"
+  maxActiveJobs     Int?     // null = ilimitado
+  maxUsers          Int?     // null = ilimitado
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id        String @id @default(cuid())
+  accountId String // o companyId, según tu modelo futuro
+  planId    String
+  plan      Plan   @relation(fields: [planId], references: [id])
+
+  status           SubscriptionStatus @default(ACTIVE)
+  startedAt        DateTime           @default(now())
+  currentPeriodEnd DateTime
+  canceledAt       DateTime?
+
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
 }
 
 // =========================
