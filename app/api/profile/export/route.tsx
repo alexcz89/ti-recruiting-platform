@@ -1,4 +1,4 @@
-// app/api/profile/export/route.ts
+// app/api/profile/export/route.tsx
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";

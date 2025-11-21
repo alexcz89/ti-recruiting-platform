@@ -1,3 +1,4 @@
+// /app/api/cv/[id]/pdf/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -39,23 +40,32 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
   if (!resume) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const me = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } });
-  if (!me || me.id !== resume.userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const me = await prisma.user.findUnique({ 
+    where: { email: session.user.email }, 
+    select: { id: true } 
+  });
+
+  if (!me || me.id !== resume.userId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const html = htmlWrapper(resume.htmlSnapshot);
 
   const browser = await puppeteer.launch({
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    headless: "new",
+    headless: true, // 👈 FIX: reemplaza "new"
   });
+
   try {
     const page = await browser.newPage();
     await page.setContent(html, { waitUntil: "networkidle0" });
+
     const pdf = await page.pdf({
       printBackground: true,
       format: "A4",
       margin: { top: "16mm", bottom: "16mm", left: "16mm", right: "16mm" },
     });
+
     await browser.close();
 
     return new NextResponse(pdf, {
@@ -65,8 +75,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         "Content-Disposition": `attachment; filename="${encodeURIComponent(resume.title || "CV")}.pdf"`,
       },
     });
+
   } catch (e) {
     try { await browser.close(); } catch {}
-    return NextResponse.json({ error: "PDF error", detail: String(e) }, { status: 500 });
+    return NextResponse.json(
+      { error: "PDF error", detail: String(e) },
+      { status: 500 }
+    );
   }
 }

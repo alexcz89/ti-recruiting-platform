@@ -32,7 +32,7 @@ export async function GET() {
         birthdate: true, // 👈 columna correcta en Prisma
         linkedin: true,
         github: true,
-        summary: true,
+        // ❌ summary eliminado: no existe en el modelo User
         highestEducationLevel: true,
         education: {
           orderBy: [{ sortIndex: "asc" }, { endDate: "desc" }],
@@ -87,11 +87,15 @@ export async function GET() {
         phone: user.phone ?? "",
         location: user.location ?? "",
         // Para birthdate sí devolvemos YYYY-MM-DD (el wizard lo transforma a dd/mm/aaaa)
-        birthDate: user.birthdate ? new Date(user.birthdate).toISOString().slice(0, 10) : "",
+        birthDate: user.birthdate
+          ? new Date(user.birthdate).toISOString().slice(0, 10)
+          : "",
         linkedin: user.linkedin ?? "",
         github: user.github ?? "",
       },
-      about: user.summary ?? "",
+      // Antes: about: user.summary ?? ""
+      // Como no hay summary en BD, lo dejamos vacío y el builder lo maneja en frontend
+      about: "",
       education: (user.education || []).map((e) => ({
         institution: e.institution ?? "",
         program: e.program ?? "",
@@ -100,7 +104,9 @@ export async function GET() {
         country: e.country ?? null,
         city: e.city ?? null,
         // 👇 ResumeWizard usa <input type="month">, le sirve YYYY-MM
-        startDate: e.startDate ? new Date(e.startDate).toISOString().slice(0, 7) : "",
+        startDate: e.startDate
+          ? new Date(e.startDate).toISOString().slice(0, 7)
+          : "",
         endDate: e.endDate ? new Date(e.endDate).toISOString().slice(0, 7) : "",
         grade: e.grade ?? null,
         description: e.description ?? null,
@@ -110,7 +116,9 @@ export async function GET() {
         company: w.company ?? "",
         role: w.role ?? "",
         // 👇 YYYY-MM para inputs type="month"
-        startDate: w.startDate ? new Date(w.startDate).toISOString().slice(0, 7) : "",
+        startDate: w.startDate
+          ? new Date(w.startDate).toISOString().slice(0, 7)
+          : "",
         endDate: w.endDate ? new Date(w.endDate).toISOString().slice(0, 7) : "",
         isCurrent: !!w.isCurrent,
         // El builder la necesita, aunque no se almacene en DB
@@ -129,7 +137,9 @@ export async function GET() {
         issuer: c.issuer ?? null,
         // Para certificados mejor YYYY-MM (coincide con input type="month")
         date: c.issuedAt ? new Date(c.issuedAt).toISOString().slice(0, 7) : "",
-        expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString().slice(0, 7) : "",
+        expiresAt: c.expiresAt
+          ? new Date(c.expiresAt).toISOString().slice(0, 7)
+          : "",
         credentialId: c.credentialId ?? null,
         url: c.url ?? null,
       })),

@@ -13,9 +13,6 @@ type Props = {
 function extractFilenameFromContentDisposition(value?: string | null): string | null {
   if (!value) return null;
   // Prioriza filename* (UTF-8) y luego filename
-  // Ejemplos:
-  //   attachment; filename="CV-Alejandro-Cerda.pdf"; filename*=UTF-8''CV-Alejandro-Cerda.pdf
-  //   attachment; filename="CV.pdf"
   const utf8Match = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(value);
   if (utf8Match?.[1]) {
     try {
@@ -51,7 +48,10 @@ async function fallbackFilename(): Promise<string> {
   }
 }
 
-export default function DownloadPdfButton({ className = "", label = "Descargar PDF" }: Props) {
+export default function DownloadPdfButton({
+  className = "",
+  label = "Descargar PDF",
+}: Props) {
   const [loading, setLoading] = useState(false);
 
   async function handleDownload() {
@@ -91,7 +91,7 @@ export default function DownloadPdfButton({ className = "", label = "Descargar P
     <button
       onClick={handleDownload}
       disabled={loading}
-      className={`inline-flex items-center gap-2 rounded-md border border-gray-300 glass-card p-4 md:p-6
+      className={`inline-flex items-center gap-2 rounded-md border border-gray-300 glass-card p-4 md:p-6 text-sm font-medium hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed ${className}`}
     >
       {loading ? (
         <>
