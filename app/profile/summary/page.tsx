@@ -300,8 +300,14 @@ export default async function ProfileSummaryPage({
                           </p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="badge">{EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level}</span>
-                          <span className="badge">{EDUCATION_STATUS_LABEL[ed.status] ?? ed.status}</span>
+                          <span className="badge">
+                            {ed.level
+                              ? (EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level)
+                              : "Sin nivel"}
+                          </span>
+                          <span className="badge">
+                            {EDUCATION_STATUS_LABEL[ed.status] ?? ed.status}
+                          </span>
                         </div>
                       </div>
                       {ed.description && <p className="text-sm text-default whitespace-pre-wrap mt-2">{ed.description}</p>}
@@ -399,14 +405,28 @@ export default async function ProfileSummaryPage({
               {candidateSkills.length > 0 ? (
                 <ul className="mt-3 space-y-3">
                   {candidateSkills.map((s) => {
-                    const pct = Math.max(0, Math.min(100, Math.round((s.level ?? 0) * 20)));
+                    const levelValue = s.level ?? 0;
+                    const pct = Math.max(0, Math.min(100, Math.round(levelValue * 20)));
+
+                    const levelLabel =
+                      s.level != null
+                        ? SKILL_LEVEL_LABEL[s.level as number] ?? `Nivel ${s.level}`
+                        : "Sin nivel";
+
                     return (
                       <li key={s.id} className="soft-panel px-3 py-2">
                         <div className="flex items-center justify-between text-sm">
                           <span className="font-medium">{s.term.label}</span>
-                          <span className="text-xs text-muted">{SKILL_LEVEL_LABEL[s.level] ?? `Nivel ${s.level}`}</span>
+                          <span className="text-xs text-muted">{levelLabel}</span>
                         </div>
-                        <div className="mt-2 progress" aria-label={`Nivel ${s.level} de 5 en ${s.term.label}`} role="progressbar" aria-valuemin={0} aria-valuemax={5} aria-valuenow={s.level ?? 0}>
+                        <div
+                          className="mt-2 progress"
+                          aria-label={`Nivel ${levelValue} de 5 en ${s.term.label}`}
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={5}
+                          aria-valuenow={levelValue}
+                        >
                           <div className="progress-bar" style={{ width: `${pct}%` }} />
                         </div>
                       </li>

@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { getSessionCompanyId } from "@/lib/session";
-import AutoSubmitJobStatus from "@/components/dashboard/AutoSubmitJobStatus";
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
 
@@ -321,32 +320,14 @@ export default async function JobsPage({
                         </td>
 
                         <td className="py-3.5 px-4 align-top">
-                          <AutoSubmitJobStatus
-                            jobId={j.id}
-                            defaultValue={j.status}
-                            updateAction={async (fd) => {
-                              "use server";
-                              const companyId2 = await getSessionCompanyId().catch(() => null);
-                              if (!companyId2) return;
-                              const jobId = String(fd.get("jobId") || "");
-                              const nextStatus = String(fd.get("status") || "");
-                              if (!jobId || !nextStatus) return;
-                              await prisma.job.update({
-                                where: { id: jobId, companyId: companyId2 },
-                                data: { status: nextStatus as any },
-                              });
-                            }}
-                            labels={STATUS_LABEL}
-                          />
+                          <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] text-zinc-700 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                            {STATUS_LABEL[j.status] || j.status}
+                          </span>
                         </td>
 
                         <td className="py-3.5 px-4 align-top">
                           <div className="flex items-center justify-end">
-                            <JobActionsMenu
-                              jobId={j.id}
-                              editHref={`/dashboard/jobs/${j.id}/edit`}
-                              applicationsHref={`/dashboard/jobs/${j.id}/applications`}
-                            />
+                            <JobActionsMenu jobId={j.id} />
                           </div>
                         </td>
                       </tr>

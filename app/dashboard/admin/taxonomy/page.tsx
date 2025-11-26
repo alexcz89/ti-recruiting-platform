@@ -24,8 +24,18 @@ function parseList(input: string): string[] {
     a.localeCompare(b, undefined, { sensitivity: "base" })
   );
 }
+
 function listToTextarea(items?: string[] | null): string {
   return (items ?? []).join("\n");
+}
+
+function slugify(label: string): string {
+  return label
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
 }
 
 export default async function TaxonomyAdminPage() {
@@ -34,17 +44,19 @@ export default async function TaxonomyAdminPage() {
   const role = (session.user as any)?.role;
   if (role !== "ADMIN") redirect("/");
 
-  // Lee valores actuales
+  // Lee valores actuales (desde lib/skills, ya adaptado a taxonomyTerm)
   const skills = await getSkillsFromDB();
   const certs = await getCertificationsFromDB();
 
-  // Timestamps (opcional)
-  const skillsMeta = await prisma.taxonomy.findUnique({
-    where: { kind: "SKILLS" },
+  // Timestamps: tomamos el último taxonomyTerm de cada kind
+  const skillsMeta = await prisma.taxonomyTerm.findFirst({
+    where: { kind: "SKILL" },
+    orderBy: { updatedAt: "desc" },
     select: { updatedAt: true },
   });
-  const certsMeta = await prisma.taxonomy.findUnique({
-    where: { kind: "CERTIFICATIONS" },
+  const certsMeta = await prisma.taxonomyTerm.findFirst({
+    where: { kind: "CERTIFICATION" },
+    orderBy: { updatedAt: "desc" },
     select: { updatedAt: true },
   });
 
@@ -56,11 +68,30 @@ export default async function TaxonomyAdminPage() {
     if ((s.user as any)?.role !== "ADMIN") return { error: "Sin permisos" };
 
     const items = parseList(String(fd.get("skills") || ""));
-    await prisma.taxonomy.upsert({
-      where: { kind: "SKILLS" },
-      update: { items },
-      create: { kind: "SKILLS", items },
+
+    // Obtenemos skills existentes para no duplicar por label
+    const existing = await prisma.taxonomyTerm.findMany({
+      where: { kind: "SKILL" },
+      select: { id: true, label: true },
     });
+    const existingSet = new Set(
+      existing.map((t) => t.label.trim().toLowerCase())
+    );
+
+    const toCreate = items.filter(
+      (label) => !existingSet.has(label.trim().toLowerCase())
+    );
+
+    if (toCreate.length) {
+      await prisma.taxonomyTerm.createMany({
+        data: toCreate.map((label) => ({
+          kind: "SKILL",
+          label,
+          slug: slugify(label),
+        })),
+        skipDuplicates: true,
+      });
+    }
 
     revalidatePath("/dashboard/admin/taxonomy");
     revalidatePath("/dashboard/jobs/new");
@@ -76,11 +107,29 @@ export default async function TaxonomyAdminPage() {
     if ((s.user as any)?.role !== "ADMIN") return { error: "Sin permisos" };
 
     const items = parseList(String(fd.get("certs") || ""));
-    await prisma.taxonomy.upsert({
-      where: { kind: "CERTIFICATIONS" },
-      update: { items },
-      create: { kind: "CERTIFICATIONS", items },
+
+    const existing = await prisma.taxonomyTerm.findMany({
+      where: { kind: "CERTIFICATION" },
+      select: { id: true, label: true },
     });
+    const existingSet = new Set(
+      existing.map((t) => t.label.trim().toLowerCase())
+    );
+
+    const toCreate = items.filter(
+      (label) => !existingSet.has(label.trim().toLowerCase())
+    );
+
+    if (toCreate.length) {
+      await prisma.taxonomyTerm.createMany({
+        data: toCreate.map((label) => ({
+          kind: "CERTIFICATION",
+          label,
+          slug: slugify(label),
+        })),
+        skipDuplicates: true,
+      });
+    }
 
     revalidatePath("/dashboard/admin/taxonomy");
     revalidatePath("/dashboard/jobs/new");
@@ -114,7 +163,6 @@ export default async function TaxonomyAdminPage() {
           )}
         </div>
 
-        {/* Client Form con RHF + Zod */}
         <SkillsFormClient
           defaultValue={listToTextarea(skills)}
           onAction={updateSkillsAction}
@@ -135,7 +183,6 @@ export default async function TaxonomyAdminPage() {
           )}
         </div>
 
-        {/* Client Form con RHF + Zod */}
         <CertsFormClient
           defaultValue={listToTextarea(certs)}
           onAction={updateCertsAction}

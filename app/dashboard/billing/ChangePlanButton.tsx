@@ -3,8 +3,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
 import type { PlanId } from "@/config/plans";
+import { toast } from "sonner";
 
 type Props = {
   planId: PlanId;

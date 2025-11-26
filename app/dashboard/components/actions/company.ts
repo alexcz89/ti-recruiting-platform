@@ -18,14 +18,18 @@ const websiteSchema = z
   .string()
   .trim()
   .min(1, "Sitio requerido")
-  .transform((v) => v.startsWith("http") ? v : `https://${v}`)
-  .url("Formato inválido, ejemplo: https://miempresa.com");
+  .url("Formato inválido, ejemplo: https://miempresa.com")
+  .transform((v) => (v.startsWith("http") ? v : `https://${v}`));
 
 /* ----------------------------------------------
  * ACTUALIZA TAMAÑO DE EMPRESA (Company.size)
  * ---------------------------------------------- */
 export async function updateCompanySize(formData: FormData) {
-  const companyId = await getSessionCompanyId();
+  const companyId = await getSessionCompanyId().catch(() => null);
+  if (!companyId) {
+    throw new Error("No hay empresa asociada en la sesión");
+  }
+
   const raw = String(formData.get("size") || "");
   const size = sizeSchema.parse(raw);
 

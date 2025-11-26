@@ -1,3 +1,4 @@
+// app/dashboard/candidates/[id]/page.tsx
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { redirect, notFound } from "next/navigation"
@@ -180,6 +181,16 @@ export default async function CandidateDetailPage({
               >
                 Ver Pipeline
               </Link>
+
+              {/* 👇 Nuevo botón: ver vacante como la ve el candidato */}
+              <Link
+                href={`/jobs/${fromJobId}`}
+                target="_blank" 
+                className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                title="Ver Vacante como candidato"
+              >
+                Ver Vacante
+                </Link>
             </>
           )}
 

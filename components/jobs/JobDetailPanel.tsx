@@ -4,6 +4,7 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import DOMPurify from "dompurify";
 import {
   Share2,
   Briefcase,
@@ -27,6 +28,8 @@ type Job = {
   employmentType?: string | null;
   seniority?: string | null;
   description?: string | null;
+  // opcionalmente, si en algún momento agregas columna extra:
+  descriptionHtml?: string | null;
   skills?: string[] | null;
 
   companyLogoUrl?: string | null;
@@ -73,7 +76,9 @@ type MetaParsed = {
   certifications?: string[] | null;
 };
 
-function parseMeta(description: string | null | undefined): {
+function parseMeta(
+  description: string | null | undefined
+): {
   meta: MetaParsed | null;
   mainDesc: string;
 } {
@@ -132,11 +137,9 @@ function Chip({
   outline?: boolean;
   className?: string;
 }) {
-  // Base del chip: tipografía y borde coherentes con claro/oscuro
   const base =
     "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium";
 
-  // Paletas (relleno suave) con buen contraste en dark
   const filled: Record<string, string> = {
     zinc: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-300/50",
     blue: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/50",
@@ -148,7 +151,6 @@ function Chip({
       "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300/50",
   };
 
-  // Paletas outline
   const outlines: Record<string, string> = {
     zinc: "border-zinc-300 text-zinc-700 dark:text-zinc-300",
     blue: "border-blue-300 text-blue-700 dark:text-blue-300",
@@ -208,14 +210,17 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     (job.updatedAt && new Date(job.updatedAt)) ||
     (job.createdAt && new Date(job.createdAt));
 
-  const { meta, mainDesc } = parseMeta(job.description);
+const rawDesc = job.description ?? "";
+const { meta, mainDesc } = parseMeta(rawDesc);
+
+// Preferimos descriptionHtml (HTML con <ul>/<ol>)
+// Si no hay, convertimos saltos de línea a <br/> para que no se vea todo corrido
+const fallbackText = (mainDesc || rawDesc).replace(/\n/g, "<br/>");
+const descHtml = (job as any).descriptionHtml || fallbackText;
 
   const companyNameRaw = (job as any).company?.name ?? job.company ?? "—";
   const companyLogoRaw =
-    (job as any).company?.logoUrl ??
-    job.companyLogoUrl ??
-    (job as any).logoUrl ??
-    null;
+    (job as any).company?.logoUrl ?? job.companyLogoUrl ?? (job as any).logoUrl ?? null;
 
   const confidential =
     (job as any).companyConfidential ??
@@ -306,7 +311,9 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
   const { req: reqSkills, nice: niceSkills } = splitSkills(job.skills);
   const haveAnySkills = reqSkills.length + niceSkills.length > 0;
 
-  const [minDegree, setMinDegree] = React.useState<DegreeLevel | null>(job.minDegree ?? null);
+  const [minDegree, setMinDegree] = React.useState<DegreeLevel | null>(
+    job.minDegree ?? null
+  );
   const [educationJson, setEducationJson] = React.useState<EduItem[]>(
     Array.isArray(job.educationJson) ? (job.educationJson as EduItem[]) : []
   );
@@ -334,13 +341,14 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     return () => {
       cancelled = true;
     };
-  }, [job.id]); // se re‐evalúa al cambiar de job
+  }, [job.id]); // se re-evalúa al cambiar de job
 
   const hasEducation = Boolean(minDegree || educationJson.length);
 
   const [copied, setCopied] = React.useState(false);
   const handleShare = async () => {
-    const url = typeof window !== "undefined" ? `${window.location.origin}/jobs/${job.id}` : "";
+    const url =
+      typeof window !== "undefined" ? `${window.location.origin}/jobs/${job.id}` : "";
     const shareData = {
       title: job.title || "Vacante",
       text: `${job.title}${showCompanyName ? ` — ${companyName}` : ""}`,
@@ -359,7 +367,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
 
   return (
     <article className="relative rounded-2xl border glass-card p-4 md:p-6">
-      {/* Toolbar superior (solo tipografía ajustada) */}
+      {/* Toolbar superior */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b glass-card p-4 md:p-6">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-medium text-default">{job.title}</h2>
@@ -421,7 +429,9 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
             )}
 
             <div className="min-w-0">
-              <h1 className="text-2xl font-semibold leading-tight text-default">{job.title}</h1>
+              <h1 className="text-2xl font-semibold leading-tight text-default">
+                {job.title}
+              </h1>
               <p className="text-sm text-muted">
                 {showCompanyName ? `${companyName} — ` : ""}
                 {job.location || "—"}
@@ -450,13 +460,18 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
             <p className="text-sm font-medium text-default mb-1">Educación</p>
             {minDegree && (
               <p className="text-sm text-muted mb-1">
-                <span className="font-medium text-default">Nivel mínimo:</span> {labelDegree(minDegree)}
+                <span className="font-medium text-default">Nivel mínimo:</span>{" "}
+                {labelDegree(minDegree)}
               </p>
             )}
             {educationJson.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {educationJson.map((e) => (
-                  <Chip key={e.name} tone={e.required ? "emerald" : "zinc"} outline={!e.required}>
+                  <Chip
+                    key={e.name}
+                    tone={e.required ? "emerald" : "zinc"}
+                    outline={!e.required}
+                  >
                     {e.name}
                     <span className="ml-1 opacity-80">
                       ({e.required ? "Obligatoria" : "Deseable"})
@@ -507,7 +522,9 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
 
         {/* Detalles */}
         <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-          <h3 className="text-sm font-semibold text-default mb-2">Detalles de la vacante</h3>
+          <h3 className="text-sm font-semibold text-default mb-2">
+            Detalles de la vacante
+          </h3>
 
           <div className="grid sm:grid-cols-3 gap-3 rounded-xl border glass-card p-4 md:p-6">
             <div className="flex items-center gap-2 min-w-0">
@@ -526,7 +543,9 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
                 <p className="text-[11px] text-muted">Sueldo</p>
                 <p className="font-medium text-default truncate">
                   {showSalaryExplicit
-                    ? `${salaryMin?.toLocaleString() ?? "—"} – ${salaryMax?.toLocaleString() ?? "—"} ${currency}`
+                    ? `${salaryMin?.toLocaleString() ?? "—"} – ${
+                        salaryMax?.toLocaleString() ?? "—"
+                      } ${currency}`
                     : "Oculto"}
                 </p>
               </div>
@@ -552,7 +571,9 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(benefits)
-                  .filter(([_, v]) => (typeof v === "boolean" ? v : String(v).trim() !== ""))
+                  .filter(([_, v]) =>
+                    typeof v === "boolean" ? v : String(v).trim() !== ""
+                  )
                   .map(([k, v]) => (
                     <Chip key={k} outline tone="emerald">
                       {k}
@@ -575,18 +596,34 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
           )}
         </section>
 
-        {/* Descripción */}
-        {mainDesc && (
+        {/* Descripción: HTML con bullets */}
+        {descHtml && (
           <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
             <h3 className="text-sm font-semibold text-default mb-1.5">Descripción</h3>
-            <p className="text-sm leading-relaxed whitespace-pre-wrap break-anywhere text-default/90">
-              {mainDesc}
-            </p>
+            <div
+              className="job-html prose prose-sm max-w-none text-sm leading-relaxed text-default/90 dark:prose-invert"
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(descHtml, {
+                  ALLOWED_TAGS: [
+                    "b",
+                    "strong",
+                    "i",
+                    "em",
+                    "p",
+                    "br",
+                    "ul",
+                    "ol",
+                    "li",
+                  ],
+                  ALLOWED_ATTR: [],
+                }),
+              }}
+            />
           </section>
         )}
       </div>
 
-      {/* Footer fijo (sin cambios funcionales, solo tipografía coherente) */}
+      {/* Footer fijo */}
       <div className="sticky bottom-0 z-10 border-t glass-card p-4 md:p-6">
         {canApply ? (
           <form method="POST" action="/api/applications">

@@ -1,7 +1,6 @@
 // app/layout.tsx
 import "./globals.css";
 import { Inter } from "next/font/google";
-import { Toaster } from "sonner";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider"; // ⬅️ Script anti-flash de tema
@@ -21,7 +20,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${inter.className} h-full`}
     >
       <head>
-        {/* Aplica el tema (dark/light) antes de hidratar para evitar “flash” */}
         <ThemeScript />
       </head>
 
@@ -32,12 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dark:bg-gradient-to-b dark:from-[#041B1F] dark:via-[#06262C] dark:to-[#082B33] dark:text-zinc-100
         "
       >
-        {/* Proveedores globales de sesión, tema, etc. */}
         <Providers>
-          {/* HEADER (cliente, reactivo a la sesión actual) */}
           <Header />
 
-          {/* MAIN */}
           <main
             id="main-content"
             className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-4 pb-10"
@@ -45,14 +40,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </main>
 
-          {/* FOOTER */}
           <footer className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-8 text-sm text-zinc-500 dark:text-zinc-400 border-t border-zinc-200/60 dark:border-zinc-800/60">
             © {new Date().getFullYear()} Bolsa TI. Todos los derechos reservados.
           </footer>
         </Providers>
-
-        {/* Toasts globales */}
-        <Toaster richColors position="top-right" />
       </body>
     </html>
   );

@@ -1,7 +1,7 @@
 // prisma/seed-plans.ts
 import { PrismaClient } from "@prisma/client";
-// 👇 IMPORT CON EXTENSIÓN .ts (importante en ESM)
-import { PLANS } from "../config/plans.ts";
+// IMPORT SIN EXTENSIÓN .ts (TS no lo permite por defecto)
+import { PLANS } from "../config/plans";
 
 const prisma = new PrismaClient();
 
@@ -18,7 +18,7 @@ async function main() {
         monthlyPriceCents,
         currency: plan.currency,
         maxActiveJobs: plan.limits.maxActiveJobs ?? null,
-        maxUsers: plan.limits.maxRecruiters ?? null, // puedes ajustar luego
+        maxUsers: plan.limits.maxRecruiters ?? null,
       },
       create: {
         name: plan.name,

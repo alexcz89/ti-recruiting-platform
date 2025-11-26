@@ -8,6 +8,7 @@ import {
   JobStatus,
   EducationLevel,
   LocationType,
+  type Prisma, // 👈 para tipar orderBy correctamente
 } from "@prisma/client";
 
 /* -------------------------------------------------
@@ -69,6 +70,7 @@ export async function GET(req: NextRequest) {
           remote: true,
           employmentType: true,
           description: true,
+          descriptionHtml: true, // 👈 IMPORTANTE: HTML con bullets
           skills: true,
           skillsJson: true,
           educationJson: true,
@@ -124,7 +126,10 @@ export async function GET(req: NextRequest) {
           city: job.city,
           remote: job.remote,
           employmentType: job.employmentType,
+
+          // 🔹 Texto plano y HTML
           description: job.description,
+          descriptionHtml: job.descriptionHtml,
 
           skills: job.skills,
           skillsJson: job.skillsJson,
@@ -189,7 +194,8 @@ export async function GET(req: NextRequest) {
     if (remote !== undefined) where.remote = remote;
     if (employmentType) where.employmentType = employmentType;
 
-    const orderBy =
+    // 👇 Tipamos orderBy para que Prisma/TS no se quejen
+    const orderBy: Prisma.JobOrderByWithRelationInput[] =
       sort === "updated"
         ? [{ updatedAt: "desc" }]
         : [{ createdAt: "desc" }];
@@ -210,6 +216,7 @@ export async function GET(req: NextRequest) {
         remote: true,
         employmentType: true,
         description: true,
+        descriptionHtml: true, // opcional en el listado
         skills: true,
         salaryMin: true,
         salaryMax: true,
@@ -250,6 +257,7 @@ export async function GET(req: NextRequest) {
         remote: j.remote,
         employmentType: j.employmentType,
         description: j.description,
+        descriptionHtml: j.descriptionHtml,
         skills: j.skills,
         salaryMin: j.salaryMin,
         salaryMax: j.salaryMax,
@@ -316,7 +324,11 @@ export async function POST(req: NextRequest) {
 
     /* ---------- Campos ---------- */
     const title = getFormString(formData, "title");
+
+    // 👇 Texto plano y HTML
     const description = getFormString(formData, "description");
+    const descriptionHtml = getFormString(formData, "descriptionHtml");
+
     let employmentType = getFormString(
       formData,
       "employmentType"
@@ -462,7 +474,10 @@ export async function POST(req: NextRequest) {
     const job = await prisma.job.create({
       data: {
         title,
+        // 👇 Guardamos ambos
         description,
+        descriptionHtml: descriptionHtml || undefined,
+
         location:
           locationType === "REMOTE"
             ? "Remoto"
@@ -527,6 +542,7 @@ export async function POST(req: NextRequest) {
         schedule,
         benefitsJson: benefitsJson ?? {},
         description,
+        descriptionHtml: descriptionHtml || null,
         education: educationJson ?? [],
         minDegree,
         skills: Array.isArray(skillsJson) ? skillsJson : [],

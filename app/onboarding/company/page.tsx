@@ -28,15 +28,26 @@ export default function CompanyOnboardingPage() {
     defaultValues: { companyName: "", size: undefined as any },
   });
 
-  // STEP 2 form
+  // STEP 2 form — industry y description siguen existiendo en el front,
+  // pero NO se enviarán al backend porque Company no tiene esos campos.
   const form2 = useForm<OnboardingCompanyStep2Input>({
     resolver: zodResolver(OnboardingCompanyStep2Schema),
-    defaultValues: { country: "", city: "", website: "", industry: "", description: "" },
+    defaultValues: {
+      country: "",
+      city: "",
+      website: "",
+      industry: "",      // ❗ Se usa en UI, pero no se guardará en DB
+      description: "",   // ❗ Se usa en UI, pero no se guardará en DB
+    },
   });
 
   const submitStep1 = (values: OnboardingCompanyStep1Input) => {
     startTransition(async () => {
-      const res = await saveCompanyStep1(values).catch((e) => ({ ok: false, error: e?.message }));
+      const res = await saveCompanyStep1(values).catch((e) => ({
+        ok: false,
+        error: e?.message,
+      }));
+
       if ((res as any)?.ok) {
         toast.success("Empresa guardada");
         setStep(2);
@@ -48,7 +59,19 @@ export default function CompanyOnboardingPage() {
 
   const submitStep2 = (values: OnboardingCompanyStep2Input) => {
     startTransition(async () => {
-      const res = await saveCompanyStep2(values).catch((e) => ({ ok: false, error: e?.message }));
+      // 👇 limpiamos los campos que NO existen en Company
+      const payload = {
+        country: values.country,
+        city: values.city,
+        website: values.website,
+        logoUrl: undefined, // si algún día quieres añadir upload
+      };
+
+      const res = await saveCompanyStep2(payload as any).catch((e) => ({
+        ok: false,
+        error: e?.message,
+      }));
+
       if ((res as any)?.ok) {
         toast.success("¡Listo! Onboarding completado");
         router.push("/dashboard");
@@ -76,13 +99,16 @@ export default function CompanyOnboardingPage() {
       </div>
 
       {step === 1 ? (
+        /* ------------ STEP 1 ------------ */
         <form
           onSubmit={form1.handleSubmit(submitStep1)}
           className="rounded-2xl border glass-card p-4 md:p-6"
         >
           <div className="grid grid-cols-1 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium">Nombre comercial</label>
+              <label className="mb-1 block text-sm font-medium">
+                Nombre comercial
+              </label>
               <input
                 {...form1.register("companyName")}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
@@ -99,7 +125,7 @@ export default function CompanyOnboardingPage() {
               <label className="mb-1 block text-sm font-medium">Tamaño</label>
               <select
                 {...form1.register("size")}
-                className="w-full rounded-lg border px-3 py-2 text-sm glass-card p-4 md:p-6"
+                className="w-full rounded-lg border px-3 py-2 text-sm"
                 defaultValue=""
               >
                 <option value="" disabled>
@@ -112,7 +138,9 @@ export default function CompanyOnboardingPage() {
                 ))}
               </select>
               {form1.formState.errors.size && (
-                <p className="mt-1 text-xs text-red-600">{form1.formState.errors.size.message}</p>
+                <p className="mt-1 text-xs text-red-600">
+                  {form1.formState.errors.size.message}
+                </p>
               )}
             </div>
           </div>
@@ -128,11 +156,13 @@ export default function CompanyOnboardingPage() {
           </div>
         </form>
       ) : (
+        /* ------------ STEP 2 ------------ */
         <form
           onSubmit={form2.handleSubmit(submitStep2)}
           className="rounded-2xl border glass-card p-4 md:p-6"
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Country */}
             <div>
               <label className="mb-1 block text-sm font-medium">País</label>
               <input
@@ -140,11 +170,9 @@ export default function CompanyOnboardingPage() {
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 placeholder="México"
               />
-              {form2.formState.errors.country && (
-                <p className="mt-1 text-xs text-red-600">{form2.formState.errors.country.message}</p>
-              )}
             </div>
 
+            {/* City */}
             <div>
               <label className="mb-1 block text-sm font-medium">Ciudad</label>
               <input
@@ -152,25 +180,25 @@ export default function CompanyOnboardingPage() {
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 placeholder="Monterrey"
               />
-              {form2.formState.errors.city && (
-                <p className="mt-1 text-xs text-red-600">{form2.formState.errors.city.message}</p>
-              )}
             </div>
 
+            {/* Website */}
             <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium">Sitio web (opcional)</label>
+              <label className="mb-1 block text-sm font-medium">
+                Sitio web (opcional)
+              </label>
               <input
                 {...form2.register("website")}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 placeholder="https://miempresa.com"
               />
-              {form2.formState.errors.website && (
-                <p className="mt-1 text-xs text-red-600">{form2.formState.errors.website.message}</p>
-              )}
             </div>
 
+            {/* Industry – UI only */}
             <div>
-              <label className="mb-1 block text-sm font-medium">Industria (opcional)</label>
+              <label className="mb-1 block text-sm font-medium">
+                Industria (solo informativo)
+              </label>
               <input
                 {...form2.register("industry")}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
@@ -178,22 +206,21 @@ export default function CompanyOnboardingPage() {
               />
             </div>
 
+            {/* Description – UI only */}
             <div className="md:col-span-2">
-              <label className="mb-1 block text-sm font-medium">Descripción (opcional)</label>
+              <label className="mb-1 block text-sm font-medium">
+                Descripción (solo informativo)
+              </label>
               <textarea
                 {...form2.register("description")}
                 className="w-full rounded-lg border px-3 py-2 text-sm"
                 placeholder="Describe brevemente a la empresa (máx. 240 caracteres)"
                 rows={3}
               />
-              {form2.formState.errors.description && (
-                <p className="mt-1 text-xs text-red-600">
-                  {form2.formState.errors.description.message}
-                </p>
-              )}
             </div>
           </div>
 
+          {/* Footer */}
           <div className="mt-6 flex items-center justify-between gap-3">
             <button
               type="button"
@@ -206,11 +233,7 @@ export default function CompanyOnboardingPage() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => {
-                  // Permite saltar detalles → dashboard
-                  // (útil si quieres que solo Step1 sea obligatorio)
-                  window.location.href = "/dashboard";
-                }}
+                onClick={() => (window.location.href = "/dashboard")}
                 className="rounded-lg px-4 py-2 text-sm text-zinc-600 hover:underline"
               >
                 Saltar por ahora
@@ -231,15 +254,23 @@ export default function CompanyOnboardingPage() {
   );
 }
 
-function StepDot({ active, children }: { active: boolean; children: React.ReactNode }) {
+function StepDot({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex items-center gap-2">
       <div
         className={`h-2.5 w-2.5 rounded-full ${
-          active ? "bg-emerald-500" : "glass-card p-4 md:p-6"
+          active ? "bg-emerald-500" : "bg-zinc-300"
         }`}
       />
-      <span className={active ? "font-medium" : "text-zinc-500"}>{children}</span>
+      <span className={active ? "font-medium" : "text-zinc-500"}>
+        {children}
+      </span>
     </div>
   );
 }

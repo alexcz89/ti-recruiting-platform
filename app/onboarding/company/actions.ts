@@ -19,7 +19,10 @@ async function requireRecruiter() {
   if (!["RECRUITER", "ADMIN"].includes(String(user.role))) {
     throw new Error("No autorizado");
   }
-  return { userId: user.id as string, companyId: user.companyId as string | null };
+  return {
+    userId: user.id as string,
+    companyId: user.companyId as string | null,
+  };
 }
 
 /** Crea/actualiza Company con los campos mínimos y vincula al usuario si no lo está */
@@ -27,7 +30,6 @@ export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
   const { userId, companyId } = await requireRecruiter();
   const data = OnboardingCompanyStep1Schema.parse(input);
 
-  // Si ya hay companyId, actualiza; si no, crea
   let company = null as { id: string } | null;
 
   if (companyId) {
@@ -48,14 +50,13 @@ export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
       select: { id: true },
     });
 
-    // Vincula el user a la nueva compañía
     await prisma.user.update({
       where: { id: userId },
       data: { companyId: company.id },
     });
   }
 
-  // Opcional: inicializa RecruiterProfile si no existe
+  // Crear/actualizar RecruiterProfile
   await prisma.recruiterProfile
     .upsert({
       where: { userId },
@@ -66,12 +67,12 @@ export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
         status: "ACTIVE" as any,
       },
     })
-    .catch(() => { /* si no existe el modelo, ignora */ });
+    .catch(() => {});
 
   return { ok: true, companyId: company!.id };
 }
 
-/** Completa metadatos de Company (ubicación, sitio, etc.) */
+/** Completa metadatos de Company (ubicación, sitio, logo) */
 export async function saveCompanyStep2(input: OnboardingCompanyStep2Input) {
   const { userId, companyId } = await requireRecruiter();
   if (!companyId) throw new Error("No hay compañía vinculada");
@@ -83,15 +84,14 @@ export async function saveCompanyStep2(input: OnboardingCompanyStep2Input) {
     data: {
       country: data.country,
       city: data.city,
+      // Estos campos existen en tu modelo Company:
       website: data.website || undefined,
-      industry: data.industry || undefined,
-      description: data.description || undefined,
       logoUrl: data.logoUrl || undefined,
     },
     select: { id: true },
   });
 
-  // Refleja algunos datos en RecruiterProfile (si existe)
+  // Reflejar website también en RecruiterProfile
   await prisma.recruiterProfile
     .update({
       where: { userId },
@@ -99,7 +99,7 @@ export async function saveCompanyStep2(input: OnboardingCompanyStep2Input) {
         website: data.website || undefined,
       },
     })
-    .catch(() => { /* ignora si no existe */ });
+    .catch(() => {});
 
   return { ok: true, companyId: company.id };
 }

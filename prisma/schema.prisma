@@ -172,6 +172,7 @@ model Company {
   country String?
   city    String?
   domain  String?
+  website String?
   size    String?
   logoUrl String?
   logoKey String?
@@ -357,6 +358,7 @@ model Job {
   employmentType EmploymentType
   seniority      Seniority?       // 👈 NUEVO (lo usa tu seed.ts)
   description    String   @db.Text
+  descriptionHtml  String?   @db.Text
   schedule       String?  // ej. "L-V 9:00–18:00"
   publishAt      DateTime? // publicación programada
 

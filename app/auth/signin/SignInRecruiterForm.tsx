@@ -4,8 +4,8 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { recruiterSignInSchema } from "@/lib/validation/recruiter/signin";
 import { toast } from "sonner";
+import { recruiterSignInSchema } from "@/lib/validation/recruiter/signin";
 
 type Props = {
   callbackUrl?: string;

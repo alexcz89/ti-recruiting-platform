@@ -100,17 +100,26 @@ function buildE164(countryDial: string, localRaw: string): string | null {
   }
 }
 
-function buildCountryOptions() {
-  const regions = Array.from(phoneUtil.getSupportedRegions());
-  const mapped = regions.map((iso) => {
+/** ✅ Tipado explícito para opciones de país */
+type CountryOption = {
+  code: string;
+  dial: string;
+  label: string;
+};
+
+function buildCountryOptions(): CountryOption[] {
+  const regions = Array.from(phoneUtil.getSupportedRegions()) as string[];
+  const mapped: CountryOption[] = regions.map((iso) => {
     const dial = String(phoneUtil.getCountryCodeForRegion(iso));
     return { code: iso, dial, label: `${iso} (+${dial})` };
   });
   const mx = mapped.find((c) => c.code === "MX");
-  const rest = mapped.filter((c) => c.code !== "MX").sort((a, b) => a.code.localeCompare(b.code));
+  const rest = mapped
+    .filter((c) => c.code !== "MX")
+    .sort((a, b) => a.code.localeCompare(b.code));
   return mx ? [mx, ...rest] : rest;
 }
-const COUNTRY_OPTIONS = buildCountryOptions();
+const COUNTRY_OPTIONS: CountryOption[] = buildCountryOptions();
 
 // ——— Helpers fechas
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -506,7 +515,6 @@ export default function ProfileForm({
           eduFA={eduFA}
           addEducation={addEducation}
           moveEducation={moveEducation}
-          EDUCATION_LEVEL_OPTIONS={EDUCATION_LEVEL_OPTIONS}
         />
 
         {errors.root?.message && (
@@ -551,7 +559,7 @@ function SectionPersonal() {
   );
 }
 
-function SectionContact({ COUNTRY_OPTIONS, isMX }: { COUNTRY_OPTIONS: { code: string; dial: string; label: string }[]; isMX: boolean; }) {
+function SectionContact({ COUNTRY_OPTIONS, isMX }: { COUNTRY_OPTIONS: CountryOption[]; isMX: boolean; }) {
   const { register, control, setValue } = useFormContext<ProfileFormData>();
   const locationValue = useWatch({ control, name: "location" }) || "";
   return (
@@ -584,11 +592,6 @@ function SectionContact({ COUNTRY_OPTIONS, isMX }: { COUNTRY_OPTIONS: { code: st
           onChange={(v) => setValue("location", v, { shouldValidate: true })}
           countries={["mx"]}
           className="border rounded-xl p-3 w-full"
-          fetchOnMount={false}
-          openOnFocus={true}
-          minChars={2}
-          debounceMs={250}
-          debug={true}
         />
       </div>
     </section>
@@ -977,17 +980,14 @@ function SectionLanguages({
     </section>
   );
 }
-
 function SectionEducation({
   eduFA,
   addEducation,
   moveEducation,
-  EDUCATION_LEVEL_OPTIONS,
 }: {
   eduFA: ReturnType<typeof useFieldArray<ProfileFormData>>;
   addEducation: () => void;
   moveEducation: (from: number, to: number) => void;
-  EDUCATION_LEVEL_OPTIONS: typeof EDUCATION_LEVEL_OPTIONS;
 }) {
   const { register } = useFormContext<ProfileFormData>();
   return (
@@ -1009,40 +1009,79 @@ function SectionEducation({
         <div className="space-y-4">
           {eduFA.fields.map((f, idx) => {
             return (
-              <div key={f.id} className="border rounded-xl p-4 space-y-3 glass-card p-4 md:p-6">
+              <div
+                key={f.id}
+                className="border rounded-xl p-4 space-y-3 glass-card p-4 md:p-6"
+              >
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium">Entrada #{idx + 1}</div>
                   <div className="flex items-center gap-2">
-                    <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => moveEducation(idx, idx - 1)}>↑</button>
-                    <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => moveEducation(idx, idx + 1)}>↓</button>
-                    <button type="button" className="text-xs border rounded px-2 py-1 hover:bg-gray-50" onClick={() => eduFA.remove(idx)}>Eliminar</button>
+                    <button
+                      type="button"
+                      className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                      onClick={() => moveEducation(idx, idx - 1)}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                      onClick={() => moveEducation(idx, idx + 1)}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs border rounded px-2 py-1 hover:bg-gray-50"
+                      onClick={() => eduFA.remove(idx)}
+                    >
+                      Eliminar
+                    </button>
                   </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-3">
                   <div>
                     <label className="text-sm">Nivel</label>
-                    <select className="border rounded-xl p-3 w-full" {...register(`education.${idx}.level` as const)}>
+                    <select
+                      className="border rounded-xl p-3 w-full"
+                      {...register(`education.${idx}.level` as const)}
+                    >
                       <option value="">—</option>
-                      {EDUCATION_LEVEL_OPTIONS.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      {EDUCATION_LEVEL_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
                       ))}
                     </select>
                   </div>
 
                   <div>
                     <label className="text-sm">Institución *</label>
-                    <input className="border rounded-xl p-3 w-full" {...register(`education.${idx}.institution` as const)} />
+                    <input
+                      className="border rounded-xl p-3 w-full"
+                      {...register(
+                        `education.${idx}.institution` as const
+                      )}
+                    />
                   </div>
 
                   <div>
                     <label className="text-sm">Programa</label>
-                    <input className="border rounded-xl p-3 w-full" placeholder="Ej. Ingeniería en Sistemas" {...register(`education.${idx}.program` as const)} />
+                    <input
+                      className="border rounded-xl p-3 w-full"
+                      placeholder="Ej. Ingeniería en Sistemas"
+                      {...register(`education.${idx}.program` as const)}
+                    />
                   </div>
 
                   <div>
                     <label className="text-sm">Inicio</label>
-                    <input type="month" className="border rounded-xl p-3 w-full" {...register(`education.${idx}.startDate` as const)} />
+                    <input
+                      type="month"
+                      className="border rounded-xl p-3 w-full"
+                      {...register(`education.${idx}.startDate` as const)}
+                    />
                   </div>
                   <div>
                     <label className="text-sm">Fin</label>
@@ -1052,7 +1091,8 @@ function SectionEducation({
                       {...register(`education.${idx}.endDate` as const)}
                     />
                     <p className="text-[11px] text-zinc-500 mt-1">
-                      Déjalo vacío si sigues cursando (se marcará como “en curso”).
+                      Déjalo vacío si sigues cursando (se marcará como “en
+                      curso”).
                     </p>
                   </div>
                 </div>

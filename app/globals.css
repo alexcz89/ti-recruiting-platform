@@ -192,3 +192,38 @@ p, span, div {
   .stat-label { @apply text-xs text-muted; }
   .stat-value { @apply text-2xl font-semibold text-default; }
 }
+
+/* === Fix: listas dentro del JobRichTextEditor === */
+.job-editor ul {
+  list-style-type: disc !important;
+  margin-left: 1.5rem !important;
+  padding-left: 0 !important;
+}
+
+.job-editor ol {
+  list-style-type: decimal !important;
+  margin-left: 1.5rem !important;
+  padding-left: 0 !important;
+}
+
+.job-editor li {
+  margin-bottom: 0.2rem !important;
+}
+
+/* Listas dentro del contenido HTML de las vacantes */
+.job-html ul {
+  list-style-type: disc;
+  margin-left: 1.25rem;
+  padding-left: 1.25rem;
+}
+
+.job-html ol {
+  list-style-type: decimal;
+  margin-left: 1.25rem;
+  padding-left: 1.25rem;
+}
+
+.job-html li {
+  margin-top: 0.125rem;
+  margin-bottom: 0.125rem;
+}

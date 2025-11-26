@@ -18,6 +18,12 @@ function excerpt(text: string | null | undefined, max = 160) {
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
+// ——— Helper para quitar etiquetas HTML (para SEO)
+function stripHtml(html: string | null | undefined) {
+  if (!html) return "";
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 // ——— Metadata para SEO/Social
 export async function generateMetadata({ params }: Params) {
   const job = await prisma.job.findUnique({
@@ -25,7 +31,8 @@ export async function generateMetadata({ params }: Params) {
     select: {
       id: true,
       title: true,
-      description: true,
+      description: true,      // plain
+      descriptionHtml: true,  // HTML con bullets/listas
       company: { select: { name: true } },
       location: true,
     },
@@ -33,10 +40,18 @@ export async function generateMetadata({ params }: Params) {
 
   if (!job) return {};
 
-  const title = `${job.title} ${job.company?.name ? "— " + job.company.name : ""}`;
-  const description = excerpt(job.description, 160);
+  const title = `${job.title} ${
+    job.company?.name ? "— " + job.company.name : ""
+  }`;
 
-  const url = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/jobs/${job.id}`;
+  // Preferimos HTML si existe, pero lo convertimos a texto plano para SEO
+  const baseDescription =
+    job.description || stripHtml(job.descriptionHtml || "");
+  const description = excerpt(baseDescription, 160);
+
+  const url = `${
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  }/jobs/${job.id}`;
 
   return {
     title,
@@ -66,7 +81,8 @@ export default async function JobDetail({ params }: Params) {
       location: true,
       employmentType: true,
       remote: true,
-      description: true,
+      description: true,      // plain
+      descriptionHtml: true,  // HTML con bullets/listas
       skills: true,
       salaryMin: true,
       salaryMax: true,
@@ -110,7 +126,10 @@ export default async function JobDetail({ params }: Params) {
     location: job.location,
     remote: job.remote,
     employmentType: job.employmentType,
+    // plain text (legacy, por si algo lo sigue usando)
     description: job.description,
+    // HTML con bullets/listas
+    descriptionHtml: job.descriptionHtml,
     skills: job.skills ?? [],
     salaryMin: job.salaryMin ?? null,
     salaryMax: job.salaryMax ?? null,
@@ -120,7 +139,7 @@ export default async function JobDetail({ params }: Params) {
   };
 
   // 4) JSON-LD (JobPosting) básico para SEO
-  //    Nota: si manejas visibilidad de sueldo vía meta, aquí podrías omitirlo.
+  //    Usamos HTML si existe; si no, caemos al texto plano con <br/>
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "JobPosting",
@@ -142,7 +161,10 @@ export default async function JobDetail({ params }: Params) {
             },
           },
         ],
-    description: (job.description || "").replace(/\n/g, "<br/>"),
+    // Preferir HTML guardado desde el wizard
+    description:
+      job.descriptionHtml ||
+      (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
     validThrough: undefined,
     employmentType: job.employmentType,
@@ -177,8 +199,8 @@ export default async function JobDetail({ params }: Params) {
 
       <JobDetailPanel
         job={panelJob as any}
-        canApply={isCandidate} // candidatos ven “Postularme”
-        editHref={canEdit ? `/dashboard/jobs/${job.id}/edit` : undefined} // recruiters ven “Editar vacante”
+        canApply={isCandidate}
+        editHref={canEdit ? `/dashboard/jobs/${job.id}/edit` : undefined}
       />
     </main>
   );

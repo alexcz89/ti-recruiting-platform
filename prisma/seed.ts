@@ -30,7 +30,7 @@ function slugifyLabel(s: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-async function seedTaxonomy(kind: TaxonomyKind, labels: string[]) {
+async function seedTaxonomy(kind: TaxonomyKind, labels: readonly string[]) {
   const rows = labels.map((label) => ({
     kind,
     slug: slugifyLabel(label),
@@ -65,15 +65,15 @@ async function seedTaxonomy(kind: TaxonomyKind, labels: string[]) {
 }
 
 async function seedLanguages() {
-  return seedTaxonomy(TaxonomyKind.LANGUAGE, LANGUAGES_FALLBACK as string[]);
+  return seedTaxonomy(TaxonomyKind.LANGUAGE, LANGUAGES_FALLBACK);
 }
 
 async function seedSkills() {
-  return seedTaxonomy(TaxonomyKind.SKILL, ALL_SKILLS as string[]);
+  return seedTaxonomy(TaxonomyKind.SKILL, ALL_SKILLS);
 }
 
 async function seedCertifications() {
-  return seedTaxonomy(TaxonomyKind.CERTIFICATION, CERTIFICATIONS as string[]);
+  return seedTaxonomy(TaxonomyKind.CERTIFICATION, CERTIFICATIONS);
 }
 
 async function seedDemoData() {

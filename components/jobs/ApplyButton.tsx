@@ -32,6 +32,7 @@ export default function ApplyButton({
     startTransition(async () => {
       const res = await applyAction();
 
+      // ✅ Rama de éxito
       if ("ok" in res && res.ok) {
         setJustApplied(true);
         toastSuccess("Postulación enviada");
@@ -39,18 +40,26 @@ export default function ApplyButton({
         return;
       }
 
-      if (res.error === "AUTH") {
-        toastInfo("Inicia sesión como candidato para postular");
-        window.location.href = res.signinUrl;
+      // ✅ A partir de aquí solo manejamos ramas con 'error'
+      if ("error" in res) {
+        if (res.error === "AUTH") {
+          toastInfo("Inicia sesión como candidato para postular");
+          window.location.href = res.signinUrl;
+          return;
+        }
+
+        if (res.error === "ROLE") {
+          toastError(res.message || "No autorizado");
+          return;
+        }
+
+        // UNKNOWN u otros
+        toastError(res.message || "No se pudo postular");
         return;
       }
 
-      if (res.error === "ROLE") {
-        toastError(res.message || "No autorizado");
-        return;
-      }
-
-      toastError(res.message || "No se pudo postular");
+      // Fallback ultra defensivo (por si algún día cambia el tipo)
+      toastError("No se pudo postular");
     });
   };
 

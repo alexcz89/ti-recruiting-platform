@@ -2,8 +2,15 @@
 "use client";
 
 import * as React from "react";
-import { useTransition, useMemo, useState } from "react";
+import { useTransition, useMemo, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { fromNow } from "@/lib/dates";
+import {
+  DragDropContext,
+  Droppable,
+  Draggable,
+  DropResult,
+} from "@hello-pangea/dnd";
 
 type Candidate = {
   id: string;
@@ -17,6 +24,7 @@ type AppCard = {
   id: string;
   status: string;
   createdAt?: string | Date | null;
+  updatedAt?: string | Date | null;
   candidate: Candidate;
 };
 
@@ -33,11 +41,18 @@ export default function Kanbanboard({
   applications: AppCard[];
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 }) {
+  const router = useRouter();
+
   // Estado local (optimista)
   const [items, setItems] = useState<AppCard[]>(applications);
   const [isPending, startTransition] = useTransition();
-  const [draggingId, setDraggingId] = useState<string | null>(null);
 
+  // 🔄 Si cambian las aplicaciones desde el servidor, sincronizamos el estado local
+  useEffect(() => {
+    setItems(applications);
+  }, [applications]);
+
+  // Agrupar por columna
   const grouped = useMemo(() => {
     const map: Record<string, AppCard[]> = {};
     for (const st of statuses) map[st] = [];
@@ -45,62 +60,135 @@ export default function Kanbanboard({
     return map;
   }, [items, statuses]);
 
-  const handleDrop = (appId: string, toStatus: string) => {
-    if (!statuses.includes(toStatus)) return;
+  // Manejo del drop (hello-pangea/dnd)
+  const handleDragEnd = (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+    if (!destination) return;
+
+    const fromStatus = source.droppableId;
+    const toStatus = destination.droppableId;
+    const fromIndex = source.index;
+    const toIndex = destination.index;
+
+    if (fromStatus === toStatus && fromIndex === toIndex) return;
+
     const prev = items;
-    const idx = prev.findIndex((x) => x.id === appId);
-    if (idx < 0) return;
-    if (prev[idx].status === toStatus) return;
 
-    // Optimista
-    const next = [...prev];
-    next[idx] = { ...next[idx], status: toStatus };
-    setItems(next);
+    // Copia por columnas
+    const cols: Record<string, AppCard[]> = {};
+    for (const st of statuses) {
+      cols[st] = [...(grouped[st] || [])];
+    }
 
-    // Server Action
+    const sourceCol = cols[fromStatus] || [];
+    const destCol = cols[toStatus] || sourceCol;
+
+    const [moved] = sourceCol.splice(fromIndex, 1);
+    if (!moved) return;
+
+    const movedCard: AppCard = { ...moved, status: toStatus };
+    destCol.splice(toIndex, 0, movedCard);
+
+    cols[fromStatus] = sourceCol;
+    cols[toStatus] = destCol;
+
+    const nextItems = statuses.flatMap((st) => cols[st]);
+    setItems(nextItems);
+
+    // Llamar acción de servidor
     const fd = new FormData();
-    fd.set("appId", appId);
+    fd.set("appId", draggableId);
     fd.set("newStatus", toStatus);
+
     startTransition(async () => {
       const res = await moveAction(fd);
       if (!res.ok) {
-        // revertir
+        // Revertir si falla
         setItems(prev);
         console.error(res.message || "No se pudo mover");
+        return;
       }
+      router.refresh();
     });
   };
 
-  const onDragStart = (id: string) => setDraggingId(id);
-  const onDragEnd = () => setDraggingId(null);
-  const allowDrop = (e: React.DragEvent) => e.preventDefault();
-
   return (
     <section className="rounded-2xl border glass-card p-3 sm:p-4 overflow-x-auto">
-      {/* Contenedor horizontal de columnas */}
-      <div className="flex gap-4 lg:gap-5 min-w-[900px] pb-1">
-        {statuses.map((st) => (
-          <Column
-            key={st}
-            title={statusLabels[st] ?? st}
-            count={grouped[st]?.length ?? 0}
-            isLoading={isPending}
-            onDrop={(appId) => handleDrop(appId, st)}
-            allowDrop={allowDrop}
-          >
-            {(grouped[st] || []).map((card) => (
-              <Card
-                key={card.id}
-                card={card}
-                jobId={jobId}
-                dragging={draggingId === card.id}
-                onDragStart={() => onDragStart(card.id)}
-                onDragEnd={onDragEnd}
-              />
-            ))}
-          </Column>
-        ))}
-      </div>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        {/* Contenedor horizontal de columnas */}
+        <div className="flex gap-4 lg:gap-5 min-w-[900px] pb-1">
+          {statuses.map((st) => {
+            const cards = grouped[st] || [];
+
+            return (
+              <Droppable
+                key={st}
+                droppableId={st}
+                type="APPLICATION"
+                // 👇 Clon bonito mientras arrastras
+                renderClone={(provided, snapshot, rubric) => {
+                  const sourceCol =
+                    grouped[rubric.source.droppableId] || [];
+                  const card = sourceCol[rubric.source.index];
+                  if (!card) return null;
+
+                  return (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.draggableProps}
+                      {...provided.dragHandleProps}
+                      className="pointer-events-none"
+                    >
+                      <Card card={card} jobId={jobId} dragging={true} />
+                    </div>
+                  );
+                }}
+              >
+                {(droppableProvided, droppableSnapshot) => (
+                  <Column
+                    title={statusLabels[st] ?? st}
+                    count={cards.length}
+                    isLoading={isPending}
+                    isDraggingOver={droppableSnapshot.isDraggingOver}
+                    innerRef={droppableProvided.innerRef}
+                    // 👇 aflojamos el tipo para que acepte droppableProps sin pelearse con TS
+                    droppableProps={droppableProvided.droppableProps as any}
+                  >
+                    {cards.map((card, index) => (
+                      <Draggable
+                        key={card.id}
+                        draggableId={card.id}
+                        index={index}
+                      >
+                        {(draggableProvided, draggableSnapshot) => (
+                          <div
+                            ref={draggableProvided.innerRef}
+                            {...draggableProvided.draggableProps}
+                            {...draggableProvided.dragHandleProps}
+                            className={
+                              draggableSnapshot.isDragging
+                                ? "opacity-30 transition-opacity"
+                                : "opacity-100 transition-opacity"
+                            }
+                          >
+                            <Card
+                              card={card}
+                              jobId={jobId}
+                              dragging={draggableSnapshot.isDragging}
+                            />
+                          </div>
+                        )}
+                      </Draggable>
+                    ))}
+
+                    {droppableProvided.placeholder}
+                  </Column>
+                )}
+              </Droppable>
+            );
+          })}
+        </div>
+      </DragDropContext>
     </section>
   );
 
@@ -110,32 +198,30 @@ export default function Kanbanboard({
     title,
     count,
     isLoading,
-    onDrop,
-    allowDrop,
+    isDraggingOver,
+    innerRef,
+    droppableProps,
     children,
   }: {
     title: string;
     count: number;
     isLoading?: boolean;
-    onDrop: (id: string) => void;
-    allowDrop: (e: React.DragEvent) => void;
+    isDraggingOver?: boolean;
+    innerRef: (element: HTMLDivElement | null) => void;
+    // 👇 aquí estaba el problema de tipos; lo dejamos como any
+    droppableProps: any;
     children: React.ReactNode;
   }) {
-    const handleDrop = (e: React.DragEvent) => {
-      e.preventDefault();
-      const id = e.dataTransfer.getData("text/plain");
-      if (id) onDrop(id);
-    };
-
     return (
       <div
-        className="
-          w-[240px] lg:w-[260px] shrink-0
-          rounded-2xl border glass-card
-          flex flex-col max-h-[72vh]
-        "
-        onDragOver={allowDrop}
-        onDrop={handleDrop}
+        ref={innerRef}
+        {...(droppableProps as any)}
+        className={[
+          "w-[240px] lg:w-[260px] shrink-0 rounded-2xl border glass-card flex flex-col max-h-[72vh] transition-colors",
+          isDraggingOver
+            ? "border-emerald-400/70 bg-emerald-50/60 dark:bg-emerald-900/10"
+            : "",
+        ].join(" ")}
       >
         {/* Header columna */}
         <div className="sticky top-0 z-10 bg-[rgb(var(--card))] border-b border-zinc-100 px-3 pt-3 pb-2 flex items-center justify-between gap-2 dark:border-zinc-800">
@@ -160,7 +246,9 @@ export default function Kanbanboard({
 
         {/* Footer columna */}
         <div className="px-3 pb-3 pt-2 border-t border-zinc-100 text-[10px] text-muted text-center dark:border-zinc-800">
-          {isLoading ? "Guardando cambios…" : "Arrastra candidatos para moverlos de etapa"}
+          {isLoading
+            ? "Guardando cambios…"
+            : "Arrastra candidatos para moverlos de etapa"}
         </div>
       </div>
     );
@@ -170,34 +258,24 @@ export default function Kanbanboard({
     card,
     jobId,
     dragging,
-    onDragStart,
-    onDragEnd,
   }: {
     card: AppCard;
     jobId: string;
     dragging: boolean;
-    onDragStart: () => void;
-    onDragEnd: () => void;
   }) {
     const when =
-      (card as any).updatedAt
-        ? new Date((card as any).updatedAt)
+      card.updatedAt
+        ? new Date(card.updatedAt)
         : card.createdAt
         ? new Date(card.createdAt)
         : null;
 
     return (
       <article
-        draggable
-        onDragStart={(e) => {
-          e.dataTransfer.setData("text/plain", card.id);
-          onDragStart();
-        }}
-        onDragEnd={onDragEnd}
         className={[
           "group rounded-xl border border-zinc-200/70 bg-white px-3 py-2.5 text-xs shadow-[0_1px_3px_rgba(15,23,42,0.12)]",
-          "hover:border-emerald-500/70 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900",
-          dragging ? "opacity-60 ring-2 ring-emerald-500/40" : "",
+          "hover:border-emerald-500/70 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 transition-all",
+          dragging ? "ring-2 ring-emerald-500/50 scale-[1.02]" : "",
         ].join(" ")}
       >
         <header className="flex items-start justify-between gap-2">

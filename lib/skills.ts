@@ -337,14 +337,13 @@ export const SKILL_TO_BUCKET: Record<string, Bucket> = {
   // Cloud / DevOps
   AWS: "cloud", "Microsoft Azure": "cloud", "Google Cloud Platform": "cloud",
   Docker: "cloud", Kubernetes: "cloud", Helm: "cloud", Kustomize: "cloud",
-  "Istio": "cloud", "Linkerd": "cloud", "Argo CD": "cloud", "Flux CD": "cloud",
+  Istio: "cloud", Linkerd: "cloud", "Argo CD": "cloud", "Flux CD": "cloud",
   Terraform: "cloud", Pulumi: "cloud", Ansible: "cloud", Jenkins: "cloud", "GitLab CI/CD": "cloud", "GitHub Actions": "cloud",
-  Prometheus: "cloud", Grafana: "cloud", "OpenTelemetry": "cloud", ELK: "cloud", "EFK (Elasticsearch/Fluentd/Kibana)": "cloud",
-  NGINX: "cloud", "HAProxy": "cloud", Traefik: "cloud", "Bash": "cloud", PowerShell: "cloud",
-
-  // Vendor-specific (cloud)
-  GKE: "cloud", "Cloud Run": "cloud", "Cloud Functions": "cloud", "BigQuery": "cloud", "Dataflow": "cloud",
-  EKS: "cloud", ECS: "cloud", Lambda: "cloud", EC2: "cloud", S3: "cloud", RDS: "cloud", DynamoDB: "cloud",
+  Prometheus: "cloud", Grafana: "cloud", OpenTelemetry: "cloud",
+  "ELK (Elasticsearch/Logstash/Kibana)": "cloud", "EFK (Elasticsearch/Fluentd/Kibana)": "cloud",
+  NGINX: "cloud", HAProxy: "cloud", Traefik: "cloud", Bash: "cloud", PowerShell: "cloud",
+  GKE: "cloud", "Cloud Run": "cloud", "Cloud Functions": "cloud", BigQuery: "cloud", Dataflow: "cloud",
+  EKS: "cloud", ECS: "cloud", Lambda: "cloud", EC2: "cloud", S3: "cloud", RDS: "cloud",
   AKS: "cloud", "Azure DevOps": "cloud", "ARM/Bicep": "cloud",
 
   // Databases
@@ -358,7 +357,8 @@ export const SKILL_TO_BUCKET: Record<string, Bucket> = {
   PyTest: "testing", TestNG: "testing", Postman: "testing", Newman: "testing", K6: "testing", Gatling: "testing", JMeter: "testing",
 
   // Seguridad / SecOps (usa bucket cybersecurity)
-  SIEM: "cybersecurity", SOC: "cybersecurity", WAF: "cybersecurity", OWASP: "cybersecurity", SAST: "cybersecurity", DAST: "cybersecurity",
+  SIEM: "cybersecurity", SOC: "cybersecurity", WAF: "cybersecurity", OWASP: "cybersecurity",
+  SAST: "cybersecurity", DAST: "cybersecurity",
 
   // Integración / Mensajería
   Kafka: "backend", RabbitMQ: "backend", ActiveMQ: "backend", NATS: "backend", MQTT: "backend",

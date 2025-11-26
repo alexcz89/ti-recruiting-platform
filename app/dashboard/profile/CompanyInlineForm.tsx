@@ -9,7 +9,7 @@ import type { OurFileRouter } from "@/app/api/uploadthing/core";
 import {
   saveCompanyBasic,
   setCompanyLogo,
-  removeCompanyLogo, // 👈 habilitado
+  removeCompanyLogo,
 } from "@/app/dashboard/company/actions";
 
 const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
@@ -25,13 +25,15 @@ type Props = {
 export default function CompanyInlineForm({ initial }: Props) {
   const [form, setForm] = useState({
     name: initial.name || "",
-    size: initial.size || "",
-    logoUrl: initial.logoUrl || "",
+    size: initial.size ?? "",
+    logoUrl: initial.logoUrl ?? "",
   });
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const onChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const onChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value } = e.target;
     setForm((p) => ({ ...p, [name]: value }));
   };
@@ -39,7 +41,10 @@ export default function CompanyInlineForm({ initial }: Props) {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    const res = await saveCompanyBasic({ name: form.name, size: (form.size || undefined) as any });
+    const res = await saveCompanyBasic({
+      name: form.name,
+      size: (form.size || undefined) as any,
+    });
     setSaving(false);
     if (res.ok) toast.success("Empresa actualizada");
     else toast.error(res.message || "Error al guardar");
@@ -61,7 +66,7 @@ export default function CompanyInlineForm({ initial }: Props) {
       <div>
         <label className="block text-sm font-medium">Logo</label>
         <div className="mt-2 flex items-center gap-3">
-          <div className="h-14 w-14 overflow-hidden rounded-xl border bg-zinc-200/60 dark:bg-zinc-700/50 rounded">
+          <div className="h-14 w-14 overflow-hidden rounded-xl border bg-zinc-200/60 dark:bg-zinc-700/50">
             {form.logoUrl ? (
               <Image
                 src={form.logoUrl}
@@ -78,11 +83,11 @@ export default function CompanyInlineForm({ initial }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-            <UploadButton<OurFileRouter>
+            <UploadButton<OurFileRouter, "logoUploader">
               endpoint="logoUploader"
               appearance={{
                 button:
-                  "rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 glass-card p-4 md:p-6",
+                  "rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50",
                 allowedContent: "text-[11px] text-zinc-500",
               }}
               onUploadBegin={() => setUploading(true)}
@@ -121,7 +126,9 @@ export default function CompanyInlineForm({ initial }: Props) {
         </div>
         <p className="mt-1 text-xs text-zinc-500">
           PNG/JPG/WEBP/SVG hasta 4&nbsp;MB. Se mostrará en tus vacantes públicas.
-          {uploading && <span className="ml-2 text-emerald-700">Subiendo…</span>}
+          {uploading && (
+            <span className="ml-2 text-emerald-700">Subiendo…</span>
+          )}
         </p>
       </div>
 

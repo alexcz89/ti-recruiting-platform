@@ -1,9 +1,21 @@
+// components/profile/ProfileSummary.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, Pencil } from "lucide-react";
-import DownloadPdfButton from "@/components/resume/DownloadPdfButton";
+
+// ⬇️ FIX: wrapper que sí acepta children
+import DownloadPdfButtonBase from "@/components/resume/DownloadPdfButton";
+import React from "react";
+
+type DownloadPdfButtonProps = React.ComponentProps<typeof DownloadPdfButtonBase> & {
+  children?: React.ReactNode;
+};
+
+function DownloadPdfButton(props: DownloadPdfButtonProps) {
+  return <DownloadPdfButtonBase {...props} />;
+}
 
 type Profile = {
   personal: {

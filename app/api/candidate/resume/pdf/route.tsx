@@ -6,7 +6,11 @@ import { prisma } from "@/lib/prisma";
 import { Font, Document, Page, Text, View, StyleSheet, pdf } from "@react-pdf/renderer";
 import type { EducationLevel, LanguageProficiency } from "@prisma/client";
 
-// ========== Fuentes (usa Core fonts si prefieres) ==========
+// 👇 fuerza a que esta ruta sea dinámica (no se prerenderiza)
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+// ========== Fuentes ==========
 try {
   Font.register({
     family: "Inter",
@@ -128,11 +132,9 @@ function ResumeDoc({
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
-        {/* Header */}
         <Text style={styles.name}>{name || "Nombre Apellido"}</Text>
         {contactLine && <Text style={styles.contacts}>{contactLine}</Text>}
 
-        {/* Summary */}
         {summary ? (
           <>
             <View style={styles.divider} />
@@ -141,7 +143,6 @@ function ResumeDoc({
           </>
         ) : null}
 
-        {/* Experience */}
         {experience.length ? (
           <>
             <View style={styles.divider} />
@@ -178,7 +179,6 @@ function ResumeDoc({
           </>
         ) : null}
 
-        {/* Education */}
         {education.length ? (
           <>
             <View style={styles.divider} />
@@ -207,7 +207,6 @@ function ResumeDoc({
           </>
         ) : null}
 
-        {/* Certifications */}
         {certs.length ? (
           <>
             <View style={styles.divider} />
@@ -225,7 +224,6 @@ function ResumeDoc({
           </>
         ) : null}
 
-        {/* Skills & Languages */}
         {skills.length || languages.length ? (
           <>
             <View style={styles.divider} />
@@ -330,7 +328,6 @@ export async function GET() {
         location={user.location}
         portfolio={user.linkedin}
         github={user.github}
-        // Por ahora sin summary porque no existe en BD
         summary={undefined}
         experience={user.experiences.map((w) => ({
           company: w.company || "",
@@ -338,7 +335,6 @@ export async function GET() {
           startDate: w.startDate,
           endDate: w.endDate,
           isCurrent: w.isCurrent || false,
-          // descripción vacía: los bullets vendrían de un flujo futuro donde mandes el CV completo desde el front
           description: "",
         }))}
         education={user.education.map((e) => ({
@@ -364,12 +360,12 @@ export async function GET() {
       />
     );
 
-    // Buffer aceptado como BodyInit en runtime; casteo para contentar a TS
     const file = (await pdf(doc).toBuffer()) as any;
 
     const headers = new Headers();
     headers.set("Content-Type", "application/pdf");
     headers.set("Content-Disposition", `inline; filename="resume.pdf"`);
+
     return new NextResponse(file, { status: 200, headers });
   } catch (e) {
     console.error("[GET /api/candidate/resume/pdf] error", e);

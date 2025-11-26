@@ -234,11 +234,14 @@ export default async function JobApplicationsPage({
     }`;
   };
 
+  const headerBtnClasses =
+      "inline-flex items-center whitespace-nowrap rounded-full border border-zinc-200 bg-white/80 px-5 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900";
+
   return (
     <main className="max-w-none p-0">
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-8 px-6 py-8 lg:px-10">
         {/* Header vacante */}
-        <header className="flex flex-wrap items-start justify-between gap-4">
+        <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
             <h1 className="text-2xl font-bold leading-tight">{job.title}</h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -254,17 +257,23 @@ export default async function JobApplicationsPage({
               <MetricBadge label="Rechazados" value={counters.REJECTED} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Botones en una sola fila, todos iguales */}
+          <div className="flex flex-row items-center gap-2">
             <Link
               href={`/dashboard/jobs/${job.id}`}
-              className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
+              className={headerBtnClasses}
             >
               Ver Pipeline
             </Link>
             <Link
-              href="/dashboard/jobs"
-              className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
+              href={`/jobs/${job.id}`}
+              target="_blank"
+              className={headerBtnClasses}
             >
+              Ver vacante
+            </Link>
+            <Link href="/dashboard/jobs" className={headerBtnClasses}>
               Volver a Vacantes
             </Link>
           </div>
@@ -365,6 +374,8 @@ export default async function JobApplicationsPage({
                         .join(" ") ||
                       "—";
 
+                    const lastActivity = a.createdAt;
+
                     return (
                       <tr
                         key={a.id}
@@ -464,11 +475,9 @@ export default async function JobApplicationsPage({
 
                         <td
                           className="py-2 px-3 text-sm text-zinc-600 dark:text-zinc-400"
-                          title={new Date(
-                            a.updatedAt ?? a.createdAt
-                          ).toLocaleString()}
+                          title={new Date(lastActivity).toLocaleString()}
                         >
-                          {fromNow(a.updatedAt ?? a.createdAt)}
+                          {fromNow(lastActivity)}
                         </td>
 
                         <td className="py-2 px-3 align-top">

@@ -16,7 +16,11 @@ export async function saveCompanyBasic(input: { name: string; size?: string | nu
     const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
     const Schema = z.object({
       name: z.string().trim().min(2, "Nombre requerido").max(120),
-      size: z.enum(SIZES).optional().nullable().transform(v => (v ?? undefined)),
+      size: z
+        .enum(SIZES)
+        .optional()
+        .nullable()
+        .transform((v) => (v ?? undefined)),
     });
 
     const data = Schema.parse(input);
@@ -36,7 +40,7 @@ export async function saveCompanyBasic(input: { name: string; size?: string | nu
   }
 }
 
-/** ✅ Solo tamaño (con redirect clásico) */
+/** ✅ Sólo tamaño (con redirect clásico) */
 export async function saveCompanySize(formData: FormData) {
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) redirect("/dashboard/overview");
@@ -59,7 +63,7 @@ export async function saveCompanySize(formData: FormData) {
   if (!parsed.success) redirect("/dashboard/company?saved=0");
 
   await prisma.company.update({
-    where: { id: companyId! },
+    where: { id: companyId },
     data: { size: parsed.data.size ?? null },
   });
 
@@ -68,7 +72,7 @@ export async function saveCompanySize(formData: FormData) {
   redirect("/dashboard/company?saved=1");
 }
 
-/** ✅ Validación simple de URL (opcional, acepta http/https o dominio plano tipo "miempresa.com") */
+/** ✅ Validación simple para URL */
 const UrlLike = z
   .string()
   .trim()
@@ -76,12 +80,12 @@ const UrlLike = z
   .max(1024)
   .refine(
     (v) =>
-      /^https?:\/\/.+/i.test(v) ||                 // http(s)://...
-      /^[a-z0-9-]+(\.[a-z0-9-]+)+([:/].*)?$/i.test(v), // dominio sin protocolo
+      /^https?:\/\/.+/i.test(v) ||
+      /^[a-z0-9-]+(\.[a-z0-9-]+)+([:/].*)?$/i.test(v),
     "URL de logo no válida"
   );
 
-/** ✅ Establecer logo de empresa (URL de UploadThing u otra) */
+/** ✅ Establecer logo de empresa */
 export async function setCompanyLogo(url: string | null) {
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) return { ok: false, message: "Sin empresa asociada" };
@@ -119,4 +123,9 @@ export async function removeCompanyLogo() {
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard/overview");
   return { ok: true };
+}
+
+/** 🔥 Nuevo: Alias oficial para eliminar el warning */
+export async function saveCompany(input: { name: string; size?: string | null }) {
+  return saveCompanyBasic(input);
 }

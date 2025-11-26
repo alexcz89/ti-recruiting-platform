@@ -1,7 +1,7 @@
 // app/api/resume/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { Prisma, TaxonomyKind, LanguageProficiency, EducationLevel } from "@prisma/client"
-import { prisma } from "@/lib/prisma" // ajusta si tu cliente vive en otra ruta
+import { prisma } from "@/lib/prisma"
 
 // ------------------------------
 // Helpers
@@ -33,7 +33,6 @@ const levelRank: Record<EducationLevel, number> = {
   OTHER: 4,
 }
 
-/** “Max” de nivel educativo para setear `User.highestEducationLevel` */
 function highestLevel(levels: (EducationLevel | null | undefined)[]): EducationLevel {
   let best: EducationLevel = "NONE"
   for (const l of levels) {
@@ -43,7 +42,6 @@ function highestLevel(levels: (EducationLevel | null | undefined)[]): EducationL
   return best
 }
 
-/** Mapear string de UI -> enum LanguageProficiency */
 function toLangLevel(input?: string): LanguageProficiency {
   const s = (input || "").toUpperCase()
   if (s.includes("NATIVE") || s.includes("NATIVO")) return "NATIVE"
@@ -53,12 +51,10 @@ function toLangLevel(input?: string): LanguageProficiency {
   return "CONVERSATIONAL"
 }
 
-/** Enum -> etiqueta simple (por ahora devolvemos el mismo enum) */
 function fromLangLevel(l: LanguageProficiency | null): string {
   return l ?? "CONVERSATIONAL"
 }
 
-/** Asegura un término en catálogo (skills / certs / languages) y retorna el id */
 async function ensureTerm(kind: TaxonomyKind, label: string) {
   const slug = slugify(label)
   const existing = await prisma.taxonomyTerm.findFirst({
@@ -75,12 +71,9 @@ async function ensureTerm(kind: TaxonomyKind, label: string) {
 }
 
 // ------------------------------
-// AUTH (ajústalo a tu stack)
+// Auth temporal para dev
 // ------------------------------
 async function getUserId(req: NextRequest) {
-  // ⚠️ Ajusta esta parte a tu sistema de auth:
-  // 1) Si usas NextAuth, trae el session.user.id aquí.
-  // 2) Mientras tanto, para desarrollo, permitimos header o body.userId.
   const headerId = req.headers.get("x-user-id")
   if (headerId) return headerId
 
@@ -88,21 +81,19 @@ async function getUserId(req: NextRequest) {
     const { userId } = await req.json()
     if (userId) return userId
   } catch {
-    // body no era JSON o no tenía userId — está bien
+    // body vacío o ya consumido
   }
 
   return null
 }
 
 // ------------------------------
-// GET: obtener el CV del usuario autenticado (normalizado para el wizard)
+// GET - Obtener CV normalizado
 // ------------------------------
 export async function GET(req: NextRequest) {
   try {
     const userId = await getUserId(req)
-    if (!userId) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -110,15 +101,12 @@ export async function GET(req: NextRequest) {
         id: true,
         name: true,
         email: true,
-        // Si alguno de estos campos no existe en tu modelo User, elimínalo del select:
         phone: true,
         location: true,
-        birthDate: true,
+        birthdate: true, // 👈 campo real en User
         linkedin: true,
         github: true,
-        summary: true,
         highestEducationLevel: true,
-
         education: {
           orderBy: [{ sortIndex: "asc" }, { endDate: "desc" }],
         },
@@ -140,22 +128,20 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    if (!user) {
-      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
-    }
+    if (!user) return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
 
-    // Normalizar a la forma que consume el ResumeWizard:
     const payload = {
       personal: {
         fullName: user.name ?? "",
         email: user.email ?? "",
-        phone: (user as any).phone ?? "",
-        location: (user as any).location ?? "",
-        birthDate: user.birthDate ? new Date(user.birthDate).toISOString().slice(0, 10) : "",
-        linkedin: (user as any).linkedin ?? "",
-        github: (user as any).github ?? "",
+        phone: user.phone ?? "",
+        location: user.location ?? "",
+        birthDate: user.birthdate ? new Date(user.birthdate).toISOString().slice(0, 10) : "",
+        linkedin: user.linkedin ?? "",
+        github: user.github ?? "",
       },
-      about: (user as any).summary ?? "",
+      // Tu modelo User no tiene summary; por ahora dejamos about vacío
+      about: "",
       education: user.education.map((e) => ({
         id: e.id,
         institution: e.institution ?? "",
@@ -205,19 +191,8 @@ export async function GET(req: NextRequest) {
 }
 
 // ------------------------------
-// POST: guardar/actualizar CV completo (TRANSACCIONAL)
+// POST - Guardar/actualizar CV completo
 // ------------------------------
-// Body esperado:
-// {
-//   userId?: string,        // solo para DEV si no hay auth
-//   personal: { fullName, email?, phone?, location?, birthDate?, linkedin?, github? },
-//   about?: string,
-//   education: [{ institution, program, level?, status?, startDate?, endDate?, country?, city?, grade?, description? }, ...],
-//   experience: [{ company, role, startDate?, endDate?, isCurrent?, description? }, ...],
-//   skills: [{ name, level? }, ...],
-//   languages: [{ name, level }, ...],
-//   certifications: [{ name, issuer?, date?, expiresAt?, credentialId?, url? }, ...]
-// }
 export async function POST(req: NextRequest) {
   try {
     const payload = await req.json()
@@ -236,24 +211,21 @@ export async function POST(req: NextRequest) {
       certifications = [],
     } = payload || {}
 
-    // Validaciones mínimas
     if (!Array.isArray(education) || !Array.isArray(experience)) {
       return NextResponse.json({ error: "Formato inválido" }, { status: 400 })
     }
 
     const txResult = await prisma.$transaction(async (tx) => {
-      // 1) USER: datos personales + about/summary
+      // 1) USER: datos personales
       const userUpdate: any = {
-        // Si no tienes alguno de estos campos en User, comenta la línea correspondiente:
         name: typeof personal.fullName === "string" ? personal.fullName : undefined,
         phone: personal.phone ?? null,
         location: personal.location ?? null,
-        birthDate: personal.birthDate ? parseDate(personal.birthDate) : null,
+        birthdate: personal.birthDate ? parseDate(personal.birthDate) : null, // 👈 corregido
         linkedin: personal.linkedin ?? null,
         github: personal.github ?? null,
-        summary: typeof about === "string" ? about : undefined,
-        // email suele venir del login; si quieres permitir override desde el wizard:
-        // email: personal.email ?? undefined,
+        // OJO: tu modelo no tiene summary, así que no lo seteamos
+        // summary: typeof about === "string" ? about : undefined,
       }
 
       await tx.user.update({
@@ -281,7 +253,6 @@ export async function POST(req: NextRequest) {
           })),
         })
 
-        // actualizar highestEducationLevel en User
         const levels = education.map((e: any) => e.level as EducationLevel | null | undefined)
         await tx.user.update({
           where: { id: userId },
@@ -310,7 +281,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // 4) SKILLS — reemplazo completo con catálogo
+      // 4) SKILLS
       await tx.candidateSkill.deleteMany({ where: { userId } })
       for (const s of skills as Array<{ name: string; level?: number }>) {
         const name = (s?.name || "").trim()
@@ -325,7 +296,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // 5) LANGUAGES — reemplazo completo con catálogo
+      // 5) LANGUAGES
       await tx.candidateLanguage.deleteMany({ where: { userId } })
       for (const l of languages as Array<{ name: string; level: string }>) {
         const name = (l?.name || "").trim()
@@ -340,7 +311,7 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // 6) CERTIFICATIONS — reemplazo completo con catálogo
+      // 6) CERTIFICATIONS
       await tx.candidateCredential.deleteMany({ where: { userId } })
       for (const c of certifications as Array<{
         name: string
@@ -366,14 +337,14 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      // Resumen para la UI
-      const [expCount, eduCount, skillCount, langCount, certCount] = await Promise.all([
-        tx.workExperience.count({ where: { userId } }),
-        tx.education.count({ where: { userId } }),
-        tx.candidateSkill.count({ where: { userId } }),
-        tx.candidateLanguage.count({ where: { userId } }),
-        tx.candidateCredential.count({ where: { userId } }),
-      ])
+      const [expCount, eduCount, skillCount, langCount, certCount] =
+        await Promise.all([
+          tx.workExperience.count({ where: { userId } }),
+          tx.education.count({ where: { userId } }),
+          tx.candidateSkill.count({ where: { userId } }),
+          tx.candidateLanguage.count({ where: { userId } }),
+          tx.candidateCredential.count({ where: { userId } }),
+        ])
 
       return {
         ok: true,
@@ -387,7 +358,7 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({ ok: true, ...txResult })
+    return NextResponse.json(txResult)
   } catch (err) {
     console.error("[RESUME POST] Error:", err)
     return NextResponse.json({ error: "Error al guardar CV" }, { status: 500 })

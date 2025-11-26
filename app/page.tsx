@@ -1,12 +1,9 @@
 // app/page.tsx
+import { Suspense } from "react";
 import Link from "next/link";
 import JobSearchBar from "@/components/JobSearchBar";
 import PricingSection from "@/components/marketing/PricingSection";
-import {
-  Users,
-  Briefcase,
-  Handshake,
-} from "lucide-react";
+import { Users, Briefcase, Handshake } from "lucide-react";
 
 /** Badge redondo para el hero */
 function IconBadge({
@@ -22,47 +19,56 @@ function IconBadge({
 }) {
   const tones: Record<string, string> = {
     emerald:
-      "bg-emerald-500/12 ring-emerald-400/30 text-emerald-600 dark:text-emerald-300",
+      "bg-emerald-500/10 ring-emerald-400/40 text-emerald-600 dark:text-emerald-300",
     violet:
-      "bg-violet-500/12 ring-violet-400/30 text-violet-600 dark:text-violet-300",
-    sky: "bg-sky-500/12 ring-sky-400/30 text-sky-600 dark:text-sky-300",
+      "bg-violet-500/10 ring-violet-400/40 text-violet-600 dark:text-violet-300",
+    sky: "bg-sky-500/10 ring-sky-400/40 text-sky-600 dark:text-sky-300",
   };
 
   return (
     <div className={`flex flex-col items-center ${className}`}>
       <div
-        className={`flex h-20 w-20 items-center justify-center rounded-full ring-2 ${tones[tone]} shadow-sm transition-transform duration-200 hover:scale-[1.03]`}
-        aria-hidden="true"
+        className={`flex h-20 w-20 items-center justify-center rounded-full ring-2 shadow-sm transition-transform duration-200 hover:scale-[1.03] ${tones[tone]}`}
       >
         {children}
       </div>
-      <span className="mt-2 text-xs text-muted">{label}</span>
+      <span className="mt-2 text-xs text-muted-foreground">{label}</span>
     </div>
   );
 }
 
 export default function Home() {
+  const year = new Date().getFullYear();
+
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen bg-background text-foreground">
       {/* Hero */}
-      <section className="relative">
-        <div className="mx-auto max-w-6xl px-6 pt-16 pb-10 lg:pt-20">
+      <section className="relative overflow-hidden border-b border-border/60">
+        {/* Glow suave atrás, funciona en light/dark */}
+        <div className="pointer-events-none absolute inset-x-0 top-[-160px] flex justify-center opacity-70 dark:opacity-90">
+          <div className="h-64 w-[480px] rounded-full bg-emerald-500/20 blur-3xl dark:bg-emerald-500/25" />
+        </div>
+
+        <div className="relative mx-auto max-w-6xl px-6 pt-16 pb-10 lg:pt-20">
           <div className="flex flex-col items-start gap-8 lg:flex-row lg:items-center lg:gap-14">
             {/* Copy */}
             <div className="max-w-2xl">
-              <div className="inline-flex items-center gap-2 badge">
-                <span className="text-emerald-600 dark:text-emerald-300">Nuevo</span>
-                <span className="text-muted">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/70 px-3 py-1 text-xs sm:text-sm text-muted-foreground backdrop-blur">
+                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-300">
+                  Nuevo
+                </span>
+                <span className="hidden sm:inline">
                   Postula con un clic, gestiona en el Pipeline y crea tu CV profesional
                 </span>
+                <span className="sm:hidden">Crea tu CV y postula fácil</span>
               </div>
 
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-default sm:text-5xl">
+              <h1 className="mt-4 text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
                 Plataforma de Reclutamiento TI
               </h1>
-              <p className="mt-3 text-sm sm:text-base text-muted">
-                Conecta talento con empresas. Publica vacantes, busca candidatos y lleva tus procesos
-                en un Pipeline.
+              <p className="mt-3 text-sm sm:text-base text-muted-foreground">
+                Conecta talento con empresas. Publica vacantes, busca candidatos y lleva
+                tus procesos en un Pipeline visual y simple.
               </p>
 
               {/* CTAs rápidos */}
@@ -70,13 +76,13 @@ export default function Home() {
                 <Link href="/candidate/resume" className="btn btn-primary">
                   ✨ Crea tu CV
                 </Link>
-                <Link href="/jobs" className="btn-ghost">
+                <Link href="/jobs" className="btn btn-ghost">
                   Ver vacantes
                 </Link>
-                <Link href="/auth/signup/candidate" className="btn-ghost">
+                <Link href="/auth/signup/candidate" className="btn btn-ghost">
                   Crear cuenta (Candidato)
                 </Link>
-                <Link href="/auth/signup/recruiter" className="btn-ghost">
+                <Link href="/auth/signup/recruiter" className="btn btn-ghost">
                   Crear cuenta (Reclutador)
                 </Link>
               </div>
@@ -90,38 +96,43 @@ export default function Home() {
               <IconBadge label="Reclutador" tone="violet">
                 <Briefcase className="h-8 w-8" />
               </IconBadge>
-              <IconBadge
-                label="Match"
-                tone="sky"
-                className="hidden sm:flex"
-              >
+              <IconBadge label="Match" tone="sky" className="hidden sm:flex">
                 <Handshake className="h-8 w-8" />
               </IconBadge>
             </div>
           </div>
 
-          {/* Buscador */}
+          {/* Buscador envuelto en Suspense (por useSearchParams) */}
           <div className="mt-8">
-            <JobSearchBar />
+            <Suspense
+              fallback={
+                <div className="h-16 w-full animate-pulse rounded-xl border border-border bg-card/70" />
+              }
+            >
+              <JobSearchBar />
+            </Suspense>
           </div>
         </div>
       </section>
 
       {/* Bloque promocional Resume Builder */}
-      <section className="mx-auto max-w-6xl px-6 pb-12">
-        <div className="glass-card p-4 md:p-6 border-emerald-400/30">
+      <section className="mx-auto max-w-6xl px-6 pb-12 pt-8">
+        <div className="rounded-xl border border-emerald-400/30 bg-card/70 p-4 backdrop-blur md:p-6">
           <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-default">Creador de CV profesional</h2>
-              <p className="mt-1 text-sm text-muted">
-                Completa tu perfil en minutos, genera tu CV con diseño limpio y listo para descargar PDF.
+              <h2 className="text-lg font-semibold text-foreground">
+                Creador de CV profesional
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Completa tu perfil en minutos y genera un CV con diseño limpio, optimizado
+                para reclutadores y listo para descargar en PDF.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
               <Link href="/candidate/resume" className="btn btn-primary">
                 Comenzar ahora
               </Link>
-              <Link href="/resume/builder" className="btn-ghost">
+              <Link href="/resume/builder" className="btn btn-ghost">
                 Ver detalles
               </Link>
             </div>
@@ -133,18 +144,19 @@ export default function Home() {
       <section className="mx-auto max-w-6xl px-6 pb-16">
         <div className="grid gap-6 md:grid-cols-2">
           {/* Reclutadores */}
-          <div className="glass-card p-4 md:p-6">
+          <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-500/15 ring-2 ring-violet-400/30">
                 <Briefcase className="h-5 w-5 text-violet-600 dark:text-violet-300" />
               </div>
-              <h2 className="text-lg font-semibold text-default">Soy reclutador</h2>
+              <h2 className="text-lg font-semibold text-foreground">Soy reclutador</h2>
             </div>
-            <p className="mt-2 text-sm text-muted">
-              Publica vacantes, gestiona postulaciones en el Pipeline y contacta talento de forma directa.
+            <p className="mt-2 text-sm text-muted-foreground">
+              Publica vacantes, gestiona postulaciones y avanza candidatos en tu Pipeline
+              con un flujo visual tipo Kanban.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/auth/signin?role=RECRUITER" className="btn-ghost">
+              <Link href="/auth/signin?role=RECRUITER" className="btn btn-ghost">
                 Iniciar sesión
               </Link>
               <Link href="/auth/signup/recruiter" className="btn btn-primary">
@@ -154,24 +166,25 @@ export default function Home() {
           </div>
 
           {/* Candidatos */}
-          <div className="glass-card p-4 md:p-6">
+          <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/15 ring-2 ring-emerald-400/30">
                 <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               </div>
-              <h2 className="text-lg font-semibold text-default">Soy talento</h2>
+              <h2 className="text-lg font-semibold text-foreground">Soy talento</h2>
             </div>
-            <p className="mt-2 text-sm text-muted">
-              Crea tu perfil, sube tu CV con nuestro constructor y postúlate a vacantes en segundos.
+            <p className="mt-2 text-sm text-muted-foreground">
+              Crea tu perfil, sube o genera tu CV con nuestro constructor y postúlate a
+              vacantes en segundos, sin formularios eternos.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/candidate/resume" className="btn btn-primary">
                 ✨ Crea tu CV
               </Link>
-              <Link href="/auth/signin?role=CANDIDATE" className="btn-ghost">
+              <Link href="/auth/signin?role=CANDIDATE" className="btn btn-ghost">
                 Iniciar sesión
               </Link>
-              <Link href="/auth/signup/candidate" className="btn-ghost">
+              <Link href="/auth/signup/candidate" className="btn btn-ghost">
                 Crear cuenta
               </Link>
             </div>
@@ -182,36 +195,39 @@ export default function Home() {
       {/* Highlights */}
       <section className="mx-auto max-w-6xl px-6 pb-20">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="glass-card p-4 md:p-6">
+          <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="text-2xl">⚡</div>
-            <h3 className="mt-2 font-semibold text-default">Postulación rápida</h3>
-            <p className="mt-1 text-sm text-muted">
-              Aplica con un clic y gestiona tu perfil con skills buscables.
+            <h3 className="mt-2 font-semibold text-foreground">Postulación rápida</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Aplica con un clic y mantén tu información centralizada para futuras
+              vacantes.
             </p>
           </div>
-          <div className="glass-card p-4 md:p-6">
+          <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="text-2xl">🎯</div>
-            <h3 className="mt-2 font-semibold text-default">Búsqueda precisa</h3>
-            <p className="mt-1 text-sm text-muted">
-              Filtra por título, tecnología y ubicación. Encuentra el mejor match.
+            <h3 className="mt-2 font-semibold text-foreground">Búsqueda precisa</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Filtra por título, tecnología, seniority y ubicación para encontrar el
+              mejor match.
             </p>
           </div>
-          <div className="glass-card p-4 md:p-6">
+          <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="text-2xl">📊</div>
-            <h3 className="mt-2 font-semibold text-default">Kanban de procesos</h3>
-            <p className="mt-1 text-sm text-muted">
-              Visualiza el pipeline de cada vacante y avanza candidatos sin fricción.
+            <h3 className="mt-2 font-semibold text-foreground">Kanban de procesos</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Visualiza cada etapa del proceso y avanza candidatos sin fricción, con
+              estatus claros.
             </p>
           </div>
         </div>
       </section>
 
-      {/* ⭐ SECCIÓN DE PRECIOS INSERTADA AQUÍ ⭐ */}
+      {/* Precios */}
       <PricingSection />
 
-      {/* Footer mínimo */}
-      <footer className="border-t border-[rgb(var(--border))] py-8 text-center text-xs text-muted">
-        © {new Date().getFullYear()} Bolsa TI — Todos los derechos reservados.
+      {/* Footer */}
+      <footer className="border-t border-border bg-background/95 py-8 text-center text-xs text-muted-foreground">
+        © {year} Bolsa TI — Todos los derechos reservados.
       </footer>
     </main>
   );

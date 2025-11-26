@@ -131,19 +131,20 @@ export default async function EditJobPage({ params }: PageProps) {
       return { error: "No autenticado o sin permisos." };
     }
 
+    // ID coherente entre URL y form
+    const jobIdFromForm = (fd.get("jobId") || "").toString();
+    const jobId = jobIdFromForm || params.id;
+    if (jobIdFromForm && jobIdFromForm !== params.id) {
+      return { error: "Inconsistencia de ID de vacante." };
+    }
+
     // Ownership (evita updates cruzados)
     if (currentRole === "RECRUITER") {
       const canEdit = await prisma.job.findFirst({
-        where: { id: job.id, companyId: (s.user as any)?.companyId ?? undefined },
+        where: { id: jobId, companyId: (s.user as any)?.companyId ?? undefined },
         select: { id: true },
       });
       if (!canEdit) return { error: "No tienes acceso a esta vacante." };
-    }
-
-    // (Opcional) si llegó jobId desde el wizard, que coincida
-    const incomingJobId = (fd.get("jobId") || "").toString();
-    if (incomingJobId && incomingJobId !== job.id) {
-      return { error: "Inconsistencia de ID de vacante." };
     }
 
     const companyMode = String(fd.get("companyMode") || "confidential");
@@ -182,7 +183,9 @@ export default async function EditJobPage({ params }: PageProps) {
     }
 
     const remote = locationType === "REMOTE";
-    const loc = remote ? "Remoto" : `${locationType === "HYBRID" ? "Híbrido" : "Presencial"} · ${city}`;
+    const loc = remote
+      ? "Remoto"
+      : `${locationType === "HYBRID" ? "Híbrido" : "Presencial"} · ${city}`;
 
     let locationLat: number | null = null;
     let locationLng: number | null = null;
@@ -225,7 +228,7 @@ export default async function EditJobPage({ params }: PageProps) {
 
     // UPDATE sobre el MISMO ID (nunca create)
     await prisma.job.update({
-      where: { id: job.id },
+      where: { id: jobId },
       data: {
         title,
         location: loc,
@@ -238,15 +241,12 @@ export default async function EditJobPage({ params }: PageProps) {
         currency,
         locationLat,
         locationLng,
-
-        // Usa la relación recruiter (no recruiterId)
         recruiter: { connect: { id: (s.user as any)?.id } },
-
         ...(companyConnect ? { company: companyConnect } : {}),
       },
     });
 
-    revalidatePath(`/dashboard/jobs/${job.id}`);
+    revalidatePath(`/dashboard/jobs/${jobId}`);
     revalidatePath(`/dashboard/jobs`);
     return { ok: true, redirectTo: "/dashboard/jobs" };
   }

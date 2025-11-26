@@ -1,37 +1,44 @@
+// components/LogoUploader.tsx
 "use client";
 
 import { UploadButton } from "@uploadthing/react";
 import type { OurFileRouter } from "@/app/api/uploadthing/core";
+import { toast } from "sonner";
 
 type Props = {
-  onUploaded: (url: string) => void;
-  className?: string;
   label?: string;
+  className?: string;
+  onUploaded: (url: string) => void;
 };
 
-export default function LogoUploader({ onUploaded, className, label }: Props) {
+export default function LogoUploader({ label, className = "", onUploaded }: Props) {
   return (
     <div className={className}>
       {label && <p className="text-sm text-zinc-600 mb-1">{label}</p>}
-      <UploadButton<OurFileRouter>
-        endpoint="logo"
-        onClientUploadComplete={(res) => {
-          const url = res?.[0]?.url;
-          if (url) onUploaded(url);
+
+      <UploadButton<OurFileRouter, "logoUploader">
+        endpoint="logoUploader"
+        appearance={{
+          button:
+            "rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 glass-card p-4 md:p-6",
+          allowedContent: "text-[11px] text-zinc-500",
         }}
-        onUploadError={(e: Error) => {
-          alert(e.message || "Error al subir imagen");
+        onClientUploadComplete={(files) => {
+          const f = (files?.[0] ?? {}) as any;
+          // UploadThing v9: usar ufsUrl si existe, con fallback a url
+          const url = f?.ufsUrl || f?.url;
+          if (!url) {
+            toast.error("No se recibió URL del logo");
+            return;
+          }
+          onUploaded(url);
+          toast.success("Logo subido correctamente");
         }}
-        content={{
-          button({ ready }) {
-            return ready ? "Subir logo" : "Cargando…";
-          },
+        onUploadError={(error) => {
+          console.error(error);
+          toast.error(error?.message || "Error al subir el logo");
         }}
-        className="ut-button:bg-emerald-600 ut-button:hover:bg-emerald-700 ut-button:text-white ut-button:rounded-lg ut-button:px-3 ut-button:py-1.5"
       />
-      <p className="mt-1 text-xs text-zinc-500">
-        PNG/JPG/SVG. Máx 2 MB.
-      </p>
     </div>
   );
 }

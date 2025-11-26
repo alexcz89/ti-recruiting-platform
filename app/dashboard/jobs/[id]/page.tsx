@@ -1,41 +1,62 @@
 // app/dashboard/jobs/[id]/page.tsx
-import { notFound } from "next/navigation";
 import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getSessionCompanyId } from "@/lib/session";
-import { fromNow } from "@/lib/dates";
 import Kanbanboard from "./Kanbanboard";
-import { ApplicationInterest } from "@prisma/client";
+import { ApplicationInterest, ApplicationStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-// Pipeline del reclutador (ApplicationInterest)
-const STATUSES = ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"] as const;
-type ColumnStatus = (typeof STATUSES)[number];
+type PageProps = { params: { id: string } };
 
-const STATUS_LABEL: Record<ColumnStatus, string> = {
+const INTEREST_STATUSES: ApplicationInterest[] = [
+  "REVIEW",
+  "MAYBE",
+  "ACCEPTED",
+  "REJECTED",
+];
+
+const INTEREST_LABEL: Record<ApplicationInterest, string> = {
   REVIEW: "En revisión",
   MAYBE: "En duda",
-  ACCEPTED: "Aceptados",
-  REJECTED: "Rechazados",
+  ACCEPTED: "Aceptado",
+  REJECTED: "Rechazado",
 };
 
-export default async function JobKanbanPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const companyId = await getSessionCompanyId().catch(() => null);
-  if (!companyId) notFound();
+export default async function JobPipelinePage({ params }: PageProps) {
+  const session = await getServerSession(authOptions);
+  if (!session) {
+    redirect(`/signin?callbackUrl=/dashboard/jobs/${params.id}`);
+  }
 
+  const companyId = await getSessionCompanyId().catch(() => null);
+  if (!companyId) {
+    redirect("/dashboard/overview");
+  }
+
+  // Verificar que la vacante pertenece a la empresa de la sesión
   const job = await prisma.job.findFirst({
     where: { id: params.id, companyId },
+    select: {
+      id: true,
+      title: true,
+      location: true,
+      company: { select: { name: true } },
+    },
   });
-  if (!job) notFound();
 
-  const apps = await prisma.application.findMany({
+  if (!job) {
+    notFound();
+  }
+
+  // Traer aplicaciones + candidato
+  const applications = await prisma.application.findMany({
     where: { jobId: job.id },
-    orderBy: { createdAt: "desc" },
+    orderBy: { createdAt: "asc" },
     include: {
       candidate: {
         select: {
@@ -44,142 +65,129 @@ export default async function JobKanbanPage({
           email: true,
           resumeUrl: true,
           skills: true,
-          firstName: true,
-          lastName: true,
         },
       },
     },
   });
 
-  // Server Action: mover tarjeta entre columnas (usa recruiterInterest)
-  async function moveApplicationAction(formData: FormData) {
+  const appCards = applications.map((a) => ({
+    id: a.id,
+    status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
+    // 👇 Application no tiene updatedAt, usamos sólo createdAt
+    createdAt: a.createdAt,
+    candidate: {
+      id: a.candidate.id,
+      name: a.candidate.name ?? a.candidate.email,
+      email: a.candidate.email,
+      resumeUrl: a.candidate.resumeUrl,
+      skills: a.candidate.skills,
+    },
+  }));
+
+  // -------- Server Action para mover tarjetas en el Kanban --------
+  async function moveAction(
+    fd: FormData
+  ): Promise<{ ok: boolean; message?: string }> {
     "use server";
 
-    const companyIdAct = await getSessionCompanyId().catch(() => null);
-    if (!companyIdAct) return { ok: false, message: "Empresa no válida" };
+    const s = await getServerSession(authOptions);
+    if (!s?.user) {
+      return { ok: false, message: "No autenticado" };
+    }
 
-    const appId = String(formData.get("appId") || "");
-    const newStatus = String(formData.get("newStatus") || "") as ColumnStatus;
+    const companyId2 = await getSessionCompanyId().catch(() => null);
+    if (!companyId2) {
+      return { ok: false, message: "Sin empresa asociada" };
+    }
 
-    if (!STATUSES.includes(newStatus)) {
+    const appId = String(fd.get("appId") || "");
+    const newStatusStr = String(fd.get("newStatus") || "") as ApplicationInterest;
+
+    if (!appId || !newStatusStr) {
+      return { ok: false, message: "Faltan datos" };
+    }
+
+    if (!INTEREST_STATUSES.includes(newStatusStr)) {
       return { ok: false, message: "Estado inválido" };
     }
 
+    // Verificar que la aplicación pertenece a una vacante de esta empresa
     const app = await prisma.application.findFirst({
-      where: { id: appId, job: { companyId: companyIdAct } },
+      where: { id: appId, job: { companyId: companyId2 } },
       select: { id: true },
     });
-    if (!app) return { ok: false, message: "Aplicación no encontrada" };
+
+    if (!app) {
+      return { ok: false, message: "No tienes acceso a esta postulación" };
+    }
+
+    const isRejected = newStatusStr === "REJECTED";
 
     await prisma.application.update({
-      where: { id: appId },
-      data: { recruiterInterest: newStatus as ApplicationInterest },
+      where: { id: app.id },
+      data: {
+        recruiterInterest: newStatusStr,
+        status: isRejected
+          ? ApplicationStatus.REJECTED
+          : ApplicationStatus.REVIEWING,
+        rejectedAt: isRejected ? new Date() : null,
+        rejectionEmailSent: false,
+      },
     });
 
     return { ok: true };
   }
 
-  const employmentType = (job as any)?.employmentType ?? "—";
-  const seniority = (job as any)?.seniority ?? "—";
-  const remote = (job as any)?.remote ? "Remoto" : "Presencial/Híbrido";
-  const updatedAt = (job as any)?.updatedAt ?? job.createdAt;
-
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-8 space-y-8">
-        {/* Header */}
-        <header className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl sm:text-3xl font-bold leading-tight break-anywhere">
-              Kanban — {job.title}
+      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-8 space-y-6">
+        {/* Header vacante */}
+        <header className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
+              Pipeline de candidatos
+            </p>
+            <h1 className="mt-1 text-2xl font-bold leading-tight text-zinc-900 dark:text-zinc-50">
+              {job.title}
             </h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {employmentType} · {seniority} · {remote} ·{" "}
-              <span className="text-zinc-500 dark:text-zinc-400">
-                Actualizada {fromNow(updatedAt)}
-              </span>
+              {job.company?.name ?? "—"}
+              {job.location ? ` · ${job.location}` : ""}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href={`/dashboard/jobs/${job.id}/applications`}
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900 dark:border-zinc-700"
-              title="Ver lista de postulaciones"
+              className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
             >
-              Ver postulaciones
+              Ver postulaciones (lista)
             </Link>
+
+            {/* 👇 Nuevo botón: ver la vacante pública */}
             <Link
-              href={`/dashboard/jobs/${job.id}/edit`}
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900 dark:border-zinc-700"
-              title="Editar vacante"
+              href={`/jobs/${job.id}`}
+              target="_blank"
+              className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
             >
-              Editar vacante
+              Ver vacante
             </Link>
+
             <Link
               href="/dashboard/jobs"
-              className="rounded-lg border px-3 py-2 text-sm hover:bg-gray-50 dark:hover:bg-zinc-900 dark:border-zinc-700"
+              className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
             >
               Volver a vacantes
             </Link>
           </div>
         </header>
 
-        {/* Resumen por columnas (usa recruiterInterest) */}
-        <section className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-6 gap-3">
-          {STATUSES.map((st) => {
-            const count = apps.filter(
-              (a) => (a.recruiterInterest ?? "REVIEW") === st,
-            ).length;
-            return (
-              <div
-                key={st}
-                className="rounded-xl border glass-card p-4 md:p-6"
-                title={st}
-              >
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  {STATUS_LABEL[st]}
-                </p>
-                <p className="text-2xl font-semibold text-default">{count}</p>
-              </div>
-            );
-          })}
-          <div className="rounded-xl border glass-card p-4 md:p-6">
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-              Total
-            </p>
-            <p className="text-2xl font-semibold text-default">
-              {apps.length}
-            </p>
-          </div>
-        </section>
-
-        {/* Kanban */}
+        {/* Kanban / Pipeline */}
         <Kanbanboard
           jobId={job.id}
-          statuses={STATUSES as unknown as string[]}
-          statusLabels={STATUS_LABEL as Record<string, string>}
-          applications={apps.map((a) => {
-            const candidateName =
-              a.candidate?.name ||
-              [a.candidate?.firstName, a.candidate?.lastName]
-                .filter(Boolean)
-                .join(" ") ||
-              "—";
-
-            return {
-              id: a.id,
-              status: (a.recruiterInterest ?? "REVIEW") as string,
-              createdAt: a.createdAt,
-              candidate: {
-                id: a.candidate?.id ?? "",
-                name: candidateName,
-                email: a.candidate?.email ?? "—",
-                resumeUrl: a.candidate?.resumeUrl ?? "",
-                skills: (a.candidate as any)?.skills ?? [],
-              },
-            };
-          })}
-          moveAction={moveApplicationAction}
+          statuses={INTEREST_STATUSES}
+          statusLabels={INTEREST_LABEL}
+          applications={appCards}
+          moveAction={moveAction}
         />
       </div>
     </main>

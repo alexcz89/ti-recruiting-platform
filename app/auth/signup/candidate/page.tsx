@@ -5,19 +5,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { z } from "zod";
-import { CandidateSignupSchema } from "@/lib/validation"; // estandarizado
+import {
+  CandidateSignupSchema,
+  type CandidateSignupInput,
+} from "@/lib/validation";
 import { createCandidateAction } from "./actions";
-
-type FormValues = {
-  name: string;
-  email: string;
-  password: string;
-};
 
 export default function CandidateSignupPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState<FormValues>({
+  const [form, setForm] = useState<CandidateSignupInput>({
     name: "",
     email: "",
     password: "",
@@ -42,8 +39,11 @@ export default function CandidateSignupPage() {
         toast.error(res?.error || "Error al crear la cuenta");
       }
     } catch (err: any) {
-      if (err instanceof z.ZodError) toast.error(err.errors?.[0]?.message || "Datos inválidos");
-      else toast.error("Error al crear la cuenta");
+      if (err instanceof z.ZodError) {
+        toast.error(err.errors?.[0]?.message || "Datos inválidos");
+      } else {
+        toast.error("Error al crear la cuenta");
+      }
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,9 @@ export default function CandidateSignupPage() {
 
   return (
     <div className="mx-auto mt-16 max-w-md rounded-2xl border glass-card p-4 md:p-6">
-      <h1 className="mb-4 text-center text-2xl font-semibold">Registro de Candidato</h1>
+      <h1 className="mb-4 text-center text-2xl font-semibold">
+        Registro de Candidato
+      </h1>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium">Nombre completo</label>

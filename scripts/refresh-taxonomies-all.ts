@@ -13,7 +13,11 @@ function slugifyLabel(s: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-async function refresh(kind: TaxonomyKind, labels: string[], emoji: string) {
+async function refresh(
+  kind: TaxonomyKind,
+  labels: readonly string[],
+  emoji: string
+) {
   console.log(`${emoji}  Borrando ${TaxonomyKind[kind]} existentes...`);
   await prisma.taxonomyTerm.deleteMany({ where: { kind } });
 
@@ -33,9 +37,9 @@ async function refresh(kind: TaxonomyKind, labels: string[], emoji: string) {
 }
 
 async function main() {
-  await refresh(TaxonomyKind.SKILL, ALL_SKILLS as string[], "🧩");
-  await refresh(TaxonomyKind.LANGUAGE, LANGUAGES_FALLBACK as string[], "🗣️");
-  await refresh(TaxonomyKind.CERTIFICATION, CERTIFICATIONS as string[], "🎓");
+  await refresh(TaxonomyKind.SKILL, ALL_SKILLS, "🧩");
+  await refresh(TaxonomyKind.LANGUAGE, LANGUAGES_FALLBACK, "🗣️");
+  await refresh(TaxonomyKind.CERTIFICATION, CERTIFICATIONS, "🎓");
 }
 
 main()

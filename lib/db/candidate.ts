@@ -8,54 +8,116 @@ export async function upsertCandidateResume(
   payload: ResumePayload
 ) {
   return prisma.$transaction(async (tx) => {
-    // 1) Datos básicos del usuario
+    // ─────────────────────────────────────────────
+    // 1) Datos básicos (tolerante a cualquier shape)
+    // ─────────────────────────────────────────────
+    const basics: any =
+      (payload as any).basics ??
+      (payload as any).personal ??
+      {};
+
+    const loc: any =
+      basics.location ??
+      (payload as any).location ??
+      {};
+
+    // Bloque educación (puede venir en distintos shapes)
+    const eduBlock: any = (payload as any).education ?? {};
+
+    // highestLevel puede venir como propiedad directa o inferirse de items
+    const highestLevel =
+      typeof eduBlock.highestLevel === "string"
+        ? eduBlock.highestLevel
+        : Array.isArray(eduBlock.items)
+        ? (eduBlock.items.find((e: any) => e.level)?.level ?? undefined)
+        : undefined;
+
+    // Meta (por ejemplo, resumeUrl) también tolerante
+    const meta: any =
+      (payload as any).meta ??
+      {};
+
     await tx.user.update({
       where: { id: userId },
       data: {
-        name: payload.basics.name?.trim() || undefined,
-        phone: payload.basics.phone?.trim() || undefined,
-        linkedin: payload.basics.linkedin?.trim() || undefined,
-        github: payload.basics.github?.trim() || undefined,
-        location: payload.basics.location?.label || undefined,
-        country: payload.basics.location?.country || undefined,
-        admin1: payload.basics.location?.admin1 || undefined,
-        city: payload.basics.location?.city || undefined,
-        cityNorm: payload.basics.location?.cityNorm || undefined,
-        admin1Norm: payload.basics.location?.admin1Norm || undefined,
+        name:
+          typeof basics.name === "string"
+            ? basics.name.trim()
+            : undefined,
+        phone:
+          typeof basics.phone === "string"
+            ? basics.phone.trim()
+            : undefined,
+        linkedin:
+          typeof basics.linkedin === "string"
+            ? basics.linkedin.trim()
+            : undefined,
+        github:
+          typeof basics.github === "string"
+            ? basics.github.trim()
+            : undefined,
+
+        // Ubicación desglosada
+        location:
+          typeof loc.label === "string"
+            ? loc.label
+            : typeof loc.location === "string"
+            ? loc.location
+            : undefined,
+        country: loc.country ?? undefined,
+        admin1: loc.admin1 ?? undefined,
+        city: loc.city ?? undefined,
+        cityNorm: loc.cityNorm ?? undefined,
+        admin1Norm: loc.admin1Norm ?? undefined,
         locationLat:
-          typeof payload.basics.location?.lat === "number"
-            ? payload.basics.location.lat
-            : undefined,
+          typeof loc.lat === "number" ? loc.lat : undefined,
         locationLng:
-          typeof payload.basics.location?.lng === "number"
-            ? payload.basics.location.lng
+          typeof loc.lng === "number" ? loc.lng : undefined,
+
+        // Educación + CV
+        highestEducationLevel: highestLevel,
+        resumeUrl:
+          typeof meta.resumeUrl === "string"
+            ? meta.resumeUrl
             : undefined,
-        highestEducationLevel: payload.education?.highestLevel || undefined,
-        resumeUrl: payload.meta?.resumeUrl || undefined,
       },
     });
 
-    // 2) WorkExperience: full replace
+    // ─────────────────────────────────────────────
+    // 2) EXPERIENCIA: full replace
+    // ─────────────────────────────────────────────
     await tx.workExperience.deleteMany({ where: { userId } });
+
     if (payload.experiences?.length) {
       await tx.workExperience.createMany({
-        data: payload.experiences.map((e, idx) => ({
-          userId,
-          role: e.role,
-          company: e.company,
-          startDate: new Date(e.startDate),
-          endDate: e.endDate ? new Date(e.endDate) : null,
-          isCurrent: !!e.isCurrent,
-          // sortIndex no existe en WorkExperience (si lo quieres, agrégalo al schema)
-        })),
+        data: payload.experiences.map((e) => {
+          const start = e.startDate ? new Date(e.startDate as any) : new Date();
+          const end = e.endDate ? new Date(e.endDate as any) : null;
+
+          return {
+            userId,
+            role: e.role,
+            company: e.company,
+            startDate: start,
+            endDate: end,
+            isCurrent: !!e.isCurrent,
+          };
+        }),
       });
     }
 
-    // 3) Education: full replace
+    // ─────────────────────────────────────────────
+    // 3) EDUCATION: full replace
+    // ─────────────────────────────────────────────
     await tx.education.deleteMany({ where: { userId } });
-    if (payload.education?.items?.length) {
+
+    const eduItems: any[] = Array.isArray(eduBlock.items)
+      ? eduBlock.items
+      : [];
+
+    if (eduItems.length) {
       await tx.education.createMany({
-        data: payload.education.items.map((ed, idx) => ({
+        data: eduItems.map((ed, idx) => ({
           userId,
           level: ed.level ?? null,
           status: ed.status,
@@ -63,16 +125,19 @@ export async function upsertCandidateResume(
           program: ed.program || null,
           country: ed.country || null,
           city: ed.city || null,
-          startDate: ed.startDate ? new Date(ed.startDate) : null,
-          endDate: ed.endDate ? new Date(ed.endDate) : null,
+          startDate: ed.startDate ? new Date(ed.startDate as any) : null,
+          endDate: ed.endDate ? new Date(ed.endDate as any) : null,
           grade: ed.grade || null,
           description: ed.description || null,
-          sortIndex: typeof ed.sortIndex === "number" ? ed.sortIndex : idx,
+          sortIndex:
+            typeof ed.sortIndex === "number" ? ed.sortIndex : idx,
         })),
       });
     }
 
+    // ─────────────────────────────────────────────
     // Helpers para TaxonomyTerm
+    // ─────────────────────────────────────────────
     async function ensureTerm(kind: TaxonomyKind, label: string) {
       const slug = slugify(label);
       const existing = await tx.taxonomyTerm.findFirst({
@@ -87,13 +152,21 @@ export async function upsertCandidateResume(
       return created.id;
     }
 
-    // 4) CandidateSkill: full replace
+    // ─────────────────────────────────────────────
+    // 4) SKILLS
+    // ─────────────────────────────────────────────
     await tx.candidateSkill.deleteMany({ where: { userId } });
+
     if (payload.skills?.length) {
       for (const s of payload.skills) {
-        const termId = s.termId
-          ? s.termId
-          : await ensureTerm(TaxonomyKind.SKILL, s.name);
+        const sAny = s as any;
+        const maybeTermId = sAny.termId as string | undefined;
+
+        const termId =
+          typeof maybeTermId === "string" && maybeTermId
+            ? maybeTermId
+            : await ensureTerm(TaxonomyKind.SKILL, s.name);
+
         await tx.candidateSkill.create({
           data: {
             userId,
@@ -105,33 +178,57 @@ export async function upsertCandidateResume(
       }
     }
 
-    // 5) Idiomas: full replace
+    // ─────────────────────────────────────────────
+    // 5) IDIOMAS
+    // ─────────────────────────────────────────────
     await tx.candidateLanguage.deleteMany({ where: { userId } });
+
     if (payload.languages?.length) {
       for (const lang of payload.languages) {
-        const termId = lang.termId
-          ? lang.termId
-          : await ensureTerm(TaxonomyKind.LANGUAGE, lang.name);
+        const langAny = lang as any;
+        const maybeTermId = langAny.termId as string | undefined;
+
+        const termId =
+          typeof maybeTermId === "string" && maybeTermId
+            ? maybeTermId
+            : await ensureTerm(TaxonomyKind.LANGUAGE, lang.name);
+
         await tx.candidateLanguage.create({
           data: { userId, termId, level: lang.level },
         });
       }
     }
 
-    // 6) Certificaciones: full replace
+    // ─────────────────────────────────────────────
+    // 6) CERTIFICACIONES
+    // ─────────────────────────────────────────────
     await tx.candidateCredential.deleteMany({ where: { userId } });
-    if (payload.credentials?.length) {
-      for (const c of payload.credentials) {
-        const termId = c.termId
-          ? c.termId
-          : await ensureTerm(TaxonomyKind.CERTIFICATION, c.name);
+
+    // credentials puede no existir en ResumePayload → pasamos por any
+    const credsRaw: any =
+      (payload as any).credentials ??
+      (payload as any).certifications ??
+      [];
+
+    const creds: any[] = Array.isArray(credsRaw) ? credsRaw : [];
+
+    if (creds.length) {
+      for (const c of creds) {
+        const cAny = c as any;
+        const maybeTermId = cAny.termId as string | undefined;
+
+        const termId =
+          typeof maybeTermId === "string" && maybeTermId
+            ? maybeTermId
+            : await ensureTerm(TaxonomyKind.CERTIFICATION, c.name);
+
         await tx.candidateCredential.create({
           data: {
             userId,
             termId,
             issuer: c.issuer || null,
-            issuedAt: c.issuedAt ? new Date(c.issuedAt) : null,
-            expiresAt: c.expiresAt ? new Date(c.expiresAt) : null,
+            issuedAt: c.issuedAt ? new Date(c.issuedAt as any) : null,
+            expiresAt: c.expiresAt ? new Date(c.expiresAt as any) : null,
             credentialId: c.credentialId || null,
             url: c.url || null,
           },
@@ -143,7 +240,9 @@ export async function upsertCandidateResume(
   });
 }
 
+// ─────────────────────────────────────────────
 // util básico para slug
+// ─────────────────────────────────────────────
 function slugify(s: string) {
   return s
     .normalize("NFD")

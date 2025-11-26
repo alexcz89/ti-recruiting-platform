@@ -190,8 +190,10 @@ export function distanceKm(a: GeoPoint, b: GeoPoint): number {
   const dLng = deg2rad(b.lng - a.lng);
   const s1 =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(a.lat)) * Math.cos(deg2rad(b.lat)) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    Math.cos(deg2rad(a.lat)) *
+      Math.cos(deg2rad(b.lat)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(s1), Math.sqrt(1 - s1));
   return R * c;
 }
@@ -210,4 +212,69 @@ export async function tryGeocodeCityToPoint(
     // eslint-disable-next-line no-empty
   } catch {}
   return null;
+}
+
+/* =====================================================
+ * 🔁 Wrappers de compatibilidad: searchPlaces / reversePlace
+ * ==================================================== */
+
+export type SearchPlacesOptions = {
+  limit?: number;
+  proximity?: GeoPoint;
+  language?: string | string[];
+  types?: string | string[];
+  country?: string | string[];
+};
+
+/**
+ * ✅ Compatibilidad con código antiguo:
+ * searchPlaces(query, options?) → usa geocodeForward por debajo.
+ */
+export async function searchPlaces(
+  query: string,
+  options?: SearchPlacesOptions
+): Promise<GeoFeature[]> {
+  return geocodeForward(query, options);
+}
+
+export type ReversePlaceOptions = {
+  limit?: number;
+  language?: string | string[];
+  types?: string | string[];
+};
+
+/**
+ * ✅ Compatibilidad con código antiguo:
+ * Puede llamarse como:
+ *   reversePlace({ lat, lng })
+ *   reversePlace(lat, lng)
+ */
+export async function reversePlace(
+  point: GeoPoint,
+  options?: ReversePlaceOptions
+): Promise<GeoFeature | null>;
+export async function reversePlace(
+  lat: number,
+  lng: number,
+  options?: ReversePlaceOptions
+): Promise<GeoFeature | null>;
+export async function reversePlace(
+  a: GeoPoint | number,
+  b?: number | ReversePlaceOptions,
+  c?: ReversePlaceOptions
+): Promise<GeoFeature | null> {
+  let point: GeoPoint;
+  let options: ReversePlaceOptions | undefined;
+
+  if (typeof a === "number") {
+    // reversePlace(lat, lng, options?)
+    point = { lat: a, lng: (b as number) ?? 0 };
+    options = c;
+  } else {
+    // reversePlace({ lat, lng }, options?)
+    point = a;
+    options = b as ReversePlaceOptions | undefined;
+  }
+
+  return geocodeReverse(point, options);
 }

@@ -34,12 +34,12 @@ type Filters = {
 
 export default function JobsRouteClient({
   initialFilters,
-  isCandidate,
 }: {
   initialFilters: Filters;
-  isCandidate?: boolean;
+  isCandidate?: boolean; // se acepta en el tipo por compatibilidad, pero no se usa
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // mantenemos el job seleccionado completo, no solo el id
+  const [selectedJob, setSelectedJob] = useState<any | null>(null);
 
   const {
     q,
@@ -92,8 +92,18 @@ export default function JobsRouteClient({
     if (q) rows.push({ label: `Texto: ${q}`, href: removeFilterLink("q") });
     if (location) rows.push({ label: `Ubicación: ${location}`, href: removeFilterLink("location") });
     if (remote === true) rows.push({ label: "Solo remoto", href: removeFilterLink("remote") });
-    if (employmentType) rows.push({ label: `Tipo: ${EMP_LABEL[employmentType] ?? employmentType}`, href: removeFilterLink("employmentType") });
-    if (seniority) rows.push({ label: `Seniority: ${SEN_LABEL[seniority] ?? seniority}`, href: removeFilterLink("seniority") });
+    if (employmentType) {
+      rows.push({
+        label: `Tipo: ${EMP_LABEL[employmentType] ?? employmentType}`,
+        href: removeFilterLink("employmentType"),
+      });
+    }
+    if (seniority) {
+      rows.push({
+        label: `Seniority: ${SEN_LABEL[seniority] ?? seniority}`,
+        href: removeFilterLink("seniority"),
+      });
+    }
     if (sort) {
       rows.push({
         label: `Orden: ${sort === "recent" ? "Recientes" : "Relevancia"}`,
@@ -216,9 +226,8 @@ export default function JobsRouteClient({
           <section aria-label="Listado de vacantes" className="lg:col-span-7">
             <JobsFeed
               initial={{ q, location, remote, employmentType, seniority, sort, limit }}
-              isCandidate={isCandidate}
-              onSelect={(id) => setSelectedId(id)}
-              selectedId={selectedId ?? undefined}
+              onSelect={(job) => setSelectedJob(job)}
+              selectedId={selectedJob?.id ?? null}
             />
           </section>
 
@@ -227,7 +236,18 @@ export default function JobsRouteClient({
             className="hidden lg:block lg:col-span-5"
           >
             <div className="sticky top-20">
-              <JobDetailPanel jobId={selectedId ?? undefined} isCandidate={isCandidate} />
+              {selectedJob ? (
+                <JobDetailPanel job={selectedJob} />
+              ) : (
+                <div className="glass-card p-6 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+                  <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">
+                    Selecciona una vacante
+                  </p>
+                  <p className="text-sm text-muted mt-1">
+                    Aquí verás los detalles completos de la vacante seleccionada.
+                  </p>
+                </div>
+              )}
             </div>
           </aside>
         </div>

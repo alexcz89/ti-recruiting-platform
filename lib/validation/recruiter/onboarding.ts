@@ -18,6 +18,8 @@ export const OnboardingCompanyStep2Schema = z.object({
     .url("URL inválida (ej. https://miempresa.com)")
     .optional()
     .or(z.literal("")),
+  // Estos dos campos hoy son solo informativos en el front;
+  // el backend actualmente no los guarda en Company.
   industry: z.string().optional(),
   description: z.string().max(240, "Máximo 240 caracteres").optional(),
   // opcional si luego agregas upload (aquí guardamos solo URL)

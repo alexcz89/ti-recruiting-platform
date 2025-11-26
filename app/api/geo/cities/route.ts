@@ -1,9 +1,23 @@
 // app/api/geo/cities/route.ts
 import { NextResponse } from "next/server";
-import { geoIsEnabled, suggestCities } from "@/lib/geo";
+import { geoIsEnabled, suggestCities, type GeoFeature } from "@/lib/geo";
 
 // Fuerza Node.js runtime (el SDK/proveedor necesita Node, no Edge)
 export const runtime = "nodejs";
+
+// ---- Tipos locales ----
+type CityPlace = {
+  id: string;
+  fullName: string;
+  label: string;
+  city: string | null;
+  admin1: string | null;
+  country: string | null;      // ISO-2 (mx, us, etc.) o null
+  cityNorm: string | null;
+  admin1Norm: string | null;
+  lat: number | null;
+  lng: number | null;
+};
 
 // helpers
 function stripDiacriticsLower(s: string | null | undefined) {
@@ -23,22 +37,30 @@ function stripDiacriticsLower(s: string | null | undefined) {
  * Nota: country intenta ser ISO-2 si suggestCities la expone (countryCode),
  * si no, usamos el último fragmento de fullName como etiqueta país (no ISO).
  */
-function mapToPlace(r: any) {
+function mapToPlace(r: GeoFeature): CityPlace {
   const id: string = String(r.id ?? "");
   const name: string = String(r.name ?? "");
   const fullName: string = String(r.fullName ?? name);
 
   // Heurística: "Ciudad, Estado/Región, País"
-  const parts = fullName.split(",").map((s: string) => s.trim()).filter(Boolean);
+  const parts = fullName
+    .split(",")
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+
   const city = parts[0] || name || null;
-  const admin1 = parts.length >= 3 ? parts[1] : (parts.length === 2 ? parts[1] : null);
-  // Si lib/geo expone countryCode (ISO-2), úsalo; si no, dejamos null.
-  const countryIso2 = (r.countryCode ? String(r.countryCode).toUpperCase() : null) || null;
+  const admin1 =
+    parts.length >= 3 ? parts[1] : parts.length === 2 ? parts[1] : null;
 
-  const lat = r?.coords?.lat ?? null;
-  const lng = r?.coords?.lng ?? null;
+  // ISO-2 si está disponible
+  const countryIso2 =
+    (r.countryCode ? String(r.countryCode).toUpperCase() : null) || null;
 
-  const label = fullName || [city, admin1, countryIso2].filter(Boolean).join(", ");
+  const lat = r.coords?.lat ?? null;
+  const lng = r.coords?.lng ?? null;
+
+  const label =
+    fullName || [city, admin1, countryIso2].filter(Boolean).join(", ");
 
   return {
     // mantenemos id/fullName por compatibilidad con clientes viejos que sólo pintan texto
@@ -49,7 +71,7 @@ function mapToPlace(r: any) {
     label,
     city,
     admin1,
-    country: countryIso2, // <- pensado para tu columna @db.VarChar(2)
+    country: countryIso2, // pensado para tu columna @db.VarChar(2)
     cityNorm: stripDiacriticsLower(city),
     admin1Norm: stripDiacriticsLower(admin1),
     lat: typeof lat === "number" ? lat : null,
@@ -59,25 +81,35 @@ function mapToPlace(r: any) {
 
 export async function GET(req: Request) {
   const t0 = Date.now();
-  try {
-    const { searchParams } = new URL(req.url);
-    const q = (searchParams.get("q") || "").trim();
-    const countries = searchParams.getAll("country").map((c) => c.toLowerCase());
-    const debug = searchParams.get("debug") === "1";
+  const url = new URL(req.url);
+  const searchParams = url.searchParams;
 
+  const q = (searchParams.get("q") || "").trim();
+  const countries = searchParams.getAll("country").map((c) => c.toLowerCase());
+  const debug = searchParams.get("debug") === "1";
+
+  try {
     if (!q) {
-      const empty = [];
+      const empty: CityPlace[] = [];
       if (debug) {
-        return NextResponse.json({ meta: { q, note: "empty query" }, items: empty }, { status: 200 });
+        return NextResponse.json(
+          { meta: { q, note: "empty query" }, items: empty },
+          { status: 200 }
+        );
       }
       return NextResponse.json(empty, { status: 200 });
     }
 
     if (!geoIsEnabled) {
-      console.warn("[/api/geo/cities] geoIsEnabled=false (¿MAPBOX_TOKEN en .env?)");
-      const empty = [];
+      console.warn(
+        "[/api/geo/cities] geoIsEnabled=false (¿MAPBOX_TOKEN en .env?)"
+      );
+      const empty: CityPlace[] = [];
       if (debug) {
-        return NextResponse.json({ meta: { q, geoIsEnabled: false }, items: empty }, { status: 200 });
+        return NextResponse.json(
+          { meta: { q, geoIsEnabled: false }, items: empty },
+          { status: 200 }
+        );
       }
       return NextResponse.json(empty, { status: 200 });
     }
@@ -88,7 +120,7 @@ export async function GET(req: Request) {
     });
 
     // 👉 ahora devolvemos objetos con estructura completa
-    const places = (results || []).map(mapToPlace);
+    const places: CityPlace[] = (results || []).map(mapToPlace);
 
     // Log básico al server
     console.log(
@@ -100,6 +132,7 @@ export async function GET(req: Request) {
     );
 
     if (debug) {
+      const sample = results[0];
       return NextResponse.json(
         {
           meta: {
@@ -108,14 +141,14 @@ export async function GET(req: Request) {
             count: places.length,
             tookMs: Date.now() - t0,
             geoIsEnabled: true,
-            sample: results[0]
+            sample: sample
               ? {
-                  id: results[0].id,
-                  name: results[0].name,
-                  fullName: results[0].fullName,
-                  type: results[0].type,
-                  countryCode: results[0].countryCode,
-                  coords: results[0].coords,
+                  id: sample.id,
+                  name: sample.name,
+                  fullName: sample.fullName,
+                  type: sample.type,
+                  countryCode: sample.countryCode,
+                  coords: sample.coords,
                   mapped: places[0],
                 }
               : null,
@@ -131,8 +164,11 @@ export async function GET(req: Request) {
   } catch (err: any) {
     console.error("[/api/geo/cities] ERROR:", err);
     // No romper UX: responde arreglo vacío cuando falla
-    if (searchParams.get("debug") === "1") {
-      return NextResponse.json({ error: true, message: String(err?.message || err) }, { status: 200 });
+    if (debug) {
+      return NextResponse.json(
+        { error: true, message: String(err?.message || err) },
+        { status: 200 }
+      );
     }
     return NextResponse.json([], { status: 200 });
   }

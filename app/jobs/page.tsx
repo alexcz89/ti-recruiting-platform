@@ -53,10 +53,13 @@ export default async function PublicJobsPage({ searchParams }: { searchParams: S
 
       <header className="space-y-1 pt-2">
         <h1 className="text-3xl font-bold">Vacantes disponibles</h1>
-        <p className="text-sm text-zinc-600">Selecciona una vacante de la lista para ver los detalles.</p>
+        <p className="text-sm text-zinc-600">
+          Selecciona una vacante de la lista para ver los detalles.
+        </p>
       </header>
 
-      <ClientSplitView filters={filters} isCandidate={true} />
+      {/* ✅ isCandidate eliminado */}
+      <ClientSplitView filters={filters} />
     </main>
   );
 }
