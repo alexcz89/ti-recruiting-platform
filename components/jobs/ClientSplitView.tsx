@@ -20,12 +20,7 @@ type Filters = {
 // Si quieres, luego tipamos mejor este Job en lugar de "any"
 type SelectedJob = any | null;
 
-export default function ClientSplitView({
-  filters,
-}: {
-  filters: Filters;
-}) {
-  // Mantiene el job seleccionado
+export default function ClientSplitView({ filters }: { filters: Filters }) {
   const [selectedJob, setSelectedJob] = React.useState<SelectedJob>(null);
 
   return (
@@ -37,7 +32,6 @@ export default function ClientSplitView({
           selectedId={selectedJob?.id ?? null}
           onSelect={(job) => setSelectedJob(job)}
           onFirstLoad={(job) => {
-            // Autoseleccionar la primera vacante si aún no hay selección
             setSelectedJob((curr: SelectedJob) => curr ?? job ?? null);
           }}
         />
@@ -45,20 +39,22 @@ export default function ClientSplitView({
 
       {/* Detalle de vacante (7/12) */}
       <section className="md:col-span-7">
-        <div className="sticky top-24">
-          {selectedJob ? (
-            <JobDetailPanel job={selectedJob} />
-          ) : (
-            <div className="glass-card p-6 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-              <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">
-                Selecciona una vacante
-              </p>
-              <p className="text-sm text-muted mt-1">
-                Aquí verás los detalles completos de la vacante seleccionada.
-              </p>
-            </div>
-          )}
-        </div>
+        {selectedJob ? (
+          <JobDetailPanel
+            key={selectedJob.id ?? "empty"}
+            job={selectedJob}
+            canApply
+          />
+        ) : (
+          <div className="glass-card p-6 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">
+              Selecciona una vacante
+            </p>
+            <p className="text-sm text-muted mt-1">
+              Aquí verás los detalles completos de la vacante seleccionada.
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );

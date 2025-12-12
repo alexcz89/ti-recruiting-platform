@@ -1,9 +1,15 @@
 // app/page.tsx
 import { Suspense } from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import JobSearchBar from "@/components/JobSearchBar";
 import PricingSection from "@/components/marketing/PricingSection";
 import { Users, Briefcase, Handshake } from "lucide-react";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /** Badge redondo para el hero */
 function IconBadge({
@@ -37,7 +43,24 @@ function IconBadge({
   );
 }
 
-export default function Home() {
+export default async function Home() {
+  const session = await getServerSession(authOptions);
+  const role = (session?.user as any)?.role as
+    | "ADMIN"
+    | "RECRUITER"
+    | "CANDIDATE"
+    | undefined;
+
+  // Reclutador / Admin -> dashboard
+  if (role === "RECRUITER" || role === "ADMIN") {
+    redirect("/dashboard/overview");
+  }
+
+  // Candidato logeado -> resumen de perfil
+  if (role === "CANDIDATE") {
+    redirect("/profile/summary");
+  }
+
   const year = new Date().getFullYear();
 
   return (
@@ -58,7 +81,8 @@ export default function Home() {
                   Nuevo
                 </span>
                 <span className="hidden sm:inline">
-                  Postula con un clic, gestiona en el Pipeline y crea tu CV profesional
+                  Postula con un clic, gestiona en el Pipeline y crea tu CV
+                  profesional
                 </span>
                 <span className="sm:hidden">Crea tu CV y postula fácil</span>
               </div>
@@ -67,13 +91,14 @@ export default function Home() {
                 Plataforma de Reclutamiento TI
               </h1>
               <p className="mt-3 text-sm sm:text-base text-muted-foreground">
-                Conecta talento con empresas. Publica vacantes, busca candidatos y lleva
-                tus procesos en un Pipeline visual y simple.
+                Conecta talento con empresas. Publica vacantes, busca
+                candidatos y lleva tus procesos en un Pipeline visual y
+                simple.
               </p>
 
               {/* CTAs rápidos */}
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/candidate/resume" className="btn btn-primary">
+                <Link href="/cv/builder" className="btn btn-primary">
                   ✨ Crea tu CV
                 </Link>
                 <Link href="/jobs" className="btn btn-ghost">
@@ -102,7 +127,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Buscador envuelto en Suspense (por useSearchParams) */}
+          {/* Buscador envuelto en Suspense */}
           <div className="mt-8">
             <Suspense
               fallback={
@@ -124,16 +149,14 @@ export default function Home() {
                 Creador de CV profesional
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Completa tu perfil en minutos y genera un CV con diseño limpio, optimizado
-                para reclutadores y listo para descargar en PDF.
+                Completa tu perfil en minutos y genera un CV con diseño limpio,
+                optimizado para reclutadores y listo para descargar en PDF.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Link href="/candidate/resume" className="btn btn-primary">
+              {/* solo queda este botón */}
+              <Link href="/cv/builder" className="btn btn-primary">
                 Comenzar ahora
-              </Link>
-              <Link href="/resume/builder" className="btn btn-ghost">
-                Ver detalles
               </Link>
             </div>
           </div>
@@ -149,17 +172,25 @@ export default function Home() {
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-500/15 ring-2 ring-violet-400/30">
                 <Briefcase className="h-5 w-5 text-violet-600 dark:text-violet-300" />
               </div>
-              <h2 className="text-lg font-semibold text-foreground">Soy reclutador</h2>
+              <h2 className="text-lg font-semibold text-foreground">
+                Soy reclutador
+              </h2>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Publica vacantes, gestiona postulaciones y avanza candidatos en tu Pipeline
-              con un flujo visual tipo Kanban.
+              Publica vacantes, gestiona postulaciones y avanza candidatos en
+              tu Pipeline con un flujo visual tipo Kanban.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/auth/signin?role=RECRUITER" className="btn btn-ghost">
+              <Link
+                href="/auth/signin?role=RECRUITER"
+                className="btn btn-ghost"
+              >
                 Iniciar sesión
               </Link>
-              <Link href="/auth/signup/recruiter" className="btn btn-primary">
+              <Link
+                href="/auth/signup/recruiter"
+                className="btn btn-primary"
+              >
                 Crear cuenta
               </Link>
             </div>
@@ -171,20 +202,28 @@ export default function Home() {
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/15 ring-2 ring-emerald-400/30">
                 <Users className="h-5 w-5 text-emerald-600 dark:text-emerald-300" />
               </div>
-              <h2 className="text-lg font-semibold text-foreground">Soy talento</h2>
+              <h2 className="text-lg font-semibold text-foreground">
+                Soy talento
+              </h2>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Crea tu perfil, sube o genera tu CV con nuestro constructor y postúlate a
-              vacantes en segundos, sin formularios eternos.
+              Crea tu perfil, sube o genera tu CV con nuestro constructor y
+              postúlate a vacantes en segundos, sin formularios eternos.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
-              <Link href="/candidate/resume" className="btn btn-primary">
+              <Link href="/cv/builder" className="btn btn-primary">
                 ✨ Crea tu CV
               </Link>
-              <Link href="/auth/signin?role=CANDIDATE" className="btn btn-ghost">
+              <Link
+                href="/auth/signin?role=CANDIDATE"
+                className="btn btn-ghost"
+              >
                 Iniciar sesión
               </Link>
-              <Link href="/auth/signup/candidate" className="btn btn-ghost">
+              <Link
+                href="/auth/signup/candidate"
+                className="btn btn-ghost"
+              >
                 Crear cuenta
               </Link>
             </div>
@@ -197,26 +236,32 @@ export default function Home() {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="text-2xl">⚡</div>
-            <h3 className="mt-2 font-semibold text-foreground">Postulación rápida</h3>
+            <h3 className="mt-2 font-semibold text-foreground">
+              Postulación rápida
+            </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Aplica con un clic y mantén tu información centralizada para futuras
-              vacantes.
+              Aplica con un clic y mantén tu información centralizada para
+              futuras vacantes.
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="text-2xl">🎯</div>
-            <h3 className="mt-2 font-semibold text-foreground">Búsqueda precisa</h3>
+            <h3 className="mt-2 font-semibold text-foreground">
+              Búsqueda precisa
+            </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Filtra por título, tecnología, seniority y ubicación para encontrar el
-              mejor match.
+              Filtra por título, tecnología, seniority y ubicación para
+              encontrar el mejor match.
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card/70 p-4 shadow-sm backdrop-blur md:p-6">
             <div className="text-2xl">📊</div>
-            <h3 className="mt-2 font-semibold text-foreground">Kanban de procesos</h3>
+            <h3 className="mt-2 font-semibold text-foreground">
+              Kanban de procesos
+            </h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Visualiza cada etapa del proceso y avanza candidatos sin fricción, con
-              estatus claros.
+              Visualiza cada etapa del proceso y avanza candidatos sin
+              fricción, con estatus claros.
             </p>
           </div>
         </div>

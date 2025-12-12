@@ -154,18 +154,26 @@ function AuthHoverMenu() {
           group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100
         "
       >
-        <div className="soft-panel shadow-md">
+        <div
+          className="
+            soft-panel shadow-md
+            border border-zinc-200 dark:border-zinc-800
+            bg-white dark:bg-zinc-900
+          "
+        >
           <div className="p-2">
             <HeaderTiny>Candidatos</HeaderTiny>
             <MenuItem href="/auth/signin?role=CANDIDATE" label="Iniciar sesión" />
-            <MenuItem href="/auth/signin?role=CANDIDATE&signup=1" label="Crear cuenta" />
+            {/* 👉 lleva directo al signup de candidato */}
+            <MenuItem href="/auth/signup/candidate" label="Crear cuenta" />
           </div>
 
           <div className="border-t border-zinc-200/70 dark:border-zinc-800/70 p-2">
             <HeaderTiny>Employers</HeaderTiny>
             <MenuItem href="/auth/signin?role=RECRUITER" label="Iniciar sesión (Employers)" />
+            {/* 👉 lleva directo al signup de reclutador */}
             <MenuItem
-              href="/auth/signin?role=RECRUITER&signup=1"
+              href="/auth/signup/recruiter"
               label="Crear cuenta (Employers)"
             />
           </div>

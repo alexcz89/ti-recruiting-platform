@@ -1,9 +1,11 @@
 // app/layout.tsx
 import "./globals.css";
+import "react-phone-input-2/lib/style.css"; // ⬅️ CSS base de react-phone-input-2
+
 import { Inter } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
-import { ThemeScript } from "@/components/ThemeProvider"; // ⬅️ Script anti-flash de tema
+import { ThemeScript } from "@/components/ThemeProvider";
 
 const inter = Inter({ subsets: ["latin"] });
 

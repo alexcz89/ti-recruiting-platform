@@ -16,6 +16,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { fromNow } from "@/lib/dates";
+import ApplyButton, { ApplyResult } from "./ApplyButton";
 
 type DegreeLevel = "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD";
 type EduItem = { name: string; required: boolean };
@@ -28,7 +29,6 @@ type Job = {
   employmentType?: string | null;
   seniority?: string | null;
   description?: string | null;
-  // opcionalmente, si en algún momento agregas columna extra:
   descriptionHtml?: string | null;
   skills?: string[] | null;
 
@@ -197,6 +197,63 @@ function labelDegree(d?: DegreeLevel | null) {
   }
 }
 
+/* ---------- Helpers para prestaciones ---------- */
+
+const BENEFIT_LABELS: Record<string, string> = {
+  auto: "Auto",
+  sgmm: "SGMM",
+  vida: "Seguro de vida",
+  bonos: "Bonos",
+  otros: "Otras prestaciones",
+  vales: "Vales",
+  celular: "Celular",
+  comedor: "Comedor",
+  primaVac: "Prima vacacional",
+  aguinaldo: "Aguinaldo",
+  utilidades: "Utilidades",
+  vacaciones: "Vacaciones",
+  combustible: "Combustible",
+  fondoAhorro: "Fondo de ahorro",
+  primaVacPct: "Prima vacacional",
+  vacacionesDias: "Vacaciones",
+  aguinaldoDias: "Aguinaldo",
+};
+
+function formatBenefitLabel(key: string, value: any): string | null {
+  const k = key.toString();
+  const lower = k.toLowerCase();
+
+  // Campos de control que no queremos mostrar
+  if (lower === "showbenefits") return null;
+
+  const base =
+    BENEFIT_LABELS[k] ?? BENEFIT_LABELS[lower] ?? k.replace(/([A-Z])/g, " $1");
+
+  // Booleanos: solo mostramos el nombre si es true
+  if (typeof value === "boolean") {
+    return value ? base : null;
+  }
+
+  // Numéricos especiales
+  if (typeof value === "number") {
+    if (lower === "primavacpct") {
+      return `${base}: ${value}%`;
+    }
+    if (lower === "vacacionesdias") {
+      return `${base}: ${value} días`;
+    }
+    if (lower === "aguinaldodias") {
+      return `${base}: ${value} días`;
+    }
+    return `${base}: ${value}`;
+  }
+
+  // String u otros
+  const vStr = String(value).trim();
+  if (!vStr) return base;
+  return `${base}: ${vStr}`;
+}
+
 export default function JobDetailPanel({ job, canApply = true, editHref }: Props) {
   if (!job) {
     return (
@@ -210,13 +267,11 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     (job.updatedAt && new Date(job.updatedAt)) ||
     (job.createdAt && new Date(job.createdAt));
 
-const rawDesc = job.description ?? "";
-const { meta, mainDesc } = parseMeta(rawDesc);
+  const rawDesc = job.description ?? "";
+  const { meta, mainDesc } = parseMeta(rawDesc);
 
-// Preferimos descriptionHtml (HTML con <ul>/<ol>)
-// Si no hay, convertimos saltos de línea a <br/> para que no se vea todo corrido
-const fallbackText = (mainDesc || rawDesc).replace(/\n/g, "<br/>");
-const descHtml = (job as any).descriptionHtml || fallbackText;
+  const fallbackText = (mainDesc || rawDesc).replace(/\n/g, "<br/>");
+  const descHtml = (job as any).descriptionHtml || fallbackText;
 
   const companyNameRaw = (job as any).company?.name ?? job.company ?? "—";
   const companyLogoRaw =
@@ -301,12 +356,23 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
   const currency = (detail.currency ?? meta?.currency) ?? "MXN";
   const schedule = detail.schedule ?? meta?.schedule ?? null;
 
-  const benefits =
+  const benefitsObj: Record<string, boolean | number | string> | null =
     (detail.showBenefits &&
       detail.benefitsJson &&
       Object.keys(detail.benefitsJson).length > 0 &&
       detail.benefitsJson) ||
     (meta?.benefits && Object.keys(meta.benefits).length > 0 ? meta.benefits : null);
+
+  // Transformamos prestaciones a etiquetas bonitas y filtramos basura
+  const benefitItems =
+    benefitsObj &&
+    Object.entries(benefitsObj)
+      .map(([k, v]) => {
+        const label = formatBenefitLabel(k, v);
+        if (!label) return null;
+        return { key: k, label };
+      })
+      .filter(Boolean) as { key: string; label: string }[];
 
   const { req: reqSkills, nice: niceSkills } = splitSkills(job.skills);
   const haveAnySkills = reqSkills.length + niceSkills.length > 0;
@@ -341,7 +407,8 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
     return () => {
       cancelled = true;
     };
-  }, [job.id]); // se re-evalúa al cambiar de job
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.id]);
 
   const hasEducation = Boolean(minDegree || educationJson.length);
 
@@ -364,6 +431,66 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
       }
     } catch {}
   };
+
+  // --------- applyAction que consume /api/applications ---------
+  const applyAction = React.useCallback(async (): Promise<ApplyResult> => {
+    try {
+      const res = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId: job.id }),
+      });
+
+      if (res.status === 401) {
+        const callback =
+          typeof window !== "undefined"
+            ? encodeURIComponent(
+                window.location.pathname + window.location.search
+              )
+            : encodeURIComponent(`/jobs/${job.id}`);
+        return {
+          error: "AUTH",
+          signinUrl: `/auth/signin?callbackUrl=${callback}`,
+        };
+      }
+
+      if (res.status === 403) {
+        const data = await res.json().catch(() => null);
+        return {
+          error: "ROLE",
+          message: data?.error || "Solo candidatos pueden postular",
+        };
+      }
+
+      if (res.status === 409) {
+        const data = await res.json().catch(() => null);
+        return {
+          error: "ALREADY_APPLIED",
+          message: data?.error || "Ya postulaste a esta vacante",
+        };
+      }
+
+      if (res.ok) {
+        const redirect =
+          typeof window !== "undefined"
+            ? `${window.location.pathname}?applied=1`
+            : `/jobs/${job.id}`;
+        return { ok: true, redirect };
+      }
+
+      const data = await res.json().catch(() => null);
+      return {
+        error: "UNKNOWN",
+        message: data?.error || "Error al postular",
+      };
+    } catch (e) {
+      console.error("[JobDetailPanel] applyAction error", e);
+      return {
+        error: "UNKNOWN",
+        message: "No se pudo conectar con el servidor",
+      };
+    }
+  }, [job.id]);
 
   return (
     <article className="relative rounded-2xl border glass-card p-4 md:p-6">
@@ -391,15 +518,7 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
           )}
 
           {canApply ? (
-            <form method="POST" action="/api/applications">
-              <input type="hidden" name="jobId" value={job.id} />
-              <button
-                type="submit"
-                className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium shadow hover:bg-emerald-700"
-              >
-                Postularme
-              </button>
-            </form>
+            <ApplyButton applyAction={applyAction} jobKey={job.id} />
           ) : editHref ? (
             <Link
               href={editHref}
@@ -444,7 +563,9 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
               <Chip tone="blue">{meta?.employmentType || job.employmentType}</Chip>
             )}
             {job.seniority && <Chip tone="violet">{job.seniority}</Chip>}
-            <Chip tone="emerald">{job.remote ? "Remoto" : "Presencial / Híbrido"}</Chip>
+            <Chip tone="emerald">
+              {job.remote ? "Remoto" : "Presencial / Híbrido"}
+            </Chip>
             {schedule && <Chip tone="amber">{schedule}</Chip>}
             {when && (
               <Chip outline tone="zinc" className="text-[11px]">
@@ -563,23 +684,18 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
           </div>
 
           {/* Prestaciones */}
-          {benefits && (
+          {benefitItems && benefitItems.length > 0 && (
             <div className="mt-4 rounded-xl border glass-card p-4 md:p-6">
               <div className="flex items-center gap-2 mb-2">
                 <Gift className="h-4 w-4 text-muted" />
                 <p className="text-[12px] font-medium text-muted">Prestaciones</p>
               </div>
               <div className="flex flex-wrap gap-1.5">
-                {Object.entries(benefits)
-                  .filter(([_, v]) =>
-                    typeof v === "boolean" ? v : String(v).trim() !== ""
-                  )
-                  .map(([k, v]) => (
-                    <Chip key={k} outline tone="emerald">
-                      {k}
-                      {typeof v !== "boolean" && `: ${v}`}
-                    </Chip>
-                  ))}
+                {benefitItems.map((b) => (
+                  <Chip key={b.key} outline tone="emerald">
+                    {b.label}
+                  </Chip>
+                ))}
               </div>
             </div>
           )}
@@ -591,30 +707,24 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
                 <BadgeCheck className="h-4 w-4 text-muted" />
                 <p className="text-[12px] font-medium text-muted">Certificaciones</p>
               </div>
-              <p className="text-sm text-default">{meta.certifications.join(", ")}</p>
+              <p className="text-sm text-default">
+                {meta.certifications.join(", ")}
+              </p>
             </div>
           )}
         </section>
 
-        {/* Descripción: HTML con bullets */}
+        {/* Descripción */}
         {descHtml && (
           <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-            <h3 className="text-sm font-semibold text-default mb-1.5">Descripción</h3>
+            <h3 className="text-sm font-semibold text-default mb-1.5">
+              Descripción
+            </h3>
             <div
               className="job-html prose prose-sm max-w-none text-sm leading-relaxed text-default/90 dark:prose-invert"
               dangerouslySetInnerHTML={{
                 __html: DOMPurify.sanitize(descHtml, {
-                  ALLOWED_TAGS: [
-                    "b",
-                    "strong",
-                    "i",
-                    "em",
-                    "p",
-                    "br",
-                    "ul",
-                    "ol",
-                    "li",
-                  ],
+                  ALLOWED_TAGS: ["b", "strong", "i", "em", "p", "br", "ul", "ol", "li"],
                   ALLOWED_ATTR: [],
                 }),
               }}
@@ -622,28 +732,8 @@ const descHtml = (job as any).descriptionHtml || fallbackText;
           </section>
         )}
       </div>
-
-      {/* Footer fijo */}
-      <div className="sticky bottom-0 z-10 border-t glass-card p-4 md:p-6">
-        {canApply ? (
-          <form method="POST" action="/api/applications">
-            <input type="hidden" name="jobId" value={job.id} />
-            <button
-              type="submit"
-              className="bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-medium shadow hover:bg-emerald-700"
-            >
-              Postularme
-            </button>
-          </form>
-        ) : editHref ? (
-          <Link
-            href={editHref}
-            className="inline-flex items-center rounded-lg border px-4 py-2 text-sm font-medium text-default hover:bg-zinc-50 dark:hover:bg-zinc-800"
-          >
-            Editar vacante
-          </Link>
-        ) : null}
-      </div>
     </article>
   );
 }
+
+

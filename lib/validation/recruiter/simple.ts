@@ -1,4 +1,4 @@
-// lib/validation/recruiter/simple.ts
+// lib/validation/recruiter/simple.ts 
 import { z } from "zod";
 import { FREE_DOMAINS } from "./signup";
 
@@ -13,7 +13,8 @@ export const RecruiterSimpleSignupSchema = z
       .email("Correo inválido")
       .refine((v) => {
         const domain = v.split("@")[1]?.toLowerCase() || "";
-        return !FREE_DOMAINS.has(domain);
+        // FREE_DOMAINS es un string[], usamos includes en vez de has
+        return !FREE_DOMAINS.includes(domain);
       }, "Usa un correo corporativo (no aceptamos dominios gratuitos)"),
     firstName: z.string().min(2, "Mínimo 2").max(60),
     lastName: z.string().min(2, "Mínimo 2").max(60),
@@ -30,4 +31,6 @@ export const RecruiterSimpleSignupSchema = z
     path: ["confirmPassword"],
   });
 
-export type RecruiterSimpleSignupInput = z.infer<typeof RecruiterSimpleSignupSchema>;
+export type RecruiterSimpleSignupInput = z.infer<
+  typeof RecruiterSimpleSignupSchema
+>;

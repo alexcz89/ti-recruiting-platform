@@ -5,7 +5,7 @@ import * as React from "react";
 import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
-import { MoreHorizontal, User2, FileText, Mail, Trash2 } from "lucide-react";
+import { MoreHorizontal, User2, FileText, MessageCircle, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -18,6 +18,7 @@ type Props = {
   candidateHref?: string;
   resumeUrl?: string | null;
   candidateEmail: string;
+  candidatePhone?: string | null; // 👈 nuevo
 };
 
 export default function ActionsMenu({
@@ -25,6 +26,7 @@ export default function ActionsMenu({
   candidateHref,
   resumeUrl,
   candidateEmail,
+  candidatePhone,
 }: Props) {
   const [pending, startTransition] = useTransition();
 
@@ -54,12 +56,26 @@ export default function ActionsMenu({
     });
   };
 
-  const handleCopyEmail = () => {
-    if (!candidateEmail) return;
-    navigator.clipboard.writeText(candidateEmail).then(
-      () => toast.success("Email copiado"),
-      () => toast.error("No se pudo copiar el email")
-    );
+  const handleSendWhatsApp = () => {
+    if (!candidatePhone) {
+      toast.error("Este candidato no tiene número de WhatsApp registrado.");
+      return;
+    }
+
+    const phone = candidatePhone.replace(/\D/g, "");
+    if (!phone) {
+      toast.error("Número de WhatsApp inválido.");
+      return;
+    }
+
+    const baseMessage = `Hola, vi tu postulación${
+      candidateEmail ? ` registrada con el correo ${candidateEmail}` : ""
+    } y me gustaría platicar contigo.`;
+
+    const message = encodeURIComponent(baseMessage);
+    const url = `https://wa.me/${phone}?text=${message}`;
+
+    window.open(url, "_blank", "noopener,noreferrer");
   };
 
   const handleOpenResume = () => {
@@ -151,7 +167,7 @@ export default function ActionsMenu({
         </DropdownMenuItem>
 
         <DropdownMenuItem
-          onClick={handleCopyEmail}
+          onClick={handleSendWhatsApp}
           className="
             group flex cursor-pointer items-center gap-1 rounded-[6px]
             px-1.5 py-0.5 text-[11px] leading-[1.05]
@@ -162,15 +178,15 @@ export default function ActionsMenu({
           <span
             className="
               inline-flex h-5 w-5 items-center justify-center
-              rounded-full bg-indigo-50 text-indigo-600
-              group-hover:bg-indigo-100 group-hover:text-indigo-700
-              dark:bg-indigo-500/10 dark:text-indigo-300
-              dark:group-hover:bg-indigo-500/20
+              rounded-full bg-emerald-50 text-emerald-600
+              group-hover:bg-emerald-100 group-hover:text-emerald-700
+              dark:bg-emerald-500/10 dark:text-emerald-300
+              dark:group-hover:bg-emerald-500/20
             "
           >
-            <Mail className="h-3 w-3" />
+            <MessageCircle className="h-3 w-3" />
           </span>
-          <span>Copiar email</span>
+          <span>Enviar WhatsApp</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem

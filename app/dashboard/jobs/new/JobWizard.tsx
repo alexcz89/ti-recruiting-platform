@@ -2158,12 +2158,36 @@ function makeDefaultValues({
     if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
   }
 
-  const html = sanitizeHtml(initial?.descriptionHtml || "");
-  const plain = initial?.description
-    ? initial.description
-    : html
-    ? htmlToPlain(html)
-    : "";
+  // 🔹 Paso 4: reconstruimos HTML a partir de descripción plana si hace falta
+  const plainFromInitial = initial?.description || "";
+
+  // pequeña utilidad para escapar texto plano
+  const escapeHtml = (str: string) =>
+    str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  let rawHtml = initial?.descriptionHtml || "";
+
+  if (!rawHtml && plainFromInitial) {
+    // Si no hay HTML guardado pero sí texto plano (caso de editar),
+    // generamos un HTML básico para que el editor no se vea vacío.
+    const lines = plainFromInitial
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    if (lines.length) {
+      rawHtml = lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n");
+    } else {
+      rawHtml = "";
+    }
+  }
+
+  const html = sanitizeHtml(rawHtml || "");
+  const plain =
+    plainFromInitial ||
+    (html ? htmlToPlain(html) : "");
 
   const initEdu = Array.isArray(initial?.education) ? initial!.education : [];
   const eduReq = initEdu.filter((e) => e.required).map((e) => e.name);

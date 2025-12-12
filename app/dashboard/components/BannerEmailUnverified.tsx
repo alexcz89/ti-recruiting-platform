@@ -1,3 +1,4 @@
+// app/dashboard/components/BannerEmailUnverified.tsx
 "use client";
 
 import { useTransition } from "react";

@@ -8,7 +8,7 @@ import { Toaster } from "sonner";
 type NavItem = { href: string; label: string };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard/overview", label: "Overview" },
+  { href: "/dashboard/overview", label: "Panel" },
   { href: "/dashboard/jobs", label: "Vacantes" },
   { href: "/dashboard/billing", label: "Facturación y plan" },
   { href: "/dashboard/billing/taxdata", label: "Datos fiscales" },

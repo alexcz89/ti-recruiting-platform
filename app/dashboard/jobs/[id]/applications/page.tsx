@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect"; // cliente (dropdown estado)
 import ActionsMenu from "./ActionsMenu"; // cliente (menú de 3 puntos)
+import { Phone, FileText as FileTextIcon, Search } from "lucide-react";
 
 /** Normaliza a slug simple para comparar skills */
 function slugSkill(s: string) {
@@ -113,6 +114,22 @@ function computeMatchScore(
   return Math.round((hits / universe.length) * 100);
 }
 
+function matchLabel(score: number) {
+  if (score >= 90) return "Muy alto";
+  if (score >= 70) return "Alto";
+  if (score >= 40) return "Medio";
+  if (score > 0) return "Bajo";
+  return "Sin datos";
+}
+
+/** Niveles de idioma (para mostrar en los chips de candidato) */
+const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
+  NATIVE: "Nativo",
+  PROFESSIONAL: "Profesional",
+  CONVERSATIONAL: "Conversacional",
+  BASIC: "Básico",
+};
+
 /** Seguridad: si no está el campo en DB, caer en REVIEW por defecto */
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const INTEREST_LABEL: Record<InterestKey, string> = {
@@ -127,12 +144,18 @@ function getAppInterest(a: any): InterestKey {
   return "REVIEW";
 }
 
+type SortKey = "match" | "recent" | "name";
+
 export default async function JobApplicationsPage({
   params,
   searchParams,
 }: {
   params: { id: string };
-  searchParams?: { interest?: InterestKey | "ALL" };
+  searchParams?: {
+    interest?: InterestKey | "ALL";
+    q?: string;
+    sort?: SortKey | string;
+  };
 }) {
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) {
@@ -197,12 +220,18 @@ export default async function JobApplicationsPage({
           skills: true,
           certifications: true,
           candidateSkills: { select: { term: { select: { label: true } } } },
+          candidateLanguages: {
+            select: {
+              level: true,
+              term: { select: { label: true } },
+            },
+          },
         },
       },
     },
   });
 
-  // Contadores por interés derivado
+  // Contadores por interés derivado (no dependen de búsqueda)
   const counters: Record<InterestKey, number> = {
     REVIEW: 0,
     MAYBE: 0,
@@ -212,7 +241,7 @@ export default async function JobApplicationsPage({
   for (const a of allApps) counters[getAppInterest(a)]++;
   const total = allApps.length;
 
-  // Filtro por interés con centinela "ALL"
+  // Parámetros de filtro/orden
   const interestParam = searchParams?.interest as string | undefined;
   const chosenInterest: InterestKey | undefined =
     !interestParam
@@ -221,21 +250,102 @@ export default async function JobApplicationsPage({
       ? undefined
       : (interestParam as InterestKey);
 
-  const apps = chosenInterest
-    ? allApps.filter((a) => getAppInterest(a) === chosenInterest)
-    : allApps;
+  const qParam = (searchParams?.q ?? "").toString();
+  const q = qParam.trim().toLowerCase();
 
-  // Hrefs siempre absolutos. Para "Todos" usamos ?interest=ALL
+  const sortParamRaw = (searchParams?.sort as string | undefined) ?? "match";
+  const sortKey: SortKey =
+    sortParamRaw === "recent" || sortParamRaw === "name"
+      ? sortParamRaw
+      : "match";
+
+  // Enriquecer apps con meta: skills, score, nombre, última actividad
+  let enriched = allApps.map((a) => {
+    const candSkills = gatherCandidateSkills(a.candidate as any);
+    const matched = intersectSkillsOnlyMatches(candSkills, jobAllSkills, 8);
+    const score = computeMatchScore(candSkills, jobAllSkills);
+
+    const fullName =
+      a.candidate?.name ||
+      [
+        (a.candidate as any)?.firstName,
+        (a.candidate as any)?.lastName,
+      ]
+        .filter(Boolean)
+        .join(" ") ||
+      "—";
+
+    const lastActivity = a.createdAt;
+
+    return {
+      ...a,
+      _candSkills: candSkills,
+      _matched: matched,
+      _score: score,
+      _fullName: fullName,
+      _lastActivity: lastActivity,
+    };
+  });
+
+  // Filtro por interés
+  if (chosenInterest) {
+    enriched = enriched.filter((a) => getAppInterest(a) === chosenInterest);
+  }
+
+  // Filtro por búsqueda (nombre, email, ciudad, skills)
+  if (q) {
+    enriched = enriched.filter((a) => {
+      const textParts = [
+        a._fullName ?? "",
+        a.candidate?.email ?? "",
+        a.candidate?.location ?? "",
+        (a._candSkills ?? []).join(" "),
+      ];
+      const haystack = textParts.join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }
+
+  // Orden
+  const apps = [...enriched].sort((a, b) => {
+    if (sortKey === "recent") {
+      return (
+        new Date(b._lastActivity).getTime() -
+        new Date(a._lastActivity).getTime()
+      );
+    }
+    if (sortKey === "name") {
+      return (a._fullName || "").localeCompare(b._fullName || "", "es", {
+        sensitivity: "base",
+      });
+    }
+    // match (desc)
+    return (b._score ?? 0) - (a._score ?? 0);
+  });
+
+  // Hrefs siempre absolutos, preservando q y sort
   const buildInterestHref = (i?: InterestKey | "ALL") => {
     const usp = new URLSearchParams();
     if (i) usp.set("interest", i);
+    if (qParam) usp.set("q", qParam);
+    if (sortKey) usp.set("sort", sortKey);
+    return `/dashboard/jobs/${job.id}/applications${
+      usp.toString() ? `?${usp.toString()}` : ""
+    }`;
+  };
+
+  const buildSortHref = (sort: SortKey) => {
+    const usp = new URLSearchParams();
+    if (interestParam) usp.set("interest", interestParam);
+    if (qParam) usp.set("q", qParam);
+    usp.set("sort", sort);
     return `/dashboard/jobs/${job.id}/applications${
       usp.toString() ? `?${usp.toString()}` : ""
     }`;
   };
 
   const headerBtnClasses =
-      "inline-flex items-center whitespace-nowrap rounded-full border border-zinc-200 bg-white/80 px-5 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900";
+    "inline-flex items-center whitespace-nowrap rounded-full border border-zinc-200 bg-white/80 px-5 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900";
 
   return (
     <main className="max-w-none p-0">
@@ -249,17 +359,10 @@ export default async function JobApplicationsPage({
               {job.location ? ` · ${job.location}` : ""} · Publicada{" "}
               {fromNow(job.createdAt)} · Actualizada {fromNow(job.updatedAt)}
             </p>
-            <div className="mt-3 flex flex-wrap gap-2 text-xs text-zinc-600">
-              <MetricBadge label="Recibidas" value={total} />
-              <MetricBadge label="En revisión" value={counters.REVIEW} />
-              <MetricBadge label="En duda" value={counters.MAYBE} />
-              <MetricBadge label="Aceptados" value={counters.ACCEPTED} />
-              <MetricBadge label="Rechazados" value={counters.REJECTED} />
-            </div>
           </div>
 
           {/* Botones en una sola fila, todos iguales */}
-          <div className="flex flex-row items-center gap-2">
+          <div className="flex flex-row flex-wrap items-center gap-2">
             <Link
               href={`/dashboard/jobs/${job.id}`}
               className={headerBtnClasses}
@@ -319,7 +422,8 @@ export default async function JobApplicationsPage({
                 : "Aún no hay postulaciones para esta vacante."}
             </p>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Cuando lleguen postulaciones las verás aquí.
+              Usa el botón “Ver vacante” para compartirla y recibir
+              postulaciones.
             </p>
           </div>
         ) : (
@@ -330,6 +434,60 @@ export default async function JobApplicationsPage({
               dark:border-zinc-800 dark:bg-zinc-950/70
             "
           >
+            {/* 🔧 Barra de herramientas sobre la tabla */}
+            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              {/* Buscador */}
+              <form
+                method="get"
+                className="relative w-full max-w-xs text-sm"
+              >
+                {interestParam && (
+                  <input
+                    type="hidden"
+                    name="interest"
+                    value={interestParam}
+                  />
+                )}
+                {sortKey && (
+                  <input type="hidden" name="sort" value={sortKey} />
+                )}
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                <input
+                  name="q"
+                  defaultValue={qParam}
+                  className="w-full rounded-full border border-zinc-200 bg-white/70 py-1.5 pl-7 pr-3 text-xs text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/60 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                  placeholder="Buscar candidato, email, ciudad o skill…"
+                />
+              </form>
+
+              {/* Orden */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  Ordenar por:
+                </span>
+                <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 text-xs dark:bg-zinc-900/70">
+                  <SortPill
+                    href={buildSortHref("match")}
+                    active={sortKey === "match"}
+                  >
+                    Match
+                  </SortPill>
+                  <SortPill
+                    href={buildSortHref("recent")}
+                    active={sortKey === "recent"}
+                  >
+                    Actividad
+                  </SortPill>
+                  <SortPill
+                    href={buildSortHref("name")}
+                    active={sortKey === "name"}
+                  >
+                    Nombre
+                  </SortPill>
+                </div>
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-zinc-50 text-left text-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-300">
@@ -343,38 +501,33 @@ export default async function JobApplicationsPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {apps.map((a) => {
-                    const candSkills = gatherCandidateSkills(a.candidate as any);
-                    const matched = intersectSkillsOnlyMatches(
-                      candSkills,
-                      jobAllSkills,
-                      8
-                    );
-                    const shown = matched.slice(0, 5);
+                  {apps.map((a: any) => {
+                    const candSkills: string[] = a._candSkills ?? [];
+                    const matched: Array<{
+                      name: string;
+                      required: boolean;
+                    }> = a._matched ?? [];
+
+                    const shown = matched.slice(0, 4);
                     const hiddenCount = Math.max(
                       0,
                       matched.length - shown.length
                     );
-                    const score = computeMatchScore(
-                      candSkills,
-                      jobAllSkills
-                    );
+                    const score: number = a._score ?? 0;
 
                     const candidateHref = a.candidate?.id
                       ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
                       : undefined;
 
-                    const fullName =
-                      a.candidate?.name ||
-                      [
-                        (a.candidate as any)?.firstName,
-                        (a.candidate as any)?.lastName,
-                      ]
-                        .filter(Boolean)
-                        .join(" ") ||
-                      "—";
+                    const fullName: string = a._fullName ?? "—";
+                    const lastActivity = a._lastActivity ?? a.createdAt;
 
-                    const lastActivity = a.createdAt;
+                    const languages = a.candidate?.candidateLanguages ?? [];
+                    const phone = a.candidate?.phone as string | undefined;
+                    const resumeUrl = a.candidate?.resumeUrl as
+                      | string
+                      | undefined;
+                    const hasWhatsApp = phone?.trim().startsWith("+52");
 
                     return (
                       <tr
@@ -397,19 +550,60 @@ export default async function JobApplicationsPage({
                             <span className="text-xs text-zinc-500 dark:text-zinc-400">
                               {a.candidate?.location ?? "—"}
                             </span>
-                            {a.status && (
-                              <span
-                                className="mt-1 inline-flex w-max items-center rounded-full border bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-200"
-                                title="Estado del pipeline"
-                              >
-                                {a.status}
-                              </span>
+
+                            {/* Idiomas principales */}
+                            {languages.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {languages.slice(0, 2).map((l: any) => (
+                                  <span
+                                    key={`${l.term.label}-${l.level}`}
+                                    className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200"
+                                  >
+                                    {l.term.label}{" "}
+                                    {LANGUAGE_LEVEL_LABEL[l.level] ??
+                                      l.level}
+                                  </span>
+                                ))}
+                                {languages.length > 2 && (
+                                  <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                    +{languages.length - 2}
+                                  </span>
+                                )}
+                              </div>
                             )}
+
+                            {/* Pequeños iconos de contacto / CV */}
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
+                              {phone && (
+                                <span
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70 dark:text-zinc-200"
+                                  title={`Tel: ${phone}`}
+                                >
+                                  <Phone className="h-3 w-3" />
+                                </span>
+                              )}
+                              {resumeUrl && (
+                                <a
+                                  href={resumeUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
+                                  title="Ver CV"
+                                >
+                                  <FileTextIcon className="h-3 w-3" />
+                                </a>
+                              )}
+                              {hasWhatsApp && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                                  WhatsApp
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 
                         <td className="py-2 px-3">
-                          <div className="min-w-[88px]">
+                          <div className="min-w-[110px]">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold">
                                 {score}%
@@ -427,6 +621,9 @@ export default async function JobApplicationsPage({
                                 />
                               </div>
                             </div>
+                            <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                              {matchLabel(score)}
+                            </p>
                           </div>
                         </td>
 
@@ -447,6 +644,11 @@ export default async function JobApplicationsPage({
                                         : "Deseable en la vacante"
                                     }
                                   >
+                                    {s.required && (
+                                      <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide">
+                                        Req
+                                      </span>
+                                    )}
                                     {s.name}
                                   </span>
                                 );
@@ -484,8 +686,9 @@ export default async function JobApplicationsPage({
                           <ActionsMenu
                             applicationId={a.id}
                             candidateHref={candidateHref}
-                            resumeUrl={a.candidate?.resumeUrl}
+                            resumeUrl={resumeUrl ?? null}
                             candidateEmail={a.candidate?.email ?? ""}
+                            candidatePhone={phone ?? null}
                           />
                         </td>
                       </tr>
@@ -527,15 +730,25 @@ function FilterPill({
   );
 }
 
-function MetricBadge({ label, value }: { label: string; value: number }) {
+function SortPill({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <span
-      className="inline-flex min-w-[140px] items-center justify-between rounded-full border px-3 py-1 text-xs
-                 border-zinc-200 bg-zinc-50 text-zinc-700
-                 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-200"
+    <Link
+      href={href}
+      className={`px-3 py-1 text-xs rounded-full transition ${
+        active
+          ? "bg-white text-emerald-700 shadow-sm dark:bg-emerald-500/20 dark:text-emerald-200"
+          : "text-zinc-600 hover:bg-white/70 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+      }`}
     >
-      <span className="text-[11px]">{label}</span>
-      <span className="text-xs font-semibold">{value}</span>
-    </span>
+      {children}
+    </Link>
   );
 }

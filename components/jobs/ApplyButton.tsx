@@ -6,41 +6,56 @@ import { useRouter } from "next/navigation";
 import { Loader2, Send, CheckCircle2 } from "lucide-react";
 import { toastSuccess, toastError, toastInfo } from "@/lib/ui/toast";
 
-type ApplyResult =
+export type ApplyResult =
   | { ok: true; redirect: string }
   | { error: "AUTH"; signinUrl: string }
   | { error: "ROLE"; message: string }
+  | { error: "ALREADY_APPLIED"; message?: string } // 👈 caso especial
   | { error: "UNKNOWN"; message?: string };
+
+type Props = {
+  applyAction: () => Promise<ApplyResult>;
+  label?: string;
+  className?: string;
+  /**
+   * Identificador estable de la vacante. Sirve para resetear el
+   * estado visual del botón cuando cambias de job.
+   */
+  jobKey?: string;
+};
 
 export default function ApplyButton({
   applyAction,
   label = "Postularme",
   className = "",
-}: {
-  applyAction: () => Promise<ApplyResult>;
-  /** etiqueta del botón (opcional) */
-  label?: string;
-  /** clases extra opcionales */
-  className?: string;
-}) {
+  jobKey,
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
   const [justApplied, setJustApplied] = React.useState(false);
 
+  // 👉 Cada vez que cambie la vacante, reseteamos el estado del botón
+  React.useEffect(() => {
+    setJustApplied(false);
+  }, [jobKey]);
+
   const onClick = () => {
     if (pending) return;
+
     startTransition(async () => {
       const res = await applyAction();
 
-      // ✅ Rama de éxito
+      // ✅ Éxito
       if ("ok" in res && res.ok) {
         setJustApplied(true);
         toastSuccess("Postulación enviada");
-        router.push(res.redirect);
+        if (res.redirect) {
+          router.push(res.redirect);
+        }
         return;
       }
 
-      // ✅ A partir de aquí solo manejamos ramas con 'error'
+      // ✅ Errores tipados
       if ("error" in res) {
         if (res.error === "AUTH") {
           toastInfo("Inicia sesión como candidato para postular");
@@ -53,12 +68,18 @@ export default function ApplyButton({
           return;
         }
 
-        // UNKNOWN u otros
+        if (res.error === "ALREADY_APPLIED") {
+          toastInfo(res.message || "Ya postulaste a esta vacante");
+          // dejamos el botón en “¡Listo!” solo para ESTA vacante
+          setJustApplied(true);
+          return;
+        }
+
         toastError(res.message || "No se pudo postular");
         return;
       }
 
-      // Fallback ultra defensivo (por si algún día cambia el tipo)
+      // Fallback defensivo
       toastError("No se pudo postular");
     });
   };
@@ -103,9 +124,10 @@ export default function ApplyButton({
         )}
       </button>
 
-      {/* Texto auxiliar con color “muted” que funciona en claro/oscuro */}
       <span className="text-[12px] text-muted" aria-live="polite">
-        {pending ? "Procesando tu postulación…" : "Se enviará sin carta ni adjuntos."}
+        {pending
+          ? "Procesando tu postulación…"
+          : "Se enviará sin carta ni adjuntos."}
       </span>
     </div>
   );

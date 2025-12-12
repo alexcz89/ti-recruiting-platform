@@ -1,6 +1,5 @@
 // app/dashboard/overview/page.tsx
 import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
 import Link from "next/link";
 import Image from "next/image";
 import { fromNow } from "@/lib/dates";
@@ -8,12 +7,17 @@ import SetupChecklist from "../components/SetupChecklist";
 import BannerEmailUnverified from "../components/BannerEmailUnverified";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import clsx from "clsx";
+import { Eye, Users, Pencil } from "lucide-react";
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
 const d7 = 7 * 24 * 60 * 60 * 1000;
 
 export default async function OverviewPage() {
-  const companyId = await getSessionCompanyId().catch(() => null);
+  // 🔐 Tomamos todo desde la sesión de next-auth
+  const session = await getServerSession(authOptions);
+  const user = session?.user as any | undefined;
+  const companyId = user?.companyId as string | undefined;
 
   if (!companyId) {
     return (
@@ -30,13 +34,10 @@ export default async function OverviewPage() {
     );
   }
 
-  // Sesión y datos para banner/checklist
-  const session = await getServerSession(authOptions);
-  const sessionEmail = session?.user?.email || null;
-
-  const dbUser = sessionEmail
+  // Usuario en BD (para emailVerified, etc.)
+  const dbUser = user?.id
     ? await prisma.user.findUnique({
-        where: { email: sessionEmail },
+        where: { id: user.id as string },
         select: { id: true, name: true, emailVerified: true },
       })
     : null;
@@ -106,19 +107,21 @@ export default async function OverviewPage() {
         <div className="sticky top-12 z-30">
           <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border glass-card p-4 md:p-6">
             <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold leading-tight text-default">Overview</h1>
+              <h1 className="text-3xl font-bold leading-tight text-default">Panel</h1>
 
               {/* Badge con logo + nombre de la empresa */}
-              {company?.logoUrl && (
+              {company && (
                 <span className="inline-flex items-center gap-2 badge">
-                  <Image
-                    src={company.logoUrl}
-                    alt={company?.name ?? "Logo"}
-                    width={20}
-                    height={20}
-                    className="h-5 w-5 rounded-sm object-contain"
-                  />
-                  <span className="text-default">{company?.name}</span>
+                  {company.logoUrl && (
+                    <Image
+                      src={company.logoUrl}
+                      alt={company.name}
+                      width={20}
+                      height={20}
+                      className="h-5 w-5 rounded-sm object-contain"
+                    />
+                  )}
+                  <span className="text-default">{company.name}</span>
                 </span>
               )}
             </div>
@@ -142,7 +145,10 @@ export default async function OverviewPage() {
 
         {/* Checklist de configuración */}
         <SetupChecklist
-          user={{ name: (session?.user as any)?.name ?? null }}
+          user={{
+            name: dbUser?.name ?? (user?.name as string) ?? null,
+            emailVerified: dbUser?.emailVerified ?? null,
+          }}
           profile={profile}
           company={company}
         />
@@ -178,70 +184,84 @@ export default async function OverviewPage() {
               />
             ) : (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {myJobs.map((j) => (
-                  <li key={j.id} className="py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          {/* mini logo en la línea del título */}
-                          {j.company?.logoUrl && (
-                            <Image
-                              src={j.company.logoUrl}
-                              alt={j.company?.name ?? "Logo"}
-                              width={16}
-                              height={16}
-                              className="h-4 w-4 rounded-sm object-contain"
-                            />
-                          )}
-                          <Link
-                            href={`/dashboard/jobs/${j.id}`}
-                            className="font-medium hover:underline text-default"
+                {myJobs.map((j) => {
+                  const hasApps = j._count.applications > 0;
+                  return (
+                    <li key={j.id} className="py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            {/* mini logo en la línea del título */}
+                            {j.company?.logoUrl && (
+                              <Image
+                                src={j.company.logoUrl}
+                                alt={j.company?.name ?? "Logo"}
+                                width={16}
+                                height={16}
+                                className="h-4 w-4 rounded-sm object-contain"
+                              />
+                            )}
+                            <Link
+                              href={`/dashboard/jobs/${j.id}`}
+                              className="font-medium hover:underline text-default"
+                            >
+                              {j.title}
+                            </Link>
+                            <span className="text-[11px] text-muted">
+                              · {j.location ?? "—"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted mt-0.5">
+                            {j.employmentType ?? "—"} ·{" "}
+                            {j.remote ? "Remoto" : "Presencial/Híbrido"}
+                          </p>
+                          <p className="text-[11px] text-muted mt-1">
+                            Actualizada {fromNow(j.updatedAt)}
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right flex flex-col items-end gap-2">
+                          <span
+                            className={clsx(
+                              "inline-flex items-center rounded-full px-2 py-1 text-[11px] gap-1 border",
+                              hasApps
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:border-emerald-500/40 dark:text-emerald-100"
+                                : "bg-zinc-50 text-zinc-500 border-zinc-200/60 dark:bg-zinc-900/40 dark:border-zinc-700/60 dark:text-zinc-300"
+                            )}
                           >
-                            {j.title}
-                          </Link>
-                          <span className="text-[11px] text-muted">
-                            · {j.location ?? "—"}
+                            <Users className="h-3 w-3" />
+                            {j._count.applications} postul.
                           </span>
-                        </div>
-                        <p className="text-xs text-muted mt-0.5">
-                          {j.employmentType ?? "—"} ·{" "}
-                          {j.remote ? "Remoto" : "Presencial/Híbrido"}
-                        </p>
-                        <p className="text-[11px] text-muted mt-1">
-                          Actualizada {fromNow(j.updatedAt)}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <span className="inline-flex items-center rounded-full border px-2 py-1 text-[11px] badge">
-                          {j._count.applications} postul.
-                        </span>
-                        <div className="mt-2 flex items-center gap-1">
-                          <Link
-                            href={`/dashboard/jobs/${j.id}`}
-                            className="btn-ghost text-xs"
-                            title="Ver Pipeline"
-                          >
-                            Ver
-                          </Link>
-                          <Link
-                            href={`/dashboard/jobs/${j.id}/applications`}
-                            className="btn-ghost text-xs"
-                            title="Ver candidatos"
-                          >
-                            Candidatos
-                          </Link>
-                          <Link
-                            href={`/dashboard/jobs/${j.id}/edit`}
-                            className="btn-ghost text-xs"
-                            title="Editar"
-                          >
-                            Editar
-                          </Link>
+                          <div className="flex items-center gap-1.5">
+                            <Link
+                              href={`/dashboard/jobs/${j.id}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200/70 bg-zinc-50/70 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                              title="Ver vacante"
+                            >
+                              <Eye className="h-4 w-4" />
+                              <span className="sr-only">Ver vacante</span>
+                            </Link>
+                            <Link
+                              href={`/dashboard/jobs/${j.id}/applications`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200/70 bg-zinc-50/70 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                              title="Ver candidatos"
+                            >
+                              <Users className="h-4 w-4" />
+                              <span className="sr-only">Ver candidatos</span>
+                            </Link>
+                            <Link
+                              href={`/dashboard/jobs/${j.id}/edit`}
+                              className="inline-flex h-8 w-8 items-center justifycenter rounded-lg border border-zinc-200/70 bg-zinc-50/70 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                              title="Editar vacante"
+                            >
+                              <Pencil className="h-4 w-4" />
+                              <span className="sr-only">Editar vacante</span>
+                            </Link>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -264,57 +284,30 @@ export default async function OverviewPage() {
                 body="Cuando lleguen postulaciones las verás aquí."
               />
             ) : (
-              <div className="overflow-x-auto rounded-xl soft-panel p-0 border-0">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead className="text-left">
-                    <tr className="text-muted">
-                      <th className="py-2.5 px-3.5 font-medium">Candidato</th>
-                      <th className="py-2.5 px-3.5 font-medium">Email</th>
-                      <th className="py-2.5 px-3.5 font-medium">Vacante</th>
-                      <th className="py-2.5 px-3.5 font-medium">Fecha</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                    {recent.map((r, idx) => (
-                      <tr
-                        key={r.id}
-                        className={`transition hover:bg-zinc-50 dark:hover:bg-zinc-900/40 ${
-                          idx % 2 === 1
-                            ? "bg-zinc-50/50 dark:bg-zinc-900/30"
-                            : ""
-                        }`}
-                      >
-                        <td className="py-2.5 px-3.5 text-default">
-                          {r.candidate?.name || "—"}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-default whitespace-nowrap">
-                          {r.candidate?.email || "—"}
-                        </td>
-                        <td className="py-2.5 px-3.5 text-default">
-                          {r.job?.id ? (
-                            <Link
-                              href={`/dashboard/jobs/${r.job.id}/applications`}
-                              className="hover:underline"
-                            >
-                              {r.job?.title ?? "—"}
-                            </Link>
-                          ) : (
-                            r.job?.title ?? "—"
-                          )}
-                          <span className="ml-1 text-xs text-muted">
-                            ({r.job?.company?.name ?? "—"})
-                          </span>
-                        </td>
-                        <td
-                          className="py-2.5 px-3.5 text-default whitespace-nowrap"
-                          title={new Date(r.createdAt).toLocaleString()}
-                        >
-                          {fromNow(r.createdAt)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {recent.map((r) => (
+                  <div
+                    key={r.id}
+                    className="rounded-xl border border-zinc-100/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/40 px-3 py-2.5 flex items-start justify-between gap-3 hover:border-blue-200 hover:bg-blue-50/60 dark:hover:border-blue-500/40 dark:hover:bg-blue-950/40 transition"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-default truncate">
+                        {r.candidate?.name || "Candidato sin nombre"}
+                      </p>
+                      <p className="text-xs text-muted truncate">
+                        {r.job?.title ?? "Vacante eliminada"} · {fromNow(r.createdAt)}
+                      </p>
+                      <p className="text-[11px] text-zinc-400 truncate">
+                        {r.candidate?.email || "—"}
+                      </p>
+                    </div>
+                    {r.status && (
+                      <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-500/40">
+                        {r.status}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -334,21 +327,55 @@ function KpiCard({
   value: string | number;
   tone?: "zinc" | "emerald" | "amber" | "blue" | "violet";
 }) {
-  const tones: Record<string, string> = {
-    zinc: "glass-card p-4 md:p-6",
-    emerald:
-      "glass-card p-4 md:p-6 border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-900/20",
-    amber:
-      "glass-card p-4 md:p-6 border-amber-300/50 dark:border-amber-400/20 bg-amber-50/60 dark:bg-amber-900/20",
-    blue:
-      "glass-card p-4 md:p-6 border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
-    violet:
-      "glass-card p-4 md:p-6 border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
+  const tones: Record<
+    string,
+    { card: string; accent: string }
+  > = {
+    zinc: {
+      card: "glass-card",
+      accent: "bg-zinc-100 dark:bg-zinc-800",
+    },
+    emerald: {
+      card:
+        "glass-card border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-900/20",
+      accent: "bg-emerald-100 dark:bg-emerald-800",
+    },
+    amber: {
+      card:
+        "glass-card border-amber-300/50 dark:border-amber-400/20 bg-amber-50/60 dark:bg-amber-900/20",
+      accent: "bg-amber-100 dark:bg-amber-800",
+    },
+    blue: {
+      card:
+        "glass-card border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
+      accent: "bg-blue-100 dark:bg-blue-800",
+    },
+    violet: {
+      card:
+        "glass-card border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
+      accent: "bg-violet-100 dark:bg-violet-800",
+    },
   };
+
+  const t = tones[tone] ?? tones.zinc;
+
   return (
-    <div className={`rounded-2xl border shadow-sm hover:shadow-md transition ${tones[tone]}`}>
-      <p className="text-sm text-muted">{label}</p>
-      <p className="mt-2 text-4xl font-bold text-default">{value}</p>
+    <div
+      className={clsx(
+        // 🔽 menos padding y borde un poco más compacto
+        "rounded-xl border shadow-sm hover:shadow-md transition flex items-center gap-3 p-3 md:p-4",
+        t.card
+      )}
+    >
+      {/* 🔽 indicador más pequeño */}
+      <div className={clsx("h-6 w-6 rounded-lg", t.accent)} />
+      <div>
+        <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+          {label}
+        </p>
+        {/* 🔽 número menos gigante */}
+        <p className="mt-1 text-2xl md:text-3xl font-bold text-default">{value}</p>
+      </div>
     </div>
   );
 }

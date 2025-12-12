@@ -1,8 +1,10 @@
+// app/dashboard/profile/ProfileForm.tsx
 "use client";
 
-import { useTransition } from "react";
+import { useTransition, useState } from "react";
 import { toast } from "sonner";
 import { saveRecruiterProfile } from "./actions";
+import PhoneInputField from "@/components/PhoneInputField";
 
 type Props = {
   initial: { phone: string; website: string };
@@ -10,10 +12,13 @@ type Props = {
 
 export default function ProfileForm({ initial }: Props) {
   const [pending, startTransition] = useTransition();
+  const [phone, setPhone] = useState(initial.phone || "");
 
   return (
     <form
       action={(formData: FormData) => {
+        formData.set("phone", phone); // 👈 aseguramos que se envíe el valor del phone input
+
         startTransition(async () => {
           const res = await saveRecruiterProfile(null as any, formData);
           if (res?.ok) toast.success(res.message || "Perfil actualizado");
@@ -23,18 +28,12 @@ export default function ProfileForm({ initial }: Props) {
       className="space-y-4"
       id="contact"
     >
-      <div>
-        <label className="block text-sm font-medium text-zinc-700">Teléfono</label>
-        <input
-          name="phone"
-          defaultValue={initial.phone}
-          placeholder="+52 81 1234 5678"
-          className="mt-1 w-full rounded-lg border border-zinc-300 glass-card p-4 md:p-6"
-        />
-        <p className="mt-1 text-xs text-zinc-500">
-          Guarda cualquier formato breve (ej. +52 81 1234 5678). Opcional.
-        </p>
-      </div>
+      <PhoneInputField
+        value={phone}
+        onChange={setPhone}
+        label="Teléfono"
+        helperText="Guardamos el número en formato internacional para que funcionen los botones de WhatsApp y llamadas."
+      />
 
       <div>
         <label className="block text-sm font-medium text-zinc-700">Sitio web</label>
@@ -42,7 +41,7 @@ export default function ProfileForm({ initial }: Props) {
           name="website"
           defaultValue={initial.website}
           placeholder="miempresa.com o https://miempresa.com"
-          className="mt-1 w-full rounded-lg border border-zinc-300 glass-card p-4 md:p-6"
+          className="mt-1 w-full rounded-lg border border-zinc-300 glass-card p-3"
         />
         <p className="mt-1 text-xs text-zinc-500">
           Puedes escribir “miempresa.com” o la URL completa. Opcional.

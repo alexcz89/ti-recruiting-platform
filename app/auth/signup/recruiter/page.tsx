@@ -27,7 +27,9 @@ export default function RecruiterSignupPage() {
   });
 
   const onChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement
+    >
   ) => {
     const { name, value } = e.target;
     setForm((p) => ({ ...p, [name]: value }));
@@ -36,22 +38,27 @@ export default function RecruiterSignupPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const parsed = RecruiterSimpleSignupSchema.parse(form);
+      const parsed =
+        RecruiterSimpleSignupSchema.parse(form);
       setLoading(true);
       const res = await createRecruiterAction(parsed);
       if (res.ok) {
         toast.success(
           res.warningDomain
-            ? "Cuenta creada. Revisa tu correo. (Ojo: dominio de email ≠ sitio)"
+            ? "Cuenta creada. Revisa tu correo. (Ojo: el dominio del email no coincide con el del sitio)."
             : "Cuenta creada. Revisa tu correo para verificarla."
         );
         router.push("/auth/signin?role=RECRUITER");
       } else {
-        toast.error(res.message || "Error al crear la cuenta");
+        toast.error(
+          res.message || "Error al crear la cuenta"
+        );
       }
     } catch (err: any) {
       if (err instanceof z.ZodError) {
-        toast.error(err.errors?.[0]?.message || "Datos inválidos");
+        toast.error(
+          err.errors?.[0]?.message || "Datos inválidos"
+        );
       } else {
         toast.error("Error al crear la cuenta");
       }
@@ -69,9 +76,14 @@ export default function RecruiterSignupPage() {
         Usa un <b>correo corporativo</b> (no aceptamos dominios gratuitos).
       </p>
 
-      <form onSubmit={onSubmit} className="grid grid-cols-1 gap-4">
+      <form
+        onSubmit={onSubmit}
+        className="grid grid-cols-1 gap-4"
+      >
         <div>
-          <label className="block text-sm font-medium">Nombre de la empresa</label>
+          <label className="block text-sm font-medium">
+            Nombre de la empresa
+          </label>
           <input
             name="companyName"
             value={form.companyName}
@@ -83,7 +95,9 @@ export default function RecruiterSignupPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium">Nombre(s)</label>
+            <label className="block text-sm font-medium">
+              Nombre(s)
+            </label>
             <input
               name="firstName"
               value={form.firstName}
@@ -93,7 +107,9 @@ export default function RecruiterSignupPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium">Apellidos</label>
+            <label className="block text-sm font-medium">
+              Apellidos
+            </label>
             <input
               name="lastName"
               value={form.lastName}
@@ -105,7 +121,9 @@ export default function RecruiterSignupPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium">Correo corporativo</label>
+          <label className="block text-sm font-medium">
+            Correo corporativo
+          </label>
           <input
             name="email"
             type="email"
@@ -119,7 +137,9 @@ export default function RecruiterSignupPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium">Contraseña</label>
+            <label className="block text-sm font-medium">
+              Contraseña
+            </label>
             <input
               name="password"
               type="password"
@@ -135,7 +155,9 @@ export default function RecruiterSignupPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium">Validar contraseña</label>
+            <label className="block text-sm font-medium">
+              Validar contraseña
+            </label>
             <input
               name="confirmPassword"
               type="password"
@@ -149,7 +171,9 @@ export default function RecruiterSignupPage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium">Tamaño de la empresa</label>
+          <label className="block text-sm font-medium">
+            Tamaño de la empresa
+          </label>
           <select
             name="size"
             value={form.size}
@@ -170,7 +194,9 @@ export default function RecruiterSignupPage() {
           disabled={loading}
           className="mt-2 w-full rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
         >
-          {loading ? "Creando..." : "Crear cuenta y verificar correo"}
+          {loading
+            ? "Creando..."
+            : "Crear cuenta y verificar correo"}
         </button>
       </form>
     </div>

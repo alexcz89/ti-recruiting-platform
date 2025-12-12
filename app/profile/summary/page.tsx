@@ -56,7 +56,7 @@ const EDUCATION_STATUS_LABEL: Record<string, string> = {
 export default async function ProfileSummaryPage({
   searchParams,
 }: {
-  searchParams?: { updated?: string; applied?: string };
+  searchParams?: { updated?: string; applied?: string; cvImported?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect("/signin?callbackUrl=/profile/summary");
@@ -174,6 +174,8 @@ export default async function ProfileSummaryPage({
       ? { text: "Ya habías postulado a esta vacante.", tone: "amber" as const }
       : null;
 
+  const cvImported = searchParams?.cvImported === "1";
+
   return (
     <main className="max-w-none p-0">
       {/* Notifs */}
@@ -183,6 +185,15 @@ export default async function ProfileSummaryPage({
             Perfil actualizado correctamente.
           </div>
         )}
+
+        {cvImported && (
+          <div className="border text-sm rounded-xl px-3 py-2 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
+            Hemos importado el CV que creaste en el constructor. Ya está guardado
+            en tu perfil como PDF y podrás reemplazarlo cuando quieras desde el
+            CV Builder.
+          </div>
+        )}
+
         {appliedMsg && (
           <div
             className={`border text-sm rounded-xl px-3 py-2 ${

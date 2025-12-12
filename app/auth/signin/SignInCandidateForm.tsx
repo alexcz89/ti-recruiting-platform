@@ -1,3 +1,4 @@
+// app/auth/signin/SignInCandidateForm.tsx
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -8,6 +9,9 @@ import { Field, TextInput } from "@/components/form/RhfFields";
 import { SignInSchema } from "@/lib/validation";
 
 type FormData = z.infer<typeof SignInSchema>;
+
+const CV_DRAFT_KEY = "cv_builder_draft_v1";
+const CV_DRAFT_SYNC_KEY = "cv_builder_synced_v1";
 
 export default function SignInCandidateForm({
   initialRole,
@@ -39,14 +43,58 @@ export default function SignInCandidateForm({
       email: data.email,
       password: data.password,
       role: isRecruiter ? "RECRUITER" : "CANDIDATE",
-      callbackUrl: callbackUrl || (isRecruiter ? "/dashboard/overview" : "/jobs"),
+      callbackUrl:
+        callbackUrl || (isRecruiter ? "/dashboard/overview" : "/jobs"),
     });
 
     if (res?.error) {
-      setError("root", { type: "auth", message: "No se pudo iniciar sesión. Verifica tus datos." });
+      setError("root", {
+        type: "auth",
+        message: "No se pudo iniciar sesión. Verifica tus datos.",
+      });
       return;
     }
-    window.location.href = res?.url || callbackUrl || (isRecruiter ? "/dashboard/overview" : "/jobs");
+
+    // =================== FASE 2: importar CV desde el borrador ===================
+    if (!isRecruiter && typeof window !== "undefined") {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const fromCvBuilder = params.get("from") === "cv-builder";
+        const alreadySynced = window.localStorage.getItem(CV_DRAFT_SYNC_KEY);
+        const rawDraft = window.localStorage.getItem(CV_DRAFT_KEY);
+
+        // Solo intentamos cuando:
+        // - viene de ?from=cv-builder
+        // - hay borrador
+        // - aún no lo marcamos como sincronizado
+        if (fromCvBuilder && rawDraft && !alreadySynced) {
+          const draft = JSON.parse(rawDraft);
+
+          const resp = await fetch("/api/cv/import-from-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ draft }),
+          });
+
+          if (resp.ok) {
+            window.localStorage.setItem(CV_DRAFT_SYNC_KEY, "1");
+          } else {
+            console.error(
+              "No se pudo importar el CV desde el borrador:",
+              await resp.text()
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Error al sincronizar CV desde el borrador", err);
+      }
+    }
+    // ============================================================================
+
+    window.location.href =
+      res?.url ||
+      callbackUrl ||
+      (isRecruiter ? "/dashboard/overview" : "/jobs");
   };
 
   return (
@@ -59,10 +107,18 @@ export default function SignInCandidateForm({
       {!isRecruiter && (
         <>
           <div className="mt-6 space-y-3">
-            <button type="button" disabled className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500">
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500"
+            >
               Continuar con Google
             </button>
-            <button type="button" disabled className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500">
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-xl border px-4 py-3 text-sm text-zinc-500"
+            >
               Continuar con GitHub
             </button>
           </div>
@@ -80,12 +136,19 @@ export default function SignInCandidateForm({
             register={register}
             name="email"
             type="email"
-            placeholder={isRecruiter ? "recruiter@demo.local" : "tu@email.com"}
+            placeholder={
+              isRecruiter ? "recruiter@demo.local" : "tu@email.com"
+            }
           />
         </Field>
 
         <Field label="Password" error={errors.password}>
-          <TextInput register={register} name="password" type="password" placeholder="••••••••" />
+          <TextInput
+            register={register}
+            name="password"
+            type="password"
+            placeholder="••••••••"
+          />
         </Field>
 
         {errors.root?.message && (

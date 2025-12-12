@@ -1,32 +1,40 @@
 // app/dashboard/candidates/[id]/page.tsx
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { redirect, notFound } from "next/navigation"
-import { prisma } from "@/lib/prisma"
-import Link from "next/link"
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { redirect, notFound } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 
-export const metadata = { title: "Candidato | Panel" }
+export const metadata = { title: "Candidato | Panel" };
+
+// Etiquetas de nivel de idioma (igual que en profile/summary)
+const LEVEL_LABEL: Record<string, string> = {
+  NATIVE: "Nativo",
+  PROFESSIONAL: "Profesional (C1–C2)",
+  CONVERSATIONAL: "Conversacional (B1–B2)",
+  BASIC: "Básico (A1–A2)",
+};
 
 export default async function CandidateDetailPage({
   params,
   searchParams,
 }: {
-  params: { id: string }
-  searchParams?: { applicationId?: string; jobId?: string }
+  params: { id: string };
+  searchParams?: { applicationId?: string; jobId?: string };
 }) {
   // 1) Guard sesión/rol
-  const session = await getServerSession(authOptions)
-  if (!session) redirect("/signin?callbackUrl=/dashboard/candidates")
+  const session = await getServerSession(authOptions);
+  if (!session) redirect("/signin?callbackUrl=/dashboard/candidates");
 
   // Reclutador/Admin + obtener companyId del reclutador para multi-tenant
   const me = await prisma.user.findUnique({
     where: { email: session.user?.email! },
     select: { id: true, role: true, companyId: true },
-  })
+  });
   if (!me || (me.role !== "RECRUITER" && me.role !== "ADMIN")) {
-    redirect("/")
+    redirect("/");
   }
-  const companyId = me.companyId ?? null
+  const companyId = me.companyId ?? null;
 
   // 2) Candidato (solo campos vigentes)
   const candidate = await prisma.user.findUnique({
@@ -42,19 +50,25 @@ export default async function CandidateDetailPage({
       github: true,
       resumeUrl: true,
       role: true,
-      skills: true,          // ← unificado
+      skills: true,
       certifications: true,
+      candidateLanguages: {
+        select: {
+          level: true,
+          term: { select: { label: true } },
+        },
+      },
     },
-  })
-  if (!candidate) notFound()
-  if (candidate.role !== "CANDIDATE") redirect("/dashboard")
+  });
+  if (!candidate) notFound();
+  if (candidate.role !== "CANDIDATE") redirect("/dashboard");
 
   // 3) Postulaciones del candidato SOLO a vacantes de MI EMPRESA
   const myApps = companyId
     ? await prisma.application.findMany({
         where: {
           candidateId: candidate.id,
-          job: { companyId }, // filtro multi-tenant por empresa
+          job: { companyId },
         },
         orderBy: { createdAt: "desc" },
         select: {
@@ -65,40 +79,53 @@ export default async function CandidateDetailPage({
             select: {
               id: true,
               title: true,
-              skills: true, // 👈 necesitamos los skills de la vacante para saber cuáles son "Req"
+              skills: true,
               company: { select: { name: true } },
             },
           },
         },
         take: 10,
       })
-    : []
+    : [];
 
-  // (Opcional) Si viene un applicationId en la URL, valida que pertenece a MI EMPRESA
-  const activeAppId = searchParams?.applicationId || ""
+  // (Opcional) applicationId
+  const activeAppId = searchParams?.applicationId || "";
   const activeApp = activeAppId
     ? await prisma.application.findFirst({
         where: { id: activeAppId, job: { companyId: companyId ?? "" } },
         select: { id: true },
       })
-    : null
+    : null;
 
   // Para botones de regreso desde job
-  const fromJobId = searchParams?.jobId
+  const fromJobId = searchParams?.jobId;
 
   // UI helpers
-  const Pill = ({ children, highlight = false }: { children: React.ReactNode; highlight?: boolean }) => (
+  const Pill = ({
+    children,
+    highlight = false,
+  }: {
+    children: React.ReactNode;
+    highlight?: boolean;
+  }) => (
     <span
       className={
         highlight
-          ? "inline-block text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5 mr-2 mb-2"
-          : "inline-block text-[11px] bg-gray-50 text-zinc-700 border rounded-full px-2 py-0.5 mr-2 mb-2"
+          ? "inline-block text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5 mr-2 mb-2 dark:bg-emerald-900/20 dark:text-emerald-100 dark:border-emerald-500/40"
+          : "inline-block text-[11px] bg-gray-50 text-zinc-700 border border-zinc-200 rounded-full px-2 py-0.5 mr-2 mb-2 dark:bg-zinc-900/40 dark:text-zinc-200 dark:border-zinc-700"
       }
     >
       {children}
     </span>
-  )
-  const List = ({ items }: { items?: string[] | null }) =>
+  );
+
+  const List = ({
+    items,
+    emptyLabel = "—",
+  }: {
+    items?: string[] | null;
+    emptyLabel?: string;
+  }) =>
     items && items.length ? (
       <div className="mt-2">
         {items.map((s) => (
@@ -106,91 +133,137 @@ export default async function CandidateDetailPage({
         ))}
       </div>
     ) : (
-      <p className="text-sm text-zinc-500">—</p>
-    )
+      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+        {emptyLabel}
+      </p>
+    );
 
   const waHref = candidate.phone
-    ? `https://wa.me/${candidate.phone.replace(/^\+/, "")}?text=${encodeURIComponent(
+    ? `https://wa.me/${candidate.phone.replace(
+        /^\+/,
+        ""
+      )}?text=${encodeURIComponent(
         `Hola ${candidate.name ?? ""}, te contacto por una oportunidad laboral.`
       )}`
-    : null
+    : null;
 
   // Helper simple para PDFs
   const pdfSrc = candidate.resumeUrl
-    ? `${candidate.resumeUrl}${candidate.resumeUrl.includes("#") ? "" : "#toolbar=1&navpanes=0&scrollbar=1"}`
-    : null
+    ? `${candidate.resumeUrl}${
+        candidate.resumeUrl.includes("#")
+          ? ""
+          : "#toolbar=1&navpanes=0&scrollbar=1"
+      }`
+    : null;
 
-  // Helper: calcula snapshot de hasta 4 skills priorizando matches REQUERIDOS (Req: <skill>)
-  function buildRequiredSnapshot(jobSkills: string[] | null | undefined, candSkills: string[] | null | undefined) {
+  // Helper: snapshot de hasta 4 skills priorizando Req
+  function buildRequiredSnapshot(
+    jobSkills: string[] | null | undefined,
+    candSkills: string[] | null | undefined
+  ) {
     const reqNames = new Set(
       (jobSkills || [])
-        .filter(s => s.toLowerCase().startsWith("req:"))
-        .map(s => s.slice(4).trim().toLowerCase())
+        .filter((s) => s.toLowerCase().startsWith("req:"))
+        .map((s) => s.slice(4).trim().toLowerCase())
         .filter(Boolean)
-    )
-    const cand = (candSkills || [])
+    );
+    const cand = candSkills || [];
 
-    // matches (requeridos ∩ candidato), preserva casing del candidato
-    const matches: string[] = []
-    const seen = new Set<string>()
+    const matches: string[] = [];
+    const seen = new Set<string>();
     for (const s of cand) {
-      const key = s.toLowerCase()
+      const key = s.toLowerCase();
       if (!seen.has(key) && reqNames.has(key)) {
-        matches.push(s)
-        seen.add(key)
+        matches.push(s);
+        seen.add(key);
       }
     }
 
-    // si faltan hasta 4, completa con otros skills del candidato (no requeridos)
-    const others: string[] = []
+    const others: string[] = [];
     for (const s of cand) {
-      const key = s.toLowerCase()
+      const key = s.toLowerCase();
       if (!seen.has(key)) {
-        others.push(s)
-        seen.add(key)
+        others.push(s);
+        seen.add(key);
       }
-      if (matches.length + others.length >= 4) break
+      if (matches.length + others.length >= 4) break;
     }
 
-    return { matches: matches.slice(0, 4), others: others.slice(0, Math.max(0, 4 - matches.length)) }
+    return {
+      matches: matches.slice(0, 4),
+      others: others.slice(0, Math.max(0, 4 - matches.length)),
+    };
   }
 
+  const headerBtnClasses =
+    "inline-flex items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-900";
+
+  // Idiomas desde candidateLanguages
+  const languageItems =
+    (candidate.candidateLanguages || [])
+      .map((cl) => {
+        const label = cl.term?.label || "";
+        const levelKey = cl.level || "";
+        if (!label && !levelKey) return null;
+        const levelLabel =
+          LEVEL_LABEL[levelKey] ?? (levelKey ? levelKey : "");
+        return levelLabel ? `${label} · ${levelLabel}` : label;
+      })
+      .filter(Boolean) as string[];
+
   return (
-    <main className="max-w-6xl mx-auto p-6 space-y-6">
+    <main className="max-w-[1200px] mx-auto px-6 py-6 lg:py-8 space-y-6 lg:space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Candidato</h1>
-          <p className="text-sm text-zinc-600">
-            {candidate.name ?? "—"} · {candidate.email}
-          </p>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-start gap-3">
+          {/* Avatar iniciales */}
+          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-600/90 text-sm font-semibold text-white shadow-sm">
+            {candidate.name
+              ?.split(" ")
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((p) => p[0]?.toUpperCase())
+              .join("") || "C"}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold leading-tight text-zinc-900 dark:text-zinc-50">
+              {candidate.name || "Candidato"}
+            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-zinc-600 dark:text-zinc-300">
+              <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-900/40">
+                {candidate.email}
+              </span>
+              {candidate.location && (
+                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-900/40">
+                  {candidate.location}
+                </span>
+              )}
+              {candidate.phone && (
+                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-900/40">
+                  {candidate.phone}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Botones alineados */}
+        <div className="flex flex-wrap lg:flex-nowrap items-center justify-end gap-2">
           {fromJobId && (
             <>
               <Link
                 href={`/dashboard/jobs/${fromJobId}/applications`}
-                className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                className={headerBtnClasses}
               >
                 ← Volver a la vacante
               </Link>
               <Link
                 href={`/dashboard/jobs/${fromJobId}`}
-                className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                className={headerBtnClasses}
                 title="Abrir Pipeline"
               >
                 Ver Pipeline
               </Link>
-
-              {/* 👇 Nuevo botón: ver vacante como la ve el candidato */}
-              <Link
-                href={`/jobs/${fromJobId}`}
-                target="_blank" 
-                className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
-                title="Ver Vacante como candidato"
-              >
-                Ver Vacante
-                </Link>
             </>
           )}
 
@@ -199,13 +272,15 @@ export default async function CandidateDetailPage({
               href={candidate.resumeUrl}
               target="_blank"
               rel="noreferrer"
-              className="border rounded px-3 py-1 text-sm"
+              className={headerBtnClasses}
               title="Ver/descargar CV"
             >
               Descargar CV
             </a>
           ) : (
-            <span className="text-xs text-zinc-400">Sin CV</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-500">
+              Sin CV
+            </span>
           )}
 
           {waHref ? (
@@ -213,81 +288,151 @@ export default async function CandidateDetailPage({
               href={waHref}
               target="_blank"
               rel="noreferrer"
-              className="border rounded px-3 py-1 text-sm"
+              className={headerBtnClasses}
               title={`WhatsApp: ${candidate.phone}`}
             >
               WhatsApp
             </a>
           ) : (
-            <span className="text-xs text-zinc-400">Sin teléfono</span>
+            <span className="text-xs text-zinc-500 dark:text-zinc-500">
+              Sin teléfono
+            </span>
           )}
-
-          {activeApp?.id ? (
-            <a
-              href={`/dashboard/messages?applicationId=${activeApp.id}`}
-              className="border rounded px-3 py-1 text-sm"
-              title="Abrir mensajes de esta postulación"
-            >
-              Abrir mensajes
-            </a>
-          ) : null}
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Columna principal (datos del candidato) */}
-        <section className="lg:col-span-2 space-y-6">
-          <div className="border rounded-xl p-4">
-            <h2 className="font-semibold">Información</h2>
-            <div className="mt-2 text-sm space-y-1">
-              <div>Nombre: {candidate.name ?? "—"}</div>
-              <div>Email: {candidate.email}</div>
-              <div>Teléfono: {candidate.phone ?? "—"}</div>
-              <div>Ubicación: {candidate.location ?? "—"}</div>
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Columna principal */}
+        <section className="space-y-6 lg:col-span-2">
+          {/* Información */}
+          <div className="glass-card border rounded-2xl p-4 md:p-6">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Información
+            </h2>
+            <dl className="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <div>
-                Fecha de nacimiento:{" "}
-                {candidate.birthdate
-                  ? new Date(candidate.birthdate).toLocaleDateString()
-                  : "—"}
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Nombre
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">
+                  {candidate.name ?? "—"}
+                </dd>
               </div>
               <div>
-                LinkedIn:{" "}
-                {candidate.linkedin ? (
-                  <a
-                    className="text-blue-600 hover:underline"
-                    href={candidate.linkedin}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {candidate.linkedin}
-                  </a>
-                ) : (
-                  "—"
-                )}
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Email
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">
+                  {candidate.email}
+                </dd>
               </div>
               <div>
-                GitHub:{" "}
-                {candidate.github ? (
-                  <a
-                    className="text-blue-600 hover:underline"
-                    href={candidate.github}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {candidate.github}
-                  </a>
-                ) : (
-                  "—"
-                )}
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Teléfono
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">
+                  {candidate.phone ?? "—"}
+                </dd>
               </div>
+              <div>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Ubicación
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">
+                  {candidate.location ?? "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Fecha de nacimiento
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">
+                  {candidate.birthdate
+                    ? new Date(candidate.birthdate).toLocaleDateString()
+                    : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+                  LinkedIn
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">
+                  {candidate.linkedin ? (
+                    <a
+                      className="text-blue-600 hover:underline dark:text-blue-400"
+                      href={candidate.linkedin}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {candidate.linkedin}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">
+                  GitHub
+                </dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">
+                  {candidate.github ? (
+                    <a
+                      className="text-blue-600 hover:underline dark:text-blue-400"
+                      href={candidate.github}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {candidate.github}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          {/* Skills / Certificaciones */}
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="glass-card border rounded-2xl p-4 md:p-5">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                Skills
+              </h2>
+              <List
+                items={candidate.skills}
+                emptyLabel="Sin skills capturados"
+              />
+            </div>
+
+            <div className="glass-card border rounded-2xl p-4 md:p-5">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                Certificaciones
+              </h2>
+              <List
+                items={candidate.certifications}
+                emptyLabel="Sin certificaciones capturadas"
+              />
             </div>
           </div>
 
-          {/* 🔎 Preview embebido del CV */}
+          <div className="glass-card border rounded-2xl p-4 md:p-5">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Idiomas
+            </h2>
+            <List
+              items={languageItems}
+              emptyLabel="Sin idiomas capturados"
+            />
+          </div>
+
+          {/* CV */}
           {candidate.resumeUrl && (
-            <div className="border rounded-xl p-4">
-              <h2 className="font-semibold">CV</h2>
-              <div className="mt-3 overflow-hidden rounded-lg border bg-gray-50">
+            <div className="glass-card border rounded-2xl p-4 md:p-6">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                CV
+              </h2>
+              <div className="mt-3 overflow-hidden rounded-lg border bg-gray-50 dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="relative w-full" style={{ height: "70vh" }}>
                   <iframe
                     src={pdfSrc!}
@@ -296,12 +441,12 @@ export default async function CandidateDetailPage({
                   />
                 </div>
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-2">
                 <a
                   href={candidate.resumeUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                  className={headerBtnClasses}
                 >
                   Abrir en nueva pestaña
                 </a>
@@ -310,50 +455,48 @@ export default async function CandidateDetailPage({
                   target="_blank"
                   rel="noreferrer"
                   download
-                  className="border rounded px-3 py-1 text-sm hover:bg-gray-50"
+                  className={headerBtnClasses}
                 >
                   Descargar
                 </a>
               </div>
-              <p className="mt-1 text-xs text-zinc-500">
-                Si el visor no carga, el sitio del CV podría bloquear la inserción. Usa “Abrir en nueva pestaña”.
+              <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+                Si el visor no carga, el sitio del CV podría bloquear la
+                inserción. Usa “Abrir en nueva pestaña”.
               </p>
             </div>
           )}
-
-          <div className="border rounded-xl p-4">
-            <h2 className="font-semibold">Certificaciones</h2>
-            <List items={candidate.certifications} />
-          </div>
-
-          <div className="border rounded-xl p-4">
-            <h2 className="font-semibold">Skills</h2>
-            <List items={candidate.skills} />
-          </div>
         </section>
 
-        {/* Panel lateral: Solo postulaciones de MI empresa */}
-        <aside className="border rounded-xl p-4 h-fit">
-          <h3 className="font-semibold mb-3">Postulaciones recientes (mi empresa)</h3>
+        {/* Panel lateral: postulaciones de mi empresa */}
+        <aside className="glass-card h-fit rounded-2xl border p-4 md:p-6">
+          <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Postulaciones recientes (mi empresa)
+          </h3>
           {myApps.length === 0 ? (
-            <p className="text-sm text-zinc-500">—</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">—</p>
           ) : (
             <ul className="space-y-3">
               {myApps.map((a) => {
-                // Construir snapshot priorizando skills requeridos que el candidato sí tiene
-                const { matches, others } = buildRequiredSnapshot(a.job?.skills, candidate.skills)
-                const show = [...matches, ...others].slice(0, 4)
+                const { matches, others } = buildRequiredSnapshot(
+                  a.job?.skills,
+                  candidate.skills
+                );
+                const show = [...matches, ...others].slice(0, 4);
 
                 return (
-                  <li key={a.id} className="border rounded-lg p-3">
-                    <div className="text-sm font-medium">
+                  <li
+                    key={a.id}
+                    className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950/70"
+                  >
+                    <div className="font-medium text-zinc-900 dark:text-zinc-50">
                       {a.job?.title} — {a.job?.company?.name ?? "—"}
                     </div>
-                    <div className="text-xs text-zinc-500">
-                      Estado: {a.status} · {new Date(a.createdAt).toLocaleDateString()}
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                      Estado: {a.status} ·{" "}
+                      {new Date(a.createdAt).toLocaleDateString()}
                     </div>
 
-                    {/* 👇 Snapshot: requeridos (match) resaltados */}
                     {show.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {show.map((s) => (
@@ -364,24 +507,24 @@ export default async function CandidateDetailPage({
                       </div>
                     )}
 
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-3 flex flex-wrap gap-2">
                       <a
                         href={`/dashboard/messages?applicationId=${a.id}`}
-                        className="border rounded px-2 py-1 text-xs"
+                        className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-800"
                         title="Abrir mensajes"
                       >
                         Mensajes
                       </a>
                       <Link
                         href={`/dashboard/jobs/${a.job?.id}/applications`}
-                        className="border rounded px-2 py-1 text-xs hover:bg-gray-50"
+                        className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-800"
                         title="Ver postulaciones de esta vacante"
                       >
                         Ver vacante
                       </Link>
                     </div>
                   </li>
-                )
+                );
               })}
             </ul>
           )}
@@ -390,11 +533,14 @@ export default async function CandidateDetailPage({
 
       {!fromJobId && (
         <div>
-          <Link href="/dashboard/jobs" className="text-sm text-blue-600 hover:underline">
+          <Link
+            href="/dashboard/jobs"
+            className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+          >
             ← Volver a vacantes
           </Link>
         </div>
       )}
     </main>
-  )
+  );
 }

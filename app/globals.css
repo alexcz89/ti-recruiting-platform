@@ -227,3 +227,132 @@ p, span, div {
   margin-top: 0.125rem;
   margin-bottom: 0.125rem;
 }
+
+/* ============================================
+   Phone input (react-phone-input-2) – theming
+   ============================================ */
+
+/* contenedor principal que pasamos como containerClass */
+.bt-phone-input {
+  width: 100%;
+}
+
+/* Input: solo colores, bordes y tipografía.
+   El layout (padding para la bandera, etc.) lo maneja el CSS de la librería. */
+.bt-phone-input .bt-phone-input-input.form-control {
+  width: 100%;
+  border-radius: 0.75rem;
+  border-color: rgb(var(--border));
+  font-size: 0.875rem;
+  background-color: color-mix(in oklab, white 2%, rgb(var(--bg-elev-1)));
+  color: rgb(var(--text));
+}
+
+/* Focus */
+.bt-phone-input .bt-phone-input-input.form-control:focus {
+  outline: none;
+  box-shadow: 0 0 0 .2rem rgba(var(--ring));
+  border-color: rgb(16 185 129); /* emerald-500 */
+}
+
+/* Contenedor de la bandera (usa buttonClass) */
+.bt-phone-input .flag-dropdown.bt-phone-input-flag {
+  border-radius: 0.75rem 0 0 0.75rem;
+  border-color: rgb(var(--border));
+  background-color: color-mix(in oklab, white 2%, rgb(var(--bg-elev-1)));
+}
+
+/* Bandera seleccionada sin fondo gris por defecto */
+.bt-phone-input .flag-dropdown.bt-phone-input-flag .selected-flag {
+  background: transparent;
+}
+
+/* Dropdown de países */
+.bt-phone-input .country-list {
+  border-radius: 0.75rem;
+  border-color: rgb(var(--border));
+}
+
+/* ====== Dark mode ====== */
+
+.dark .bt-phone-input .bt-phone-input-input.form-control {
+  background-color: #09090b;
+  color: #f9fafb;
+  border-color: #3f3f46; /* zinc-700 */
+}
+
+.dark .bt-phone-input .flag-dropdown.bt-phone-input-flag {
+  background-color: #09090b;
+  border-color: #3f3f46;
+}
+
+.dark .bt-phone-input .country-list {
+  background-color: #09090b;
+  color: #e5e5e5;
+  border-color: #3f3f46;
+}
+
+/* ==============================
+   PhoneInput – lista de países
+   ============================== */
+
+.bt-phone-input .country-list {
+  background-color: #ffffff;
+  color: #111827;
+  border-radius: 0.75rem;
+  border-color: rgb(var(--border));
+  font-size: 0.875rem;
+}
+
+/* Cada país */
+.bt-phone-input .country-list .country {
+  padding: 0.35rem 0.75rem;
+}
+
+/* Hover / elemento activo */
+.bt-phone-input .country-list .country:hover,
+.bt-phone-input .country-list .country.highlight {
+  background-color: rgba(16, 185, 129, 0.12); /* emerald suave */
+}
+
+/* Código de marcación un poquito más tenue */
+.bt-phone-input .country-list .dial-code {
+  color: #6b7280; /* zinc-500 */
+}
+
+/* ===== Dark mode ===== */
+
+.dark .bt-phone-input .country-list {
+  background-color: #09090b;
+  color: #e5e7eb;
+  border-color: #3f3f46;
+}
+
+.dark .bt-phone-input .country-list .country:hover,
+.dark .bt-phone-input .country-list .country.highlight {
+  background-color: rgba(52, 211, 153, 0.18); /* emerald-400 más notorio */
+}
+
+.dark .bt-phone-input .country-list .dial-code {
+  color: #9ca3af; /* zinc-400 */
+}
+
+/* Cuando se abre el dropdown de la LADA, que NO ponga fondo blanco */
+.bt-phone-input .flag-dropdown.open,
+.bt-phone-input .flag-dropdown.open .selected-flag {
+  background: transparent !important;
+}
+
+/* También al hacer hover sobre la banderita */
+.bt-phone-input .selected-flag:hover {
+  background: transparent !important;
+}
+
+/* Versión explícita para dark mode (por si acaso) */
+.dark .bt-phone-input .flag-dropdown.open,
+.dark .bt-phone-input .flag-dropdown.open .selected-flag,
+.dark .bt-phone-input .selected-flag:hover {
+  background: transparent !important;
+}
+
+

@@ -11,6 +11,12 @@ import {
 import { createEmailVerifyToken } from "@/lib/tokens";
 import { sendVerificationEmail } from "@/lib/mailer";
 
+// 🔐 Lógica de dominios corporativos (ya la tienes en validation/signup)
+import { isFreeDomain } from "@/lib/validation/recruiter/signup";
+
+// Helper para empresa + dominio (definido en lib/company.ts)
+import { ensureCompanyForRecruiter } from "@/lib/company";
+
 // ---------------------------------------------------------
 // Rate limit simple en memoria
 // ---------------------------------------------------------
@@ -22,7 +28,9 @@ const rlStore: Map<string, number[]> =
 
 function rateLimit(ip: string) {
   const now = Date.now();
-  const arr = (rlStore.get(ip) || []).filter((ts) => now - ts < RL_WINDOW_MS);
+  const arr = (rlStore.get(ip) || []).filter(
+    (ts) => now - ts < RL_WINDOW_MS
+  );
   if (arr.length >= RL_MAX) return false;
   arr.push(now);
   rlStore.set(ip, arr);
@@ -32,6 +40,10 @@ function rateLimit(ip: string) {
 export type ActionState = {
   ok: boolean;
   message?: string;
+  /**
+   * warningDomain: por si en otro flujo comparamos dominio de email
+   * vs dominio del sitio web (en este formulario simple aún no hay website).
+   */
   warningDomain?: boolean;
 };
 
@@ -44,53 +56,70 @@ export async function createRecruiterAction(
   try {
     // Rate limit
     const ip =
-      (headers().get("x-forwarded-for") || "").split(",")[0]?.trim() || "local";
+      (headers().get("x-forwarded-for") || "")
+        .split(",")[0]
+        ?.trim() || "local";
     if (!rateLimit(ip)) {
-      return { ok: false, message: "Demasiados intentos. Inténtalo más tarde." };
+      return {
+        ok: false,
+        message: "Demasiados intentos. Inténtalo más tarde.",
+      };
     }
 
-    // Validación Zod
+    // Validación Zod (estructura y contraseñas)
     const data = RecruiterSimpleSignupSchema.parse(input);
+
+    // ❌ Bloquear dominios gratuitos tipo Gmail/Hotmail/etc.
+    if (isFreeDomain(data.email)) {
+      return {
+        ok: false,
+        message:
+          "Usa un correo corporativo (no aceptamos dominios gratuitos como Gmail/Hotmail).",
+      };
+    }
+
+    // Normalizar email
+    const email = data.email.toLowerCase().trim();
 
     // ¿Usuario ya existe?
     const exists = await prisma.user.findUnique({
-      where: { email: data.email.toLowerCase().trim() },
+      where: { email },
       select: { id: true },
     });
-    if (exists) return { ok: false, message: "Este correo ya está registrado." };
-
-    // Busca o crea la empresa
-    let company = await prisma.company.findFirst({
-      where: { name: data.companyName },
-      select: { id: true },
-    });
-
-    if (!company) {
-      company = await prisma.company.create({
-        data: {
-          name: data.companyName,
-          size: (data.size as string) ?? null,
-        },
-        select: { id: true },
-      });
+    if (exists) {
+      return {
+        ok: false,
+        message: "Este correo ya está registrado.",
+      };
     }
 
-    // Crea el usuario RECRUITER
+    // 🏢 Asegurar empresa usando helper centralizado + dominio
+    // (evita duplicar compañías tipo "KFC" vs "Kentucky Fried Chicken")
+    const company = await ensureCompanyForRecruiter({
+      companyName: data.companyName,
+      email,
+      size: data.size ?? null,
+      // En este formulario simple no tenemos país/ciudad,
+      // pero el helper los acepta como opcionales.
+    });
+
+    // Crear usuario RECRUITER
     const passwordHash = await hash(data.password, 10);
+    const fullName = `${data.firstName} ${data.lastName}`.trim();
+
     const user = await prisma.user.create({
       data: {
-        email: data.email.toLowerCase().trim(),
-        name: `${data.firstName} ${data.lastName}`.trim(),
+        email,
+        name: fullName,
         passwordHash,
         role: "RECRUITER",
-        // ✅ relación correcta
         company: { connect: { id: company.id } },
-        // ❌ no enviar emailVerified aquí; el campo existe y queda null
+        // emailVerified queda null hasta que confirme el correo
       },
       select: { id: true, email: true },
     });
 
-    // (Opcional) Perfil de reclutador (status por default = PENDING)
+    // Perfil de reclutador (status PENDING por default)
     await prisma.recruiterProfile
       .create({
         data: {
@@ -98,13 +127,17 @@ export async function createRecruiterAction(
           company: data.companyName,
           website: null,
           phone: "",
-          // status: PENDING por default en el schema
         },
       })
-      .catch(() => { /* ignora si no existe el modelo */ });
+      .catch(() => {
+        // Si el modelo no existe o falla, no rompemos el signup
+      });
 
     // Token + email de verificación
-    const token = await createEmailVerifyToken({ email: user.email }, 60);
+    const token = await createEmailVerifyToken(
+      { email: user.email },
+      60
+    );
     const baseUrl =
       process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
     const verifyUrl = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(
@@ -114,7 +147,9 @@ export async function createRecruiterAction(
 
     return {
       ok: true,
-      message: "Cuenta creada. Revisa tu correo para verificar tu email.",
+      warningDomain: false,
+      message:
+        "Cuenta creada. Revisa tu correo para verificar tu email.",
     };
   } catch (err: any) {
     const msg =

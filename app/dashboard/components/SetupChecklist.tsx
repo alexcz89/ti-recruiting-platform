@@ -1,3 +1,4 @@
+// app/dashboard/components/SetupChecklist.tsx
 import Link from "next/link";
 import { resendVerificationEmailAction } from "./actions/profile";
 

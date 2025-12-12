@@ -17,7 +17,11 @@ export default async function EditJobPage({ params }: PageProps) {
   const session = await getServerSession(authOptions);
   if (!session) redirect(`/signin?callbackUrl=/dashboard/jobs/${params.id}/edit`);
 
-  const role = (session?.user as any)?.role as "RECRUITER" | "ADMIN" | string | undefined;
+  const role = (session?.user as any)?.role as
+    | "RECRUITER"
+    | "ADMIN"
+    | string
+    | undefined;
   if (role !== "RECRUITER" && role !== "ADMIN") redirect("/");
 
   const sessionUser = session.user as any;
@@ -50,29 +54,57 @@ export default async function EditJobPage({ params }: PageProps) {
       })
     : null;
 
-  function parseMetaFromDescription(desc: string) {
-    const metaStart = desc.indexOf("\n---\n[Meta]\n");
-    if (metaStart === -1) return {};
-    const metaText = desc.slice(metaStart + "\n---\n[Meta]\n".length);
-    const lines = metaText.split("\n").filter(Boolean);
-    const out: any = {};
-    for (const line of lines) {
-      const parts = line.split(";").map((s) => s.trim()).filter(Boolean);
-      for (const p of parts) {
-        const eq = p.indexOf("=");
-        if (eq === -1) continue;
-        const key = p.slice(0, eq).trim();
-        const val = p.slice(eq + 1).trim();
-        if (val === "true" || val === "false") out[key] = val === "true";
-        else if (!isNaN(Number(val))) out[key] = Number(val);
-        else if (val.startsWith("{") || val.startsWith("[")) {
-          try {
-            out[key] = JSON.parse(val);
-          } catch {}
-        } else out[key] = val;
-      }
+  /* ---------- Meta parser robusto (igual que JobDetailPanel) ---------- */
+  type MetaMap = { [key: string]: any };
+
+  function parseMetaFromDescription(
+    description: string | null | undefined
+  ): { meta: MetaMap; mainDesc: string } {
+    const raw = description ?? "";
+    const match = raw.match(/---\s*\[Meta\]([\s\S]*)$/i);
+    if (!match) {
+      return { meta: {}, mainDesc: raw.trim() };
     }
-    return out;
+
+    const metaBlock = match[1].trim();
+    const tokens = metaBlock
+      .split(/\r?\n/)
+      .flatMap((l) => l.split(";"))
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    const parsed: MetaMap = {};
+    for (const tok of tokens) {
+      const i = tok.indexOf("=");
+      if (i < 0) continue;
+      const key = tok.slice(0, i).trim();
+      const valRaw = tok.slice(i + 1).trim();
+
+      if (valRaw === "true" || valRaw === "false") {
+        parsed[key] = valRaw === "true";
+        continue;
+      }
+      if (/^-?\d+(\.\d+)?$/.test(valRaw)) {
+        parsed[key] = Number(valRaw);
+        continue;
+      }
+      if (valRaw === "" || valRaw.toLowerCase() === "null") {
+        parsed[key] = null;
+        continue;
+      }
+      if (valRaw.startsWith("{") || valRaw.startsWith("[")) {
+        try {
+          parsed[key] = JSON.parse(valRaw);
+          continue;
+        } catch {
+          /* ignore */
+        }
+      }
+      parsed[key] = valRaw;
+    }
+
+    const mainDesc = raw.slice(0, match.index).trim();
+    return { meta: parsed, mainDesc };
   }
 
   function deserializeSkills(skills: string[] | null) {
@@ -83,12 +115,42 @@ export default async function EditJobPage({ params }: PageProps) {
     });
   }
 
-  const meta = parseMetaFromDescription(job.description || "");
-  const description = (job.description || "").split("\n---\n[Meta]\n")[0] || "";
-  const certs = meta.certifications || [];
-  const benefitsJson = meta.benefits || {};
+  const { meta, mainDesc } = parseMetaFromDescription(job.description || "");
+  const description = mainDesc;
+
+  const certs: string[] = Array.isArray(meta.certifications)
+    ? meta.certifications
+    : meta.certifications
+    ? [meta.certifications]
+    : [];
+
+  const metaBenefits =
+    meta.benefits && typeof meta.benefits === "object" ? meta.benefits : null;
+
+  const benefitsJson: Record<string, any> =
+    (job.benefitsJson && Object.keys(job.benefitsJson as any).length > 0
+      ? (job.benefitsJson as any)
+      : metaBenefits || {}) ?? {};
+
   const showSalary =
-    typeof meta.showSalary === "boolean" ? meta.showSalary : !!(job.salaryMin || job.salaryMax);
+    typeof meta.showSalary === "boolean"
+      ? meta.showSalary
+      : !!(job.salaryMin || job.salaryMax);
+
+  const schedule: string =
+    (meta.schedule as string | undefined) ?? job.schedule ?? "";
+
+  const showBenefits: boolean =
+    typeof meta.showBenefits === "boolean"
+      ? meta.showBenefits
+      : job.showBenefits ?? false;
+
+  // 👇 Idiomas desde meta (si existen)
+  const languages: any[] = Array.isArray(meta.languages)
+    ? meta.languages
+    : meta.languages
+    ? [meta.languages]
+    : [];
 
   let locationType: "REMOTE" | "HYBRID" | "ONSITE" = "REMOTE";
   let city = "";
@@ -103,7 +165,7 @@ export default async function EditJobPage({ params }: PageProps) {
   }
 
   const wizardInitial = {
-    id: job.id, // 👈 BLINDAJE: se mandará en el FormData desde el wizard
+    id: job.id,
     title: job.title,
     companyMode: job.company?.name === "Confidencial" ? "confidential" : "own",
     locationType,
@@ -112,33 +174,43 @@ export default async function EditJobPage({ params }: PageProps) {
     salaryMin: job.salaryMin ?? "",
     salaryMax: job.salaryMax ?? "",
     showSalary,
-    employmentType: job.employmentType || "FULL_TIME",
-    schedule: meta.schedule || "",
-    showBenefits: Boolean(meta.showBenefits),
+    employmentType:
+      (meta.employmentType as string) || job.employmentType || "FULL_TIME",
+    schedule,
+    showBenefits,
     benefitsJson,
     description,
     responsibilities: meta.responsibilities || "",
     skills: deserializeSkills(job.skills),
     certs,
+    // Educación si ya la usas en el wizard
+    minDegree: (job as any).minDegree ?? null,
+    educationJson: Array.isArray((job as any).educationJson)
+      ? ((job as any).educationJson as any[])
+      : [],
+    // 👇 idiomas iniciales para el JobWizard
+    languages,
   };
 
   // ============= Server Action: UPDATE (nunca create) =============
   async function updateAction(fd: FormData) {
     "use server";
     const s = await getServerSession(authOptions);
-    const currentRole = (s?.user as any)?.role as "RECRUITER" | "ADMIN" | string | undefined;
+    const currentRole = (s?.user as any)?.role as
+      | "RECRUITER"
+      | "ADMIN"
+      | string
+      | undefined;
     if (!s?.user || (currentRole !== "RECRUITER" && currentRole !== "ADMIN")) {
       return { error: "No autenticado o sin permisos." };
     }
 
-    // ID coherente entre URL y form
     const jobIdFromForm = (fd.get("jobId") || "").toString();
     const jobId = jobIdFromForm || params.id;
     if (jobIdFromForm && jobIdFromForm !== params.id) {
       return { error: "Inconsistencia de ID de vacante." };
     }
 
-    // Ownership (evita updates cruzados)
     if (currentRole === "RECRUITER") {
       const canEdit = await prisma.job.findFirst({
         where: { id: jobId, companyId: (s.user as any)?.companyId ?? undefined },
@@ -159,10 +231,18 @@ export default async function EditJobPage({ params }: PageProps) {
     const responsibilities = String(fd.get("responsibilities") || "");
     const employmentType = String(fd.get("employmentType") || "FULL_TIME");
     const showBenefits = fd.get("showBenefits") === "true";
-    const benefitsJson = String(fd.get("benefitsJson") || "{}");
+    const benefitsJsonStr = String(fd.get("benefitsJson") || "{}");
     const skillsJson = String(fd.get("skillsJson") || "[]");
     const certsJson = String(fd.get("certsJson") || "[]");
     const schedule = String(fd.get("schedule") || "");
+
+    const hasBenefitsField = fd.has("benefitsJson");
+    const minDegreeField = fd.get("minDegree");
+    const hasEducationField = fd.has("educationJson");
+    const educationJsonStr = String(fd.get("educationJson") || "[]");
+
+    // 👇 idiomas desde el form
+    const languagesJson = String(fd.get("languagesJson") || "[]");
 
     if (!title || !description)
       return { error: "Faltan campos obligatorios (título y descripción)." };
@@ -173,13 +253,43 @@ export default async function EditJobPage({ params }: PageProps) {
     } catch {
       return { error: "Formato inválido en skillsJson." };
     }
-    const skills = parsedSkills.map((x) => (x.required ? `Req: ${x.name}` : `Nice: ${x.name}`));
+    const skills = parsedSkills.map((x) =>
+      x.required ? `Req: ${x.name}` : `Nice: ${x.name}`
+    );
 
     let certsArr: string[] = [];
     try {
       certsArr = JSON.parse(certsJson || "[]");
     } catch {
       certsArr = [];
+    }
+
+    let parsedBenefits: Record<string, any> = {};
+    if (hasBenefitsField) {
+      try {
+        parsedBenefits = JSON.parse(benefitsJsonStr || "{}");
+      } catch {
+        parsedBenefits = {};
+      }
+    }
+
+    const minDegree = minDegreeField ? String(minDegreeField) : null;
+
+    let educationJson: any[] = [];
+    if (hasEducationField) {
+      try {
+        educationJson = JSON.parse(educationJsonStr || "[]");
+      } catch {
+        educationJson = [];
+      }
+    }
+
+    // 👇 parseo de idiomas
+    let languagesArr: any[] = [];
+    try {
+      languagesArr = JSON.parse(languagesJson || "[]");
+    } catch {
+      languagesArr = [];
     }
 
     const remote = locationType === "REMOTE";
@@ -197,7 +307,6 @@ export default async function EditJobPage({ params }: PageProps) {
       }
     }
 
-    // Cambiar empresa (own/confidencial) sin crear job nuevo
     let companyConnect: { connect: { id: string } } | undefined = undefined;
     const sessCompanyId = (s.user as any)?.companyId as string | undefined;
     if (companyMode === "own") {
@@ -211,22 +320,27 @@ export default async function EditJobPage({ params }: PageProps) {
       });
       const confId = existing
         ? existing.id
-        : (await prisma.company.create({ data: { name: label }, select: { id: true } })).id;
+        : (
+            await prisma.company.create({
+              data: { name: label },
+              select: { id: true },
+            })
+          ).id;
       companyConnect = { connect: { id: confId } };
     }
 
     const descWithMeta =
       description +
       `\n\n---\n[Meta]\n` +
-      `showSalary=${showSalary}; currency=${currency}; salaryMin=${salaryMin ?? ""}; salaryMax=${
-        salaryMax ?? ""
-      }\n` +
+      `showSalary=${showSalary}; currency=${currency}; salaryMin=${
+        salaryMin ?? ""
+      }; salaryMax=${salaryMax ?? ""}\n` +
       `employmentType=${employmentType}; schedule=${schedule}\n` +
-      `showBenefits=${showBenefits}; benefits=${benefitsJson}\n` +
+      `showBenefits=${showBenefits}; benefits=${JSON.stringify(parsedBenefits)}\n` +
       `responsibilities=${responsibilities}\n` +
-      `certifications=${JSON.stringify(certsArr)}\n`;
+      `certifications=${JSON.stringify(certsArr)}\n` +
+      `languages=${JSON.stringify(languagesArr)}\n`;
 
-    // UPDATE sobre el MISMO ID (nunca create)
     await prisma.job.update({
       where: { id: jobId },
       data: {
@@ -239,10 +353,17 @@ export default async function EditJobPage({ params }: PageProps) {
         salaryMin: salaryMin ?? undefined,
         salaryMax: salaryMax ?? undefined,
         currency,
+        showSalary,
+        schedule: schedule || null,
+        ...(hasBenefitsField ? { showBenefits, benefitsJson: parsedBenefits } : {}),
+        ...(minDegreeField ? { minDegree: minDegree as any } : {}),
+        ...(hasEducationField ? { educationJson } : {}),
         locationLat,
         locationLng,
         recruiter: { connect: { id: (s.user as any)?.id } },
         ...(companyConnect ? { company: companyConnect } : {}),
+        // si en tu schema tienes un campo JSON para idiomas, aquí podrías guardar:
+        // languagesJson: languagesArr,
       },
     });
 
@@ -259,11 +380,14 @@ export default async function EditJobPage({ params }: PageProps) {
       </p>
 
       <JobWizard
-        onSubmit={updateAction} // ← solo UPDATE; no hay POST aquí
-        presetCompany={{ id: userCompany?.id ?? null, name: userCompany?.name ?? null }}
+        onSubmit={updateAction}
+        presetCompany={{
+          id: userCompany?.id ?? null,
+          name: userCompany?.name ?? null,
+        }}
         skillsOptions={skillsOptions}
         certOptions={certOptions}
-        initial={wizardInitial as any} // ← incluye { id: job.id }
+        initial={wizardInitial as any}
       />
     </main>
   );
