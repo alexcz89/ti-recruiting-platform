@@ -35,10 +35,24 @@ type CvDraftEducation = {
   endDate?: string | null; // "YYYY-MM"
 };
 
+type CvDraftSkill = {
+  termId?: string;
+  label?: string;
+  level?: 1 | 2 | 3 | 4 | 5;
+};
+
+type CvDraftLanguage = {
+  termId?: string;
+  label?: string;
+  level?: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+};
+
 type CvDraft = {
   identity?: CvDraftIdentity;
   experiences?: CvDraftExperience[];
   education?: CvDraftEducation[];
+  skills?: CvDraftSkill[];
+  languages?: CvDraftLanguage[];
 };
 
 /* ========= Helpers ========= */
@@ -50,6 +64,75 @@ function parseMonthToDate(ym?: string | null): Date | null {
   const mm = Number(m);
   if (!yy || !mm) return null;
   return new Date(yy, mm - 1, 1);
+}
+
+/**
+ * Envía un correo de verificación.
+ *
+ * Está pensado para usar un proveedor tipo Resend vía HTTP.
+ * - Si faltan variables de entorno, simplemente no hace nada (no truena el signup).
+ * - Más adelante puedes cambiar el HTML, el proveedor o la URL sin tocar el resto del flujo.
+ */
+async function sendVerificationEmail(email: string, name?: string | null) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM; // ej: "Bolsa TI <no-reply@bolsati.mx>"
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000";
+
+  if (!apiKey || !from) {
+    console.warn(
+      "[signup] Falta RESEND_API_KEY o EMAIL_FROM; no se envió correo de verificación."
+    );
+    return;
+  }
+
+  // Generar token seguro (JWT firmado) con expiración de 60 minutos
+  const { createEmailVerifyToken } = await import("@/lib/tokens");
+  const token = await createEmailVerifyToken({ email }, 60);
+
+  // URL segura con token firmado (no el email en texto plano)
+  const verifyUrl = `${baseUrl.replace(/\/$/, "")}/api/auth/verify?token=${token}`;
+
+  const firstName = (name || "").split(" ")[0] || "¡Hola!";
+
+  const subject = "Confirma tu correo en Bolsa TI";
+  const html = `
+    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding:24px;">
+      <h1 style="font-size:20px; margin-bottom:12px;">${firstName}, confirma tu correo</h1>
+      <p style="font-size:14px; line-height:1.5; margin-bottom:16px;">
+        Gracias por crear tu cuenta en <strong>Bolsa TI</strong>.
+        Antes de empezar a usarla, necesitamos confirmar que este correo es tuyo.
+      </p>
+      <p style="text-align:center; margin:24px 0;">
+        <a href="${verifyUrl}"
+           style="display:inline-block; padding:10px 18px; border-radius:999px;
+                  background:#059669; color:#ffffff; text-decoration:none; font-size:14px;">
+          Verificar correo
+        </a>
+      </p>
+      <p style="font-size:12px; color:#6b7280; line-height:1.5; margin-top:24px;">
+        Si tú no creaste esta cuenta, puedes ignorar este mensaje. El enlace expira en 60 minutos.
+      </p>
+    </div>
+  `;
+
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from,
+        to: email,
+        subject,
+        html,
+      }),
+    });
+  } catch (err) {
+    console.error("[signup] Error enviando correo de verificación:", err);
+  }
 }
 
 async function importDraftToUser(userId: string, draft: CvDraft) {
@@ -93,20 +176,21 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
       .map((e) => {
         const start = parseMonthToDate(e.startDate);
         const end = e.isCurrent ? null : parseMonthToDate(e.endDate);
-        return {
+
+        const row: any = {
           userId,
           role: e.role || "",
           company: e.company || "",
-          startDate: start,
-          endDate: end,
           isCurrent: !!e.isCurrent,
-          bulletsText: e.bulletsText || "",
-          descriptionHtml: e.descriptionHtml || "",
         };
+
+        if (start) row.startDate = start;
+        row.endDate = end; // nullable en el modelo
+
+        return row;
       });
 
     if (data.length) {
-      // 👇 Cast a any para no pelear con los tipos de startDate/endDate
       tx.push(prisma.workExperience.createMany({ data: data as any }));
     }
   }
@@ -119,7 +203,6 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
         const start = parseMonthToDate(e.startDate);
         const end = parseMonthToDate(e.endDate);
 
-        // Heurística simple para status
         const status =
           !end && start ? "ONGOING" : end ? "COMPLETED" : "COMPLETED";
 
@@ -129,14 +212,54 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
           program: e.program || "",
           startDate: start,
           endDate: end,
-          level: "BACHELOR" as any, // default razonable
+          level: "BACHELOR" as any,
           status: status as any,
           sortIndex: index,
         };
       });
 
     if (data.length) {
-      tx.push(prisma.education.createMany({ data }));
+      tx.push(prisma.education.createMany({ data: data as any }));
+    }
+  }
+
+  // ---- Skills ----
+  if (Array.isArray(draft.skills) && draft.skills.length) {
+    const data = draft.skills
+      .filter((s) => s.termId && s.label && s.label.trim())
+      .map((s) => ({
+        userId,
+        termId: s.termId as string,
+        level: s.level ?? 3,
+      }));
+
+    if (data.length) {
+      tx.push(
+        prisma.candidateSkill.createMany({
+          data: data as any,
+          skipDuplicates: true,
+        })
+      );
+    }
+  }
+
+  // ---- Idiomas ----
+  if (Array.isArray(draft.languages) && draft.languages.length) {
+    const data = draft.languages
+      .filter((l) => l.termId && l.label && l.label.trim())
+      .map((l) => ({
+        userId,
+        termId: l.termId as string,
+        level: (l.level ?? "CONVERSATIONAL") as any,
+      }));
+
+    if (data.length) {
+      tx.push(
+        prisma.candidateLanguage.createMany({
+          data: data as any,
+          skipDuplicates: true,
+        })
+      );
     }
   }
 
@@ -156,7 +279,6 @@ export async function createCandidateAction(
 
     const email = data.email.toLowerCase().trim();
 
-    // ¿Ya existe?
     const existing = await prisma.user.findUnique({
       where: { email },
       select: { id: true },
@@ -174,7 +296,7 @@ export async function createCandidateAction(
         passwordHash,
         role: "CANDIDATE" as Role,
       },
-      select: { id: true },
+      select: { id: true, name: true, email: true },
     });
 
     // Intentar importar el borrador del CV (si vino algo)
@@ -187,7 +309,10 @@ export async function createCandidateAction(
       await importDraftToUser(user.id, cvDraft);
     }
 
-    return { ok: true };
+    // Enviar correo de verificación (no bloquea el flujo si falla)
+    await sendVerificationEmail(user.email, data.name);
+
+    return { ok: true, emailVerificationSent: true };
   } catch (err) {
     console.error("Error createCandidateAction", err);
     return { ok: false, error: "No se pudo crear la cuenta" };

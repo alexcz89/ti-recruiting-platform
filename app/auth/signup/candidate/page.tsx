@@ -6,6 +6,9 @@ export const metadata = {
   title: "Registro de Candidato | Bolsa TI",
 };
 
+// ⚠️ Evita problemas de prerender con useSearchParams en el client
+export const dynamic = "force-dynamic";
+
 export default function CandidateSignupPage() {
   return (
     <Suspense
