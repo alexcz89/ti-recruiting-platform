@@ -31,6 +31,44 @@ This account can be used to test:
 - ✅ Application tracking at `/profile/applications`
 - ✅ Resume builder at `/resume/builder`
 
+## Test Recruiter Account
+
+**Created:** 2025-12-16
+**Status:** ✅ Active & Email Verified
+
+### Login Credentials
+- **Email:** `recruiter.test@tasktest.com`
+- **Password:** `TestRecruiter123!`
+- **Role:** RECRUITER
+- **Login URL:** http://localhost:3000/auth/signin?role=RECRUITER
+
+### Account Details
+- **User ID:** `cmj8tpev30002751n32mmwq4b`
+- **Name:** Test Recruiter
+- **Location:** Monterrey, NL, Mexico
+- **Phone:** +528187654321
+- **Email Verified:** Yes ✓
+- **Recruiter Status:** APPROVED
+
+### Company Details
+- **Name:** Task Test Company
+- **Domain:** tasktest.com
+- **Billing Plan:** PRO (5 active jobs, unlimited candidates)
+- **Company ID:** `cmj8tpepm0000751nski0gnj7`
+
+### Test Coverage
+
+This account can be used to test:
+- ✅ Recruiter login flow
+- ✅ Dashboard access at `/dashboard/overview`
+- ✅ Job creation at `/dashboard/jobs/new`
+- ✅ Job management at `/dashboard/jobs`
+- ✅ Application management at `/dashboard/jobs/[id]/applications`
+- ✅ Candidate search at `/dashboard/candidates`
+- ✅ Company settings at `/dashboard/company`
+- ✅ Billing settings at `/dashboard/billing`
+- ✅ Multi-tenant isolation (company-based)
+
 ## Creating Additional Test Accounts
 
 ### Candidate Account
@@ -43,19 +81,35 @@ npx tsx scripts/create-test-candidate.ts
 
 # Delete and recreate
 npx tsx scripts/create-test-candidate.ts --delete --verify
+
+# Verify candidate exists
+npx tsx scripts/verify-test-user.ts
 ```
 
-### Verify Test User
+### Recruiter Account
 ```bash
-npx tsx scripts/verify-test-user.ts
+# Create with auto-verification
+npx tsx scripts/create-test-recruiter.ts --verify
+
+# Create without verification (to test email flow)
+npx tsx scripts/create-test-recruiter.ts
+
+# Delete and recreate
+npx tsx scripts/create-test-recruiter.ts --delete --verify
+
+# Verify recruiter exists
+npx tsx scripts/verify-test-recruiter.ts
 ```
 
 ### Test Login Credentials
 ```bash
-# Test default candidate
-npx tsx scripts/test-login.ts
+# Test candidate
+npx tsx scripts/test-login.ts "candidate.test@example.com" "TestCandidate123!"
 
-# Test specific credentials
+# Test recruiter
+npx tsx scripts/test-login.ts "recruiter.test@tasktest.com" "TestRecruiter123!"
+
+# Test any credentials
 npx tsx scripts/test-login.ts "email@example.com" "password"
 ```
 
