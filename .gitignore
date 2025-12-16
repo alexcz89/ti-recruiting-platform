@@ -25,4 +25,8 @@ coverage/
 .vscode/
 .idea/
 .vercel/
+.claude/
+
+# tests
+test-screenshots/
 
