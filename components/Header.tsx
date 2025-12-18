@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import ThemeToggle from "@/components/ThemeToggle";
 import SignOutButton from "@/components/SignOutButton";
+import LogoTaskit from "@/components/LogoTaskit";
 
 export default function Header() {
   return (
@@ -18,11 +19,9 @@ export default function Header() {
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-12 md:h-14 items-center justify-between gap-3">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 font-semibold shrink-0">
-            <span className="inline-flex h-7 w-7 md:h-8 md:w-8 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
-              TI
-            </span>
-            <span className="text-zinc-900 dark:text-zinc-100">Bolsa TI</span>
+          <Link href="/" className="flex items-center gap-2 shrink-0">
+            <LogoTaskit className="h-7 md:h-8 w-auto" />
+            <span className="sr-only">TaskIT / Bolsa TI</span>
           </Link>
 
           {/* Nav + acciones */}
@@ -164,14 +163,12 @@ function AuthHoverMenu() {
           <div className="p-2">
             <HeaderTiny>Candidatos</HeaderTiny>
             <MenuItem href="/auth/signin?role=CANDIDATE" label="Iniciar sesión" />
-            {/* 👉 lleva directo al signup de candidato */}
             <MenuItem href="/auth/signup/candidate" label="Crear cuenta" />
           </div>
 
           <div className="border-t border-zinc-200/70 dark:border-zinc-800/70 p-2">
             <HeaderTiny>Employers</HeaderTiny>
             <MenuItem href="/auth/signin?role=RECRUITER" label="Iniciar sesión (Employers)" />
-            {/* 👉 lleva directo al signup de reclutador */}
             <MenuItem
               href="/auth/signup/recruiter"
               label="Crear cuenta (Employers)"

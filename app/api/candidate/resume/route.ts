@@ -13,6 +13,13 @@ function fromLangLevel(l: LanguageProficiency | null): string {
   return l ?? "CONVERSATIONAL";
 }
 
+function parseDate(input?: string | null): Date | null {
+  if (!input) return null;
+  const normalized = /^\d{4}-\d{2}$/.test(input) ? `${input}-01` : input;
+  const dt = new Date(normalized);
+  return isNaN(dt.getTime()) ? null : dt;
+}
+
 async function requireUserId(): Promise<string | null> {
   const session = await getServerSession(authOptions);
   return (session?.user as any)?.id ?? null;
@@ -61,6 +68,7 @@ export async function GET() {
             startDate: true,
             endDate: true,
             isCurrent: true,
+            description: true,
           },
         },
         candidateSkills: {
@@ -118,7 +126,7 @@ export async function GET() {
           : "",
         endDate: w.endDate ? new Date(w.endDate).toISOString().slice(0, 7) : "",
         isCurrent: !!w.isCurrent,
-        description: "",
+        description: w.description ?? "",
       })),
       skills: (user.candidateSkills || []).map((s) => ({
         name: s.term.label,
@@ -142,5 +150,61 @@ export async function GET() {
   } catch (e) {
     console.error("[GET /api/candidate/resume] error", e);
     return NextResponse.json({ error: "Error al obtener CV" }, { status: 500 });
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const userId = await requireUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    }
+
+    const body = await req.json().catch(() => null);
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Payload invalido" }, { status: 400 });
+    }
+
+    const rawExperiences = Array.isArray((body as any).experiences)
+      ? (body as any).experiences
+      : Array.isArray((body as any).experience)
+      ? (body as any).experience
+      : [];
+
+    if (!Array.isArray(rawExperiences)) {
+      return NextResponse.json(
+        { error: "Experiencias invalidas" },
+        { status: 400 }
+      );
+    }
+
+    const experiences = rawExperiences
+      .map((w: any) => ({
+        company: typeof w?.company === "string" ? w.company.trim() : "",
+        role: typeof w?.role === "string" ? w.role.trim() : "",
+        startDate: parseDate(w?.startDate) ?? new Date(),
+        endDate: parseDate(w?.endDate) ?? null,
+        isCurrent: !!w?.isCurrent,
+        description:
+          typeof w?.description === "string" && w.description.trim()
+            ? w.description
+            : null,
+      }))
+      .filter((w) => w.company && w.role);
+
+    await prisma.workExperience.deleteMany({ where: { userId } });
+    if (experiences.length) {
+      await prisma.workExperience.createMany({
+        data: experiences.map((w) => ({ ...w, userId })),
+      });
+    }
+
+    return NextResponse.json({
+      ok: true,
+      counts: { experience: experiences.length },
+    });
+  } catch (e) {
+    console.error("[POST /api/candidate/resume] error", e);
+    return NextResponse.json({ error: "Error al guardar CV" }, { status: 500 });
   }
 }

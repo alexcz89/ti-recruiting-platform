@@ -1,7 +1,7 @@
 // app/auth/signup/candidate/CandidateSignupClient.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -38,22 +38,46 @@ type DraftSummary = {
   languages: { items: string[]; total: number };
 };
 
+const EMPTY_FORM: CandidateSignupWithConfirmInput = {
+  name: "",
+  email: "",
+  password: "",
+  confirmPassword: "",
+};
+
 export default function CandidateSignupClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const fromCvBuilder = searchParams?.get("from") === "cv-builder";
 
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState<CandidateSignupWithConfirmInput>({
-    name: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
+  const [form, setForm] = useState<CandidateSignupWithConfirmInput>(EMPTY_FORM);
 
   const [draftSummary, setDraftSummary] = useState<DraftSummary | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const updateForm = useCallback(
+    (
+      updates:
+        | Partial<CandidateSignupWithConfirmInput>
+        | ((
+            prev: CandidateSignupWithConfirmInput
+          ) => Partial<CandidateSignupWithConfirmInput>)
+    ) => {
+      setForm((prev) => ({
+        ...prev,
+        ...(typeof updates === "function" ? updates(prev) : updates),
+      }));
+    },
+    []
+  );
+
+  const handleChange =
+    <K extends keyof CandidateSignupWithConfirmInput>(field: K) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      updateForm({ [field]: e.target.value });
+    };
 
   // ===== Prefill desde el CV Builder (localStorage) + resumen =====
   useEffect(() => {
@@ -89,8 +113,7 @@ export default function CandidateSignupClient() {
           .join(" ")
           .trim();
 
-        setForm((prev) => ({
-          ...prev,
+        updateForm((prev) => ({
           name: fullName || prev.name,
           email: identity.email || prev.email,
         }));
@@ -153,12 +176,7 @@ export default function CandidateSignupClient() {
     } catch (err) {
       console.error("Error leyendo draft de CV en signup:", err);
     }
-  }, [fromCvBuilder]);
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
+  }, [fromCvBuilder, updateForm]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,7 +322,7 @@ export default function CandidateSignupClient() {
           <input
             name="name"
             value={form.name}
-            onChange={handleChange}
+            onChange={handleChange("name")}
             className="w-full rounded-lg border px-3 py-2 text-sm"
             autoComplete="name"
             required
@@ -318,7 +336,7 @@ export default function CandidateSignupClient() {
             name="email"
             type="email"
             value={form.email}
-            onChange={handleChange}
+            onChange={handleChange("email")}
             className="w-full rounded-lg border px-3 py-2 text-sm"
             autoComplete="email"
             required
@@ -331,7 +349,7 @@ export default function CandidateSignupClient() {
               name="password"
               type={showPassword ? "text" : "password"}
               value={form.password}
-              onChange={handleChange}
+              onChange={handleChange("password")}
               className="w-full rounded-lg border px-3 py-2 pr-10 text-sm"
               autoComplete="new-password"
               placeholder="Mín. 8, 1 mayús, 1 min, 1 número"
@@ -363,7 +381,7 @@ export default function CandidateSignupClient() {
               name="confirmPassword"
               type={showConfirmPassword ? "text" : "password"}
               value={form.confirmPassword}
-              onChange={handleChange}
+              onChange={handleChange("confirmPassword")}
               className="w-full rounded-lg border px-3 py-2 pr-10 text-sm"
               autoComplete="new-password"
               required

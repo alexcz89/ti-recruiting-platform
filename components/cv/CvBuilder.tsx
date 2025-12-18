@@ -1,7 +1,7 @@
 // components/cv/CvBuilder.tsx
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
@@ -28,6 +28,7 @@ type CvExperience = {
   startDate: string;
   endDate?: string | null;
   isCurrent?: boolean;
+  description?: string;
   bullets?: string[];
   bulletsText?: string;
   /** HTML del editor enriquecido (para no perder formato de bullets) */
@@ -46,6 +47,10 @@ type CvLanguage = {
   termId: string;
   label: string;
   level: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+};
+type PreviewExperience = CvExperience & {
+  bullets: string[];
+  safeDescriptionHtml: string;
 };
 
 type SkillOption = { termId: string; label: string };
@@ -129,6 +134,27 @@ const inputSmCls = inputBase + " md:max-w-xs"; // corto
 
 /* ==================== LocalStorage key ==================== */
 const LS_KEY = "cv_builder_draft_v1";
+const buildDraftKey = (user?: { id?: string; email?: string }) => {
+  const slug =
+    user?.id?.toString() ||
+    user?.email?.toString().replace(/[^a-zA-Z0-9._-]/g, "-");
+  return slug ? `${LS_KEY}:${slug}` : LS_KEY;
+};
+
+/* ==================== Sanitizers ==================== */
+const sanitizeHtml = (html: string) => {
+  if (typeof window === "undefined") return html;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  doc.querySelectorAll("script,style").forEach((n) => n.remove());
+  return doc.body.innerHTML;
+};
+
+const sanitizeFilename = (raw: string) =>
+  (raw || "candidato")
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim() || "candidato";
 
 /* ==================== Helpers para autocomplete ==================== */
 function filterSkillOptions(all: SkillOption[], query: string): SkillOption[] {
@@ -168,17 +194,23 @@ export default function CvBuilder({
   const user = session?.user as any | undefined;
   const role = user?.role as "ADMIN" | "RECRUITER" | "CANDIDATE" | undefined;
   const isCandidate = role === "CANDIDATE";
+  const draftKey = useMemo(() => buildDraftKey(user), [user]);
 
   const [identity, setIdentity] = useState<CvIdentity>({
     ...initial.identity,
     birthdate: initial.identity.birthdate || "",
   });
   const [experiences, setExperiences] = useState<CvExperience[]>(
-    (initial.experiences || []).map((e) => ({
-      ...e,
-      bulletsText: e.bullets?.join("\n") || "",
-      descriptionHtml: e.descriptionHtml || "",
-    }))
+    (initial.experiences || []).map((e) => {
+      const description =
+        e.description ?? e.bulletsText ?? e.bullets?.join("\n") ?? "";
+      return {
+        ...e,
+        description,
+        bulletsText: e.bulletsText || description || e.bullets?.join("\n") || "",
+        descriptionHtml: e.descriptionHtml || "",
+      };
+    })
   );
   const [education, setEducation] = useState<CvEducation[]>(
     initial.education || []
@@ -190,7 +222,9 @@ export default function CvBuilder({
   const [certifications, setCertifications] = useState<string[]>(
     initial.certifications || []
   );
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [saving, setSaving] = useState(false);
+  const loadedDraftKeyRef = useRef<string | null>(null);
 
   // control de apertura de combos
   const [openSkillIndex, setOpenSkillIndex] = useState<number | null>(null);
@@ -199,12 +233,17 @@ export default function CvBuilder({
   );
 
   const fullName = useMemo(() => joinName(identity), [identity]);
+  const safeFileBase = useMemo(
+    () => sanitizeFilename(fullName || "candidato"),
+    [fullName]
+  );
 
   // ====== Cargar borrador desde localStorage (para uso sin registro) ======
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !draftKey) return;
+    if (loadedDraftKeyRef.current === draftKey) return;
     try {
-      const raw = window.localStorage.getItem(LS_KEY);
+      const raw = window.localStorage.getItem(draftKey);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<{
         identity: CvIdentity;
@@ -223,11 +262,17 @@ export default function CvBuilder({
       }
       if (Array.isArray(parsed.experiences)) {
         setExperiences(
-          parsed.experiences.map((e) => ({
-            ...e,
-            bulletsText: e.bulletsText || e.bullets?.join("\n") || "",
-            descriptionHtml: e.descriptionHtml || "",
-          }))
+          parsed.experiences.map((e) => {
+            const description =
+              e.description ?? e.bulletsText ?? e.bullets?.join("\n") ?? "";
+            return {
+              ...e,
+              description,
+              bulletsText:
+                e.bulletsText || description || e.bullets?.join("\n") || "",
+              descriptionHtml: e.descriptionHtml || "",
+            };
+          })
         );
       }
       if (Array.isArray(parsed.education)) {
@@ -242,42 +287,62 @@ export default function CvBuilder({
       if (Array.isArray(parsed.certifications)) {
         setCertifications(parsed.certifications);
       }
+      loadedDraftKeyRef.current = draftKey;
     } catch (err) {
       console.error("Error al cargar borrador de CV desde localStorage", err);
     }
     // solo al montar
-  }, []);
+  }, [draftKey]);
 
   // ====== Guardar borrador en localStorage en cada cambio ======
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const draft = {
-        identity,
-        experiences,
-        education,
-        skills,
-        languages,
-        certifications,
-      };
-      window.localStorage.setItem(LS_KEY, JSON.stringify(draft));
-    } catch (err) {
-      console.error("Error al guardar borrador de CV en localStorage", err);
-    }
-  }, [identity, experiences, education, skills, languages, certifications]);
+    if (typeof window === "undefined" || !draftKey) return;
+    const handle = window.setTimeout(() => {
+      try {
+        const draft = {
+          identity,
+          experiences,
+          education,
+          skills,
+          languages,
+          certifications,
+        };
+        window.localStorage.setItem(draftKey, JSON.stringify(draft));
+      } catch (err) {
+        console.error("Error al guardar borrador de CV en localStorage", err);
+      }
+    }, 400);
+
+    return () => window.clearTimeout(handle);
+  }, [
+    draftKey,
+    identity,
+    experiences,
+    education,
+    skills,
+    languages,
+    certifications,
+  ]);
 
   // Editor -> preview
-  const previewExperiences = experiences.map((e) => ({
-    ...e,
-    bullets: (e.bulletsText || "")
-      .split("\n")
-      .map((b) => b.trim())
-      .filter(Boolean),
-  }));
+  const previewExperiences: PreviewExperience[] = experiences.map((e) => {
+    const bulletsSource =
+      e.bulletsText || e.description || e.bullets?.join("\n") || "";
+    return {
+      ...e,
+      bullets: bulletsSource
+        .split("\n")
+        .map((b) => b.trim())
+        .filter(Boolean),
+      safeDescriptionHtml: e.descriptionHtml
+        ? sanitizeHtml(e.descriptionHtml)
+        : "",
+    };
+  });
 
   // Agrupar/ordenar por empresa y roles (reciente -> antiguo)
   const groupedByCompany = useMemo(() => {
-    const map = new Map<string, CvExperience[]>();
+    const map = new Map<string, PreviewExperience[]>();
     for (const e of previewExperiences) {
       const key = e.company || "—";
       if (!map.has(key)) map.set(key, []);
@@ -302,6 +367,7 @@ export default function CvBuilder({
       startDate: "",
       endDate: "",
       isCurrent: false,
+      description: "",
       bulletsText: "",
       descriptionHtml: "",
     };
@@ -416,13 +482,82 @@ export default function CvBuilder({
     }
   };
 
+  // ===== Sincronizar experiencias con la API antes de generar el PDF =====
+  const syncExperiencesToServer = async () => {
+    try {
+      // Si no hay sesión, no intentamos guardar
+      if (!user) return;
+
+      const experiencesPayload = experiences
+        .map((e) => {
+          const company = (e.company || "").trim();
+          const role = (e.role || "").trim();
+          if (!company && !role) return null;
+
+          const rawDescription =
+            e.description ?? e.bulletsText ?? e.bullets?.join("\n") ?? "";
+          const normalizedDescription = rawDescription
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .join("\n");
+
+          return {
+            company,
+            role,
+            startDate: e.startDate || null,
+            endDate: e.isCurrent ? null : e.endDate || null,
+            isCurrent: !!e.isCurrent,
+            description: normalizedDescription || null,
+          };
+        })
+        .filter(Boolean) as any[];
+
+      if (!experiencesPayload.length) return;
+
+      const res = await fetch("/api/candidate/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ experiences: experiencesPayload }),
+      });
+
+      if (!res.ok) {
+        let body: any = null;
+        try {
+          body = await res.json();
+        } catch {
+          // ignore
+        }
+        console.error(
+          "Error al guardar experiencias en el servidor",
+          res.status,
+          body
+        );
+      }
+    } catch (err) {
+      console.error("Error al sincronizar experiencias con el servidor", err);
+    }
+  };
+
   const handlePrint = async () => {
     try {
-      const pdf = await buildCvPdf();
-      pdf.save(`CV-${fullName || "candidato"}.pdf`);
-    } catch (err: any) {
+      setDownloadingPdf(true);
+
+      // 1) Guardar experiencias (incluye description) en WorkExperience
+      await syncExperiencesToServer();
+
+      // 2) Abrir el PDF generado por la ruta /api/candidate/resume/pdf
+      const url = `/api/candidate/resume/pdf?ts=${Date.now()}`;
+      const newTab = window.open(url, "_blank", "noopener,noreferrer");
+
+      if (!newTab) {
+        console.warn("El navegador bloqueó la apertura de la nueva pestaña.");
+      }
+    } catch (err) {
       console.error(err);
-      alert(err?.message || "Hubo un problema al generar el PDF.");
+      alert("Hubo un problema al abrir el PDF.");
+    } finally {
+      setDownloadingPdf(false);
     }
   };
 
@@ -437,6 +572,9 @@ export default function CvBuilder({
 
     try {
       setSaving(true);
+
+      // También sincronizamos experiencias a la BD
+      await syncExperiencesToServer();
 
       // 1) ¿ya existe un resumeUrl?
       const existing = (await fetch("/api/profile/resume", {
@@ -458,7 +596,7 @@ export default function CvBuilder({
       // 2) Construir PDF (misma lógica que para descargar)
       const pdf = await buildCvPdf();
       const blob = pdf.output("blob");
-      const file = new File([blob], `CV-${fullName || "candidato"}.pdf`, {
+      const file = new File([blob], `CV-${safeFileBase}.pdf`, {
         type: "application/pdf",
       });
 
@@ -516,9 +654,10 @@ export default function CvBuilder({
           <button
             type="button"
             onClick={handlePrint}
+            disabled={downloadingPdf}
             className="inline-flex items-center rounded-xl border px-4 py-2 text-sm font-medium border-zinc-200 bg-white text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            Guardar como PDF (print)
+            {downloadingPdf ? "Abriendo PDF..." : "Guardar como PDF (print)"}
           </button>
         </div>
 
@@ -664,6 +803,7 @@ export default function CvBuilder({
                     startDate: "",
                     endDate: "",
                     isCurrent: false,
+                    description: "",
                     bulletsText: "",
                     descriptionHtml: "",
                   },
@@ -808,6 +948,7 @@ export default function CvBuilder({
                               ? {
                                   ...x,
                                   descriptionHtml: html,
+                                  description: plain,
                                   bulletsText: plain,
                                 }
                               : x
@@ -1327,8 +1468,9 @@ export default function CvBuilder({
                 type="button"
                 className="rounded-lg border px-4 py-2 text-xs md:text-sm hover:bg-gray-50"
                 onClick={handlePrint}
+                disabled={downloadingPdf}
               >
-                Descargar sin registrarme
+                {downloadingPdf ? "Abriendo PDF..." : "Descargar sin registrarme"}
               </button>
             </div>
           </section>
@@ -1410,6 +1552,10 @@ export default function CvBuilder({
                           const endS = e.isCurrent
                             ? "Actual"
                             : fmtMonthShort(e.endDate);
+                          const hasHtml =
+                            typeof e.safeDescriptionHtml === "string" &&
+                            e.safeDescriptionHtml.trim().length > 0;
+                          const hasBullets = e.bullets && e.bullets.length > 0;
                           return (
                             <div key={idx}>
                               <div className="flex justify-between">
@@ -1422,12 +1568,21 @@ export default function CvBuilder({
                                   {endS}
                                 </div>
                               </div>
-                              {e.bullets && e.bullets.length > 0 && (
-                                <ul className="list-disc pl-5 mt-1 text-[12px] leading-6">
-                                  {e.bullets.map((b, j) => (
-                                    <li key={j}>{b}</li>
-                                  ))}
-                                </ul>
+                              {hasHtml ? (
+                                <div
+                                  className="mt-1 text-[12px] leading-6 cv-exp-html"
+                                  dangerouslySetInnerHTML={{
+                                    __html: e.safeDescriptionHtml || "",
+                                  }}
+                                />
+                              ) : (
+                                hasBullets && (
+                                  <ul className="list-disc pl-5 mt-1 text-[12px] leading-6">
+                                    {e.bullets!.map((b, j) => (
+                                      <li key={j}>{b}</li>
+                                    ))}
+                                  </ul>
+                                )
                               )}
                             </div>
                           );
@@ -1542,6 +1697,22 @@ export default function CvBuilder({
         .cv-meta-row span + span::before {
           content: " · ";
           margin: 0 2px;
+        }
+
+        /* Bullets inside rich text experience descriptions */
+        .cv-sheet .cv-exp-html ul {
+          list-style: disc;
+        }
+        .cv-sheet .cv-exp-html ol {
+          list-style: decimal;
+        }
+        .cv-sheet .cv-exp-html ul,
+        .cv-sheet .cv-exp-html ol {
+          padding-left: 1.1rem;
+          margin: 4px 0;
+        }
+        .cv-sheet .cv-exp-html li {
+          margin-bottom: 2px;
         }
 
         @media print {

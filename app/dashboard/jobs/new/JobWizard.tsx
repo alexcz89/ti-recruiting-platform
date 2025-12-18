@@ -7,10 +7,8 @@ import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { createStringFuse, searchStrings } from "@/lib/search/fuse";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import DOMPurify from "dompurify";
 import JobRichTextEditor from "@/components/jobs/JobRichTextEditor";
-import { Briefcase, Clock3 } from "lucide-react";
-import { z } from "zod";
+import { Briefcase, Clock3, Save, CheckCircle2 } from "lucide-react";
 import {
   Controller,
   FormProvider,
@@ -21,117 +19,47 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LANGUAGES_FALLBACK } from "@/lib/skills";
 
+// Import from new architecture
+import {
+  JobForm,
+  JobWizardProps,
+  PresetCompany,
+  LanguageProficiency,
+  EmploymentType,
+  DegreeLevel,
+} from "./JobWizard/types";
+import { jobSchema } from "./JobWizard/types";
+import {
+  BENEFITS,
+  EMPLOYMENT_OPTIONS,
+  SCHEDULE_PRESETS,
+} from "./JobWizard/constants";
+import {
+  makeDefaultValues,
+  sanitizeHtml,
+  htmlToPlain,
+  clampNonNegative,
+  labelEmployment,
+  labelDegree,
+  labelLanguageLevel,
+} from "./JobWizard/utils/helpers";
+import { useAutosave } from "./JobWizard/hooks/useAutosave";
+import { useQualityScore } from "./JobWizard/hooks/useQualityScore";
+import Stepper from "./JobWizard/components/Stepper";
+import QualityIndicator from "./JobWizard/components/QualityIndicator";
+import Step1Basic from "./JobWizard/components/Step1Basic";
+
 /* =============================
-   Utils
+   Helper Functions
 ============================= */
-
-function sanitizeHtml(html: string) {
-  if (!html) return "";
-  return DOMPurify.sanitize(html, {
-    ALLOWED_TAGS: ["b", "i", "strong", "em", "ul", "ol", "li", "p", "br"],
-    ALLOWED_ATTR: [],
-  });
+function getTimeAgo(date: Date): string {
+  const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "hace unos segundos";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `hace ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `hace ${hours}h`;
 }
-
-function htmlToPlain(html: string) {
-  if (!html) return "";
-  // Soporte SSR: si no hay window/document, hacemos un strip básico
-  if (typeof window === "undefined") {
-    return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-  }
-  const div = document.createElement("div");
-  div.innerHTML = html;
-  return (div.textContent || div.innerText || "").trim();
-}
-
-/* =============================
-   Tipos
-============================= */
-type PresetCompany = { id: string | null; name: string | null };
-
-type LocationType = "REMOTE" | "HYBRID" | "ONSITE";
-type EmploymentType =
-  | "FULL_TIME"
-  | "PART_TIME"
-  | "CONTRACT"
-  | "INTERNSHIP";
-type Currency = "MXN" | "USD";
-type DegreeLevel = "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD";
-type LanguageProficiency =
-  | "NATIVE"
-  | "PROFESSIONAL"
-  | "CONVERSATIONAL"
-  | "BASIC";
-
-type TemplateJob = {
-  id: string;
-  title?: string;
-  locationType?: LocationType;
-  city?: string | null;
-  country?: string | null;
-  admin1?: string | null;
-  cityNorm?: string | null;
-  admin1Norm?: string | null;
-  locationLat?: number | null;
-  locationLng?: number | null;
-  currency?: Currency;
-  salaryMin?: number | null;
-  salaryMax?: number | null;
-  showSalary?: boolean | null;
-  employmentType?: EmploymentType;
-  schedule?: string | null;
-  benefitsJson?: any | null;
-  description?: string | null; // legacy plain
-  descriptionHtml?: string | null;
-  education?: Array<{ name: string; required: boolean }> | null;
-  minDegree?: DegreeLevel | null;
-  skills?: Array<{ name: string; required: boolean }> | null;
-  certs?: string[] | null;
-  languages?: Array<{ name: string; level: LanguageProficiency }> | null;
-};
-
-type Props = {
-  onSubmit: (fd: FormData) => Promise<any>;
-  presetCompany: PresetCompany;
-  skillsOptions: string[];
-  certOptions: string[];
-  templates?: TemplateJob[];
-  initial?: {
-    id?: string;
-    // Paso 1
-    title?: string;
-    companyMode?: "own" | "other" | "confidential";
-    companyOtherName?: string;
-    locationType?: LocationType;
-    city?: string;
-    country?: string | null;
-    admin1?: string | null;
-    cityNorm?: string | null;
-    admin1Norm?: string | null;
-    locationLat?: number | null;
-    locationLng?: number | null;
-    currency?: Currency;
-    salaryMin?: number | string | null;
-    salaryMax?: number | string | null;
-    showSalary?: boolean;
-    // Paso 2
-    employmentType?: EmploymentType;
-    schedule?: string;
-    // Paso 3
-    showBenefits?: boolean;
-    benefitsJson?: Record<string, any>;
-    // Paso 4
-    description?: string; // legacy plain
-    descriptionHtml?: string | null;
-    education?: Array<{ name: string; required: boolean }>;
-    minDegree?: DegreeLevel;
-    // Paso 4 (skills/certs)
-    skills?: Array<{ name: string; required: boolean }>;
-    certs?: string[];
-    // Idiomas requeridos de la vacante
-    languages?: Array<{ name: string; level: LanguageProficiency }>;
-  };
-};
 
 /* =============================
    Constantes
@@ -149,220 +77,8 @@ const EDUCATION_SUGGESTIONS = [
   "Técnico en Redes",
 ];
 
-const BENEFITS = [
-  { key: "aguinaldo", label: "Aguinaldo", def: true },
-  { key: "vacaciones", label: "Vacaciones", def: true },
-  { key: "primaVac", label: "Prima vacacional", def: true },
-  { key: "utilidades", label: "Utilidades", def: true },
-  { key: "bonos", label: "Bonos", def: false },
-  { key: "vales", label: "Vales de despensa", def: false },
-  { key: "fondoAhorro", label: "Fondo de ahorro", def: false },
-  { key: "combustible", label: "Combustible", def: false },
-  { key: "comedor", label: "Comedor subsidiado", def: false },
-  { key: "celular", label: "Celular", def: false },
-  { key: "sgmm", label: "SGMM", def: false },
-  { key: "vida", label: "Seguro de vida", def: false },
-  { key: "auto", label: "Automóvil", def: false },
-  { key: "otros", label: "Otros", def: false },
-];
-
 const reviewBox =
   "mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border bg-zinc-50 p-2 dark:bg-zinc-900/40";
-
-const EMPLOYMENT_OPTIONS: {
-  value: EmploymentType;
-  label: string;
-  subtitle: string;
-}[] = [
-  {
-    value: "FULL_TIME",
-    label: "Tiempo completo",
-    subtitle: "Jornada laboral estándar, puesto base.",
-  },
-  {
-    value: "PART_TIME",
-    label: "Medio tiempo",
-    subtitle: "Ideal para estudiantes o segundo empleo.",
-  },
-  {
-    value: "CONTRACT",
-    label: "Por periodo",
-    subtitle: "Proyecto con fecha de inicio y fin.",
-  },
-  {
-    value: "INTERNSHIP",
-    label: "Prácticas profesionales",
-    subtitle: "Perfil junior / trainee.",
-  },
-];
-
-const SCHEDULE_PRESETS = [
-  { label: "Oficina clásica", value: "L-V 9:00–18:00" },
-  { label: "Oficina temprana", value: "L-V 8:00–17:00" },
-  { label: "Banco / retail", value: "L-S 9:00–18:00" },
-  { label: "Turno vespertino", value: "L-V 13:00–22:00" },
-];
-
-/* =============================
-   Zod schema + RHF types
-============================= */
-const jobSchema = z
-  .object({
-    // Paso 1
-    title: z.string().min(3, "Mínimo 3 caracteres."),
-    companyMode: z.enum(["own", "confidential"]),
-    companyOtherName: z.string().optional(),
-    locationType: z.enum(["REMOTE", "HYBRID", "ONSITE"]),
-    city: z.string().optional(),
-    country: z.string().optional(),
-    admin1: z.string().optional(),
-    cityNorm: z.string().optional(),
-    admin1Norm: z.string().optional(),
-    locationLat: z.number().nullable().optional(),
-    locationLng: z.number().nullable().optional(),
-    currency: z.enum(["MXN", "USD"]),
-    salaryMin: z.string().optional(),
-    salaryMax: z.string().optional(),
-    showSalary: z.boolean(),
-    // Paso 2
-    employmentType: z.enum([
-      "FULL_TIME",
-      "PART_TIME",
-      "CONTRACT",
-      "INTERNSHIP",
-    ]),
-    schedule: z.string().optional(),
-    // Paso 3
-    showBenefits: z.boolean(),
-    benefits: z.record(z.boolean()),
-    aguinaldoDias: z.number().min(0),
-    vacacionesDias: z.number().min(0),
-    primaVacPct: z.number().min(0).max(100),
-    // Paso 4
-    descriptionHtml: z.string().optional(),
-    descriptionPlain: z.string().min(50, "Mínimo 50 caracteres."),
-    minDegree: z.enum(["HIGHSCHOOL", "TECH", "BACHELOR", "MASTER", "PHD"]),
-    eduRequired: z.array(z.string()),
-    eduNice: z.array(z.string()),
-    requiredSkills: z.array(z.string()),
-    niceSkills: z.array(z.string()),
-    certs: z.array(z.string()),
-    // Idiomas requeridos
-    languages: z.array(
-      z.object({
-        name: z.string(),
-        level: z.enum([
-          "NATIVE",
-          "PROFESSIONAL",
-          "CONVERSATIONAL",
-          "BASIC",
-        ]),
-      })
-    ),
-  })
-  .superRefine((data, ctx) => {
-    if (
-      (data.locationType === "HYBRID" ||
-        data.locationType === "ONSITE") &&
-      !data.city?.trim()
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Para híbrido/presencial, la ciudad es obligatoria.",
-        path: ["city"],
-      });
-    }
-
-    const min = data.salaryMin ? Number(data.salaryMin) : undefined;
-    const max = data.salaryMax ? Number(data.salaryMax) : undefined;
-
-    if (data.salaryMin && (Number.isNaN(min) || (min as number) < 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "El sueldo mínimo debe ser ≥ 0.",
-        path: ["salaryMin"],
-      });
-    }
-    if (data.salaryMax && (Number.isNaN(max) || (max as number) < 0)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "El sueldo máximo debe ser ≥ 0.",
-        path: ["salaryMax"],
-      });
-    }
-    if (
-      typeof min === "number" &&
-      typeof max === "number" &&
-      !Number.isNaN(min) &&
-      !Number.isNaN(max) &&
-      min > max
-    ) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          "El sueldo mínimo no puede ser mayor que el máximo.",
-        path: ["salaryMin"],
-      });
-    }
-  });
-
-type JobForm = z.infer<typeof jobSchema>;
-
-/* =============================
-   Stepper
-============================= */
-function Stepper({
-  step,
-  total = 5,
-  onJump,
-}: {
-  step: number;
-  total?: number;
-  onJump?: (n: number) => void;
-}) {
-  const items = Array.from({ length: total }, (_, i) => i + 1);
-  return (
-    <ol className="-mx-1 mb-3 flex items-center gap-2 px-1">
-      {items.map((n) => {
-        const done = n < step;
-        const active = n === step;
-        return (
-          <li key={n}>
-            <button
-              type="button"
-              onClick={() => onJump?.(n)}
-              className={[
-                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
-                done &&
-                  "border-emerald-500/50 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-                active &&
-                  "border-emerald-600 bg-emerald-600 text-white shadow-sm",
-                !done &&
-                  !active &&
-                  "border-zinc-200 dark:border-zinc-800 bg-white/70 dark:bg-zinc-900/50 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50/80 dark:hover:bg-zinc-800/70",
-              ].join(" ")}
-              aria-current={active ? "step" : undefined}
-            >
-              <span
-                className={[
-                  "grid h-5 w-5 place-content-center rounded-full text-[11px] font-semibold",
-                  active
-                    ? "bg-white/20 text-white"
-                    : done
-                    ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                    : "bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300",
-                ].join(" ")}
-              >
-                {n}
-              </span>
-              <span className="hidden sm:inline">Paso {n}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 /* =============================
    Componente principal
@@ -374,20 +90,26 @@ export default function JobWizard({
   certOptions,
   templates = [],
   initial,
-}: Props) {
+}: JobWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [maxStepVisited, setMaxStepVisited] = useState(1);
+  const [stepCompletion, setStepCompletion] = useState<boolean[]>([
+    false,
+    false,
+    false,
+    false,
+    false,
+  ]);
   const [tab4, setTab4] = useState<"desc" | "skills" | "langs" | "edu">(
     "desc"
   );
   const [busy, setBusy] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   const methods = useForm<JobForm>({
     resolver: zodResolver(jobSchema),
     defaultValues: makeDefaultValues({ presetCompany, initial }),
-    mode: "onBlur",
+    mode: "onChange",
   });
 
   const {
@@ -399,6 +121,10 @@ export default function JobWizard({
     control,
     formState: { errors },
   } = methods;
+
+  // Initialize new hooks
+  const { lastSaved, isSaving } = useAutosave(watch, initial?.id);
+  const qualityScore = useQualityScore(watch);
 
   const {
     fields: languageFields,
@@ -444,29 +170,9 @@ export default function JobWizard({
     return searchStrings(certsFuse, q, 50);
   }, [certQuery, certsFuse, certOptions]);
 
-  // Derivados para paso 1 y 4
-  const locationType = watch("locationType");
-  const title = watch("title");
-  const city = watch("city");
-  const salaryMin = watch("salaryMin");
-  const salaryMax = watch("salaryMax");
-
+  // Derivados para paso 4
   const descriptionPlain = watch("descriptionPlain") || "";
   const descLength = descriptionPlain.replace(/\s+/g, "").length;
-
-  const canNext1 =
-    !!title?.trim() &&
-    !(
-      (locationType === "HYBRID" || locationType === "ONSITE") &&
-      !city?.trim()
-    ) &&
-    !(
-      salaryMin &&
-      salaryMax &&
-      !Number.isNaN(Number(salaryMin)) &&
-      !Number.isNaN(Number(salaryMax)) &&
-      Number(salaryMin) > Number(salaryMax)
-    );
 
   const canNext4 = descLength >= 50;
 
@@ -827,13 +533,24 @@ export default function JobWizard({
 
   // Helper para avanzar controlando paso máximo visitado
   function goNextStep(next: number) {
+    // Mark current step as complete
+    setStepCompletion((prev) => {
+      const newCompletion = [...prev];
+      newCompletion[step - 1] = true;
+      return newCompletion;
+    });
+
     setStep(next);
     setMaxStepVisited((prev) => Math.max(prev, next));
+
+    // Smooth scroll to top
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleStepClick(target: number) {
     if (target <= maxStepVisited) {
       setStep(target);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     toast.error(
@@ -847,272 +564,79 @@ export default function JobWizard({
   return (
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onValidSubmit)}>
-        <div className="space-y-6">
-          <Stepper step={step} onJump={handleStepClick} />
+        <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+          <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
+            {/* Header with Autosave and Quality */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <h2 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+                  {initial?.id ? "Editar vacante" : "Nueva vacante"}
+                </h2>
 
-          {/* Paso 1 */}
-          {step === 1 && (
-            <section className="grid gap-4 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-white/70 dark:bg-zinc-900/50 backdrop-blur p-4 md:p-6">
-              <h3 className="font-semibold">1) Datos básicos</h3>
-
-              {/* Plantillas */}
-              {templates.length > 0 && (
-                <div className="grid gap-1">
-                  <label className="text-sm">
-                    Usar vacante anterior (plantilla)
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      className="min-w-0 flex-1 rounded-md border border-zinc-300 p-2 dark:border-zinc-700 dark:bg-zinc-900"
-                      value={selectedTemplateId}
-                      onChange={(e) =>
-                        setSelectedTemplateId(e.target.value)
-                      }
-                    >
-                      <option value="">
-                        — Selecciona una vacante —
-                      </option>
-                      {templates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.title || `Vacante ${t.id.slice(0, 6)}`}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      className="rounded-md border px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                      disabled={!selectedTemplateId}
-                      onClick={() =>
-                        applyTemplateById(selectedTemplateId)
-                      }
-                    >
-                      Aplicar
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Título */}
-              <div className="grid gap-1">
-                <label className="text-sm">
-                  Nombre de la vacante *
-                </label>
-                <input
-                  className={inputCls(errors.title)}
-                  {...register("title")}
-                />
-                {errors.title && (
-                  <p className="text-xs text-red-600">
-                    {errors.title.message}
-                  </p>
-                )}
-              </div>
-
-              {/* Empresa */}
-              <div className="grid gap-1">
-                <label className="text-sm">Empresa *</label>
-                <div className="flex flex-wrap gap-3">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      value="own"
-                      {...register("companyMode")}
-                      disabled={!presetCompany?.id}
-                    />
-                    <span>
-                      Mi empresa{" "}
-                      {presetCompany?.name
-                        ? `(${presetCompany.name})`
-                        : "(no asignada)"}
-                    </span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      value="confidential"
-                      {...register("companyMode")}
-                    />
-                    <span>Confidencial (ocultar nombre)</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Ubicación + Sueldo */}
-              <div className="grid md:grid-cols-2 gap-3">
-                {/* Ubicación */}
-                <div className="grid gap-1">
-                  <label className="text-sm">Ubicación *</label>
-                  <select
-                    className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                    {...register("locationType")}
-                  >
-                    <option value="REMOTE">Remoto</option>
-                    <option value="HYBRID">Híbrido</option>
-                    <option value="ONSITE">Presencial</option>
-                  </select>
-
-                  {(locationType === "HYBRID" ||
-                    locationType === "ONSITE") && (
-                    <div className="mt-2">
-                      <Controller
-                        control={control}
-                        name="city"
-                        render={({ field: { value, onChange } }) => (
-                          <LocationAutocomplete
-                            value={value || ""}
-                            onChange={(next: any) => {
-                              if (typeof next === "string") {
-                                onChange(next);
-                                return;
-                              }
-                              if (
-                                next &&
-                                typeof next === "object"
-                              ) {
-                                onChange(
-                                  next.label || next.city || ""
-                                );
-                                setValue(
-                                  "country",
-                                  next.country || ""
-                                );
-                                setValue(
-                                  "admin1",
-                                  next.admin1 || ""
-                                );
-                                setValue(
-                                  "cityNorm",
-                                  next.cityNorm || ""
-                                );
-                                setValue(
-                                  "admin1Norm",
-                                  next.admin1Norm || ""
-                                );
-                                setValue(
-                                  "locationLat",
-                                  typeof next.lat === "number" &&
-                                    Number.isFinite(next.lat)
-                                    ? next.lat
-                                    : null
-                                );
-                                setValue(
-                                  "locationLng",
-                                  typeof next.lng === "number" &&
-                                    Number.isFinite(next.lng)
-                                    ? next.lng
-                                    : null
-                                );
-                                return;
-                              }
-                              onChange("");
-                              setValue("country", "");
-                              setValue("admin1", "");
-                              setValue("cityNorm", "");
-                              setValue("admin1Norm", "");
-                              setValue("locationLat", null);
-                              setValue("locationLng", null);
-                            }}
-                            onPlace={() => {}}
-                            countries={["mx"]}
-                          />
-                        )}
-                      />
+                {/* Autosave Indicator */}
+                <div className="flex items-center gap-2 text-xs sm:text-sm">
+                  {isSaving ? (
+                    <div className="flex items-center gap-1.5 text-zinc-500">
+                      <Save className="h-3.5 w-3.5 animate-pulse" />
+                      <span>Guardando...</span>
                     </div>
-                  )}
-                  {errors.city && (
-                    <p className="text-xs text-red-600">
-                      {errors.city.message as string}
-                    </p>
-                  )}
-                </div>
-
-                {/* Sueldo */}
-                <div className="grid gap-1">
-                  <label className="text-sm">
-                    Sueldo (opcional)
-                  </label>
-                  <div className="grid grid-cols-[minmax(84px,96px)_1fr_1fr] gap-2 items-center">
-                    <select
-                      className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                      {...register("currency")}
-                    >
-                      <option value="MXN">MXN</option>
-                      <option value="USD">USD</option>
-                    </select>
-                    <input
-                      className={inputCls(errors.salaryMin)}
-                      type="number"
-                      placeholder="Mín."
-                      {...register("salaryMin")}
-                      min={0}
-                    />
-                    <input
-                      className={inputCls(errors.salaryMax)}
-                      type="number"
-                      placeholder="Máx."
-                      {...register("salaryMax")}
-                      min={0}
-                    />
-                  </div>
-                  {(errors.salaryMin || errors.salaryMax) && (
-                    <p className="text-xs text-red-600">
-                      {(errors.salaryMin?.message as string) ||
-                        (errors.salaryMax?.message as string)}
-                    </p>
-                  )}
-                  <label className="mt-1 flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      {...register("showSalary")}
-                    />
-                    Mostrar sueldo
-                  </label>
+                  ) : lastSaved ? (
+                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      <span>Guardado {getTimeAgo(lastSaved)}</span>
+                    </div>
+                  ) : null}
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2">
-                <button
-                  className="rounded-md border px-4 py-2"
-                  disabled
-                >
-                  Atrás
-                </button>
-                <button
-                  type="button"
-                  className={clsx(
-                    "rounded-md px-4 py-2 text-white",
-                    canNext1
-                      ? "bg-emerald-600 hover:bg-emerald-500"
-                      : "bg-emerald-300"
-                  )}
-                  disabled={!canNext1}
-                  onClick={() => goNextStep(2)}
-                >
-                  Siguiente
-                </button>
+              {/* Quality Score - Compact (screens < lg) */}
+              <div className="lg:hidden">
+                <QualityIndicator score={qualityScore} compact />
               </div>
-            </section>
-          )}
+            </div>
 
-          {/* Paso 2 */}
-          {step === 2 && (
-            <section className="grid gap-4 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-white/70 dark:bg-zinc-900/50 backdrop-blur p-4 md:p-6">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold flex items-center gap-2">
-                  <Briefcase className="h-5 w-5 text-emerald-500" />
-                  <span>2) Tipo de empleo</span>
-                </h3>
-                <div className="hidden text-xs text-zinc-500 sm:inline">
-                  Elige el tipo de contrato y un horario de referencia.
+            {/* Two Column Grid */}
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
+              {/* Main Content Column */}
+              <div className="space-y-8">
+                <div className="mb-10">
+                  <Stepper
+                    step={step}
+                    maxStepVisited={maxStepVisited}
+                    stepCompletion={stepCompletion}
+                    onJump={handleStepClick}
+                  />
                 </div>
-              </div>
 
-              {/* Cards de tipo de empleo */}
-              <div className="grid gap-3">
+                {/* Paso 1 */}
+                {step === 1 && (
+                  <Step1Basic
+                    presetCompany={presetCompany}
+                    templates={templates}
+                    onApplyTemplate={applyTemplateById}
+                    onNext={() => goNextStep(2)}
+                  />
+                )}
+
+                {/* Paso 2 */}
+                {step === 2 && (
+                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
+                    <Briefcase className="h-5 w-5 text-emerald-500" />
+                    <span>2) Tipo de empleo</span>
+                  </h3>
+                  <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+                    Elige el tipo de contrato y un horario de referencia.
+                  </p>
+                </div>
+
+                {/* Cards de tipo de empleo */}
+                <div className="grid gap-6">
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                   Tipo de contrato *
                 </label>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   {EMPLOYMENT_OPTIONS.map((opt) => {
                     const active =
                       watch("employmentType") === opt.value;
@@ -1126,10 +650,10 @@ export default function JobWizard({
                           })
                         }
                         className={clsx(
-                          "group flex h-full flex-col items-start rounded-xl border px-3 py-2 text-left text-xs sm:text-sm transition",
+                          "group flex h-full flex-col items-start rounded-xl border p-5 text-left text-xs sm:text-sm transition",
                           active
-                            ? "border-emerald-500 bg-emerald-50/80 text-emerald-900 shadow-sm dark:border-emerald-500/80 dark:bg-emerald-900/10 dark:text-emerald-100"
-                            : "border-zinc-200 bg-white/80 text-zinc-700 hover:border-emerald-400 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:border-emerald-500/70 dark:hover:bg-emerald-900/10"
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-100"
+                            : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/10"
                         )}
                       >
                         <div className="flex items-center gap-2">
@@ -1157,13 +681,13 @@ export default function JobWizard({
               </div>
 
               {/* Horario */}
-              <div className="grid gap-2">
+              <div className="grid gap-3">
                 <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
                   <Clock3 className="h-4 w-4 text-emerald-500" />
                   Horario de referencia (opcional)
                 </label>
                 <input
-                  className="rounded-md border border-zinc-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                  className="rounded-md border border-zinc-300 bg-white p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                   placeholder="Ej. L-V 9:00–18:00, esquema híbrido 3 días oficina / 2 remoto..."
                   {...register("schedule")}
                 />
@@ -1189,51 +713,51 @@ export default function JobWizard({
                 </p>
               </div>
 
-              <div className="flex justify-between pt-2">
-                <button
-                  type="button"
-                  className="rounded-md border px-4 py-2"
-                  onClick={() => setStep(1)}
-                >
-                  Atrás
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-500"
-                  onClick={() => goNextStep(3)}
-                >
-                  Siguiente
-                </button>
-              </div>
-            </section>
-          )}
+                    <div className="flex justify-between gap-4 pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                        onClick={() => setStep(1)}
+                      >
+                        Atrás
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition"
+                        onClick={() => goNextStep(3)}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-          {/* Paso 3 - Prestaciones */}
-          {step === 3 && (
-            <section className="grid gap-4 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-white/70 dark:bg-zinc-900/50 backdrop-blur p-4 md:p-6">
-              <h3 className="font-semibold">3) Prestaciones</h3>
+                {/* Paso 3 - Prestaciones */}
+                {step === 3 && (
+                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                    <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">3) Prestaciones</h3>
 
-              <div className="rounded-lg border border-emerald-300/70 dark:border-emerald-800/70 bg-emerald-50/80 dark:bg-emerald-900/20 p-3 flex items-center justify-between">
-                <div className="text-sm">
-                  <strong>Visibilidad:</strong> Mostrar prestaciones en
-                  la publicación
+                <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-5 flex items-center justify-between">
+                  <div className="text-sm">
+                    <strong>Visibilidad:</strong> Mostrar prestaciones en
+                    la publicación
+                  </div>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      {...register("showBenefits")}
+                    />
+                    {showBenefits ? "Sí" : "No"}
+                  </label>
                 </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    {...register("showBenefits")}
-                  />
-                  {showBenefits ? "Sí" : "No"}
-                </label>
-              </div>
 
-              <div className="mt-3 grid sm:grid-cols-2 gap-3">
+                <div className="grid sm:grid-cols-2 gap-6">
                 {BENEFITS.map((b) => {
                   const checked = !!benefits[b.key];
                   return (
                     <div
                       key={b.key}
-                      className="rounded-md border border-zinc-200/70 dark:border-zinc-800/70 bg-white/60 dark:bg-zinc-900/40 p-3"
+                      className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6"
                     >
                       <div className="flex items-center gap-2">
                         <input
@@ -1283,30 +807,30 @@ export default function JobWizard({
                 })}
               </div>
 
-              <div className="flex justify-between">
-                <button
-                  type="button"
-                  className="rounded-md border px-4 py-2"
-                  onClick={() => setStep(2)}
-                >
-                  Atrás
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-500"
-                  onClick={() => goNextStep(4)}
-                >
-                  Siguiente
-                </button>
-              </div>
-            </section>
-          )}
+                    <div className="flex justify-between gap-4 pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                        onClick={() => setStep(2)}
+                      >
+                        Atrás
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition"
+                        onClick={() => goNextStep(4)}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-          {/* Paso 4 */}
-          {step === 4 && (
-            <section className="grid gap-4 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-white/70 dark:bg-zinc-900/50 backdrop-blur p-4 md:p-6">
-              {/* Tabs */}
-              <div className="flex items-center gap-2">
+                {/* Paso 4 */}
+                {step === 4 && (
+                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                {/* Tabs */}
+                <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
                 {[
                   { k: "desc", lbl: "Descripción" },
                   { k: "skills", lbl: "Skills / Certs" },
@@ -1317,10 +841,10 @@ export default function JobWizard({
                     key={t.k}
                     type="button"
                     className={clsx(
-                      "rounded-md px-3 py-1.5",
+                      "rounded-md px-4 py-2 text-sm font-medium transition",
                       tab4 === (t.k as any)
-                        ? "bg-emerald-600 text-white"
-                        : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        ? "bg-emerald-600 text-white shadow-sm"
+                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                     )}
                     onClick={() => setTab4(t.k as any)}
                   >
@@ -1331,8 +855,8 @@ export default function JobWizard({
 
               {/* DESCRIPCIÓN */}
               {tab4 === "desc" && (
-                <div className="grid gap-2">
-                  <label className="text-sm">
+                <div className="animate-fade-in-up grid gap-6">
+                  <label className="text-sm font-medium">
                     Descripción de la vacante *
                   </label>
                   <Controller
@@ -1376,15 +900,15 @@ export default function JobWizard({
 
               {/* SKILLS / CERTS */}
               {tab4 === "skills" && (
-                <div className="grid gap-4">
-                  <div className="grid gap-2">
-                    <label className="text-sm">
+                <div className="animate-fade-in-up grid gap-8">
+                  <div className="grid gap-3">
+                    <label className="text-sm font-medium">
                       Skills / Lenguajes
                     </label>
 
                     <div className="relative">
                       <input
-                        className="w-full rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                        className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                         placeholder="Busca (ej. Python, AWS, React Native...) y presiona Enter"
                         value={skillQuery}
                         onChange={(e) =>
@@ -1433,7 +957,7 @@ export default function JobWizard({
                     </div>
 
                     {/* bins */}
-                    <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="grid sm:grid-cols-2 gap-6">
                       <Bin
                         title="Obligatoria"
                         items={requiredSkills}
@@ -1480,13 +1004,13 @@ export default function JobWizard({
                   </div>
 
                   {/* Certificaciones */}
-                  <div className="grid gap-2">
-                    <label className="text-sm">
+                  <div className="grid gap-3">
+                    <label className="text-sm font-medium">
                       Certificaciones (opcional)
                     </label>
                     <div className="relative">
                       <input
-                        className="w-full rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                        className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                         placeholder="Busca y selecciona (ej. AWS SAA, CCNA...)"
                         value={certQuery}
                         onChange={(e) =>
@@ -1567,7 +1091,7 @@ export default function JobWizard({
 
               {/* IDIOMAS */}
               {tab4 === "langs" && (
-                <div className="grid gap-3">
+                <div className="animate-fade-in-up grid gap-6">
                   <div className="flex items-center justify-between">
                     <label className="text-sm font-medium">
                       Idiomas requeridos (opcional)
@@ -1600,7 +1124,7 @@ export default function JobWizard({
                         className="grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_auto] gap-2 items-center"
                       >
                         <select
-                          className="rounded-md border border-zinc-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                          className="rounded-md border border-zinc-300 bg-white p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                           {...register(
                             `languages.${idx}.name` as const
                           )}
@@ -1613,7 +1137,7 @@ export default function JobWizard({
                         </select>
 
                         <select
-                          className="rounded-md border border-zinc-300 bg-white p-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                          className="rounded-md border border-zinc-300 bg-white p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                           {...register(
                             `languages.${idx}.level` as const
                           )}
@@ -1645,12 +1169,12 @@ export default function JobWizard({
 
               {/* EDUCACIÓN */}
               {tab4 === "edu" && (
-                <div className="grid gap-2">
-                  <div className="grid md:grid-cols-2 gap-3">
-                    <div className="grid gap-1">
-                      <label className="text-sm">Nivel mínimo</label>
+                <div className="animate-fade-in-up grid gap-8">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Nivel mínimo</label>
                       <select
-                        className="rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                        className="rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                         {...register("minDegree")}
                       >
                         <option value="HIGHSCHOOL">
@@ -1665,13 +1189,13 @@ export default function JobWizard({
                       </select>
                     </div>
 
-                    <div className="grid gap-1">
-                      <label className="text-sm">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">
                         Agregar educación (programa / carrera)
                       </label>
                       <div className="relative">
                         <input
-                          className="w-full rounded-md border border-zinc-300 bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                          className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                           placeholder="Ej. Ingeniería en Sistemas, Maestría en TI... (Enter agrega)"
                           value={educationQuery}
                           onChange={(e) =>
@@ -1722,7 +1246,7 @@ export default function JobWizard({
                   </div>
 
                   {/* bins educación */}
-                  <div className="grid sm:grid-cols-2 gap-3">
+                  <div className="grid sm:grid-cols-2 gap-6">
                     <Bin
                       title="Obligatoria"
                       items={eduRequired}
@@ -1767,68 +1291,78 @@ export default function JobWizard({
                 </div>
               )}
 
-              {/* Navegación paso 4 */}
-              <div className="flex justify-between">
-                <button
-                  type="button"
-                  className="rounded-md border px-4 py-2"
-                  onClick={() => setStep(3)}
-                >
-                  Atrás
-                </button>
-                <button
-                  type="button"
-                  className={clsx(
-                    "rounded-md px-4 py-2 text-white",
-                    canNext4
-                      ? "bg-emerald-600 hover:bg-emerald-500"
-                      : "bg-emerald-300"
-                  )}
-                  disabled={!canNext4}
-                  onClick={() => goNextStep(5)}
-                >
-                  Siguiente
-                </button>
+                    {/* Navegación paso 4 */}
+                    <div className="flex justify-between gap-4 pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+                      <button
+                        type="button"
+                        className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                        onClick={() => setStep(3)}
+                      >
+                        Atrás
+                      </button>
+                      <button
+                        type="button"
+                        className={clsx(
+                          "rounded-md px-6 py-2.5 text-sm font-medium text-white transition",
+                          canNext4
+                            ? "bg-emerald-600 hover:bg-emerald-500"
+                            : "bg-emerald-300 cursor-not-allowed"
+                        )}
+                        disabled={!canNext4}
+                        onClick={() => goNextStep(5)}
+                      >
+                        Siguiente
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Paso 5 - Revisión */}
+                {step === 5 && (
+                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                  5) Revisión y publicación
+                </h3>
+
+                {/* Bloque general de revisión */}
+                <ReviewBlock presetCompany={presetCompany} />
+
+                    <div className="pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+                      <div className="flex justify-between gap-4">
+                        <button
+                          type="button"
+                          className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                          onClick={() => setStep(4)}
+                        >
+                          Atrás
+                        </button>
+                        <button
+                          type="submit"
+                          className="rounded-md bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:bg-emerald-300 disabled:cursor-not-allowed transition shadow-sm hover:shadow-md"
+                          disabled={busy}
+                        >
+                          {busy
+                            ? initial?.id
+                              ? "Guardando..."
+                              : "Publicando..."
+                            : initial?.id
+                            ? "Guardar cambios"
+                            : "Publicar vacante"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </section>
-          )}
 
-          {/* Paso 5 - Revisión */}
-          {step === 5 && (
-            <section className="grid gap-4 rounded-2xl border border-zinc-200/70 dark:border-zinc-800/70 bg-white/70 dark:bg-zinc-950/50 backdrop-blur p-4 md:p-6">
-              <h3 className="font-semibold">
-                5) Revisión y publicación
-              </h3>
-
-              {/* Bloque general de revisión */}
-              <ReviewBlock presetCompany={presetCompany} />
-
-              <div className="sticky bottom-0 mt-2 -mx-4 border-t border-zinc-200/70 dark:border-zinc-800/70 bg-white/80 dark:bg-zinc-950/50 backdrop-blur p-4 md:p-6">
-                <div className="flex justify-between">
-                  <button
-                    type="button"
-                    className="rounded-md border px-4 py-2"
-                    onClick={() => setStep(4)}
-                  >
-                    Atrás
-                  </button>
-                  <button
-                    type="submit"
-                    className="rounded-md bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-500 disabled:bg-emerald-300"
-                    disabled={busy}
-                  >
-                    {busy
-                      ? initial?.id
-                        ? "Guardando..."
-                        : "Publicando..."
-                      : initial?.id
-                      ? "Guardar cambios"
-                      : "Publicar vacante"}
-                  </button>
+              {/* Sidebar Column - Quality Indicator (screens >= lg) */}
+              <aside className="hidden lg:block">
+                <div className="sticky top-8">
+                  <QualityIndicator score={qualityScore} />
                 </div>
-              </div>
-            </section>
-          )}
+              </aside>
+            </div>
+          </div>
         </div>
       </form>
     </FormProvider>
@@ -1884,9 +1418,9 @@ function Bin({
     <div
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
-      className="rounded-md border border-zinc-200/70 bg-white/60 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/40"
+      className="rounded-md border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
     >
-      <p className="mb-2 text-xs font-medium text-zinc-600">
+      <p className="mb-3 text-xs font-medium text-zinc-600 dark:text-zinc-400">
         {title}
       </p>
       <div className="flex flex-wrap gap-2 min-h-[32px]">
@@ -1932,9 +1466,7 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
 
   const hasSalary = Boolean(v.salaryMin || v.salaryMax);
   const salaryText = hasSalary
-    ? `${v.currency} ${v.salaryMin || "—"} - ${v.salaryMax || "—"} ${
-        v.showSalary ? "(visible)" : "(oculto)"
-      }`
+    ? `${v.currency} ${v.salaryMin || "—"} - ${v.salaryMax || "—"}`
     : "No especificado";
 
   const benefitsList = Object.entries(v.benefits || {})
@@ -1953,113 +1485,325 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
     (v.eduRequired && v.eduRequired.length > 0) ||
     (v.eduNice && v.eduNice.length > 0);
 
-  const eduText =
-    [
-      ...(v.eduRequired || []).map((n) => `Req: ${n}`),
-      ...(v.eduNice || []).map((n) => `Dese: ${n}`),
-    ].join(", ") || "";
-
-  const skillsText =
-    [
-      ...(v.requiredSkills || []).map((n) => `Req: ${n}`),
-      ...(v.niceSkills || []).map((n) => `Dese: ${n}`),
-    ].join(", ") || "—";
-
   const hasCerts = v.certs && v.certs.length > 0;
-  const certsText = hasCerts ? v.certs!.join(", ") : "";
 
   const hasLanguages = v.languages && v.languages.length > 0;
+
+  const hasRequiredSkills = v.requiredSkills && v.requiredSkills.length > 0;
+  const hasNiceSkills = v.niceSkills && v.niceSkills.length > 0;
 
   // 🔹 HTML saneado para usar en el resumen
   const safeDescriptionHtml = sanitizeHtml(v.descriptionHtml || "");
 
   return (
-    <div className="grid gap-3 text-sm">
-      <div>
-        <strong>Vacante:</strong> {v.title}
+    <div className="grid gap-8">
+      {/* Basic Information Card */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+          <Briefcase className="h-5 w-5 text-emerald-500" />
+          Información básica
+        </h4>
+        <div className="grid gap-6">
+          <div className="grid gap-1">
+            <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Título de la vacante
+            </span>
+            <span className="text-base font-medium text-zinc-900 dark:text-zinc-100">
+              {v.title}
+            </span>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-6">
+            <div className="grid gap-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Empresa
+              </span>
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                {v.companyMode === "confidential"
+                  ? "Confidencial"
+                  : presetCompany?.name || "Mi empresa"}
+              </span>
+            </div>
+
+            <div className="grid gap-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Ubicación
+              </span>
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                {locationText}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div>
-        <strong>Empresa:</strong>{" "}
-        {v.companyMode === "confidential"
-          ? "Confidencial"
-          : presetCompany?.name || "Mi empresa"}
+      {/* Compensation Card */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+          Compensación y horario
+        </h4>
+        <div className="grid gap-6">
+          <div className="grid sm:grid-cols-2 gap-6">
+            <div className="grid gap-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Rango salarial
+              </span>
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                {salaryText}
+                {hasSalary && (
+                  <span className="ml-2 text-xs text-zinc-500">
+                    {v.showSalary ? "(visible en publicación)" : "(oculto en publicación)"}
+                  </span>
+                )}
+              </span>
+            </div>
+
+            <div className="grid gap-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Tipo de contrato
+              </span>
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                {labelEmployment(v.employmentType)}
+              </span>
+            </div>
+          </div>
+
+          {v.schedule && (
+            <div className="grid gap-1">
+              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Horario
+              </span>
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                {v.schedule}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      <div>
-        <strong>Ubicación:</strong> {locationText}
-      </div>
+      {/* Benefits Card */}
+      {(v.showBenefits || benefitsList.length > 0) && (
+        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-6">
+          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-600">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+            </svg>
+            Prestaciones
+          </h4>
 
-      <div>
-        <strong>Sueldo:</strong> {salaryText}
-      </div>
+          {benefitsList.length > 0 ? (
+            <div className="grid sm:grid-cols-2 gap-6">
+              {benefitsList.map((item) => (
+                <div key={item} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                  <svg className="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Prestaciones configuradas pero ocultas en la publicación
+            </p>
+          )}
 
-      <div>
-        <strong>Tipo:</strong> {labelEmployment(v.employmentType)}
-      </div>
-
-      {v.schedule && (
-        <div>
-          <strong>Horario:</strong> {v.schedule}
+          <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800">
+            <span className="inline-flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+              {v.showBenefits ? (
+                <>
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
+                    <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
+                  </svg>
+                  Visibles en la publicación
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd"/>
+                    <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z"/>
+                  </svg>
+                  Ocultas en la publicación
+                </>
+              )}
+            </span>
+          </div>
         </div>
       )}
 
-      <div>
-        <strong>Prestaciones visibles:</strong>{" "}
-        {v.showBenefits ? "Sí" : "No"}
-      </div>
+      {/* Requirements Card */}
+      {(hasEduItems || hasRequiredSkills || hasNiceSkills || hasCerts || hasLanguages) && (
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
+              <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+              <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+            </svg>
+            Requisitos
+          </h4>
 
-      {v.showBenefits && benefitsList.length > 0 && (
-        <ul className="ml-4 list-disc">
-          {benefitsList.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      )}
+          <div className="grid gap-8">
+            {/* Education */}
+            <div className="grid gap-6">
+              <div className="grid gap-1">
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Nivel mínimo de educación
+                </span>
+                <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                  {labelDegree(v.minDegree)}
+                </span>
+              </div>
 
-      <div>
-        <strong>Educación — nivel mínimo:</strong>{" "}
-        {labelDegree(v.minDegree)}
-      </div>
+              {hasEduItems && (
+                <div className="grid gap-2">
+                  {v.eduRequired && v.eduRequired.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1.5 block">
+                        Carreras requeridas:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {v.eduRequired.map((name) => (
+                          <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 text-xs text-red-700 dark:text-red-300">
+                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd"/>
+                            </svg>
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-      {hasEduItems && (
-        <div>
-          <strong>Formación académica:</strong> {eduText}
+                  {v.eduNice && v.eduNice.length > 0 && (
+                    <div>
+                      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1.5 block">
+                        Carreras deseables:
+                      </span>
+                      <div className="flex flex-wrap gap-2">
+                        {v.eduNice.map((name) => (
+                          <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 text-xs text-blue-700 dark:text-blue-300">
+                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd"/>
+                            </svg>
+                            {name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Skills */}
+            {(hasRequiredSkills || hasNiceSkills) && (
+              <div className="grid gap-6">
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Skills técnicos
+                </span>
+
+                {hasRequiredSkills && (
+                  <div>
+                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1.5 block">
+                      Obligatorios:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {v.requiredSkills!.map((name) => (
+                        <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 text-xs font-medium text-red-700 dark:text-red-300">
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd"/>
+                          </svg>
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {hasNiceSkills && (
+                  <div>
+                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-1.5 block">
+                      Deseables:
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {v.niceSkills!.map((name) => (
+                        <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 text-xs font-medium text-blue-700 dark:text-blue-300">
+                          <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd"/>
+                          </svg>
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Certifications */}
+            {hasCerts && (
+              <div className="grid gap-6">
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Certificaciones
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {v.certs!.map((cert) => (
+                    <span key={cert} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/40 text-xs font-medium text-purple-700 dark:text-purple-300">
+                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/>
+                      </svg>
+                      {cert}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Languages */}
+            {hasLanguages && (
+              <div className="grid gap-6">
+                <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Idiomas requeridos
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {v.languages!.map((lng) => (
+                    <span key={`${lng.name}-${lng.level}`} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800/40 text-xs font-medium text-indigo-700 dark:text-indigo-300">
+                      <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M7 2a1 1 0 011 1v1h3a1 1 0 110 2H9.578a18.87 18.87 0 01-1.724 4.78c.29.354.596.696.914 1.026a1 1 0 11-1.44 1.389c-.188-.196-.373-.396-.554-.6a19.098 19.098 0 01-3.107 3.567 1 1 0 01-1.334-1.49 17.087 17.087 0 003.13-3.733 18.992 18.992 0 01-1.487-2.494 1 1 0 111.79-.89c.234.47.489.928.764 1.372.417-.934.752-1.913.997-2.927H3a1 1 0 110-2h3V3a1 1 0 011-1zm6 6a1 1 0 01.894.553l2.991 5.982a.869.869 0 01.02.037l.99 1.98a1 1 0 11-1.79.894L15.383 16h-4.764l-.724 1.447a1 1 0 11-1.788-.894l.99-1.98.019-.038 2.99-5.982A1 1 0 0113 8zm-1.382 6h2.764L13 11.236 11.618 14z" clipRule="evenodd"/>
+                      </svg>
+                      {lng.name}
+                      <span className="text-[10px] opacity-75">
+                        ({labelLanguageLevel(lng.level as LanguageProficiency)})
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      <div>
-        <strong>Skills:</strong> {skillsText}
-      </div>
-
-      {hasCerts && (
-        <div>
-          <strong>Certificaciones:</strong> {certsText}
-        </div>
-      )}
-
-      {hasLanguages && (
-        <div>
-          <strong>Idiomas requeridos:</strong>
-          <ul className="ml-4 list-disc">
-            {v.languages!.map((lng) => (
-              <li
-                key={`${lng.name}-${lng.level}`}
-              >{`${lng.name} (${labelLanguageLevel(
-                lng.level as LanguageProficiency
-              )})`}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* 🔹 Descripción al final */}
-      <div>
-        <strong>Descripción (resumen):</strong>
+      {/* Description Card */}
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <line x1="10" y1="9" x2="8" y2="9"/>
+          </svg>
+          Descripción de la vacante
+        </h4>
         <div
-          className={`job-html ${reviewBox}`}
+          className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-zinc-900 dark:prose-headings:text-zinc-100 prose-p:text-zinc-700 dark:prose-p:text-zinc-300 prose-li:text-zinc-700 dark:prose-li:text-zinc-300 prose-strong:text-zinc-900 dark:prose-strong:text-zinc-100"
           dangerouslySetInnerHTML={{
-            __html: safeDescriptionHtml || "<p>Sin descripción</p>",
+            __html: safeDescriptionHtml || "<p class='text-zinc-500 dark:text-zinc-400 italic'>Sin descripción</p>",
           }}
         />
       </div>
@@ -2075,181 +1819,4 @@ function inputCls(err?: any) {
     "min-w-0 rounded-md border bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900",
     err ? "border-red-500" : "border-zinc-300"
   );
-}
-
-function labelEmployment(e: EmploymentType) {
-  switch (e) {
-    case "FULL_TIME":
-      return "Tiempo completo";
-    case "PART_TIME":
-      return "Medio tiempo";
-    case "CONTRACT":
-      return "Por periodo";
-    case "INTERNSHIP":
-      return "Prácticas profesionales";
-  }
-}
-
-function labelDegree(d: DegreeLevel) {
-  switch (d) {
-    case "HIGHSCHOOL":
-      return "Bachillerato";
-    case "TECH":
-      return "Técnico";
-    case "BACHELOR":
-      return "Licenciatura / Ingeniería";
-    case "MASTER":
-      return "Maestría";
-    case "PHD":
-      return "Doctorado";
-  }
-}
-
-function labelLanguageLevel(l: LanguageProficiency) {
-  switch (l) {
-    case "NATIVE":
-      return "Nativo";
-    case "PROFESSIONAL":
-      return "Profesional (C1–C2)";
-    case "CONVERSATIONAL":
-      return "Conversacional (B1–B2)";
-    case "BASIC":
-      return "Básico (A1–A2)";
-  }
-}
-
-function clampNonNegative(n: string) {
-  const v = Math.max(0, Number(n || 0));
-  if (!Number.isFinite(v)) return "";
-  return String(v);
-}
-
-function makeDefaultValues({
-  presetCompany,
-  initial,
-}: {
-  presetCompany: PresetCompany;
-  initial?: Props["initial"];
-}): JobForm {
-  const benefitsBase = BENEFITS.reduce((acc, b) => {
-    acc[b.key] = b.def;
-    return acc;
-  }, {} as Record<string, boolean>);
-
-  const showBenefits =
-    typeof initial?.showBenefits === "boolean"
-      ? (initial.showBenefits as boolean)
-      : true;
-
-  let benefitsJson = benefitsBase;
-  let aguinaldoDias = 15;
-  let vacacionesDias = 12;
-  let primaVacPct = 25;
-
-  if (initial?.benefitsJson && typeof initial.benefitsJson === "object") {
-    const b = initial.benefitsJson as any;
-    const base = { ...benefitsBase };
-    for (const k of Object.keys(base)) {
-      base[k] = typeof b[k] === "boolean" ? b[k] : base[k];
-    }
-    benefitsJson = base;
-    if (typeof b.aguinaldoDias === "number") aguinaldoDias = b.aguinaldoDias;
-    if (typeof b.vacacionesDias === "number") vacacionesDias = b.vacacionesDias;
-    if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
-  }
-
-  // 🔹 Paso 4: reconstruimos HTML a partir de descripción plana si hace falta
-  const plainFromInitial = initial?.description || "";
-
-  // pequeña utilidad para escapar texto plano
-  const escapeHtml = (str: string) =>
-    str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
-
-  let rawHtml = initial?.descriptionHtml || "";
-
-  if (!rawHtml && plainFromInitial) {
-    // Si no hay HTML guardado pero sí texto plano (caso de editar),
-    // generamos un HTML básico para que el editor no se vea vacío.
-    const lines = plainFromInitial
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter(Boolean);
-    if (lines.length) {
-      rawHtml = lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n");
-    } else {
-      rawHtml = "";
-    }
-  }
-
-  const html = sanitizeHtml(rawHtml || "");
-  const plain =
-    plainFromInitial ||
-    (html ? htmlToPlain(html) : "");
-
-  const initEdu = Array.isArray(initial?.education) ? initial!.education : [];
-  const eduReq = initEdu.filter((e) => e.required).map((e) => e.name);
-  const eduNice = initEdu.filter((e) => !e.required).map((e) => e.name);
-
-  const initSkills = Array.isArray(initial?.skills) ? initial!.skills : [];
-  const skillsReq = initSkills.filter((s) => s.required).map((s) => s.name);
-  const skillsNice = initSkills.filter((s) => !s.required).map((s) => s.name);
-
-  const defaultCompanyModeRaw =
-    initial?.companyMode ?? (presetCompany?.id ? "own" : "confidential");
-  const companyMode =
-    defaultCompanyModeRaw === "other"
-      ? "own"
-      : (defaultCompanyModeRaw as "own" | "confidential");
-
-  const languagesInit = Array.isArray(initial?.languages)
-    ? initial!.languages
-    : [];
-
-  return {
-    // Paso 1
-    title: initial?.title ?? "",
-    companyMode,
-    companyOtherName: initial?.companyOtherName ?? "",
-    locationType: initial?.locationType ?? "ONSITE",
-    city: initial?.city ?? "",
-    country: initial?.country ?? "",
-    admin1: initial?.admin1 ?? "",
-    cityNorm: initial?.cityNorm ?? "",
-    admin1Norm: initial?.admin1Norm ?? "",
-    locationLat: initial?.locationLat ?? null,
-    locationLng: initial?.locationLng ?? null,
-    currency: (initial?.currency as Currency) ?? "MXN",
-    salaryMin:
-      initial?.salaryMin === null || initial?.salaryMin === undefined
-        ? ""
-        : String(initial.salaryMin),
-    salaryMax:
-      initial?.salaryMax === null || initial?.salaryMax === undefined
-        ? ""
-        : String(initial.salaryMax),
-    showSalary: !!initial?.showSalary,
-    // Paso 2
-    employmentType: initial?.employmentType ?? "FULL_TIME",
-    schedule: initial?.schedule ?? "",
-    // Paso 3
-    showBenefits,
-    benefits: benefitsJson,
-    aguinaldoDias,
-    vacacionesDias,
-    primaVacPct,
-    // Paso 4
-    descriptionHtml: html,
-    descriptionPlain: plain,
-    minDegree: initial?.minDegree ?? "BACHELOR",
-    eduRequired: eduReq,
-    eduNice,
-    requiredSkills: skillsReq,
-    niceSkills: skillsNice,
-    certs: Array.isArray(initial?.certs) ? initial!.certs! : [],
-    // Idiomas
-    languages: languagesInit,
-  };
 }

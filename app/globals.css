@@ -18,11 +18,16 @@ html {
 * { @apply box-border; }
 
 body {
-  @apply min-h-screen antialiased text-zinc-800
-    bg-gradient-to-br from-brand via-white to-emerald-50
-    dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 dark:text-zinc-100;
+  @apply min-h-screen antialiased;
+  background-color: #ffffff !important; /* Blanco sólido en modo claro */
+  color: #27272a; /* zinc-800 */
   margin: 0;
   padding: 0;
+}
+
+.dark body {
+  background-color: #09090b !important; /* zinc-950 sólido en modo oscuro */
+  color: #fafafa; /* zinc-50 */
 }
 
 /* Links */
@@ -65,6 +70,11 @@ p, span, div {
    Design Tokens (Claro / Oscuro)
    =============================== */
 :root{
+  /* Backgrounds sólidos */
+  --background: 255 255 255;          /* blanco puro */
+  --foreground: 24 24 27;             /* zinc-900 */
+  --card: 255 255 255;                /* blanco */
+  
   /* fondos elevación (glass) */
   --bg-elev-1: 255 255 255 / 0.85;    /* vidrio claro */
   --bg-elev-2: 255 255 255 / 1;       /* blanco sólido */
@@ -75,7 +85,12 @@ p, span, div {
   --ring: 0 0 0 / 0.06;               /* focus ring sutil */
 }
 
-.dark:root{
+.dark{
+  /* Backgrounds sólidos en modo oscuro */
+  --background: 9 9 11;               /* zinc-950 */
+  --foreground: 250 250 250;          /* zinc-50 */
+  --card: 24 24 27;                   /* zinc-900 */
+  
   --bg-elev-1: 24 24 27 / 0.70;       /* zinc-900/70 */
   --bg-elev-2: 24 24 27 / 0.85;       /* zinc-900/85 */
   --border: 39 39 42;                 /* zinc-800 */
@@ -88,7 +103,7 @@ p, span, div {
    Utilidades reutilizables
    =============================== */
 @layer components {
-  /* Tarjetas “glass” coherentes en ambos temas */
+  /* Tarjetas "glass" coherentes en ambos temas */
   .glass-card{
     @apply rounded-2xl border shadow-sm backdrop-blur;
     background: color-mix(in oklab, transparent, rgb(var(--bg-elev-1)));
@@ -355,4 +370,59 @@ p, span, div {
   background: transparent !important;
 }
 
+/* ===============================
+   Animaciones para Landing Page
+   =============================== */
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 0.8s ease-out forwards;
+}
+
+.animation-delay-200 {
+  animation-delay: 0.2s;
+  opacity: 0;
+}
+
+.animation-delay-300 {
+  animation-delay: 0.3s;
+  opacity: 0;
+}
+
+.animation-delay-400 {
+  animation-delay: 0.4s;
+  opacity: 0;
+}
+
+.animation-delay-500 {
+  animation-delay: 0.5s;
+  opacity: 0;
+}
+
+.animation-delay-600 {
+  animation-delay: 0.6s;
+  opacity: 0;
+}

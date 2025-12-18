@@ -164,12 +164,7 @@ export default async function NewJobPage() {
   }
 
   return (
-    <main className="max-w-4xl p-6 space-y-6">
-      <h2 className="text-2xl font-bold">Publicar vacante</h2>
-      <p className="text-sm text-zinc-600 mb-4">
-        Llena los campos y publica la nueva vacante.
-      </p>
-
+    <main className="w-full">
       <JobWizard
         onSubmit={createAction}
         // presetCompany: si el usuario tiene empresa, la pasamos; si no, null

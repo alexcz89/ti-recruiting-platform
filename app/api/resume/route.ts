@@ -1,6 +1,8 @@
 // app/api/resume/route.ts
 import { NextRequest, NextResponse } from "next/server"
 import { Prisma, TaxonomyKind, LanguageProficiency, EducationLevel } from "@prisma/client"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 
 // ------------------------------
@@ -71,28 +73,12 @@ async function ensureTerm(kind: TaxonomyKind, label: string) {
 }
 
 // ------------------------------
-// Auth temporal para dev
-// ------------------------------
-async function getUserId(req: NextRequest) {
-  const headerId = req.headers.get("x-user-id")
-  if (headerId) return headerId
-
-  try {
-    const { userId } = await req.json()
-    if (userId) return userId
-  } catch {
-    // body vacío o ya consumido
-  }
-
-  return null
-}
-
-// ------------------------------
 // GET - Obtener CV normalizado
 // ------------------------------
 export async function GET(req: NextRequest) {
   try {
-    const userId = await getUserId(req)
+    const session = await getServerSession(authOptions)
+    const userId = (session?.user as any)?.id
     if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
 
     const user = await prisma.user.findUnique({
@@ -195,11 +181,11 @@ export async function GET(req: NextRequest) {
 // ------------------------------
 export async function POST(req: NextRequest) {
   try {
+    const session = await getServerSession(authOptions)
+    const userId = (session?.user as any)?.id
+    if (!userId) return NextResponse.json({ error: "No autenticado" }, { status: 401 })
+
     const payload = await req.json()
-    const userId = payload.userId || (await getUserId(req))
-    if (!userId) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
 
     const {
       personal = {},
