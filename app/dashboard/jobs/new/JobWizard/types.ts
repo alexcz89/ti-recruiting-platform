@@ -76,6 +76,17 @@ export type JobWizardProps = {
   };
 };
 
+const salaryField = z.preprocess((val) => {
+  if (typeof val === "number") return val;
+  if (typeof val === "string") {
+    const digits = val.replace(/[^\d]/g, "");
+    if (!digits) return undefined;
+    const n = Number(digits);
+    return Number.isNaN(n) ? undefined : n;
+  }
+  return undefined;
+}, z.number().int().nonnegative().optional());
+
 // Zod schema
 export const jobSchema = z.object({
   // Paso 1
@@ -91,8 +102,8 @@ export const jobSchema = z.object({
   locationLat: z.number().nullable().optional(),
   locationLng: z.number().nullable().optional(),
   currency: z.enum(["MXN", "USD"]),
-  salaryMin: z.string().optional(),
-  salaryMax: z.string().optional(),
+  salaryMin: salaryField,
+  salaryMax: salaryField,
   showSalary: z.boolean(),
   // Paso 2
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"]),
@@ -130,34 +141,15 @@ export const jobSchema = z.object({
     });
   }
 
-  const min = data.salaryMin ? Number(data.salaryMin) : undefined;
-  const max = data.salaryMax ? Number(data.salaryMax) : undefined;
-
-  if (data.salaryMin && (Number.isNaN(min) || (min as number) < 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "El sueldo mínimo debe ser ≥ 0.",
-      path: ["salaryMin"],
-    });
-  }
-  if (data.salaryMax && (Number.isNaN(max) || (max as number) < 0)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "El sueldo máximo debe ser ≥ 0.",
-      path: ["salaryMax"],
-    });
-  }
   if (
-    typeof min === "number" &&
-    typeof max === "number" &&
-    !Number.isNaN(min) &&
-    !Number.isNaN(max) &&
-    min > max
+    data.salaryMin != null &&
+    data.salaryMax != null &&
+    data.salaryMax < data.salaryMin
   ) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "El sueldo mínimo no puede ser mayor que el máximo.",
-      path: ["salaryMin"],
+      path: ["salaryMax"],
+      message: "El sueldo máximo debe ser mayor o igual al mínimo",
     });
   }
 });

@@ -30,7 +30,7 @@ export default function Stepper({
   const items = Array.from({ length: total }, (_, i) => i + 1);
 
   return (
-    <div className="mb-12 p-6">
+    <div className="mb-6 p-4">
       <ol className="flex items-center justify-between gap-4">
         {items.map((n, idx) => {
           const done = n < step;
@@ -82,7 +82,7 @@ export default function Stepper({
                 {/* Label */}
                 <span
                   className={clsx(
-                    "text-xs font-medium transition-colors hidden sm:block",
+                    "text-[11px] sm:text-xs font-medium transition-colors hidden sm:block text-center leading-snug whitespace-nowrap",
                     active && "text-emerald-600 dark:text-emerald-400",
                     done && !active && "text-emerald-600 dark:text-emerald-400",
                     !done && !active && "text-zinc-500 dark:text-zinc-400"

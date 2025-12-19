@@ -567,7 +567,7 @@ export default function JobWizard({
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
           <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
             {/* Header with Autosave and Quality */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-0">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <h2 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
                   {initial?.id ? "Editar vacante" : "Nueva vacante"}
@@ -598,8 +598,8 @@ export default function JobWizard({
             {/* Two Column Grid */}
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
               {/* Main Content Column */}
-              <div className="space-y-8">
-                <div className="mb-10">
+              <div className="space-y-0">
+                <div className="mb-0">
                   <Stepper
                     step={step}
                     maxStepVisited={maxStepVisited}
