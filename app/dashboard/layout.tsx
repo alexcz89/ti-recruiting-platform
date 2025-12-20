@@ -91,7 +91,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 href="/dashboard/jobs/new"
                 className="block w-full rounded-lg bg-emerald-600 text-white text-sm font-medium px-3 py-2 text-center hover:bg-emerald-700"
               >
-                + Publicar vacante
+                Crear vacante
               </Link>
               <Link
                 href="/dashboard/jobs"

@@ -99,13 +99,6 @@ export default function JobRichTextEditor({ valueHtml, onChangeHtml }: Props) {
     "text-zinc-700 hover:bg-zinc-200/50 dark:text-zinc-200 dark:hover:bg-zinc-800";
   const active = "bg-zinc-300 dark:bg-zinc-700 text-zinc-900 dark:text-white";
 
-  const counterColor =
-    charCount < 20
-      ? "text-red-500"
-      : charCount < 50
-      ? "text-amber-600"
-      : "text-emerald-600";
-
   return (
     <div className="w-full">
       {/* Toolbar estilo Notion */}
@@ -216,11 +209,6 @@ export default function JobRichTextEditor({ valueHtml, onChangeHtml }: Props) {
       </div>
 
       <EditorContent editor={editor} />
-
-      {/* Contador de caracteres integrado */}
-      <div className={`mt-1 text-xs text-right ${counterColor}`}>
-        {charCount} / 50
-      </div>
     </div>
   );
 }

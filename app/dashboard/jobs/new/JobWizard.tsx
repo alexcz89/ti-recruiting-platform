@@ -1,4 +1,4 @@
-// app/dashboard/jobs/new/JobWizard.tsx
+﻿// app/dashboard/jobs/new/JobWizard.tsx
 "use client";
 
 import { useMemo, useState } from "react";
@@ -8,7 +8,7 @@ import { createStringFuse, searchStrings } from "@/lib/search/fuse";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import JobRichTextEditor from "@/components/jobs/JobRichTextEditor";
-import { Briefcase, Clock3, Save, CheckCircle2 } from "lucide-react";
+import { Briefcase, Clock3, Save, CheckCircle2, Check, X } from "lucide-react";
 import {
   Controller,
   FormProvider,
@@ -61,20 +61,71 @@ function getTimeAgo(date: Date): string {
   return `hace ${hours}h`;
 }
 
+function plainToBasicHtml(plain: string): string {
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const lines = plain.replace(/\r\n/g, "\n").split("\n");
+  const paragraphs: string[][] = [];
+  let buffer: string[] = [];
+
+  lines.forEach((line) => {
+    if (!line.trim()) {
+      if (buffer.length) {
+        paragraphs.push(buffer);
+        buffer = [];
+      }
+      return;
+    }
+    buffer.push(line);
+  });
+
+  if (buffer.length) paragraphs.push(buffer);
+
+  const bulletPrefixes = ["- ", "* ", "• "];
+  const isBulletLine = (line: string) =>
+    bulletPrefixes.some((prefix) => line.startsWith(prefix));
+
+  return paragraphs
+    .map((paraLines) => {
+      const allBullets = paraLines.every(isBulletLine);
+      if (allBullets) {
+        const items = paraLines
+          .map((line) => {
+            const prefix = bulletPrefixes.find((p) => line.startsWith(p)) || "";
+            return escapeHtml(line.slice(prefix.length).trim());
+          })
+          .filter(Boolean);
+        if (!items.length) return "";
+        return `<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
+      }
+
+      const text = paraLines.map((line) => escapeHtml(line)).join("<br/>");
+      return `<p>${text}</p>`;
+    })
+    .filter(Boolean)
+    .join("");
+}
+
 /* =============================
    Constantes
 ============================= */
 const EDUCATION_SUGGESTIONS = [
-  "Ingeniería en Sistemas",
-  "Ingeniería en Tecnologías Computacionales",
-  "Ingeniería en Robótica",
-  "Licenciatura en Informática",
-  "Licenciatura en Ciencias de la Computación",
-  "Maestría en Tecnologías de Información",
-  "Maestría en Ciencia de Datos",
+  "Ingenier�a en Sistemas",
+  "Ingenier�a en tecnolog�as Computacionales",
+  "Ingenier�a en Rob�tica",
+  "Licenciatura en Inform�tica",
+  "Licenciatura en Ciencias de la Computaci�n",
+  "Maestr�a en tecnolog�as de Informaci�n",
+  "Maestr�a en Ciencia de Datos",
   "MBA con enfoque en TI",
-  "Técnico en Programación",
-  "Técnico en Redes",
+  "T�cnico en Programaci�n",
+  "T�cnico en Redes",
 ];
 
 const reviewBox =
@@ -172,7 +223,12 @@ export default function JobWizard({
 
   // Derivados para paso 4
   const descriptionPlain = watch("descriptionPlain") || "";
-  const descLength = descriptionPlain.replace(/\s+/g, "").length;
+  const descLength = descriptionPlain.length;
+  const wordCount = descriptionPlain.trim()
+    ? descriptionPlain.trim().split(/\s+/).filter(Boolean).length
+    : 0;
+  const MAX_DESC_CHARS = 500;
+  const MAX_DESC_WORDS = 80;
 
   const canNext4 = descLength >= 50;
 
@@ -182,12 +238,15 @@ export default function JobWizard({
     const tpl = templates.find((t) => t.id === id);
     if (!tpl) return;
 
-    const html = sanitizeHtml(tpl.descriptionHtml || "");
+    let html = sanitizeHtml(tpl.descriptionHtml || "");
     const plain = tpl.description
       ? tpl.description
       : html
       ? htmlToPlain(html)
       : "";
+    if (!html.trim() && plain.trim()) {
+      html = sanitizeHtml(plainToBasicHtml(plain));
+    }
 
     // beneficios base
     const benefitsBase = BENEFITS.reduce((acc, b) => {
@@ -271,7 +330,7 @@ export default function JobWizard({
     toast.success("Plantilla aplicada");
   }
 
-  // Envío
+  // Env�o
   async function onValidSubmit(v: JobForm) {
     setBusy(true);
     try {
@@ -313,12 +372,17 @@ export default function JobWizard({
       fd.set("showBenefits", String(v.showBenefits));
       fd.set("benefitsJson", JSON.stringify(benefitsPayload));
 
-      // Paso 4 — HTML + texto plano
-      const safeHtml = sanitizeHtml((v.descriptionHtml || "").trim());
+      // Paso 4 � HTML + texto plano
+      let safeHtml = sanitizeHtml((v.descriptionHtml || "").trim());
+      if (!safeHtml.trim() && v.descriptionPlain.trim()) {
+        safeHtml = sanitizeHtml(
+          plainToBasicHtml(v.descriptionPlain.trim())
+        );
+      }
       const safePlain =
         v.descriptionPlain.trim() || htmlToPlain(safeHtml);
 
-      // ahora sí guardamos ambos campos
+      // ahora s� guardamos ambos campos
       fd.set("descriptionHtml", safeHtml);
       fd.set("description", safePlain);
 
@@ -365,12 +429,12 @@ export default function JobWizard({
         if (res.status === 402 && data?.code === "PLAN_LIMIT_REACHED") {
           toast.error(
             data?.error ||
-              "Has alcanzado el límite de vacantes activas para tu plan.",
+              "Has alcanzado el l�mite de vacantes activas para tu plan.",
             {
               description:
                 typeof data?.maxActiveJobs === "number"
                   ? `Vacantes activas: ${
-                      data.currentActiveJobs ?? "?"
+                      data.currentActiveJobs ?? "—"
                     } / ${data.maxActiveJobs}. Cierra una vacante o mejora tu plan.`
                   : undefined,
             }
@@ -382,13 +446,13 @@ export default function JobWizard({
         );
       }
 
-      toast.success("Vacante publicada correctamente 🎉");
+      toast.success("Vacante publicada correctamente ??");
       router.push(`/dashboard/jobs/${data.id}/applications`);
     } catch (err: any) {
       console.error("Error en handlePublish:", err);
       toast.error(
         (err && typeof err.message === "string" && err.message) ||
-          "Ocurrió un error al guardar la vacante"
+          "Ocurri� un error al guardar la vacante"
       );
     } finally {
       setBusy(false);
@@ -403,6 +467,28 @@ export default function JobWizard({
   const eduRequired = watch("eduRequired");
   const eduNice = watch("eduNice");
   const certs = watch("certs");
+  const tabItems = [
+    { k: "desc", lbl: "Descripción", done: descLength > 0 },
+    {
+      k: "skills",
+      lbl: "Skills / Certs",
+      done:
+        requiredSkills.length +
+          niceSkills.length +
+          certs.length >
+        0,
+    },
+    {
+      k: "langs",
+      lbl: "Idiomas",
+      done: languageFields.length > 0,
+    },
+    {
+      k: "edu",
+      lbl: "Educación",
+      done: eduRequired.length + eduNice.length > 0,
+    },
+  ];
 
   function addSkillByName(name: string, to: "req" | "nice" = "req") {
     const n = name.trim();
@@ -531,7 +617,7 @@ export default function JobWizard({
     }
   }
 
-  // Helper para avanzar controlando paso máximo visitado
+  // Helper para avanzar controlando paso m�ximo visitado
   function goNextStep(next: number) {
     // Mark current step as complete
     setStepCompletion((prev) => {
@@ -620,7 +706,7 @@ export default function JobWizard({
 
                 {/* Paso 2 */}
                 {step === 2 && (
-                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="space-y-5 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
                     <Briefcase className="h-5 w-5 text-emerald-500" />
@@ -632,7 +718,7 @@ export default function JobWizard({
                 </div>
 
                 {/* Cards de tipo de empleo */}
-                <div className="grid gap-6">
+                <div className="grid gap-3">
                 <label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
                   Tipo de contrato *
                 </label>
@@ -650,12 +736,15 @@ export default function JobWizard({
                           })
                         }
                         className={clsx(
-                          "group flex h-full flex-col items-start rounded-xl border p-5 text-left text-xs sm:text-sm transition",
+                          "group relative flex h-full min-h-[140px] flex-col items-start rounded-xl border p-4 text-left text-xs sm:text-sm transition",
                           active
-                            ? "border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-100"
+                            ? "border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm ring-1 ring-emerald-500/30 dark:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-100"
                             : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/10"
                         )}
                       >
+                        {active && (
+                          <Check className="absolute right-3 top-3 h-4 w-4 text-emerald-600" />
+                        )}
                         <div className="flex items-center gap-2">
                           <span
                             className={clsx(
@@ -667,11 +756,11 @@ export default function JobWizard({
                           >
                             {opt.label[0]}
                           </span>
-                          <span className="font-medium">
+                          <span className="font-semibold whitespace-normal break-words leading-tight hyphens-none line-clamp-2 min-h-[2.5rem]">
                             {opt.label}
                           </span>
                         </div>
-                        <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
+                        <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400 whitespace-normal break-words hyphens-none">
                           {opt.subtitle}
                         </p>
                       </button>
@@ -681,22 +770,32 @@ export default function JobWizard({
               </div>
 
               {/* Horario */}
-              <div className="grid gap-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                  <Clock3 className="h-4 w-4 text-emerald-500" />
-                  Horario de referencia (opcional)
-                </label>
+              <div className="grid gap-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                <Clock3 className="h-4 w-4 text-emerald-500" />
+                Horario de referencia (opcional)
+              </label>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Ej. L-V 9:00-18:00 (hora local)
+              </p>
                 <input
-                  className="rounded-md border border-zinc-300 bg-white p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                  placeholder="Ej. L-V 9:00–18:00, esquema híbrido 3 días oficina / 2 remoto..."
+                  className="h-11 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                  placeholder="Ej. L-V 9:00-18:00 (hora local)"
                   {...register("schedule")}
                 />
                 <div className="flex flex-wrap gap-2 text-[11px]">
-                  {SCHEDULE_PRESETS.map((p) => (
+                  {SCHEDULE_PRESETS.map((p) => {
+                    const active = watch("schedule") === p.value;
+                    return (
                     <button
                       key={p.value}
                       type="button"
-                      className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/20"
+                      className={clsx(
+                        "cursor-pointer rounded-full border px-3 py-1.5 text-xs transition-colors hover:bg-zinc-50 active:scale-[0.98] active:transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 dark:hover:bg-zinc-800",
+                        active
+                          ? "bg-emerald-50 border-emerald-500 text-emerald-900 dark:bg-emerald-950/20 dark:border-emerald-400 dark:text-emerald-100"
+                          : "bg-white border-zinc-200 text-zinc-700 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-200"
+                      )}
                       onClick={() =>
                         setValue("schedule", p.value, {
                           shouldDirty: true,
@@ -705,7 +804,8 @@ export default function JobWizard({
                     >
                       {p.label}
                     </button>
-                  ))}
+                    );
+                  })}
                 </div>
                 <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
                   Este campo es informativo. No afecta filtros ni
@@ -713,13 +813,13 @@ export default function JobWizard({
                 </p>
               </div>
 
-                    <div className="flex justify-between gap-4 pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+                    <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
                       <button
                         type="button"
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(1)}
                       >
-                        Atrás
+                        Atr�s
                       </button>
                       <button
                         type="button"
@@ -734,63 +834,72 @@ export default function JobWizard({
 
                 {/* Paso 3 - Prestaciones */}
                 {step === 3 && (
-                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                     <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">3) Prestaciones</h3>
 
-                <div className="rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-5 flex items-center justify-between">
+                <div
+                  className={clsx(
+                    "rounded-lg border p-4 flex items-start justify-between gap-4",
+                    showBenefits
+                      ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20"
+                      : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                  )}
+                >
                   <div className="text-sm">
-                    <strong>Visibilidad:</strong> Mostrar prestaciones en
-                    la publicación
+                    <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                      Mostrar prestaciones en la publicación
+                    </div>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Recomendado: aumenta conversiones
+                    </p>
                   </div>
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
                       {...register("showBenefits")}
                     />
-                    {showBenefits ? "Sí" : "No"}
+                    {showBenefits ? "Si" : "No"}
                   </label>
                 </div>
 
-                <div className="grid sm:grid-cols-2 gap-6">
+                <div className="grid sm:grid-cols-2 gap-4">
                 {BENEFITS.map((b) => {
                   const checked = !!benefits[b.key];
                   return (
-                    <div
+                    <label
                       key={b.key}
-                      className="rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6"
+                      className="flex items-center gap-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 transition cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 dark:hover:bg-zinc-800/40 dark:hover:border-zinc-600 active:scale-[0.98] has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20 dark:has-[:checked]:border-emerald-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-emerald-500/40 has-[:focus-visible]:outline-none"
                     >
-                      <div className="flex items-center gap-2">
-                        <input
-                          id={`benefit-${b.key}`}
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(e) =>
-                            setValue(
-                              "benefits",
-                              {
-                                ...benefits,
-                                [b.key]: e.target.checked,
-                              },
-                              { shouldDirty: true }
-                            )
-                          }
-                        />
-                        <label
-                          htmlFor={`benefit-${b.key}`}
-                          className="text-sm cursor-pointer select-none"
-                        >
-                          {b.label}
-                        </label>
+                      <input
+                        id={`benefit-${b.key}`}
+                        type="checkbox"
+                        className="accent-emerald-600"
+                        checked={checked}
+                        onChange={(e) =>
+                          setValue(
+                            "benefits",
+                            {
+                              ...benefits,
+                              [b.key]: e.target.checked,
+                            },
+                            { shouldDirty: true }
+                          )
+                        }
+                      />
+                      <span className="min-w-0 text-sm font-medium text-zinc-800 dark:text-zinc-100 whitespace-normal break-normal hyphens-none leading-tight">
+                        {b.label}
+                      </span>
 
+                      <div className="ml-auto flex items-center gap-3">
                         {checked && b.key === "aguinaldo" && (
                           <NumberMini
-                            label="Días"
+                            label="días"
                             field="aguinaldoDias"
                           />
                         )}
                         {checked && b.key === "vacaciones" && (
                           <NumberMini
-                            label="Días"
+                            label="días"
                             field="vacacionesDias"
                           />
                         )}
@@ -802,18 +911,18 @@ export default function JobWizard({
                           />
                         )}
                       </div>
-                    </div>
+                    </label>
                   );
                 })}
               </div>
 
-                    <div className="flex justify-between gap-4 pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+                    <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
                       <button
                         type="button"
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(2)}
                       >
-                        Atrás
+                        Atr�s
                       </button>
                       <button
                         type="button"
@@ -828,67 +937,97 @@ export default function JobWizard({
 
                 {/* Paso 4 */}
                 {step === 4 && (
-                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                 {/* Tabs */}
-                <div className="flex flex-wrap items-center gap-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                {[
-                  { k: "desc", lbl: "Descripción" },
-                  { k: "skills", lbl: "Skills / Certs" },
-                  { k: "langs", lbl: "Idiomas" },
-                  { k: "edu", lbl: "Educación" },
-                ].map((t) => (
+                <div
+                  role="tablist"
+                  aria-label="Detalles de la vacante"
+                  className="flex flex-wrap items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50/70 p-1 dark:border-zinc-800 dark:bg-zinc-900/60"
+                >
+                {tabItems.map((t) => (
                   <button
                     key={t.k}
                     type="button"
+                    role="tab"
+                    aria-selected={tab4 === (t.k as any)}
                     className={clsx(
-                      "rounded-md px-4 py-2 text-sm font-medium transition",
+                      "flex items-center gap-2 rounded-lg h-9 px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50",
                       tab4 === (t.k as any)
                         ? "bg-emerald-600 text-white shadow-sm"
-                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                     )}
                     onClick={() => setTab4(t.k as any)}
                   >
-                    {t.lbl}
+                    <span>{t.lbl}</span>
+                    {t.done ? (
+                      <span className="inline-flex h-4 w-4 items-center justify-center">
+                        <CheckCircle2
+                          className={clsx(
+                            "h-3.5 w-3.5",
+                            tab4 === (t.k as any)
+                              ? "text-white/90"
+                              : "text-emerald-500"
+                          )}
+                        />
+                      </span>
+                    ) : (
+                      <span className="inline-flex h-4 w-4 items-center justify-center">
+                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
 
-              {/* DESCRIPCIÓN */}
+              {/* Descripción */}
               {tab4 === "desc" && (
-                <div className="animate-fade-in-up grid gap-6">
+                <div className="animate-fade-in-up grid gap-4 mt-4">
                   <label className="text-sm font-medium">
                     Descripción de la vacante *
                   </label>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Incluye responsabilidades, requisitos y beneficios.
+                  </p>
                   <Controller
                     name="descriptionHtml"
                     control={control}
-                    render={({ field: { value, onChange } }) => (
-                      <JobRichTextEditor
-                        valueHtml={value || ""}
-                        onChangeHtml={(html, plain) => {
-                          const safe = sanitizeHtml(html || "");
-                          onChange(safe);
-                          const plainText =
-                            plain || htmlToPlain(safe);
-                          setValue("descriptionPlain", plainText, {
-                            shouldDirty: true,
-                            shouldValidate: true,
-                          });
-                        }}
-                      />
-                    )}
+                    render={({ field: { value, onChange } }) => {
+                      const isEmpty = !value || !value.trim();
+                      return (
+                        <div className="relative [&_.job-editor]:min-h-[260px] md:[&_.job-editor]:min-h-[320px] [&_.job-editor+div]:hidden [&_.job-editor~div]:hidden">
+                          <JobRichTextEditor
+                            valueHtml={value || ""}
+                            onChangeHtml={(html, plain) => {
+                              const safe = sanitizeHtml(html || "");
+                              onChange(safe);
+                              const plainText =
+                                plain || htmlToPlain(safe);
+                              setValue("descriptionPlain", plainText, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              });
+                            }}
+                          />
+                          {isEmpty && (
+                            <div className="pointer-events-none absolute left-4 right-4 top-12 text-xs text-zinc-400 dark:text-zinc-500 whitespace-pre-line">
+                              Ejemplo:
+                              - Responsabilidades principales
+                              - Requisitos clave y tecnolog�as
+                              - Beneficios y cultura del equipo
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }}
                   />
                   <div
                     className={clsx(
                       "text-xs",
-                      descLength < 20 && "text-red-500",
-                      descLength >= 20 &&
-                        descLength < 50 &&
-                        "text-amber-600",
-                      descLength >= 50 && "text-emerald-600"
+                      canNext4 ? "text-emerald-600" : "text-red-500"
                     )}
                   >
-                    {descLength} / 50
+                    chars: {descLength}/{MAX_DESC_CHARS}&nbsp;&nbsp;palabras:{" "}
+                    {wordCount}/{MAX_DESC_WORDS}
                   </div>
                   {errors.descriptionPlain && (
                     <p className="text-xs text-red-600">
@@ -900,10 +1039,10 @@ export default function JobWizard({
 
               {/* SKILLS / CERTS */}
               {tab4 === "skills" && (
-                <div className="animate-fade-in-up grid gap-8">
+                <div className="animate-fade-in-up grid gap-6">
                   <div className="grid gap-3">
                     <label className="text-sm font-medium">
-                      Skills / Lenguajes
+                      Skills / Certs
                     </label>
 
                     <div className="relative">
@@ -961,7 +1100,7 @@ export default function JobWizard({
                       <Bin
                         title="Obligatoria"
                         items={requiredSkills}
-                        placeholder="Arrastra aquí"
+                        placeholder="Arrastra aqu�"
                         onRemove={(name) =>
                           setValue(
                             "requiredSkills",
@@ -1004,10 +1143,13 @@ export default function JobWizard({
                   </div>
 
                   {/* Certificaciones */}
-                  <div className="grid gap-3">
+                  <div className="grid gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
                     <label className="text-sm font-medium">
                       Certificaciones (opcional)
                     </label>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Opcional: agrega certificaciones relevantes.
+                    </p>
                     <div className="relative">
                       <input
                         className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
@@ -1060,12 +1202,13 @@ export default function JobWizard({
                         {certs.map((c) => (
                           <span
                             key={c}
-                            className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                            className="group inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 transition cursor-pointer hover:bg-emerald-100/70 active:scale-[0.98] focus-within:outline-none focus-within:ring-2 focus-within:ring-emerald-500/40 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100 dark:hover:bg-emerald-900/30"
                           >
                             {c}
                             <button
                               type="button"
-                              className="text-zinc-500 hover:text-red-600"
+                              aria-label="Remove"
+                              className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-emerald-700/60 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                               onClick={() =>
                                 setValue(
                                   "certs",
@@ -1075,7 +1218,7 @@ export default function JobWizard({
                               }
                               title="Quitar"
                             >
-                              ×
+                              <X className="h-3 w-3" />
                             </button>
                           </span>
                         ))}
@@ -1101,19 +1244,19 @@ export default function JobWizard({
                       className="rounded-md border px-3 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                       onClick={() =>
                         addLanguageRow({
-                          name: "Inglés",
+                          name: "Ingl�s",
                           level: "PROFESSIONAL",
                         })
                       }
                     >
-                      + Añadir idioma
+                      + A�adir idioma
                     </button>
                   </div>
 
                   {languageFields.length === 0 && (
                     <p className="text-xs text-zinc-500">
-                      Añade uno o más idiomas relevantes para la
-                      vacante (ej. Inglés profesional).
+                      A�ade uno o m�s idiomas relevantes para la
+                      vacante (ej. Ingl�s profesional).
                     </p>
                   )}
 
@@ -1124,7 +1267,7 @@ export default function JobWizard({
                         className="grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_auto] gap-2 items-center"
                       >
                         <select
-                          className="rounded-md border border-zinc-300 bg-white p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                          className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                           {...register(
                             `languages.${idx}.name` as const
                           )}
@@ -1137,29 +1280,30 @@ export default function JobWizard({
                         </select>
 
                         <select
-                          className="rounded-md border border-zinc-300 bg-white p-4 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                          className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                           {...register(
                             `languages.${idx}.level` as const
                           )}
                         >
                           <option value="NATIVE">Nativo</option>
                           <option value="PROFESSIONAL">
-                            Profesional (C1–C2)
+                            Profesional (C1�C2)
                           </option>
                           <option value="CONVERSATIONAL">
-                            Conversacional (B1–B2)
+                            Conversacional (B1�B2)
                           </option>
                           <option value="BASIC">
-                            Básico (A1–A2)
+                            B�sico (A1�A2)
                           </option>
                         </select>
 
                         <button
                           type="button"
-                          className="rounded-md border px-2 py-1 text-xs text-zinc-500 hover:text-red-600 hover:border-red-300 dark:border-zinc-700"
+                          aria-label="Remove"
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-zinc-200 text-emerald-700/60 transition hover:text-emerald-700 hover:border-emerald-300 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-700"
                           onClick={() => removeLanguageRow(idx)}
                         >
-                          ×
+                          <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     ))}
@@ -1167,36 +1311,36 @@ export default function JobWizard({
                 </div>
               )}
 
-              {/* EDUCACIÓN */}
+              {/* EDUCACI�N */}
               {tab4 === "edu" && (
-                <div className="animate-fade-in-up grid gap-8">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="grid gap-2">
+                <div className="animate-fade-in-up grid gap-6">
+                  <div className="grid md:grid-cols-2 gap-6 min-w-0">
+                    <div className="grid gap-2 min-w-0">
                       <label className="text-sm font-medium">Nivel mínimo</label>
                       <select
-                        className="rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                        className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                         {...register("minDegree")}
                       >
                         <option value="HIGHSCHOOL">
                           Bachillerato
                         </option>
-                        <option value="TECH">Técnico</option>
+                        <option value="TECH">T�cnico</option>
                         <option value="BACHELOR">
-                          Licenciatura / Ingeniería
+                          Licenciatura / Ingenier�a
                         </option>
-                        <option value="MASTER">Maestría</option>
+                        <option value="MASTER">Maestr�a</option>
                         <option value="PHD">Doctorado</option>
                       </select>
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid gap-2 min-w-0">
                       <label className="text-sm font-medium">
-                        Agregar educación (programa / carrera)
+                        Agregar educaci�n (programa / carrera)
                       </label>
                       <div className="relative">
                         <input
-                          className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                          placeholder="Ej. Ingeniería en Sistemas, Maestría en TI... (Enter agrega)"
+                          className="w-full min-w-0 h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                          placeholder="Ej. Ingenier�a en Sistemas, Maestr�a en TI... (Enter agrega)"
                           value={educationQuery}
                           onChange={(e) =>
                             setEducationQuery(e.target.value)
@@ -1245,7 +1389,7 @@ export default function JobWizard({
                     </div>
                   </div>
 
-                  {/* bins educación */}
+                  {/* bins educaci�n */}
                   <div className="grid sm:grid-cols-2 gap-6">
                     <Bin
                       title="Obligatoria"
@@ -1288,17 +1432,22 @@ export default function JobWizard({
                       onDrop={(e) => onDropEdu(e, "nice")}
                     />
                   </div>
+                  {eduRequired.length === 0 && eduNice.length === 0 && (
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Agrega al menos un programa educativo recomendado para la vacante.
+                    </p>
+                  )}
                 </div>
               )}
 
-                    {/* Navegación paso 4 */}
-                    <div className="flex justify-between gap-4 pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+                    {/* Navegaci�n paso 4 */}
+                    <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
                       <button
                         type="button"
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(3)}
                       >
-                        Atrás
+                        Atr�s
                       </button>
                       <button
                         type="button"
@@ -1320,12 +1469,12 @@ export default function JobWizard({
                 {/* Paso 5 - Revisión */}
                 {step === 5 && (
                   <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                  5) Revisión y publicación
-                </h3>
+                    <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                      5) Revisión y publicación
+                    </h3>
 
-                {/* Bloque general de revisión */}
-                <ReviewBlock presetCompany={presetCompany} />
+                {/* Bloque general de revisi�n */}
+                <ReviewBlock presetCompany={presetCompany} onEditStep={setStep} onEditTab={setTab4} />
 
                     <div className="pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
                       <div className="flex justify-between gap-4">
@@ -1383,13 +1532,13 @@ function NumberMini({
 }) {
   const { register } = useFormContext<JobForm>();
   return (
-    <div className="ml-auto flex items-center gap-2 text-xs">
-      <span className="text-zinc-500">{label}:</span>
+    <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+      <span className="whitespace-nowrap">{label}:</span>
       <input
         type="number"
         min={0}
         max={max}
-        className="w-20 rounded border border-zinc-300 bg-white p-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        className="h-10 w-16 rounded border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         {...register(field, { valueAsNumber: true })}
       />
     </div>
@@ -1418,12 +1567,12 @@ function Bin({
     <div
       onDragOver={(e) => e.preventDefault()}
       onDrop={onDrop}
-      className="rounded-md border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
+      className="rounded-md border border-zinc-200 bg-white p-5 min-h-[180px] dark:border-zinc-800 dark:bg-zinc-900"
     >
       <p className="mb-3 text-xs font-medium text-zinc-600 dark:text-zinc-400">
         {title}
       </p>
-      <div className="flex flex-wrap gap-2 min-h-[32px]">
+      <div className="flex flex-wrap items-start gap-2 min-h-[32px]">
         {items.length === 0 ? (
           <span className="text-xs text-zinc-400">
             {placeholder}
@@ -1434,16 +1583,17 @@ function Bin({
               key={name}
               draggable
               onDragStart={(e) => onDragStart(name, e)}
-              className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+              className="group inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 transition cursor-pointer hover:bg-emerald-100/70 active:scale-[0.98] focus-within:outline-none focus-within:ring-2 focus-within:ring-emerald-500/40 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100 dark:hover:bg-emerald-900/30"
             >
               {name}
               <button
                 type="button"
-                className="text-zinc-500 hover:text-red-600"
+                aria-label="Remove"
+                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-emerald-700/60 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                 onClick={() => onRemove(name)}
                 title="Quitar"
               >
-                ×
+                <X className="h-3 w-3" />
               </button>
             </span>
           ))
@@ -1453,21 +1603,45 @@ function Bin({
   );
 }
 
-function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
+function ReviewBlock({
+  presetCompany,
+  onEditStep,
+  onEditTab,
+}: {
+  presetCompany: PresetCompany;
+  onEditStep: (step: number) => void;
+  onEditTab: (tab: "desc" | "skills" | "langs" | "edu") => void;
+}) {
   const { watch } = useFormContext<JobForm>();
   const v = watch();
 
   const isRemote = v.locationType === "REMOTE";
   const locationText = isRemote
     ? "Remoto"
-    : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} · ${
-        v.city || ""
-      }`;
+    : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} · ${v.city || ""}`;
 
-  const hasSalary = Boolean(v.salaryMin || v.salaryMax);
-  const salaryText = hasSalary
-    ? `${v.currency} ${v.salaryMin || "—"} - ${v.salaryMax || "—"}`
-    : "No especificado";
+  const salaryMin =
+    typeof v.salaryMin === "number" && !Number.isNaN(v.salaryMin)
+      ? v.salaryMin
+      : undefined;
+  const salaryMax =
+    typeof v.salaryMax === "number" && !Number.isNaN(v.salaryMax)
+      ? v.salaryMax
+      : undefined;
+  const hasMin = salaryMin !== undefined;
+  const hasMax = salaryMax !== undefined;
+  const hasSalary = hasMin || hasMax;
+
+  const formatAmount = (value: number) =>
+    new Intl.NumberFormat("es-MX").format(value);
+
+  const salaryText = !hasSalary
+    ? "No especificado"
+    : hasMin && hasMax
+    ? `${v.currency} ${formatAmount(salaryMin!)} - ${formatAmount(salaryMax!)}`
+    : hasMin
+    ? `Desde ${v.currency} ${formatAmount(salaryMin!)}`
+    : `Hasta ${v.currency} ${formatAmount(salaryMax!)}`;
 
   const benefitsList = Object.entries(v.benefits || {})
     .filter(([, val]) => val)
@@ -1492,17 +1666,26 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
   const hasRequiredSkills = v.requiredSkills && v.requiredSkills.length > 0;
   const hasNiceSkills = v.niceSkills && v.niceSkills.length > 0;
 
-  // 🔹 HTML saneado para usar en el resumen
   const safeDescriptionHtml = sanitizeHtml(v.descriptionHtml || "");
+  const hasDescription = Boolean(v.descriptionPlain && v.descriptionPlain.trim());
 
   return (
     <div className="grid gap-8">
       {/* Basic Information Card */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-          <Briefcase className="h-5 w-5 text-emerald-500" />
-          Información básica
-        </h4>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <Briefcase className="h-5 w-5 text-emerald-500" />
+            Información básica
+          </h4>
+          <button
+            type="button"
+            className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+            onClick={() => onEditStep(1)}
+          >
+            Editar
+          </button>
+        </div>
         <div className="grid gap-6">
           <div className="grid gap-1">
             <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
@@ -1539,12 +1722,21 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
 
       {/* Compensation Card */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
-            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-          </svg>
-          Compensación y horario
-        </h4>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+            Compensación y horario
+          </h4>
+          <button
+            type="button"
+            className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+            onClick={() => onEditStep(2)}
+          >
+            Editar
+          </button>
+        </div>
         <div className="grid gap-6">
           <div className="grid sm:grid-cols-2 gap-6">
             <div className="grid gap-1">
@@ -1555,7 +1747,9 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
                 {salaryText}
                 {hasSalary && (
                   <span className="ml-2 text-xs text-zinc-500">
-                    {v.showSalary ? "(visible en publicación)" : "(oculto en publicación)"}
+                    {v.showSalary
+                      ? "(visible en publicación)"
+                      : "(oculto en publicación)"}
                   </span>
                 )}
               </span>
@@ -1571,7 +1765,7 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
             </div>
           </div>
 
-          {v.schedule && (
+          {v.schedule ? (
             <div className="grid gap-1">
               <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                 Horario
@@ -1580,25 +1774,45 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
                 {v.schedule}
               </span>
             </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-300">
+              <span>Agrega un horario de referencia</span>
+              <button
+                type="button"
+                className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs font-medium text-emerald-700 hover:border-emerald-200 hover:text-emerald-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-emerald-300"
+                onClick={() => onEditStep(2)}
+              >
+                Agregar horario
+              </button>
+            </div>
           )}
         </div>
       </div>
 
       {/* Benefits Card */}
       {(v.showBenefits || benefitsList.length > 0) && (
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-6">
-          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-600">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
-            </svg>
-            Prestaciones
-          </h4>
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+              </svg>
+              Prestaciones
+            </h4>
+            <button
+              type="button"
+              className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+              onClick={() => onEditStep(3)}
+            >
+              Editar
+            </button>
+          </div>
 
           {benefitsList.length > 0 ? (
             <div className="grid sm:grid-cols-2 gap-6">
               {benefitsList.map((item) => (
                 <div key={item} className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                  <svg className="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="h-5 w-5 text-emerald-500 dark:text-emerald-400 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                   <span>{item}</span>
@@ -1611,7 +1825,7 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
             </p>
           )}
 
-          <div className="mt-4 pt-4 border-t border-emerald-200 dark:border-emerald-800">
+          <div className="mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
             <span className="inline-flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-300">
               {v.showBenefits ? (
                 <>
@@ -1638,13 +1852,47 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
       {/* Requirements Card */}
       {(hasEduItems || hasRequiredSkills || hasNiceSkills || hasCerts || hasLanguages) && (
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
-              <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
-              <path d="M6 12v5c3 3 9 3 12 0v-5"/>
-            </svg>
-            Requisitos
-          </h4>
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
+                <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+                <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+              </svg>
+              Requisitos
+            </h4>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+                onClick={() => {
+                  onEditStep(4);
+                  onEditTab("edu");
+                }}
+              >
+                Editar educación
+              </button>
+              <button
+                type="button"
+                className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+                onClick={() => {
+                  onEditStep(4);
+                  onEditTab("skills");
+                }}
+              >
+                Editar skills/certs
+              </button>
+              <button
+                type="button"
+                className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+                onClick={() => {
+                  onEditStep(4);
+                  onEditTab("langs");
+                }}
+              >
+                Editar idiomas
+              </button>
+            </div>
+          </div>
 
           <div className="grid gap-8">
             {/* Education */}
@@ -1667,7 +1915,7 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
                       </span>
                       <div className="flex flex-wrap gap-2">
                         {v.eduRequired.map((name) => (
-                          <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 text-xs text-red-700 dark:text-red-300">
+                          <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40 text-xs text-emerald-700 dark:text-emerald-300">
                             <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd"/>
                             </svg>
@@ -1685,7 +1933,7 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
                       </span>
                       <div className="flex flex-wrap gap-2">
                         {v.eduNice.map((name) => (
-                          <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 text-xs text-blue-700 dark:text-blue-300">
+                          <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60 text-xs text-zinc-700 dark:text-zinc-200">
                             <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd"/>
                             </svg>
@@ -1713,7 +1961,7 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {v.requiredSkills!.map((name) => (
-                        <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/40 text-xs font-medium text-red-700 dark:text-red-300">
+                        <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/40 text-xs font-medium text-emerald-700 dark:text-emerald-300">
                           <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clipRule="evenodd"/>
                           </svg>
@@ -1731,7 +1979,7 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
                     </span>
                     <div className="flex flex-wrap gap-2">
                       {v.niceSkills!.map((name) => (
-                        <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/40 text-xs font-medium text-blue-700 dark:text-blue-300">
+                        <span key={name} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/60 text-xs font-medium text-zinc-700 dark:text-zinc-200">
                           <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd"/>
                           </svg>
@@ -1790,27 +2038,55 @@ function ReviewBlock({ presetCompany }: { presetCompany: PresetCompany }) {
 
       {/* Description Card */}
       <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
-            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/>
-            <line x1="16" y1="17" x2="8" y2="17"/>
-            <line x1="10" y1="9" x2="8" y2="9"/>
-          </svg>
-          Descripción de la vacante
-        </h4>
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
+              <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+            Descripción de la vacante
+          </h4>
+          <button
+            type="button"
+            className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+            onClick={() => {
+              onEditStep(4);
+              onEditTab("desc");
+            }}
+          >
+            Editar
+          </button>
+        </div>
+        {!hasDescription && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">
+            <span>La descripción está vacía.</span>
+            <button
+              type="button"
+              className="rounded-md border border-amber-200 bg-white px-2 py-1 text-xs font-medium text-amber-800 hover:border-amber-300 hover:text-amber-700 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200"
+              onClick={() => {
+                onEditStep(4);
+                onEditTab("desc");
+              }}
+            >
+              Agregar descripción
+            </button>
+          </div>
+        )}
         <div
           className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-zinc-900 dark:prose-headings:text-zinc-100 prose-p:text-zinc-700 dark:prose-p:text-zinc-300 prose-li:text-zinc-700 dark:prose-li:text-zinc-300 prose-strong:text-zinc-900 dark:prose-strong:text-zinc-100"
           dangerouslySetInnerHTML={{
-            __html: safeDescriptionHtml || "<p class='text-zinc-500 dark:text-zinc-400 italic'>Sin descripción</p>",
+            __html:
+              safeDescriptionHtml ||
+              "<p class='text-zinc-500 dark:text-zinc-400 italic'>Sin descripción</p>",
           }}
         />
       </div>
     </div>
   );
 }
-
 /* =============================
    Helpers
 ============================= */

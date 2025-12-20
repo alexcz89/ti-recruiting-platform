@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
-import { MapPin, DollarSign, Building2 } from "lucide-react";
+import { MapPin, DollarSign, Building2, Check } from "lucide-react";
 import clsx from "clsx";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { JobForm, PresetCompany, TemplateJob } from "../types";
@@ -62,23 +62,32 @@ export default function Step1Basic({
   const [salaryMinFocused, setSalaryMinFocused] = useState(false);
   const [salaryMaxFocused, setSalaryMaxFocused] = useState(false);
 
+  const salaryNeedsSwap =
+    salaryMin &&
+    salaryMax &&
+    !Number.isNaN(Number(salaryMin)) &&
+    !Number.isNaN(Number(salaryMax)) &&
+    Number(salaryMin) > Number(salaryMax);
+
   const canNext =
     !!title?.trim() &&
     !(
       (locationType === "HYBRID" || locationType === "ONSITE") &&
       !city?.trim()
     ) &&
-    !(
-      salaryMin &&
-      salaryMax &&
-      !Number.isNaN(Number(salaryMin)) &&
-      !Number.isNaN(Number(salaryMax)) &&
-      Number(salaryMin) > Number(salaryMax)
-    );
+    !salaryNeedsSwap;
+
+  const disabledMessage = !canNext
+    ? !title?.trim()
+      ? "Falta nombre de vacante"
+      : (locationType === "HYBRID" || locationType === "ONSITE") && !city?.trim()
+        ? "Falta ciudad"
+        : null
+    : null;
 
   return (
     <section className="p-6 lg:p-8">
-      <div className="space-y-10">
+      <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/20">
@@ -99,9 +108,9 @@ export default function Step1Basic({
           </div>
         )}
 
-        <div className="grid gap-10">
+        <div className="grid gap-6">
           {/* Título */}
-          <div className="space-y-2 py-4">
+          <div className="space-y-2 py-2">
             <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <span>Nombre de la vacante</span>
               <span className="text-red-500">*</span>
@@ -130,13 +139,14 @@ export default function Step1Basic({
           </div>
 
           {/* Empresa */}
-          <div className="space-y-2 py-4">
+          <div className="space-y-2 py-2">
             <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <span>Empresa</span>
               <span className="text-red-500">*</span>
             </label>
-            <div className="grid gap-10 sm:grid-cols-2">
+            <div className="grid gap-6 sm:grid-cols-2">
               <label className="relative flex cursor-pointer items-center gap-3 rounded-lg border-2 border-zinc-200 bg-white min-h-[120px] p-6 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20">
+                <Check className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-emerald-600 opacity-0 transition-opacity has-[:checked]:opacity-100" />
                 <input
                   type="radio"
                   value="own"
@@ -153,6 +163,7 @@ export default function Step1Basic({
               </label>
 
               <label className="relative flex cursor-pointer items-center gap-3 rounded-lg border-2 border-zinc-200 bg-white min-h-[120px] p-6 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20">
+                <Check className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-emerald-600 opacity-0 transition-opacity has-[:checked]:opacity-100" />
                 <input
                   type="radio"
                   value="confidential"
@@ -170,14 +181,17 @@ export default function Step1Basic({
           {/* Ubicación y Sueldo en grid */}
           <div className="grid gap-4 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] items-start">
             {/* Ubicación */}
-            <div className="space-y-2 py-4 min-w-0 overflow-hidden">
+            <div className="space-y-2 py-2 min-w-0 overflow-hidden">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <MapPin className="h-4 w-4 text-emerald-500" />
                 <span>Ubicación</span>
                 <span className="text-red-500">*</span>
               </label>
 
-              <select className={inputCls()} {...register("locationType")}>
+              <select
+                className={inputCls(undefined, "h-11 px-3 py-2")}
+                {...register("locationType")}
+              >
                 <option value="REMOTE">🌎 Remoto</option>
                 <option value="HYBRID">🏢 Híbrido</option>
                 <option value="ONSITE">🏛️ Presencial</option>
@@ -185,6 +199,9 @@ export default function Step1Basic({
 
               {(locationType === "HYBRID" || locationType === "ONSITE") && (
                 <div className="mt-3 relative min-w-0 overflow-hidden">
+                  <p className="mb-2 text-xs text-muted-foreground">
+                    Escribe ciudad y selecciona una sugerencia.
+                  </p>
                   <Controller
                     control={control}
                     name="city"
@@ -226,6 +243,7 @@ export default function Step1Basic({
                         }}
                         onPlace={() => {}}
                         countries={["mx"]}
+                        className={inputCls(errors.city, "h-11 px-3 py-2")}
                       />
                     )}
                   />
@@ -240,17 +258,17 @@ export default function Step1Basic({
             </div>
 
             {/* Sueldo */}
-            <div className="space-y-2 py-4 min-w-0 relative z-10">
+            <div className="space-y-2 py-2 min-w-0 relative z-10">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <DollarSign className="h-4 w-4 text-emerald-500" />
                 <span>Sueldo (opcional)</span>
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-[128px_minmax(0,1fr)_minmax(0,1fr)] gap-2 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,170px)_minmax(0,170px)] gap-2 items-center min-w-0">
                 <select
                   className={inputCls(
                     undefined,
-                    "h-11 w-[128px] min-w-[128px] px-3 pr-10 py-2"
+                    "h-11 w-[112px] min-w-[112px] px-3 py-2 pr-10"
                   )}
                   {...register("currency")}
                 >
@@ -276,8 +294,8 @@ export default function Step1Basic({
                         inputMode="numeric"
                         name={field.name}
                         ref={field.ref}
-                        className={inputCls(errors.salaryMin, "h-11 w-full min-w-0 p-3")}
-                        placeholder="Mínimo"
+                        className={inputCls(errors.salaryMin, "h-11 w-full min-w-0 px-3 py-2")}
+                        placeholder="Ej. 80,000"
                         value={displayValue}
                         onFocus={() => setSalaryMinFocused(true)}
                         onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
@@ -309,8 +327,8 @@ export default function Step1Basic({
                         inputMode="numeric"
                         name={field.name}
                         ref={field.ref}
-                        className={inputCls(errors.salaryMax, "h-11 w-full min-w-0 p-3")}
-                        placeholder="Máximo"
+                        className={inputCls(errors.salaryMax, "h-11 w-full min-w-0 px-3 py-2")}
+                        placeholder="Ej. 120,000"
                         value={displayValue}
                         onFocus={() => setSalaryMaxFocused(true)}
                         onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
@@ -324,6 +342,33 @@ export default function Step1Basic({
                   }}
                 />
               </div>
+
+              {/* MOVIDO AQUÍ para no afectar alineación */}
+              <p className="text-xs text-muted-foreground">
+                Recomendado: mejora el match y la visibilidad.
+              </p>
+
+              {salaryNeedsSwap && (
+                <div className="flex items-center gap-2 text-xs text-amber-700">
+                  <span>Intercambiar valores?</span>
+                  <button
+                    type="button"
+                    className="text-emerald-700 hover:text-emerald-600 font-medium"
+                    onClick={() => {
+                      setValue("salaryMin", salaryMax ?? undefined, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                      setValue("salaryMax", salaryMin ?? undefined, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }}
+                  >
+                    Intercambiar
+                  </button>
+                </div>
+              )}
 
               {(errors.salaryMin || errors.salaryMax) && (
                 <p className="text-xs text-red-600 flex items-center gap-1">
@@ -346,7 +391,10 @@ export default function Step1Basic({
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-end gap-3 pt-8 mt-8 border-t border-zinc-200 dark:border-zinc-800">
+        <div className="flex flex-col items-end gap-2 pt-4 mt-6 border-t border-zinc-200 dark:border-zinc-800">
+          {disabledMessage && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">{disabledMessage}</p>
+          )}
           <button
             type="button"
             className={clsx(
