@@ -300,14 +300,8 @@ export default function JobWizard({
       locationLat: tpl.locationLat ?? null,
       locationLng: tpl.locationLng ?? null,
       currency: tpl.currency ?? "MXN",
-      salaryMin:
-        tpl.salaryMin === null || tpl.salaryMin === undefined
-          ? ""
-          : String(tpl.salaryMin),
-      salaryMax:
-        tpl.salaryMax === null || tpl.salaryMax === undefined
-          ? ""
-          : String(tpl.salaryMax),
+      salaryMin: tpl.salaryMin ?? undefined,
+      salaryMax: tpl.salaryMax ?? undefined,
       showSalary: Boolean(tpl.showSalary),
       employmentType: tpl.employmentType ?? "FULL_TIME",
       schedule: tpl.schedule ?? "",
@@ -351,10 +345,10 @@ export default function JobWizard({
       if (v.locationLng != null)
         fd.set("locationLng", String(v.locationLng));
       fd.set("currency", v.currency);
-      if (v.salaryMin)
-        fd.set("salaryMin", clampNonNegative(v.salaryMin));
-      if (v.salaryMax)
-        fd.set("salaryMax", clampNonNegative(v.salaryMax));
+      if (v.salaryMin != null)
+        fd.set("salaryMin", String(Math.max(0, v.salaryMin)));
+      if (v.salaryMax != null)
+        fd.set("salaryMax", String(Math.max(0, v.salaryMax)));
       fd.set("showSalary", String(v.showSalary));
 
       // Paso 2

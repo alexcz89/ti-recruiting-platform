@@ -1,6 +1,6 @@
 // app/dashboard/components/SetupChecklist.tsx
 import Link from "next/link";
-import { resendVerificationEmailAction } from "./actions/profile";
+import { resendVerificationAction } from "./actions";
 
 type RecruiterStatus = "PENDING" | "APPROVED" | "REJECTED";
 
@@ -42,7 +42,7 @@ export default function SetupChecklist({ user, profile, company, compact = false
       ok: emailVerifiedOk,
       hint: "Asegura tu cuenta y habilita funciones clave.",
       action: !emailVerifiedOk ? (
-        <form action={resendVerificationEmailAction}>
+        <form action={resendVerificationAction}>
           <button
             type="submit"
             className="

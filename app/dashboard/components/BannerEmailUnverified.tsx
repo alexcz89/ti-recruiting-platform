@@ -2,7 +2,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { resendVerificationEmailAction } from "./actions/profile";
+import { resendVerificationActionClient } from "./actions";
 import { toast } from "sonner";
 
 export default function BannerEmailUnverified() {
@@ -10,7 +10,7 @@ export default function BannerEmailUnverified() {
 
   const onResend = () => {
     start(async () => {
-      const res = await resendVerificationEmailAction();
+      const res = await resendVerificationActionClient();
       if (res?.ok) toast.success(res.message || "Verificación reenviada.");
       else toast.error(res?.message || "No se pudo reenviar.");
     });

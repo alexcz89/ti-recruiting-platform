@@ -166,13 +166,17 @@ export function makeDefaultValues({
     locationLng: initial?.locationLng ?? null,
     currency: initial?.currency ?? "MXN",
     salaryMin:
-      initial?.salaryMin === null || initial?.salaryMin === undefined
-        ? ""
-        : String(initial.salaryMin),
+      typeof initial?.salaryMin === "number"
+        ? initial.salaryMin
+        : typeof initial?.salaryMin === "string"
+        ? Number(initial.salaryMin) || undefined
+        : undefined,
     salaryMax:
-      initial?.salaryMax === null || initial?.salaryMax === undefined
-        ? ""
-        : String(initial.salaryMax),
+      typeof initial?.salaryMax === "number"
+        ? initial.salaryMax
+        : typeof initial?.salaryMax === "string"
+        ? Number(initial.salaryMax) || undefined
+        : undefined,
     showSalary: !!initial?.showSalary,
     employmentType: initial?.employmentType ?? "FULL_TIME",
     schedule: initial?.schedule ?? "",

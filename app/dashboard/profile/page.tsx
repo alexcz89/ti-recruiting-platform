@@ -1,197 +1,221 @@
 // app/dashboard/profile/page.tsx
-import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import Link from "next/link";
+import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 import ProfileForm from "./ProfileForm";
-import CompanyInlineForm from "./CompanyInlineForm";
+import CompanyForm from "./CompanyForm";
+import { Mail, CheckCircle, XCircle, Calendar, Building2 } from "lucide-react";
 
-export default async function RecruiterProfilePage() {
+export default async function ProfilePage() {
   const session = await getServerSession(authOptions);
-  const userId = (session?.user as any)?.id as string | undefined;
-  const companyId = (session?.user as any)?.companyId as string | undefined;
+  if (!session?.user) redirect("/auth/signin");
 
-  if (!userId) {
-    return (
-      <main className="max-w-none p-0">
-        <div className="mx-auto max-w-[900px] px-6 lg:px-10 py-10">
-          <EmptyState
-            title="No has iniciado sesión"
-            body="Inicia sesión para editar tu perfil."
-            ctaHref="/auth/signin?role=RECRUITER"
-            ctaLabel="Ir a iniciar sesión"
-          />
-        </div>
-      </main>
-    );
-  }
+  const user = session.user as any;
+  const userId = user.id as string;
+  const companyId = user.companyId as string | undefined;
 
-  const [user, profile, company] = await Promise.all([
+  const [dbUser, profile, company] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      select: { name: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        emailVerified: true,
+        createdAt: true,
+      },
     }),
     prisma.recruiterProfile.findUnique({
       where: { userId },
-      select: { phone: true, website: true, status: true, updatedAt: true },
+      select: { phone: true, website: true, status: true },
     }),
     companyId
       ? prisma.company.findUnique({
           where: { id: companyId },
-          // 👇 añadimos logoUrl para el uploader
-          select: { name: true, size: true, logoUrl: true },
+          select: {
+            id: true,
+            name: true,
+            size: true,
+            logoUrl: true,
+            _count: { select: { jobs: true } },
+          },
         })
-      : Promise.resolve(null),
+      : null,
   ]);
 
-  const phoneOk = Boolean(profile?.phone && profile.phone.trim().length >= 6);
-  const sizeOk = Boolean(company?.size && company.size.length > 0);
-  const needsBanner = !phoneOk || !sizeOk;
-  const done = [phoneOk, sizeOk].filter(Boolean).length;
-  const pct = Math.round((done / 2) * 100);
+  if (!dbUser) redirect("/auth/signin");
+
+  const emailVerified = !!dbUser.emailVerified;
+  const profileStatus = profile?.status || "PENDING";
 
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[900px] px-6 lg:px-10 py-10 space-y-6">
-        <header className="rounded-2xl border glass-card p-4 md:p-6">
-          <h1 className="text-2xl font-bold leading-tight">Mi perfil</h1>
-          <p className="text-sm text-zinc-600">
+      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-4 space-y-6">
+        {/* Header */}
+        <div className="rounded-2xl border glass-card p-6">
+          <h1 className="text-3xl font-bold text-default">Mi perfil</h1>
+          <p className="mt-1 text-sm text-muted">
             Actualiza tus datos de contacto y la información básica de tu empresa.
           </p>
-        </header>
+        </div>
 
-        {/* ✅ Mini-checklist */}
-        {needsBanner && (
-          <section className="rounded-2xl border bg-amber-50 border-amber-200 px-4 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="font-medium text-amber-900">Completa tu configuración</p>
-                <p className="text-xs text-amber-800">
-                  Falta: {!phoneOk ? "Teléfono de contacto" : ""}
-                  {!phoneOk && !sizeOk ? " y " : ""}
-                  {!sizeOk ? "Tamaño de la empresa" : ""}
+        {/* Two Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Content - Spans 2 columns */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Contact Information */}
+            <section className="rounded-2xl border glass-card p-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-default">Datos de contacto</h2>
+                <p className="text-sm text-muted">
+                  Estos datos ayudan a que te ubiquen y te contacten más rápido.
                 </p>
               </div>
-              <div className="text-sm font-semibold text-amber-900">{pct}%</div>
-            </div>
-            <div className="mt-2 h-2 w-full rounded-full bg-amber-100 overflow-hidden">
-              <div className="h-2 bg-amber-400" style={{ width: `${pct}%` }} />
-            </div>
-            <div className="mt-3 flex gap-2">
-              {!phoneOk && (
-                <a href="#contact" className="text-xs rounded-md border px-2 py-1 hover:bg-amber-100">
-                  Ir a contacto
-                </a>
-              )}
-              {!sizeOk && (
-                <a href="#company" className="text-xs rounded-md border px-2 py-1 hover:bg-amber-100">
-                  Elegir tamaño
-                </a>
-              )}
-            </div>
-          </section>
-        )}
 
-        {/* Tarjeta de vista rápida */}
-        <section className="rounded-2xl border glass-card p-4 md:p-6">
-          <h2 className="font-semibold">Tu cuenta</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            <span className="font-medium">{user?.name ?? "—"}</span> · {user?.email ?? "—"}
-          </p>
-          {profile?.status && (
-            <p className="mt-1 text-xs">
-              Estado:{" "}
-              <span
-                className={
-                  profile.status === "APPROVED"
-                    ? "text-emerald-600"
-                    : profile.status === "REJECTED"
-                    ? "text-red-600"
-                    : "text-amber-600"
-                }
+              <ProfileForm
+                initial={{
+                  phone: profile?.phone || "",
+                  website: profile?.website || "",
+                }}
+              />
+            </section>
+
+            {/* Company Information */}
+            {companyId && (
+              <section className="rounded-2xl border glass-card p-6">
+                <div className="mb-4 flex items-start justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-default">Mi empresa</h2>
+                    <p className="text-sm text-muted">
+                      Empresa actual: <span className="font-medium text-default">{company?.name || "TestCorp"}</span>
+                    </p>
+                  </div>
+                  
+                  {company && company._count.jobs > 0 && (
+                    <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-500/40 px-3 py-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        {company._count.jobs} vacante{company._count.jobs !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <CompanyForm
+                  companyId={companyId}
+                  initial={{
+                    name: company?.name || "",
+                    size: company?.size || "",
+                    logoUrl: company?.logoUrl || "",
+                  }}
+                />
+              </section>
+            )}
+          </div>
+
+          {/* Sidebar - Account Info */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Account Card */}
+            <section className="rounded-2xl border glass-card p-6">
+              <h2 className="text-lg font-semibold text-default mb-4">Tu cuenta</h2>
+              
+              <div className="space-y-4">
+                {/* User Info */}
+                <div className="flex items-start gap-3">
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white font-bold text-lg shrink-0">
+                    {dbUser.name?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-default truncate">
+                      {dbUser.name || "Usuario"}
+                    </p>
+                    <p className="text-sm text-muted truncate flex items-center gap-1">
+                      <Mail className="h-3.5 w-3.5" />
+                      {dbUser.email}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="h-px bg-zinc-200 dark:bg-zinc-700" />
+
+                {/* Status Badges */}
+                <div className="space-y-2">
+                  {/* Email Verification */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50">
+                    <span className="text-sm text-muted">Email</span>
+                    {emailVerified ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Verificado
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                        <XCircle className="h-3.5 w-3.5" />
+                        Sin verificar
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Profile Status */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50">
+                    <span className="text-sm text-muted">Estado</span>
+                    <span
+                      className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full ${
+                        profileStatus === "APPROVED"
+                          ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/40"
+                          : "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/40"
+                      }`}
+                    >
+                      {profileStatus === "APPROVED" ? (
+                        <>
+                          <CheckCircle className="h-3 w-3" />
+                          Aprobado
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="h-3 w-3" />
+                          Pendiente
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Member Since */}
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50">
+                    <span className="text-sm text-muted">Miembro desde</span>
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-default">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {new Date(dbUser.createdAt).toLocaleDateString("es-MX", {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Help Card */}
+            <section className="rounded-2xl border border-blue-200 dark:border-blue-500/30 bg-blue-50/60 dark:bg-blue-900/20 p-6">
+              <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                ¿Necesitas ayuda?
+              </h3>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mb-3">
+                Si tienes problemas con tu cuenta o necesitas cambiar información,
+                contáctanos.
+              </p>
+              <a
+                href="mailto:support@taskit.com"
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
               >
-                {profile.status === "PENDING" ? "Pendiente" : profile.status}
-              </span>
-              {profile?.updatedAt && (
-                <span className="text-zinc-500">
-                  {" "}
-                  · actualizado {new Date(profile.updatedAt).toLocaleDateString()}
-                </span>
-              )}
-            </p>
-          )}
-        </section>
-
-        {/* Formulario de contacto (toasts) */}
-        <section id="contact" className="rounded-2xl border glass-card p-4 md:p-6">
-          <h2 className="font-semibold">Datos de contacto</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Estos datos ayudan a que te ubiquen y te contacten más rápido.
-          </p>
-
-          <div className="mt-4">
-            <ProfileForm
-              initial={{
-                phone: profile?.phone ?? "",
-                website: profile?.website ?? "",
-              }}
-            />
+                <Mail className="h-3.5 w-3.5" />
+                support@taskit.com
+              </a>
+            </section>
           </div>
-        </section>
-
-        {/* Mi empresa inline (nombre + tamaño + logo, con toasts) */}
-        <section id="company" className="rounded-2xl border glass-card p-4 md:p-6">
-          <h2 className="font-semibold">Mi empresa</h2>
-          <p className="mt-1 text-sm text-zinc-600">
-            Empresa actual: <span className="font-medium">{company?.name ?? "—"}</span>
-          </p>
-
-          <div className="mt-4">
-            <CompanyInlineForm
-              initial={{
-                name: company?.name ?? "",
-                size: company?.size ?? null,
-                logoUrl: company?.logoUrl ?? null, // 👈 pasamos el logo al formulario
-              }}
-            />
-          </div>
-
-          <div className="mt-4">
-            <Link
-              href="/dashboard/overview"
-              className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
-            >
-              Regresar al overview
-            </Link>
-          </div>
-        </section>
+        </div>
       </div>
     </main>
-  );
-}
-
-function EmptyState({
-  title,
-  body,
-  ctaHref,
-  ctaLabel,
-}: {
-  title: string;
-  body?: string;
-  ctaHref?: string;
-  ctaLabel?: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-dashed p-8 text-center glass-card p-4 md:p-6">
-      <p className="text-base font-medium text-zinc-800">{title}</p>
-      {body && <p className="mt-1 text-sm text-zinc-600">{body}</p>}
-      {ctaHref && ctaLabel && (
-        <div className="mt-4">
-          <Link href={ctaHref} className="text-sm border rounded px-3 py-1 hover:bg-gray-50">
-            {ctaLabel}
-          </Link>
-        </div>
-      )}
-    </div>
   );
 }

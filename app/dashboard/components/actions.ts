@@ -48,3 +48,45 @@ export async function resendVerificationAction(formData: FormData) {
   rl.set(email, now);
   redirect(`${returnTo}?resent=1`);
 }
+
+// Client-friendly version that returns a result instead of redirecting
+export async function resendVerificationActionClient() {
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email?.toLowerCase().trim();
+
+  if (!email) {
+    return { ok: false, message: "No hay sesión activa" };
+  }
+
+  const now = Date.now();
+  const last = rl.get(email) || 0;
+  if (now - last < 60_000) {
+    return { ok: false, message: "Espera 60 segundos antes de reenviar" };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { emailVerified: true },
+  });
+
+  if (!user) {
+    return { ok: false, message: "Usuario no encontrado" };
+  }
+
+  if (user.emailVerified) {
+    return { ok: true, message: "Tu email ya está verificado" };
+  }
+
+  try {
+    const token = await createEmailVerifyToken({ email }, 60);
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const verifyUrl = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(token)}`;
+
+    await sendVerificationEmail(email, verifyUrl);
+
+    rl.set(email, now);
+    return { ok: true, message: "Email de verificación enviado" };
+  } catch (error) {
+    return { ok: false, message: "Error al enviar email" };
+  }
+}
