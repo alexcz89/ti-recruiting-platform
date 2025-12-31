@@ -195,7 +195,6 @@ export default async function ProfilePage() {
                 </div>
               </div>
             </section>
-
             {/* Help Card */}
             <section className="rounded-2xl border border-blue-200 dark:border-blue-500/30 bg-blue-50/60 dark:bg-blue-900/20 p-6">
               <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
@@ -205,6 +204,7 @@ export default async function ProfilePage() {
                 Si tienes problemas con tu cuenta o necesitas cambiar información,
                 contáctanos.
               </p>
+
               <a
                 href="mailto:support@taskit.com"
                 className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"

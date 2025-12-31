@@ -1,7 +1,7 @@
 ﻿// app/dashboard/jobs/new/JobWizard.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { createStringFuse, searchStrings } from "@/lib/search/fuse";
@@ -116,16 +116,16 @@ function plainToBasicHtml(plain: string): string {
    Constantes
 ============================= */
 const EDUCATION_SUGGESTIONS = [
-  "Ingenier�a en Sistemas",
-  "Ingenier�a en tecnolog�as Computacionales",
-  "Ingenier�a en Rob�tica",
-  "Licenciatura en Inform�tica",
-  "Licenciatura en Ciencias de la Computaci�n",
-  "Maestr�a en tecnolog�as de Informaci�n",
-  "Maestr�a en Ciencia de Datos",
+  "Ingeniería en Sistemas",
+  "Ingeniería en tecnologías Computacionales",
+  "Ingeniería en Robótica",
+  "Licenciatura en Informática",
+  "Licenciatura en Ciencias de la Computación",
+  "Maestría en tecnologías de Información",
+  "Maestría en Ciencia de Datos",
   "MBA con enfoque en TI",
-  "T�cnico en Programaci�n",
-  "T�cnico en Redes",
+  "Técnico en Programación",
+  "Técnico en Redes",
 ];
 
 const reviewBox =
@@ -190,6 +190,8 @@ export default function JobWizard({
   const [skillQuery, setSkillQuery] = useState("");
   const [educationQuery, setEducationQuery] = useState("");
   const [certQuery, setCertQuery] = useState("");
+  const [isEducationOpen, setIsEducationOpen] = useState(false);
+  const educationDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const skillsFuse = useMemo(
     () => createStringFuse(skillsOptions || []),
@@ -514,6 +516,7 @@ export default function JobWizard({
       });
     }
     setEducationQuery("");
+    setIsEducationOpen(false);
   }
 
   function addCert(c: string) {
@@ -637,6 +640,33 @@ export default function JobWizard({
       "Primero completa los pasos anteriores antes de avanzar."
     );
   }
+
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent | MouseEvent) {
+      const target = event.target as Node | null;
+      if (
+        !educationDropdownRef.current ||
+        !target ||
+        educationDropdownRef.current.contains(target)
+      ) {
+        return;
+      }
+      setIsEducationOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsEducationOpen(false);
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   /* =============================
      Render
@@ -813,7 +843,7 @@ export default function JobWizard({
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(1)}
                       >
-                        Atr�s
+                        Atrás
                       </button>
                       <button
                         type="button"
@@ -916,7 +946,7 @@ export default function JobWizard({
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(2)}
                       >
-                        Atr�s
+                        Atrás
                       </button>
                       <button
                         type="button"
@@ -1006,7 +1036,7 @@ export default function JobWizard({
                             <div className="pointer-events-none absolute left-4 right-4 top-12 text-xs text-zinc-400 dark:text-zinc-500 whitespace-pre-line">
                               Ejemplo:
                               - Responsabilidades principales
-                              - Requisitos clave y tecnolog�as
+                              - Requisitos clave y tecnologías
                               - Beneficios y cultura del equipo
                             </div>
                           )}
@@ -1094,7 +1124,7 @@ export default function JobWizard({
                       <Bin
                         title="Obligatoria"
                         items={requiredSkills}
-                        placeholder="Arrastra aqu�"
+                        placeholder="Arrastra aquí"
                         onRemove={(name) =>
                           setValue(
                             "requiredSkills",
@@ -1238,19 +1268,19 @@ export default function JobWizard({
                       className="rounded-md border px-3 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                       onClick={() =>
                         addLanguageRow({
-                          name: "Ingl�s",
+                          name: "Inglés",
                           level: "PROFESSIONAL",
                         })
                       }
                     >
-                      + A�adir idioma
+                      + Añadir idioma
                     </button>
                   </div>
 
                   {languageFields.length === 0 && (
                     <p className="text-xs text-zinc-500">
-                      A�ade uno o m�s idiomas relevantes para la
-                      vacante (ej. Ingl�s profesional).
+                      Añade uno o más idiomas relevantes para la
+                      vacante (ej. Inglés profesional).
                     </p>
                   )}
 
@@ -1281,13 +1311,13 @@ export default function JobWizard({
                         >
                           <option value="NATIVE">Nativo</option>
                           <option value="PROFESSIONAL">
-                            Profesional (C1�C2)
+                            Profesional (C1-C2)
                           </option>
                           <option value="CONVERSATIONAL">
-                            Conversacional (B1�B2)
+                            Conversacional (B1-B2)
                           </option>
                           <option value="BASIC">
-                            B�sico (A1�A2)
+                            Básico (A1-A2)
                           </option>
                         </select>
 
@@ -1305,7 +1335,7 @@ export default function JobWizard({
                 </div>
               )}
 
-              {/* EDUCACI�N */}
+              {/* EDUCACIÓN */}
               {tab4 === "edu" && (
                 <div className="animate-fade-in-up grid gap-6">
                   <div className="grid md:grid-cols-2 gap-6 min-w-0">
@@ -1318,27 +1348,37 @@ export default function JobWizard({
                         <option value="HIGHSCHOOL">
                           Bachillerato
                         </option>
-                        <option value="TECH">T�cnico</option>
+                        <option value="TECH">Técnico</option>
                         <option value="BACHELOR">
-                          Licenciatura / Ingenier�a
+                          Licenciatura / Ingeniería
                         </option>
-                        <option value="MASTER">Maestr�a</option>
+                        <option value="MASTER">Maestría</option>
                         <option value="PHD">Doctorado</option>
                       </select>
                     </div>
 
                     <div className="grid gap-2 min-w-0">
                       <label className="text-sm font-medium">
-                        Agregar educaci�n (programa / carrera)
+                        Agregar educación (programa / carrera)
                       </label>
-                      <div className="relative">
+                      <div
+                        className="relative"
+                        ref={educationDropdownRef}
+                      >
                         <input
                           className="w-full min-w-0 h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                          placeholder="Ej. Ingenier�a en Sistemas, Maestr�a en TI... (Enter agrega)"
+                          placeholder="Ej. Ingeniería en Sistemas, Maestría en TI... (Enter agrega)"
                           value={educationQuery}
-                          onChange={(e) =>
-                            setEducationQuery(e.target.value)
-                          }
+                          onChange={(e) => {
+                            const nextValue = e.target.value;
+                            setEducationQuery(nextValue);
+                            setIsEducationOpen(!!nextValue.trim());
+                          }}
+                          onFocus={() => {
+                            if (educationQuery.trim()) {
+                              setIsEducationOpen(true);
+                            }
+                          }}
                           onKeyDown={(e) => {
                             if (
                               (e.key === "Enter" ||
@@ -1346,18 +1386,29 @@ export default function JobWizard({
                               educationQuery.trim()
                             ) {
                               e.preventDefault();
-                              addEduByName(
-                                filteredEducation[0] ||
-                                  educationQuery.trim(),
-                                "req"
-                              );
+                              addEduByName(educationQuery.trim(), "req");
                             }
                           }}
                           aria-autocomplete="list"
-                          aria-expanded={!!educationQuery}
+                          aria-expanded={isEducationOpen}
                         />
-                        {educationQuery && (
+                        {isEducationOpen && educationQuery && (
                           <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
+                            {educationQuery.trim() && (
+                              <button
+                                type="button"
+                                className="block w-full px-3 py-2 text-left text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
+                                onClick={() =>
+                                  addEduByName(
+                                    educationQuery.trim(),
+                                    "req"
+                                  )
+                                }
+                                role="option"
+                              >
+                                {`Agregar "${educationQuery.trim()}"`}
+                              </button>
+                            )}
                             {filteredEducation.length === 0 ? (
                               <div className="px-3 py-2 text-sm text-zinc-500">
                                 Sin resultados
@@ -1383,7 +1434,7 @@ export default function JobWizard({
                     </div>
                   </div>
 
-                  {/* bins educaci�n */}
+                  {/* bins educación */}
                   <div className="grid sm:grid-cols-2 gap-6">
                     <Bin
                       title="Obligatoria"
@@ -1441,7 +1492,7 @@ export default function JobWizard({
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(3)}
                       >
-                        Atr�s
+                        Atrás
                       </button>
                       <button
                         type="button"

@@ -15,6 +15,15 @@ const LEVEL_LABEL: Record<string, string> = {
   BASIC: "Básico (A1–A2)",
 };
 
+// Skills con nivel (igual que en profile/summary)
+const SKILL_LEVEL_LABEL: Record<number, string> = {
+  1: "B?sico",
+  2: "Junior",
+  3: "Intermedio",
+  4: "Avanzado",
+  5: "Experto",
+};
+
 export default async function CandidateDetailPage({
   params,
   searchParams,
@@ -52,6 +61,14 @@ export default async function CandidateDetailPage({
       role: true,
       skills: true,
       certifications: true,
+      candidateSkills: {
+        select: {
+          id: true,
+          level: true,
+          term: { select: { label: true } },
+        },
+        orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
+      },
       candidateLanguages: {
         select: {
           level: true,
@@ -197,6 +214,19 @@ export default async function CandidateDetailPage({
 
   const headerBtnClasses =
     "inline-flex items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-900";
+
+  const detailedSkills =
+    (candidate.candidateSkills || [])
+      .map((s) => ({
+        id: s.id,
+        label: s.term?.label || "",
+        level: s.level ?? null,
+      }))
+      .filter((s) => s.label) || [];
+
+  const candidateSkillNames = detailedSkills.length
+    ? detailedSkills.map((s) => s.label)
+    : candidate.skills;
 
   // Idiomas desde candidateLanguages
   const languageItems =
@@ -399,10 +429,52 @@ export default async function CandidateDetailPage({
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                 Skills
               </h2>
-              <List
-                items={candidate.skills}
-                emptyLabel="Sin skills capturados"
-              />
+              {detailedSkills.length > 0 ? (
+                <ul className="mt-3 space-y-3">
+                  {detailedSkills.map((s) => {
+                    const levelValue = s.level ?? 0;
+                    const pct = Math.max(
+                      0,
+                      Math.min(100, Math.round(levelValue * 20))
+                    );
+
+                    const levelLabel =
+                      s.level != null
+                        ? SKILL_LEVEL_LABEL[s.level as number] ??
+                          `Nivel ${s.level}`
+                        : "Sin nivel";
+
+                    return (
+                      <li key={s.id} className="soft-panel px-3 py-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">{s.label}</span>
+                          <span className="text-xs text-muted">
+                            {levelLabel}
+                          </span>
+                        </div>
+                        <div
+                          className="mt-2 progress"
+                          aria-label={`Nivel ${levelValue} de 5 en ${s.label}`}
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={5}
+                          aria-valuenow={levelValue}
+                        >
+                          <div
+                            className="progress-bar"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <List
+                  items={candidate.skills}
+                  emptyLabel="Sin skills capturados"
+                />
+              )}
             </div>
 
             <div className="glass-card border rounded-2xl p-4 md:p-5">
@@ -480,7 +552,7 @@ export default async function CandidateDetailPage({
               {myApps.map((a) => {
                 const { matches, others } = buildRequiredSnapshot(
                   a.job?.skills,
-                  candidate.skills
+                  candidateSkillNames
                 );
                 const show = [...matches, ...others].slice(0, 4);
 

@@ -6,6 +6,7 @@ import { Inter } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider";
+import { Toaster } from "sonner"; // ⬅️ AGREGADO
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -45,6 +46,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <footer className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-8 text-sm text-zinc-500 dark:text-zinc-400 border-t border-zinc-200/60 dark:border-zinc-800/60">
             © {new Date().getFullYear()} Bolsa TI. Todos los derechos reservados.
           </footer>
+
+          {/* ⬅️ AGREGADO: Toaster para notificaciones */}
+          <Toaster position="top-right" richColors />
         </Providers>
       </body>
     </html>

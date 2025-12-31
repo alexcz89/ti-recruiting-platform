@@ -14,10 +14,7 @@ function slugifyLabel(s: string) {
 }
 
 async function main() {
-  console.log("🗑️  Borrando SKILLs existentes...");
-  await prisma.taxonomyTerm.deleteMany({ where: { kind: TaxonomyKind.SKILL } });
-
-  console.log("🌱 Insertando nuevos SKILLs...");
+  console.log("🌱 Actualizando SKILLs (idempotente)...");
   const rows = ALL_SKILLS.map((label) => ({
     kind: TaxonomyKind.SKILL,
     slug: slugifyLabel(label),
@@ -25,10 +22,21 @@ async function main() {
     aliases: [] as string[],
   }));
 
-  await prisma.taxonomyTerm.createMany({
-    data: rows,
-    skipDuplicates: true,
-  });
+  for (const row of rows) {
+    await prisma.taxonomyTerm.upsert({
+      where: {
+        kind_slug: {
+          kind: row.kind,
+          slug: row.slug,
+        },
+      },
+      create: row,
+      update: {
+        label: row.label,
+        aliases: row.aliases,
+      },
+    });
+  }
 
   const count = await prisma.taxonomyTerm.count({ where: { kind: TaxonomyKind.SKILL } });
   console.log(`✅ Insertados ${count} SKILLs.`);

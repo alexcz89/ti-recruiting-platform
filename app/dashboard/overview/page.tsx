@@ -8,10 +8,12 @@ import BannerEmailUnverified from "../components/BannerEmailUnverified";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import clsx from "clsx";
-import { Eye, Users, Pencil } from "lucide-react";
+import { AlertCircle, CheckCircle2, XCircle, Clock, TrendingUp, Bell } from "lucide-react";
+import QuickActionButtons from "./QuickActionButtons";
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
 const d7 = 7 * 24 * 60 * 60 * 1000;
+const d15 = 15 * 24 * 60 * 60 * 1000;
 
 export default async function OverviewPage() {
   // 🔐 Tomamos todo desde la sesión de next-auth
@@ -55,16 +57,30 @@ export default async function OverviewPage() {
     }),
   ]);
 
-  // KPIs
-  const [openJobs, appsTotal, apps7d, candidates] = await Promise.all([
+  // KPIs mejorados
+  const [openJobs, appsTotal, apps7d, appsPending] = await Promise.all([
     prisma.job.count({ where: { companyId } }),
     prisma.application.count({ where: { job: { companyId } } }),
     prisma.application.count({
       where: { job: { companyId }, createdAt: { gte: new Date(Date.now() - d7) } },
     }),
-    prisma.user.count({ where: { role: "CANDIDATE" } }),
+    prisma.application.count({
+      where: { job: { companyId }, status: "SUBMITTED" },
+    }),
   ]);
 
+  // Tareas pendientes
+  const jobsWithoutApps = await prisma.job.count({
+    where: {
+      companyId,
+      createdAt: { lt: new Date(Date.now() - d15) },
+      applications: { none: {} },
+    },
+  });
+
+  const hasPendingTasks = appsPending > 0 || jobsWithoutApps > 0;
+
+  // Postulaciones recientes (con más info para acciones rápidas)
   const recent = await prisma.application.findMany({
     where: { job: { companyId } },
     orderBy: { createdAt: "desc" },
@@ -75,26 +91,24 @@ export default async function OverviewPage() {
           id: true,
           title: true,
           company: { select: { name: true } },
-          updatedAt: true,
         },
       },
-      candidate: { select: { name: true, email: true } },
+      candidate: { select: { id: true, name: true, email: true } },
     },
   });
 
-  const myJobs = await prisma.job.findMany({
-    where: { companyId },
+  // Actividad reciente (con updatedAt para detectar cambios)
+  const recentActivity = await prisma.application.findMany({
+    where: { job: { companyId } },
     orderBy: { updatedAt: "desc" },
-    take: 8,
+    take: 5,
     select: {
       id: true,
-      title: true,
-      location: true,
-      employmentType: true,
-      remote: true,
+      status: true,
+      createdAt: true,
       updatedAt: true,
-      company: { select: { name: true, logoUrl: true } },
-      _count: { select: { applications: true } },
+      job: { select: { title: true } },
+      candidate: { select: { name: true } },
     },
   });
 
@@ -124,16 +138,30 @@ export default async function OverviewPage() {
                   <span className="text-default">{company.name}</span>
                 </span>
               )}
+
+              {/* 🔔 Badge de notificaciones */}
+              {appsPending > 0 && (
+                <Link
+                  href="/dashboard/jobs?filter=pending"
+                  className="relative inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-500/40 hover:bg-amber-200 dark:hover:bg-amber-900/60 transition"
+                  title={`${appsPending} candidato${appsPending !== 1 ? "s" : ""} por revisar`}
+                >
+                  <Bell className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                  <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                    {appsPending}
+                  </span>
+                </Link>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Link href="/dashboard/jobs/new" className="btn btn-primary">
                 + Publicar vacante
               </Link>
-              <Link href="/dashboard/jobs" className="btn-ghost">
+              <Link href="/dashboard/jobs" className="btn-ghost hidden sm:inline-flex">
                 Administrar vacantes
               </Link>
-              <Link href="/dashboard/billing" className="btn-ghost">
+              <Link href="/dashboard/billing" className="btn-ghost hidden md:inline-flex">
                 Facturación y plan
               </Link>
             </div>
@@ -153,125 +181,68 @@ export default async function OverviewPage() {
           company={company}
         />
 
+        {/* 🚨 Tareas pendientes */}
+        {hasPendingTasks && (
+          <section className="rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-900/20 p-4 md:p-6">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-semibold text-amber-900 dark:text-amber-100 mb-3">
+                  Tareas pendientes
+                </h2>
+                <ul className="space-y-2">
+                  {appsPending > 0 && (
+                    <li className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+                      <Clock className="h-4 w-4 shrink-0" />
+                      <Link
+                        href="/dashboard/jobs?filter=pending"
+                        className="hover:underline"
+                      >
+                        <span className="font-semibold">{appsPending}</span> candidato
+                        {appsPending !== 1 ? "s" : ""} por revisar
+                      </Link>
+                    </li>
+                  )}
+                  {jobsWithoutApps > 0 && (
+                    <li className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
+                      <XCircle className="h-4 w-4 shrink-0" />
+                      <Link
+                        href="/dashboard/jobs?filter=no-applications"
+                        className="hover:underline"
+                      >
+                        <span className="font-semibold">{jobsWithoutApps}</span> vacante
+                        {jobsWithoutApps !== 1 ? "s" : ""} sin postulaciones (hace más de
+                        15 días)
+                      </Link>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* KPIs */}
         <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <KpiCard label="Vacantes abiertas" value={nf(openJobs)} tone="emerald" />
           <KpiCard label="Postulaciones totales" value={nf(appsTotal)} tone="blue" />
-          <KpiCard label="Postulaciones últimos 7 días" value={nf(apps7d)} tone="violet" />
-          <KpiCard label="Candidatos registrados" value={nf(candidates)} tone="zinc" />
+          <KpiCard label="Últimos 7 días" value={nf(apps7d)} tone="violet" />
+          <KpiCard
+            label="Por revisar"
+            value={nf(appsPending)}
+            tone={appsPending > 0 ? "amber" : "zinc"}
+            badge={appsPending > 0 ? "Prioritario" : undefined}
+          />
         </section>
 
         {/* Grids */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          {/* Vacantes recientes */}
-          <div className="lg:col-span-8 rounded-2xl border glass-card p-4 md:p-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-default">Vacantes recientes</h2>
-              <Link
-                href="/dashboard/jobs"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                Ver todas →
-              </Link>
-            </div>
-
-            {myJobs.length === 0 ? (
-              <EmptyState
-                title="Aún no hay vacantes"
-                body="Publica tu primera vacante y empezará a aparecer aquí."
-                ctaHref="/dashboard/jobs/new"
-                ctaLabel="Publicar vacante"
-              />
-            ) : (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {myJobs.map((j) => {
-                  const hasApps = j._count.applications > 0;
-                  return (
-                    <li key={j.id} className="py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            {/* mini logo en la línea del título */}
-                            {j.company?.logoUrl && (
-                              <Image
-                                src={j.company.logoUrl}
-                                alt={j.company?.name ?? "Logo"}
-                                width={16}
-                                height={16}
-                                className="h-4 w-4 rounded-sm object-contain"
-                              />
-                            )}
-                            <Link
-                              href={`/dashboard/jobs/${j.id}`}
-                              className="font-medium hover:underline text-default"
-                            >
-                              {j.title}
-                            </Link>
-                            <span className="text-[11px] text-muted">
-                              · {j.location ?? "—"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted mt-0.5">
-                            {j.employmentType ?? "—"} ·{" "}
-                            {j.remote ? "Remoto" : "Presencial/Híbrido"}
-                          </p>
-                          <p className="text-[11px] text-muted mt-1">
-                            Actualizada {fromNow(j.updatedAt)}
-                          </p>
-                        </div>
-                        <div className="shrink-0 text-right flex flex-col items-end gap-2">
-                          <span
-                            className={clsx(
-                              "inline-flex items-center rounded-full px-2 py-1 text-[11px] gap-1 border",
-                              hasApps
-                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:border-emerald-500/40 dark:text-emerald-100"
-                                : "bg-zinc-50 text-zinc-500 border-zinc-200/60 dark:bg-zinc-900/40 dark:border-zinc-700/60 dark:text-zinc-300"
-                            )}
-                          >
-                            <Users className="h-3 w-3" />
-                            {j._count.applications} postul.
-                          </span>
-                          <div className="flex items-center gap-1.5">
-                            <Link
-                              href={`/dashboard/jobs/${j.id}`}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200/70 bg-zinc-50/70 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-                              title="Ver vacante"
-                            >
-                              <Eye className="h-4 w-4" />
-                              <span className="sr-only">Ver vacante</span>
-                            </Link>
-                            <Link
-                              href={`/dashboard/jobs/${j.id}/applications`}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200/70 bg-zinc-50/70 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-                              title="Ver candidatos"
-                            >
-                              <Users className="h-4 w-4" />
-                              <span className="sr-only">Ver candidatos</span>
-                            </Link>
-                            <Link
-                              href={`/dashboard/jobs/${j.id}/edit`}
-                              className="inline-flex h-8 w-8 items-center justifycenter rounded-lg border border-zinc-200/70 bg-zinc-50/70 text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-                              title="Editar vacante"
-                            >
-                              <Pencil className="h-4 w-4" />
-                              <span className="sr-only">Editar vacante</span>
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Postulaciones recientes */}
-          <div className="lg:col-span-4 rounded-2xl border glass-card p-4 md:p-6">
-            <div className="flex items-center justify-between mb-3">
+          <div className="lg:col-span-7 rounded-2xl border glass-card p-4 md:p-6">
+            <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-default">Postulaciones recientes</h2>
               <Link
-                href="/dashboard/applications"
+                href="/dashboard/jobs"
                 className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
                 Ver todas →
@@ -284,30 +255,103 @@ export default async function OverviewPage() {
                 body="Cuando lleguen postulaciones las verás aquí."
               />
             ) : (
-              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+              <div className="space-y-3">
                 {recent.map((r) => (
                   <div
                     key={r.id}
-                    className="rounded-xl border border-zinc-100/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/40 px-3 py-2.5 flex items-start justify-between gap-3 hover:border-blue-200 hover:bg-blue-50/60 dark:hover:border-blue-500/40 dark:hover:bg-blue-950/40 transition"
+                    className="rounded-xl border border-zinc-100/80 dark:border-zinc-800/80 bg-zinc-50/60 dark:bg-zinc-900/40 p-3 hover:border-blue-200 hover:bg-blue-50/60 dark:hover:border-blue-500/40 dark:hover:bg-blue-950/40 transition"
                   >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-default truncate">
-                        {r.candidate?.name || "Candidato sin nombre"}
-                      </p>
-                      <p className="text-xs text-muted truncate">
-                        {r.job?.title ?? "Vacante eliminada"} · {fromNow(r.createdAt)}
-                      </p>
-                      <p className="text-[11px] text-zinc-400 truncate">
-                        {r.candidate?.email || "—"}
-                      </p>
+                    <div className="flex items-start justify-between gap-3">
+                      <Link
+                        href={`/dashboard/jobs/${r.job.id}/applications`}
+                        className="min-w-0 flex-1"
+                      >
+                        <p className="text-sm font-medium text-default truncate">
+                          {r.candidate?.name || "Candidato sin nombre"}
+                        </p>
+                        <p className="text-xs text-muted truncate">
+                          {r.job?.title ?? "Vacante eliminada"} · {fromNow(r.createdAt)}
+                        </p>
+                        <p className="text-[11px] text-zinc-400 truncate">
+                          {r.candidate?.email || "—"}
+                        </p>
+                      </Link>
+
+                      <div className="shrink-0 flex items-center gap-2">
+                        {r.status === "SUBMITTED" && (
+                          <span className="rounded-full px-2 py-0.5 text-[11px] font-medium border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-500/40">
+                            Nuevo
+                          </span>
+                        )}
+                        {r.status === "REVIEWING" && (
+                          <span className="rounded-full px-2 py-0.5 text-[11px] font-medium border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-100 dark:border-blue-500/40">
+                            En revisión
+                          </span>
+                        )}
+
+                        {/* Botones de acción rápida */}
+                        {r.status === "SUBMITTED" && (
+                          <QuickActionButtons applicationId={r.id} />
+                        )}
+                      </div>
                     </div>
-                    {r.status && (
-                      <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] border bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-100 dark:border-amber-500/40">
-                        {r.status}
-                      </span>
-                    )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Actividad reciente */}
+          <div className="lg:col-span-5 rounded-2xl border glass-card p-4 md:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-default">Actividad reciente</h2>
+            </div>
+
+            {recentActivity.length === 0 ? (
+              <EmptyState title="Sin actividad reciente" />
+            ) : (
+              <div className="space-y-3">
+                {recentActivity.map((activity) => {
+                  const isNew =
+                    activity.createdAt.getTime() === activity.updatedAt.getTime();
+                  const icon = isNew ? (
+                    <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  );
+
+                  return (
+                    <div
+                      key={activity.id}
+                      className="flex items-start gap-3 text-sm text-muted"
+                    >
+                      <div className="shrink-0 mt-0.5">{icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-zinc-400">
+                          {fromNow(activity.updatedAt)}
+                        </p>
+                        <p className="text-sm text-default mt-0.5">
+                          {isNew ? (
+                            <>
+                              Nueva postulación para{" "}
+                              <span className="font-medium">{activity.job.title}</span>
+                            </>
+                          ) : (
+                            <>
+                              Actualización en{" "}
+                              <span className="font-medium">{activity.job.title}</span>
+                              {activity.status !== "SUBMITTED" && (
+                                <span className="text-xs text-muted ml-1">
+                                  ({activity.status.toLowerCase()})
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -322,37 +366,32 @@ function KpiCard({
   label,
   value,
   tone = "zinc",
+  badge,
 }: {
   label: string;
   value: string | number;
   tone?: "zinc" | "emerald" | "amber" | "blue" | "violet";
+  badge?: string;
 }) {
-  const tones: Record<
-    string,
-    { card: string; accent: string }
-  > = {
+  const tones: Record<string, { card: string; accent: string }> = {
     zinc: {
       card: "glass-card",
       accent: "bg-zinc-100 dark:bg-zinc-800",
     },
     emerald: {
-      card:
-        "glass-card border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-900/20",
+      card: "glass-card border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-900/20",
       accent: "bg-emerald-100 dark:bg-emerald-800",
     },
     amber: {
-      card:
-        "glass-card border-amber-300/50 dark:border-amber-400/20 bg-amber-50/60 dark:bg-amber-900/20",
+      card: "glass-card border-amber-300/50 dark:border-amber-400/20 bg-amber-50/60 dark:bg-amber-900/20",
       accent: "bg-amber-100 dark:bg-amber-800",
     },
     blue: {
-      card:
-        "glass-card border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
+      card: "glass-card border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
       accent: "bg-blue-100 dark:bg-blue-800",
     },
     violet: {
-      card:
-        "glass-card border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
+      card: "glass-card border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
       accent: "bg-violet-100 dark:bg-violet-800",
     },
   };
@@ -362,18 +401,22 @@ function KpiCard({
   return (
     <div
       className={clsx(
-        // 🔽 menos padding y borde un poco más compacto
-        "rounded-xl border shadow-sm hover:shadow-md transition flex items-center gap-3 p-3 md:p-4",
+        "rounded-xl border shadow-sm hover:shadow-md transition p-3 md:p-4",
         t.card
       )}
     >
-      {/* 🔽 indicador más pequeño */}
-      <div className={clsx("h-6 w-6 rounded-lg", t.accent)} />
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className={clsx("h-6 w-6 rounded-lg shrink-0", t.accent)} />
+        {badge && (
+          <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border border-amber-200 dark:border-amber-500/40">
+            {badge}
+          </span>
+        )}
+      </div>
       <div>
         <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
           {label}
         </p>
-        {/* 🔽 número menos gigante */}
         <p className="mt-1 text-2xl md:text-3xl font-bold text-default">{value}</p>
       </div>
     </div>

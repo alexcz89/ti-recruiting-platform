@@ -21,6 +21,7 @@ type SearchParams = {
   sort?: "title" | "total" | "pending" | "createdAt" | "status";
   dir?: "asc" | "desc";
   status?: "ALL" | "OPEN" | "PAUSED" | "CLOSED";
+  filter?: "pending" | "no-applications"; // 🆕 Filtros especiales
 };
 
 const DATE_WINDOWS: Array<{ value: NonNullable<SearchParams["date"]>; label: string; days?: number }> =
@@ -42,6 +43,7 @@ function toggleSortLink(sp: SearchParams, field: NonNullable<SearchParams["sort"
     status: sp.status || "OPEN",
     sort: field,
     dir: nextDir || "asc",
+    ...(sp.filter && { filter: sp.filter }),
   });
   return `/dashboard/jobs?${p.toString()}`;
 }
@@ -76,15 +78,16 @@ export default async function JobsPage({
   }
 
   // Normaliza filtros
-  const sp: Required<Pick<SearchParams, "title" | "location" | "date" | "sort" | "dir" | "status">> =
-    {
-      title: (searchParams.title || "").trim(),
-      location: (searchParams.location || "").trim(),
-      date: (searchParams.date as any) || "any",
-      sort: (searchParams.sort as any) || "createdAt",
-      dir: (searchParams.dir as any) || "desc",
-      status: (searchParams.status as any) || "OPEN",
-    };
+  const sp: Required<Pick<SearchParams, "title" | "location" | "date" | "sort" | "dir" | "status">> &
+    Pick<SearchParams, "filter"> = {
+    title: (searchParams.title || "").trim(),
+    location: (searchParams.location || "").trim(),
+    date: (searchParams.date as any) || "any",
+    sort: (searchParams.sort as any) || "createdAt",
+    dir: (searchParams.dir as any) || "desc",
+    status: (searchParams.status as any) || "OPEN",
+    filter: searchParams.filter,
+  };
 
   // Fecha desde (si aplica)
   let createdAtGte: Date | undefined = undefined;
@@ -128,7 +131,7 @@ export default async function JobsPage({
   if (createdAtGte) where.createdAt = { gte: createdAtGte };
 
   // Cargamos jobs del reclutador/empresa
-  const jobs = await prisma.job.findMany({
+  let jobs = await prisma.job.findMany({
     where,
     orderBy: { updatedAt: "desc" },
     select: {
@@ -150,6 +153,19 @@ export default async function JobsPage({
   });
   const pendingMap = new Map<string, number>();
   for (const row of byJobPending) pendingMap.set(row.jobId, row._count._all);
+
+  // 🆕 Aplicar filtros especiales
+  if (sp.filter === "pending") {
+    // Solo vacantes con candidatos pendientes
+    jobs = jobs.filter((j) => (pendingMap.get(j.id) || 0) > 0);
+  } else if (sp.filter === "no-applications") {
+    // Solo vacantes sin postulaciones creadas hace más de 15 días
+    const d15 = 15 * 24 * 60 * 60 * 1000;
+    const cutoffDate = new Date(Date.now() - d15);
+    jobs = jobs.filter(
+      (j) => j._count.applications === 0 && new Date(j.createdAt) < cutoffDate
+    );
+  }
 
   // Opciones para selects (todas las vacantes)
   const titleOptions = Array.from(new Set(allJobs.map((j) => j.title))).sort((a, b) =>
@@ -179,6 +195,14 @@ export default async function JobsPage({
     }
   });
 
+  // 🆕 Badge de filtro activo
+  const activeFilterLabel =
+    sp.filter === "pending"
+      ? "Con candidatos por revisar"
+      : sp.filter === "no-applications"
+      ? "Sin postulaciones (>15 días)"
+      : null;
+
   return (
     <main className="max-w-none p-0">
       <div className="mx-auto max-w-[1600px] px-6 lg:px-10 py-8 space-y-8">
@@ -188,9 +212,23 @@ export default async function JobsPage({
             <p className="text-[11px] tracking-[0.18em] uppercase text-zinc-500 dark:text-zinc-400">
               Panel de reclutador
             </p>
-            <h1 className="text-3xl font-bold leading-tight text-zinc-900 dark:text-zinc-50">
-              Vacantes
-            </h1>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold leading-tight text-zinc-900 dark:text-zinc-50">
+                Vacantes
+              </h1>
+              {activeFilterLabel && (
+                <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-500/40 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
+                  🔍 {activeFilterLabel}
+                  <Link
+                    href="/dashboard/jobs"
+                    className="hover:underline"
+                    title="Quitar filtro"
+                  >
+                    ✕
+                  </Link>
+                </span>
+              )}
+            </div>
             <p className="text-sm text-zinc-600 dark:text-zinc-300">
               Gestiona y monitorea tus vacantes en Bolsa TI.
             </p>
@@ -225,19 +263,32 @@ export default async function JobsPage({
         {sorted.length === 0 ? (
           <div className="rounded-2xl border border-dashed glass-card p-8 text-center">
             <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              No hay vacantes con esos filtros
+              {activeFilterLabel
+                ? `No hay vacantes ${activeFilterLabel.toLowerCase()}`
+                : "No hay vacantes con esos filtros"}
             </p>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              Ajusta los filtros o crea una nueva vacante.
+              {activeFilterLabel ? (
+                <>
+                  <Link href="/dashboard/jobs" className="text-blue-600 hover:underline">
+                    Quitar filtro
+                  </Link>{" "}
+                  o ajusta los criterios.
+                </>
+              ) : (
+                "Ajusta los filtros o crea una nueva vacante."
+              )}
             </p>
-            <div className="mt-4">
-              <Link
-                href="/dashboard/jobs/new"
-                className="text-sm border rounded-full px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-900"
-              >
-                Publicar vacante
-              </Link>
-            </div>
+            {!activeFilterLabel && (
+              <div className="mt-4">
+                <Link
+                  href="/dashboard/jobs/new"
+                  className="text-sm border rounded-full px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-900"
+                >
+                  Publicar vacante
+                </Link>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-2xl border glass-card p-0">
@@ -341,6 +392,7 @@ export default async function JobsPage({
               <span>
                 Mostrando <strong>{sorted.length}</strong> vacante
                 {sorted.length === 1 ? "" : "s"}
+                {activeFilterLabel && ` (${activeFilterLabel.toLowerCase()})`}
               </span>
               <span>Página 1 / 1</span>
             </div>

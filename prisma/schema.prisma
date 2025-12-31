@@ -123,6 +123,53 @@ enum InvoiceStatus {
   ERROR        // Error al timbrar o al comunicarse con el PAC
 }
 
+// =========================
+// ASSESSMENT SYSTEM
+// =========================
+
+enum AssessmentType {
+  MCQ
+  CODING
+  MIXED
+}
+
+enum AssessmentDifficulty {
+  JUNIOR
+  MID
+  SENIOR
+}
+
+enum AttemptStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  EVALUATED
+}
+
+// ✅ NUEVO: status para invitaciones (enviar evaluación por candidato)
+enum AssessmentInviteStatus {
+  SENT
+  STARTED
+  SUBMITTED
+  EVALUATED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  TRIALING
+}
+
+enum RecruiterStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// =========================
+
 model Invoice {
   id        String   @id @default(cuid())
 
@@ -181,23 +228,23 @@ model Company {
   billingPlan BillingPlan @default(FREE)
 
   // ✅ Datos fiscales para CFDI (facturación)
-  taxLegalName    String?       // Razón social
-  taxRfc          String? @db.VarChar(13)
-  taxRegime       String? @db.VarChar(3)   // Código de régimen (ej. "601", "612", etc.)
-  taxZip          String? @db.VarChar(5)   // C.P. domicilio fiscal
-  taxAddressLine1 String?                 // Calle y número
-  taxAddressLine2 String?                 // Colonia / interior / detalles
-  taxEmail        String?                 // Correo para envío de CFDI
-  cfdiUseDefault  String? @db.VarChar(5)  // Uso CFDI preferido (ej. "G03")
+  taxLegalName     String?       // Razón social
+  taxRfc           String? @db.VarChar(13)
+  taxRegime        String? @db.VarChar(3)   // Código de régimen (ej. "601", "612", etc.)
+  taxZip           String? @db.VarChar(5)   // C.P. domicilio fiscal
+  taxAddressLine1  String?                 // Calle y número
+  taxAddressLine2  String?                 // Colonia / interior / detalles
+  taxEmail         String?                 // Correo para envío de CFDI
+  cfdiUseDefault   String? @db.VarChar(5)  // Uso CFDI preferido (ej. "G03")
   taxDataCompleted Boolean @default(false)
 
-  users     User[]
-  jobs      Job[]
+  users User[]
+  jobs  Job[]
   // 👇 back-relation para plantillas
   templates JobTemplate[] @relation("CompanyTemplates")
 
   // 👇 back-relation con facturas CFDI
-  invoices  Invoice[]
+  invoices Invoice[]
 
   createdAt DateTime @default(now())
 }
@@ -218,7 +265,7 @@ model User {
   emailVerified DateTime?
 
   applications Application[]
-  jobs         Job[]         @relation("PostedJobs")
+  jobs         Job[] @relation("PostedJobs")
 
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
@@ -269,6 +316,13 @@ model User {
   // 👇 NUEVO: versiones de CV guardadas
   resumes Resume[]
 
+  // 👇 NUEVO: assessment attempts
+  assessmentAttempts AssessmentAttempt[]
+
+  // 👇 NUEVO: invites de assessments
+  assessmentInvitesReceived AssessmentInvite[] @relation("AssessmentInviteCandidate")
+  assessmentInvitesSent     AssessmentInvite[] @relation("AssessmentInviteInvitedBy")
+
   @@index([locationLat, locationLng])
   @@index([country])
   @@index([country, admin1])
@@ -279,16 +333,16 @@ model User {
 
 // =========================
 model WorkExperience {
-  id        String    @id @default(cuid())
-  userId    String
-  role      String
-  company   String
-  startDate DateTime
-  endDate   DateTime?
-  isCurrent Boolean   @default(false)
+  id          String   @id @default(cuid())
+  userId      String
+  role        String
+  company     String
+  startDate   DateTime
+  endDate     DateTime?
+  isCurrent   Boolean  @default(false)
   description String?  // 1 bullet por línea, texto plano
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -357,11 +411,11 @@ model Job {
 
   // Publicación
   employmentType EmploymentType
-  seniority      Seniority?       // 👈 NUEVO (lo usa tu seed.ts)
-  description    String   @db.Text
-  descriptionHtml  String?   @db.Text
-  schedule       String?  // ej. "L-V 9:00–18:00"
-  publishAt      DateTime? // publicación programada
+  seniority      Seniority? // 👈 NUEVO (lo usa tu seed.ts)
+  description    String     @db.Text
+  descriptionHtml String?   @db.Text
+  schedule       String?    // ej. "L-V 9:00–18:00"
+  publishAt      DateTime?  // publicación programada
 
   // Lista simple y relación catálogo
   skills         String[]
@@ -398,10 +452,16 @@ model Job {
 
   // Reclutador que publicó
   recruiterId String?
-  recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id])
+  recruiter   User? @relation("PostedJobs", fields: [recruiterId], references: [id])
 
   // Relaciones
   applications Application[]
+
+  // 👇 NUEVO: assessments
+  assessments JobAssessment[]
+
+  // 👇 NUEVO: invites enviados para esta vacante
+  assessmentInvites AssessmentInvite[]
 
   @@index([companyId])
   @@index([title])
@@ -426,10 +486,11 @@ model Application {
   coverLetter String?
   status      ApplicationStatus @default(SUBMITTED)
   createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @default(now()) @updatedAt
 
   // Lógica de rechazo diferido
   rejectedAt         DateTime?
-  rejectionEmailSent Boolean   @default(false)
+  rejectionEmailSent Boolean @default(false)
 
   // Interés/estado del reclutador
   recruiterInterest ApplicationInterest @default(REVIEW)
@@ -438,6 +499,12 @@ model Application {
   job       Job  @relation(fields: [jobId], references: [id])
 
   messages Message[]
+
+  // 👇 NUEVO: assessments
+  assessmentAttempts AssessmentAttempt[]
+
+  // 👇 NUEVO: invites (enviar evaluación por postulación)
+  assessmentInvites AssessmentInvite[]
 
   @@unique([candidateId, jobId])
   @@index([status, createdAt])
@@ -481,15 +548,8 @@ model Subscription {
   updatedAt DateTime @updatedAt
 }
 
-enum SubscriptionStatus {
-  ACTIVE
-  PAST_DUE
-  CANCELED
-  TRIALING
-}
-
 // =========================
-// Plantillas de vacante (para “Usar vacante anterior”)
+// Plantillas de vacante (para "Usar vacante anterior")
 // =========================
 model JobTemplate {
   id String @id @default(cuid())
@@ -506,7 +566,7 @@ model JobTemplate {
 
   // (Opcional) quién la creó
   creatorId String?
-  creator   User?   @relation(fields: [creatorId], references: [id], name: "UserCreatedTemplates")
+  creator   User? @relation(fields: [creatorId], references: [id], name: "UserCreatedTemplates")
 
   @@index([companyId, updatedAt])
   @@index([lastUsedAt])
@@ -529,11 +589,6 @@ model CodexEntry {
 }
 
 // =========================
-enum RecruiterStatus {
-  PENDING
-  APPROVED
-  REJECTED
-}
 
 model RecruiterProfile {
   id        String          @id @default(cuid())
@@ -638,7 +693,7 @@ model CandidateLanguage {
 
 // =========================
 model CandidateCredential {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   userId       String
   termId       String
   issuer       String?
@@ -668,4 +723,237 @@ model Resume {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// =========================================================
+// ASSESSMENT SYSTEM
+// =========================================================
+
+model AssessmentTemplate {
+  id          String  @id @default(cuid())
+  title       String
+  slug        String  @unique
+  description String? @db.Text
+
+  type       AssessmentType
+  difficulty AssessmentDifficulty
+
+  totalQuestions Int
+  passingScore   Int
+  timeLimit      Int
+
+  sections Json
+
+  allowRetry       Boolean @default(false)
+  maxAttempts      Int     @default(1)
+  shuffleQuestions Boolean @default(true)
+  penalizeWrong    Boolean @default(false)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  questions        AssessmentQuestion[]
+  codingChallenges CodingChallenge[]
+  jobAssessments   JobAssessment[]
+  attempts         AssessmentAttempt[]
+
+  // 👇 NUEVO: invites por template
+  invites AssessmentInvite[]
+
+  @@index([slug])
+  @@index([type, difficulty])
+}
+
+model AssessmentQuestion {
+  id         String @id @default(cuid())
+  templateId String
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  section    String
+  difficulty AssessmentDifficulty
+  tags       String[]
+
+  questionText String  @db.Text
+  codeSnippet  String? @db.Text
+
+  options        Json
+  allowMultiple  Boolean @default(false)
+  explanation    String? @db.Text
+  isActive       Boolean  @default(true)
+  timesUsed      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  answers AttemptAnswer[]
+
+  @@index([templateId, section])
+}
+
+model CodingChallenge {
+  id         String @id @default(cuid())
+  templateId String
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String @db.Text
+  difficulty  AssessmentDifficulty
+  timeLimit   Int
+
+  instructions String @db.Text
+  starterCode  String @db.Text
+
+  inputFiles Json
+  testCases  Json
+
+  language    String
+  allowedLibs String[]
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  submissions CodingSubmission[]
+
+  @@index([templateId])
+}
+
+model JobAssessment {
+  id    String @id @default(cuid())
+  jobId String
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  templateId String
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id])
+
+  isRequired Boolean @default(true)
+  minScore   Int?
+  triggerAt  String @default("AFTER_APPLY")
+
+  createdAt DateTime @default(now())
+
+  @@unique([jobId, templateId])
+  @@index([jobId])
+}
+
+model AssessmentAttempt {
+  id String @id @default(cuid())
+
+  candidateId String
+  candidate   User   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  templateId String
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id])
+
+  applicationId String?
+  application   Application? @relation(fields: [applicationId], references: [id])
+
+  status        AttemptStatus @default(NOT_STARTED)
+  attemptNumber Int          @default(1)
+
+  startedAt   DateTime?
+  submittedAt DateTime?
+  expiresAt   DateTime?
+  timeSpent   Int?
+
+  totalScore    Int?
+  sectionScores Json?
+  passed        Boolean?
+
+  flagsJson  Json?
+  ipAddress  String?
+  userAgent  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers          AttemptAnswer[]
+  codingSubmissions CodingSubmission[]
+
+  @@index([candidateId, status])
+  @@index([applicationId])
+  @@index([templateId, status])
+}
+
+// ✅ NUEVO: invitación para enviar evaluación a un candidato específico (por aplicación)
+model AssessmentInvite {
+  id     String               @id @default(cuid())
+  token  String               @unique
+  status AssessmentInviteStatus @default(SENT)
+
+  applicationId String
+  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  jobId String
+  job   Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  candidateId String
+  candidate   User         @relation("AssessmentInviteCandidate", fields: [candidateId], references: [id], onDelete: Cascade)
+
+  templateId String
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  invitedById String?
+  invitedBy   User?        @relation("AssessmentInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime?
+
+  @@index([applicationId])
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([templateId])
+}
+
+model AttemptAnswer {
+  id String @id @default(cuid())
+
+  attemptId String
+  attempt   AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  questionId String
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id])
+
+  selectedOptions String[]
+
+  isCorrect    Boolean?
+  pointsEarned Float?
+  timeSpent    Int?
+
+  answeredAt DateTime @default(now())
+
+  @@unique([attemptId, questionId])
+  @@index([attemptId])
+  @@index([questionId])
+}
+
+model CodingSubmission {
+  id String @id @default(cuid())
+
+  attemptId String
+  attempt   AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  challengeId String
+  challenge   CodingChallenge @relation(fields: [challengeId], references: [id])
+
+  code     String @db.Text
+  language String
+
+  testResults Json?
+  autoScore   Int?
+
+  manualScores Json?
+  manualScore  Int?
+  finalScore   Int?
+
+  feedback   String? @db.Text
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  submittedAt DateTime @default(now())
+
+  @@index([attemptId])
+  @@index([challengeId])
 }

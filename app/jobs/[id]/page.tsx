@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getSessionCompanyId } from "@/lib/session";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
+import AssessmentRequirement from "./AssessmentRequirement";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -31,8 +32,8 @@ export async function generateMetadata({ params }: Params) {
     select: {
       id: true,
       title: true,
-      description: true,      // plain
-      descriptionHtml: true,  // HTML con bullets/listas
+      description: true,
+      descriptionHtml: true,
       company: { select: { name: true } },
       location: true,
     },
@@ -40,13 +41,9 @@ export async function generateMetadata({ params }: Params) {
 
   if (!job) return {};
 
-  const title = `${job.title} ${
-    job.company?.name ? "— " + job.company.name : ""
-  }`;
+  const title = `${job.title} ${job.company?.name ? "— " + job.company.name : ""}`;
 
-  // Preferimos HTML si existe, pero lo convertimos a texto plano para SEO
-  const baseDescription =
-    job.description || stripHtml(job.descriptionHtml || "");
+  const baseDescription = job.description || stripHtml(job.descriptionHtml || "");
   const description = excerpt(baseDescription, 160);
 
   const url = `${
@@ -57,22 +54,21 @@ export async function generateMetadata({ params }: Params) {
     title,
     description,
     alternates: { canonical: url },
-    openGraph: {
-      title,
-      description,
-      url,
-      type: "website",
-    },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-    },
+    openGraph: { title, description, url, type: "website" },
+    twitter: { card: "summary", title, description },
   };
 }
 
 export default async function JobDetail({ params }: Params) {
-  // 1) Cargar la vacante
+  // 1) Sesión y rol
+  const session = await getServerSession(authOptions);
+  const user = (session?.user as any) || null;
+
+  const role =
+    (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
+  const isCandidate = role === "CANDIDATE";
+
+  // 2) Cargar vacante + assessment requerido (si existe)
   const job = await prisma.job.findUnique({
     where: { id: params.id },
     select: {
@@ -81,8 +77,8 @@ export default async function JobDetail({ params }: Params) {
       location: true,
       employmentType: true,
       remote: true,
-      description: true,      // plain
-      descriptionHtml: true,  // HTML con bullets/listas
+      description: true,
+      descriptionHtml: true,
       skills: true,
       salaryMin: true,
       salaryMax: true,
@@ -92,23 +88,44 @@ export default async function JobDetail({ params }: Params) {
       companyId: true,
       company: { select: { name: true } },
       status: true,
+
+      // 👇 assessment requerido (solo 1 por ahora)
+      assessments: {
+        where: { isRequired: true },
+        orderBy: { createdAt: "asc" }, // ✅ determinístico
+        take: 1,
+        select: {
+          id: true,
+          isRequired: true,
+          minScore: true,
+          templateId: true,
+          template: {
+            select: {
+              id: true,
+              title: true,
+              difficulty: true,
+              totalQuestions: true,
+              timeLimit: true,
+              passingScore: true,
+            },
+          },
+        },
+      },
     },
   });
+
   if (!job) notFound();
-  // Si quieres ocultar no abiertas:
   // if (job.status !== "OPEN") notFound();
 
-  // 2) Sesión y permisos
-  const session = await getServerSession(authOptions);
-  const role = (session?.user as any)?.role as
-    | "CANDIDATE"
-    | "RECRUITER"
-    | "ADMIN"
-    | undefined;
+  // ✅ Log temporal para detectar si trae assessment requerido
+  console.log("[PUBLIC JOB]", {
+    jobId: job?.id,
+    requiredAssessmentsCount: job?.assessments?.length ?? 0,
+    requiredAssessmentTemplateId: job?.assessments?.[0]?.templateId ?? null,
+    requiredAssessmentTitle: job?.assessments?.[0]?.template?.title ?? null,
+  });
 
-  const isCandidate = role === "CANDIDATE";
-
-  // Recruiter/Admin: solo pueden ver si es SU empresa
+  // 3) Permisos recruiter/admin: solo su empresa
   let canEdit = false;
   if (role === "RECRUITER" || role === "ADMIN") {
     const myCompanyId = await getSessionCompanyId().catch(() => null);
@@ -118,7 +135,28 @@ export default async function JobDetail({ params }: Params) {
     canEdit = true;
   }
 
-  // 3) Adaptar shape que consume el panel
+  // 4) Intento del candidato (solo si está logueado como candidato y hay assessment)
+  const requiredAssessment = job.assessments?.[0] ?? null;
+
+  const userAttempt =
+    isCandidate && user?.id && requiredAssessment?.templateId
+      ? await prisma.assessmentAttempt.findFirst({
+          where: {
+            candidateId: user.id,
+            templateId: requiredAssessment.templateId,
+            status: { in: ["SUBMITTED", "EVALUATED"] },
+          },
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            status: true,
+            totalScore: true,
+            passed: true,
+          },
+        })
+      : null;
+
+  // 5) Shape para JobDetailPanel
   const panelJob = {
     id: job.id,
     title: job.title,
@@ -126,9 +164,7 @@ export default async function JobDetail({ params }: Params) {
     location: job.location,
     remote: job.remote,
     employmentType: job.employmentType,
-    // plain text (legacy, por si algo lo sigue usando)
     description: job.description,
-    // HTML con bullets/listas
     descriptionHtml: job.descriptionHtml,
     skills: job.skills ?? [],
     salaryMin: job.salaryMin ?? null,
@@ -138,8 +174,7 @@ export default async function JobDetail({ params }: Params) {
     updatedAt: job.updatedAt,
   };
 
-  // 4) JSON-LD (JobPosting) básico para SEO
-  //    Usamos HTML si existe; si no, caemos al texto plano con <br/>
+  // 6) JSON-LD
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "JobPosting",
@@ -161,41 +196,31 @@ export default async function JobDetail({ params }: Params) {
             },
           },
         ],
-    // Preferir HTML guardado desde el wizard
-    description:
-      job.descriptionHtml ||
-      (job.description || "").replace(/\n/g, "<br/>"),
+    description: job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
-    validThrough: undefined,
     employmentType: job.employmentType,
     identifier: {
       "@type": "PropertyValue",
       name: job.company?.name ?? "Confidencial",
       value: job.id,
     },
-    baseSalary:
-      job.salaryMin != null || job.salaryMax != null
-        ? {
-            "@type": "MonetaryAmount",
-            currency: job.currency || "MXN",
-            value: {
-              "@type": "QuantitativeValue",
-              minValue: job.salaryMin ?? undefined,
-              maxValue: job.salaryMax ?? undefined,
-              unitText: "MONTH", // ajusta si tu sueldo es mensual, anual, etc.
-            },
-          }
-        : undefined,
   };
 
   return (
-    <main className="max-w-[1100px] xl:max-w-[1200px] mx-auto px-6 lg:px-10 py-8">
-      {/* JSON-LD para SEO */}
+    <main className="max-w-[1100px] xl:max-w-[1200px] mx-auto px-6 lg:px-10 py-8 space-y-6">
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
+      {/* ✅ Badge / bloque de evaluación requerida */}
+      {requiredAssessment && (
+        <AssessmentRequirement
+          assessment={requiredAssessment as any}
+          userAttempt={userAttempt as any}
+        />
+      )}
 
       <JobDetailPanel
         job={panelJob as any}
