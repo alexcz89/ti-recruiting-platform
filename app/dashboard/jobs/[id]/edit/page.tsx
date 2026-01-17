@@ -362,8 +362,6 @@ export default async function EditJobPage({ params }: PageProps) {
         locationLng,
         recruiter: { connect: { id: (s.user as any)?.id } },
         ...(companyConnect ? { company: companyConnect } : {}),
-        // si en tu schema tienes un campo JSON para idiomas, aquí podrías guardar:
-        // languagesJson: languagesArr,
       },
     });
 
@@ -373,22 +371,27 @@ export default async function EditJobPage({ params }: PageProps) {
   }
 
   return (
-    <main className="max-w-4xl p-6 space-y-6" key={`edit-${job.id}`}>
-      <h2 className="text-2xl font-bold">Editar vacante</h2>
-      <p className="text-sm text-zinc-600 mb-4">
-        Modifica los campos necesarios y guarda los cambios.
-      </p>
+    <main className="w-full max-w-none p-0" key={`edit-${job.id}`}>
+      {/* Container ancho (igual idea que /new) para evitar que el wizard quede “aplastado” */}
+      <div className="mx-auto w-full max-w-[1200px] px-6 lg:px-10 py-8 space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold">Editar vacante</h2>
+          <p className="text-sm text-zinc-600 mt-1">
+            Modifica los campos necesarios y guarda los cambios.
+          </p>
+        </div>
 
-      <JobWizard
-        onSubmit={updateAction}
-        presetCompany={{
-          id: userCompany?.id ?? null,
-          name: userCompany?.name ?? null,
-        }}
-        skillsOptions={skillsOptions}
-        certOptions={certOptions}
-        initial={wizardInitial as any}
-      />
+        <JobWizard
+          onSubmit={updateAction}
+          presetCompany={{
+            id: userCompany?.id ?? null,
+            name: userCompany?.name ?? null,
+          }}
+          skillsOptions={skillsOptions}
+          certOptions={certOptions}
+          initial={wizardInitial as any}
+        />
+      </div>
     </main>
   );
 }

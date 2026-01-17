@@ -1,12 +1,12 @@
 // app/layout.tsx
 import "./globals.css";
-import "react-phone-input-2/lib/style.css"; // ⬅️ CSS base de react-phone-input-2
+import "react-phone-input-2/lib/style.css";
 
 import { Inter } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider";
-import { Toaster } from "sonner"; // ⬅️ AGREGADO
+import { Toaster } from "sonner";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,22 +17,12 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="es"
-      suppressHydrationWarning
-      className={`${inter.className} h-full`}
-    >
+    <html lang="es" suppressHydrationWarning className={`${inter.className} h-full`}>
       <head>
         <ThemeScript />
       </head>
 
-      <body
-        className="
-          min-h-screen antialiased 
-          bg-gradient-to-b from-white via-zinc-50 to-zinc-100 text-zinc-800
-          dark:bg-gradient-to-b dark:from-[#041B1F] dark:via-[#06262C] dark:to-[#082B33] dark:text-zinc-100
-        "
-      >
+      <body className="min-h-screen antialiased bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
         <Providers>
           <Header />
 
@@ -47,7 +37,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             © {new Date().getFullYear()} Bolsa TI. Todos los derechos reservados.
           </footer>
 
-          {/* ⬅️ AGREGADO: Toaster para notificaciones */}
           <Toaster position="top-right" richColors />
         </Providers>
       </body>

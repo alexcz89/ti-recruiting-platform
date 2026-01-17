@@ -1,7 +1,7 @@
 // app/assessments/[templateId]/page.tsx
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import AssessmentIntro from './AssessmentIntro';
@@ -10,13 +10,21 @@ import AssessmentProgress from './AssessmentProgress';
 import AssessmentTimer from './AssessmentTimer';
 import { useAntiCheating } from './useAntiCheating';
 
+type Option = {
+  id?: string;
+  value?: string;
+  text?: string;
+  label?: string; // por si algún template usa label
+  [k: string]: any;
+};
+
 type Question = {
   id: string;
   section: string;
   difficulty: string;
   questionText: string;
   codeSnippet?: string;
-  options: Array<{ id: string; text: string }>;
+  options: Option[];
   allowMultiple: boolean;
 };
 
@@ -30,6 +38,40 @@ type AttemptState = {
   currentIndex?: number;
 };
 
+type StartResponse = {
+  attemptId: string;
+  expiresAt?: string | Date | null;
+  reused?: boolean;
+  questions: Question[];
+  savedAnswers?: Record<string, string[]>;
+  savedTimeSpent?: Record<string, number>;
+};
+
+function keyOfOption(o: any) {
+  return String(o?.id ?? o?.value ?? JSON.stringify(o));
+}
+
+function normalizeQuestions(raw: any[]): Question[] {
+  const qs = Array.isArray(raw) ? raw : [];
+  return qs.map((q: any) => {
+    const opts = Array.isArray(q?.options) ? q.options : [];
+    return {
+      id: String(q.id),
+      section: String(q.section ?? ''),
+      difficulty: String(q.difficulty ?? ''),
+      questionText: String(q.questionText ?? ''),
+      codeSnippet: q.codeSnippet ? String(q.codeSnippet) : undefined,
+      allowMultiple: Boolean(q.allowMultiple),
+      options: opts.map((o: any) => ({
+        ...o,
+        id: o?.id != null ? String(o.id) : undefined,
+        value: o?.value != null ? String(o.value) : undefined,
+        text: o?.text != null ? String(o.text) : o?.label != null ? String(o.label) : undefined,
+      })),
+    };
+  });
+}
+
 export default function AssessmentPage() {
   const params = useParams();
   const router = useRouter();
@@ -37,11 +79,8 @@ export default function AssessmentPage() {
 
   const templateId = params.templateId as string;
 
-  // invite flow (from URL)
   const inviteToken = searchParams.get('token');
   const applicationIdQS = searchParams.get('applicationId');
-
-  // ✅ resume flow (from URL)
   const attemptIdQS = searchParams.get('attemptId');
 
   const [loading, setLoading] = useState(true);
@@ -52,14 +91,15 @@ export default function AssessmentPage() {
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [timeSpent, setTimeSpent] = useState<Record<string, number>>({});
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
+
   const [submitting, setSubmitting] = useState(false);
   const [expired, setExpired] = useState(false);
 
-  // Persistir en qué pregunta va (para que refresh no “reinicie” la UI)
-  const lastHydratedAttemptIdRef = useRef<string | null>(null);
+  const lastIndexHydratedAttemptIdRef = useRef<string | null>(null);
   const autoStartOnceRef = useRef(false);
 
   useAntiCheating({
@@ -68,7 +108,29 @@ export default function AssessmentPage() {
     maxTabSwitches: 5,
   });
 
-  // Cargar template
+  const total = questions.length;
+
+  const handleExpire = () => {
+    setExpired((prev) => {
+      if (prev) return prev;
+      toast.error('⏰ Tiempo expirado. Ya no puedes responder.');
+      return true;
+    });
+  };
+
+  const isAnsweredId = (qid?: string) => {
+    if (!qid) return false;
+    const a = answers[qid];
+    return Array.isArray(a) && a.length > 0;
+  };
+
+  const answeredCount = useMemo(() => {
+    return Object.values(answers).reduce(
+      (acc, arr) => acc + (Array.isArray(arr) && arr.length > 0 ? 1 : 0),
+      0
+    );
+  }, [answers]);
+
   useEffect(() => {
     async function loadTemplate() {
       try {
@@ -77,7 +139,6 @@ export default function AssessmentPage() {
         const data = await res.json();
         setTemplate(data.template);
 
-        // ✅ si vienes por invitación o por resume (attemptId), NO bloquees aquí
         if (!data.userStatus.canStart && !inviteToken && !attemptIdQS) {
           toast.error('Ya completaste esta evaluación');
           router.push('/dashboard');
@@ -93,38 +154,6 @@ export default function AssessmentPage() {
     loadTemplate();
   }, [templateId, router, inviteToken, attemptIdQS]);
 
-  // Restore currentIndex desde localStorage (solo una vez por attempt)
-  useEffect(() => {
-    if (!attemptId || questions.length === 0) return;
-
-    if (lastHydratedAttemptIdRef.current === attemptId) return;
-    lastHydratedAttemptIdRef.current = attemptId;
-
-    const key = `assessment:${attemptId}:currentIndex`;
-    const raw = localStorage.getItem(key);
-    if (raw == null) return;
-
-    const n = parseInt(raw, 10);
-    if (Number.isNaN(n)) return;
-
-    const clamped = Math.max(0, Math.min(n, questions.length - 1));
-    setCurrentIndex(clamped);
-  }, [attemptId, questions.length]);
-
-  useEffect(() => {
-    if (!attemptId) return;
-    const key = `assessment:${attemptId}:currentIndex`;
-    localStorage.setItem(key, String(currentIndex));
-  }, [attemptId, currentIndex]);
-
-  const handleExpire = () => {
-    setExpired((prev) => {
-      if (prev) return prev;
-      toast.error('⏰ Tiempo expirado. Ya no puedes responder.');
-      return true;
-    });
-  };
-
   function firstUnansweredIndex(qs: Question[], a: Record<string, string[]>) {
     const idx = qs.findIndex((q) => {
       const ans = a[q.id];
@@ -133,15 +162,36 @@ export default function AssessmentPage() {
     return idx === -1 ? 0 : idx;
   }
 
+  // Restore currentIndex desde localStorage (solo una vez por attempt)
+  useEffect(() => {
+    if (!attemptId || total === 0) return;
+    if (lastIndexHydratedAttemptIdRef.current === attemptId) return;
+    lastIndexHydratedAttemptIdRef.current = attemptId;
+
+    const key = `assessment:${attemptId}:currentIndex`;
+    const raw = localStorage.getItem(key);
+    if (raw == null) return;
+
+    const n = parseInt(raw, 10);
+    if (Number.isNaN(n)) return;
+
+    const clamped = Math.max(0, Math.min(n, total - 1));
+    setCurrentIndex(clamped);
+  }, [attemptId, total]);
+
+  useEffect(() => {
+    if (!attemptId) return;
+    const key = `assessment:${attemptId}:currentIndex`;
+    localStorage.setItem(key, String(currentIndex));
+  }, [attemptId, currentIndex]);
+
   async function hydrateFromState(tryAttemptId: string, qs: Question[]) {
     const res = await fetch(`/api/assessments/attempts/${tryAttemptId}/state`, {
       method: 'GET',
       cache: 'no-store',
     });
 
-    if (!res.ok) {
-      throw new Error(`state_not_ok_${res.status}`);
-    }
+    if (!res.ok) throw new Error(`state_not_ok_${res.status}`);
 
     const st = (await res.json()) as AttemptState;
 
@@ -155,7 +205,7 @@ export default function AssessmentPage() {
     if (st.expired) handleExpire();
 
     if (typeof st.currentIndex === 'number') {
-      const clamped = Math.max(0, Math.min(st.currentIndex, qs.length - 1));
+      const clamped = Math.max(0, Math.min(st.currentIndex, Math.max(0, qs.length - 1)));
       setCurrentIndex(clamped);
     } else {
       setCurrentIndex(firstUnansweredIndex(qs, savedAnswers));
@@ -173,18 +223,20 @@ export default function AssessmentPage() {
         body: JSON.stringify({
           token: inviteToken || undefined,
           applicationId: applicationIdQS || undefined,
+          attemptId: attemptIdQS || undefined, // reanudar exacto si viene de Mis Evaluaciones
         }),
       });
 
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as StartResponse;
 
       if (!res.ok) {
-        const msg = data?.error || 'Error al iniciar';
+        const msg = (data as any)?.error || 'Error al iniciar';
         throw new Error(msg);
       }
 
-      const newAttemptId = data.attemptId as string;
-      const qs = (data.questions || []) as Question[];
+      const newAttemptId = data.attemptId;
+      const qs = normalizeQuestions((data as any).questions);
+      if (!qs.length) throw new Error('Respuesta inválida de /start (sin questions)');
 
       setAttemptId(newAttemptId);
       setQuestions(qs);
@@ -194,41 +246,27 @@ export default function AssessmentPage() {
 
       if (data.expiresAt) setExpiresAt(new Date(data.expiresAt));
 
-      // ✅ Persist attemptId en URL para que refresh pueda reanudar (sin token)
-      // Mantiene token/applicationId si vienen.
+      // Persist attemptId en URL para refresh
       const next = new URLSearchParams(searchParams.toString());
       next.set('attemptId', newAttemptId);
       router.replace(`/assessments/${templateId}?${next.toString()}`);
 
-      // 1) Si /start regresa savedAnswers/savedTimeSpent y NO está vacío, úsalo.
-      const savedAnswers = (data?.savedAnswers ?? null) as Record<string, string[]> | null;
-      const savedTimeSpent = (data?.savedTimeSpent ?? null) as Record<string, number> | null;
+      const savedAnswers = data.savedAnswers ?? null;
+      const savedTimeSpent = data.savedTimeSpent ?? null;
 
       const hasSavedAnswers =
         savedAnswers &&
         typeof savedAnswers === 'object' &&
-        Object.keys(savedAnswers).length > 0;
+        Object.keys(savedAnswers).some((k) => (savedAnswers as any)[k]?.length > 0);
 
       if (hasSavedAnswers) {
         setAnswers(savedAnswers!);
         setTimeSpent(savedTimeSpent || {});
         setCurrentIndex(firstUnansweredIndex(qs, savedAnswers!));
       } else {
-        // 2) Si no, intenta hidratar desde /state:
-        //    - siempre que venga attemptIdQS (resume)
-        //    - o si el backend dijo reused
-        //    - o si no sabemos (mejor intentar)
-        const shouldTryState = Boolean(attemptIdQS) || Boolean(data?.reused) || true;
-
-        if (shouldTryState) {
-          try {
-            await hydrateFromState(newAttemptId, qs);
-          } catch {
-            setAnswers({});
-            setTimeSpent({});
-            setCurrentIndex(0);
-          }
-        } else {
+        try {
+          await hydrateFromState(newAttemptId, qs);
+        } catch {
           setAnswers({});
           setTimeSpent({});
           setCurrentIndex(0);
@@ -244,7 +282,7 @@ export default function AssessmentPage() {
     }
   };
 
-  // ✅ Auto-start si viene token (invite) O attemptId (resume)
+  // Auto-start si viene token (invite) O attemptId (resume)
   useEffect(() => {
     if (autoStartOnceRef.current) return;
     if (loading) return;
@@ -258,27 +296,15 @@ export default function AssessmentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, template, inviteToken, attemptIdQS, started, starting]);
 
-  // ✅ Si vienes con attemptIdQS, hidrata desde /state en cuanto ya tengas questions + attemptId
-  useEffect(() => {
-    if (!attemptIdQS) return;
-    if (!started) return;
-    if (!attemptId) return;
-    if (attemptId !== attemptIdQS) return; // solo si corresponde
-    if (questions.length === 0) return;
-
-    // evitar rehidratar repetido
-    if (lastHydratedAttemptIdRef.current === attemptIdQS) return;
-
-    hydrateFromState(attemptIdQS, questions).catch(() => {
-      // si falla, no tronar UX
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attemptIdQS, started, attemptId, questions.length]);
+  const currentQuestion = questions[currentIndex];
+  const currentAnswer = answers[currentQuestion?.id || ''] || [];
 
   const handleAnswer = async (questionId: string, selectedOptions: string[]) => {
     if (!attemptId || expired) return;
 
-    setAnswers((prev) => ({ ...prev, [questionId]: selectedOptions }));
+    // Guardamos en UI tal cual (keys)
+    const unique = Array.from(new Set(selectedOptions.map((x) => String(x).trim()))).filter(Boolean);
+    setAnswers((prev) => ({ ...prev, [questionId]: unique }));
 
     const questionTime = timeSpent[questionId] || 0;
 
@@ -286,18 +312,12 @@ export default function AssessmentPage() {
       const res = await fetch(`/api/assessments/attempts/${attemptId}/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          questionId,
-          selectedOptions,
-          timeSpent: questionTime,
-        }),
+        body: JSON.stringify({ questionId, selectedOptions: unique, timeSpent: questionTime }),
       });
 
       if (!res.ok && res.status === 400) {
         const data = await res.json().catch(() => null);
-        if (data?.error?.toLowerCase?.().includes('expir')) {
-          handleExpire();
-        }
+        if (data?.error?.toLowerCase?.().includes('expir')) handleExpire();
       }
     } catch (error) {
       console.error('Error saving answer:', error);
@@ -306,22 +326,22 @@ export default function AssessmentPage() {
 
   const handleNext = () => {
     if (expired) return;
-    if (currentIndex < questions.length - 1) setCurrentIndex(currentIndex + 1);
+    if (currentIndex < total - 1) setCurrentIndex((i) => i + 1);
   };
 
   const handlePrevious = () => {
     if (expired) return;
-    if (currentIndex > 0) setCurrentIndex(currentIndex - 1);
+    if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   };
 
   const handleSubmit = async () => {
     if (!attemptId || submitting) return;
 
     if (!expired) {
-      const unanswered = questions.filter((q) => !answers[q.id]);
-      if (unanswered.length > 0) {
+      const unansweredCount = questions.filter((q) => !isAnsweredId(q.id)).length;
+      if (unansweredCount > 0) {
         const confirmed = confirm(
-          `Tienes ${unanswered.length} pregunta(s) sin responder. ¿Deseas enviar de todos modos?`
+          `Tienes ${unansweredCount} pregunta(s) sin responder. ¿Deseas enviar de todos modos?`
         );
         if (!confirmed) return;
       }
@@ -337,8 +357,7 @@ export default function AssessmentPage() {
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         const msg =
-          data?.error ||
-          (expired ? 'Tiempo expirado. No se pudo enviar.' : 'Error al enviar');
+          data?.error || (expired ? 'Tiempo expirado. No se pudo enviar.' : 'Error al enviar');
         throw new Error(msg);
       }
 
@@ -361,9 +380,10 @@ export default function AssessmentPage() {
 
   // Timer para tiempo en pregunta actual
   useEffect(() => {
-    if (!started || expired || !questions[currentIndex]) return;
+    if (!started || expired) return;
+    if (!currentQuestion?.id) return;
 
-    const questionId = questions[currentIndex].id;
+    const questionId = currentQuestion.id;
     const interval = setInterval(() => {
       setTimeSpent((prev) => ({
         ...prev,
@@ -372,7 +392,7 @@ export default function AssessmentPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [started, expired, currentIndex, questions]);
+  }, [started, expired, currentQuestion?.id]);
 
   if (loading) {
     return (
@@ -399,8 +419,20 @@ export default function AssessmentPage() {
     return <AssessmentIntro template={template} onStart={handleStart} />;
   }
 
-  const currentQuestion = questions[currentIndex];
-  const currentAnswer = answers[currentQuestion?.id] || [];
+  if (!currentQuestion) {
+    return (
+      <main className="max-w-none p-0">
+        <div className="mx-auto max-w-[1200px] px-6 lg:px-10 py-8">
+          <div className="flex items-center justify-center py-16">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto"></div>
+              <p className="mt-4 text-muted">Cargando pregunta...</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="max-w-none p-0">
@@ -410,18 +442,14 @@ export default function AssessmentPage() {
             <div>
               <h1 className="text-2xl font-bold text-default">{template.title}</h1>
               <p className="text-sm text-muted">
-                Pregunta {currentIndex + 1} de {questions.length}
+                Pregunta {currentIndex + 1} de {total}
               </p>
             </div>
 
             {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
           </div>
 
-          <AssessmentProgress
-            current={currentIndex + 1}
-            total={questions.length}
-            answered={Object.keys(answers).length}
-          />
+          <AssessmentProgress current={currentIndex + 1} total={total} answered={answeredCount} />
 
           {expired && (
             <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
@@ -431,9 +459,18 @@ export default function AssessmentPage() {
         </div>
 
         <AssessmentQuestion
-          question={currentQuestion}
+          question={{
+            ...currentQuestion,
+            // Importante: el componente usa option.id como “id” visual,
+            // pero la selección real viaja por keyOfOption(option).
+            options: currentQuestion.options.map((o) => ({
+              id: keyOfOption(o),
+              text: String(o.text ?? o.label ?? o.value ?? ''),
+            })),
+          }}
           selectedOptions={currentAnswer}
-          onAnswer={(options) => handleAnswer(currentQuestion.id, options)}
+          onAnswer={(optionKeys) => handleAnswer(currentQuestion.id, optionKeys)}
+          disabled={expired}
         />
 
         <div className="mt-8 flex items-center justify-between gap-4">
@@ -446,12 +483,8 @@ export default function AssessmentPage() {
           </button>
 
           <div className="flex items-center gap-2">
-            {currentIndex === questions.length - 1 ? (
-              <button
-                onClick={handleSubmit}
-                disabled={submitting || expired}
-                className="btn btn-primary"
-              >
+            {currentIndex === total - 1 ? (
+              <button onClick={handleSubmit} disabled={submitting || expired} className="btn btn-primary">
                 {submitting ? 'Enviando...' : 'Enviar evaluación ✓'}
               </button>
             ) : (
@@ -465,25 +498,28 @@ export default function AssessmentPage() {
         <div className="mt-8 p-6 rounded-2xl border glass-card">
           <h3 className="text-sm font-semibold mb-3">Mapa de preguntas</h3>
           <div className="grid grid-cols-10 gap-2">
-            {questions.map((q, idx) => (
-              <button
-                key={q.id}
-                onClick={() => !expired && setCurrentIndex(idx)}
-                className={`
-                  h-10 w-10 rounded-lg text-sm font-medium transition
-                  ${
-                    idx === currentIndex
-                      ? 'bg-emerald-600 text-white'
-                      : answers[q.id]
-                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                      : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
-                  }
-                  ${expired ? 'opacity-60 cursor-not-allowed' : ''}
-                `}
-              >
-                {idx + 1}
-              </button>
-            ))}
+            {questions.map((q, idx) => {
+              const isAnswered = isAnsweredId(q.id);
+              return (
+                <button
+                  key={q.id}
+                  onClick={() => !expired && setCurrentIndex(idx)}
+                  className={`
+                    h-10 w-10 rounded-lg text-sm font-medium transition
+                    ${
+                      idx === currentIndex
+                        ? 'bg-emerald-600 text-white'
+                        : isAnswered
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                        : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                    }
+                    ${expired ? 'opacity-60 cursor-not-allowed' : ''}
+                  `}
+                >
+                  {idx + 1}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

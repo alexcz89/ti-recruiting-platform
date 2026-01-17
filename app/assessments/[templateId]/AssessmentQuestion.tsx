@@ -2,8 +2,9 @@
 'use client';
 
 type Option = {
-  id: string;
-  text: string;
+  id?: string;        // puede existir
+  value?: string;     // puede existir
+  text?: string;      // tu UI lo usa
 };
 
 type Question = {
@@ -20,20 +21,30 @@ type Props = {
   question: Question;
   selectedOptions: string[];
   onAnswer: (options: string[]) => void;
+  disabled?: boolean;
 };
 
-export default function AssessmentQuestion({ question, selectedOptions, onAnswer }: Props) {
-  const handleSelect = (optionId: string) => {
+function keyOfOption(o: any) {
+  return String(o?.id ?? o?.value ?? JSON.stringify(o));
+}
+
+export default function AssessmentQuestion({
+  question,
+  selectedOptions,
+  onAnswer,
+  disabled = false,
+}: Props) {
+  const handleSelect = (optionKey: string) => {
+    if (disabled) return;
+
     if (question.allowMultiple) {
-      // Checkbox: toggle
-      if (selectedOptions.includes(optionId)) {
-        onAnswer(selectedOptions.filter((id) => id !== optionId));
+      if (selectedOptions.includes(optionKey)) {
+        onAnswer(selectedOptions.filter((k) => k !== optionKey));
       } else {
-        onAnswer([...selectedOptions, optionId]);
+        onAnswer([...selectedOptions, optionKey]);
       }
     } else {
-      // Radio: solo una
-      onAnswer([optionId]);
+      onAnswer([optionKey]);
     }
   };
 
@@ -55,7 +66,6 @@ export default function AssessmentQuestion({ question, selectedOptions, onAnswer
           {question.questionText}
         </h2>
 
-        {/* Code snippet si existe */}
         {question.codeSnippet && (
           <pre className="p-4 rounded-lg bg-zinc-900 dark:bg-zinc-950 text-zinc-100 text-sm overflow-x-auto mb-4">
             <code>{question.codeSnippet}</code>
@@ -65,15 +75,22 @@ export default function AssessmentQuestion({ question, selectedOptions, onAnswer
 
       {/* Opciones */}
       <div className="space-y-3">
-        {question.options.map((option) => {
-          const isSelected = selectedOptions.includes(option.id);
+        {question.options.map((option, idx) => {
+          const optionKey = keyOfOption(option);
+          const isSelected = selectedOptions.includes(optionKey);
+
+          const label = option?.id ?? option?.value ?? String(idx + 1);
+          const text = option?.text ?? String(optionKey);
 
           return (
             <button
-              key={option.id}
-              onClick={() => handleSelect(option.id)}
+              type="button"
+              key={optionKey}
+              onClick={() => handleSelect(optionKey)}
+              disabled={disabled}
               className={`
                 w-full text-left p-4 rounded-xl border-2 transition-all
+                ${disabled ? 'opacity-60 cursor-not-allowed' : ''}
                 ${
                   isSelected
                     ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
@@ -82,7 +99,6 @@ export default function AssessmentQuestion({ question, selectedOptions, onAnswer
               `}
             >
               <div className="flex items-start gap-3">
-                {/* Checkbox/Radio */}
                 <div className="shrink-0 mt-0.5">
                   {question.allowMultiple ? (
                     <div
@@ -115,24 +131,17 @@ export default function AssessmentQuestion({ question, selectedOptions, onAnswer
                     <div
                       className={`
                         h-5 w-5 rounded-full border-2 flex items-center justify-center
-                        ${
-                          isSelected
-                            ? 'border-emerald-600'
-                            : 'border-zinc-300 dark:border-zinc-600'
-                        }
+                        ${isSelected ? 'border-emerald-600' : 'border-zinc-300 dark:border-zinc-600'}
                       `}
                     >
-                      {isSelected && (
-                        <div className="h-3 w-3 rounded-full bg-emerald-600" />
-                      )}
+                      {isSelected && <div className="h-3 w-3 rounded-full bg-emerald-600" />}
                     </div>
                   )}
                 </div>
 
-                {/* Texto de opción */}
                 <div className="flex-1">
-                  <span className="font-semibold text-default mr-2">{option.id})</span>
-                  <span className="text-default">{option.text}</span>
+                  <span className="font-semibold text-default mr-2">{label})</span>
+                  <span className="text-default">{text}</span>
                 </div>
               </div>
             </button>
@@ -140,11 +149,8 @@ export default function AssessmentQuestion({ question, selectedOptions, onAnswer
         })}
       </div>
 
-      {/* Ayuda */}
       {question.allowMultiple && (
-        <p className="mt-4 text-sm text-muted">
-          💡 Puedes seleccionar múltiples opciones
-        </p>
+        <p className="mt-4 text-sm text-muted">💡 Puedes seleccionar múltiples opciones</p>
       )}
     </div>
   );

@@ -1,7 +1,7 @@
 // app/dashboard/jobs/[id]/assessments/AssignAssessmentForm.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
@@ -60,12 +60,22 @@ export default function AssignAssessmentForm({
     loadTemplates();
   }, []);
 
+  const availableTemplates = useMemo(() => {
+    return templates.filter((t) => !existingTemplateIds.has(t.id));
+  }, [templates, existingTemplateIds]);
+
   // Asignar assessment
-  const handleAssign = async (e: React.FormEvent) => {
+  const handleAssign = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     if (!selectedTemplateId) {
       toast.error("Selecciona un assessment");
+      return;
+    }
+
+    // ✅ blindaje anti duplicados (por si el estado quedó stale)
+    if (existingTemplateIds.has(selectedTemplateId)) {
+      toast.error("Ese assessment ya está asignado a la vacante");
       return;
     }
 
@@ -91,6 +101,12 @@ export default function AssignAssessmentForm({
       if (!res.ok) throw new Error(await readErrorMessage(res));
 
       toast.success("Assessment asignado exitosamente");
+
+      // ✅ reset del formulario (evita re-submit accidental)
+      setSelectedTemplateId("");
+      setIsRequired(true);
+      setMinScore(undefined);
+
       router.refresh();
     } catch (error: any) {
       console.error(error);
@@ -118,10 +134,6 @@ export default function AssignAssessmentForm({
       toast.error(error?.message || "Error al remover assessment");
     }
   };
-
-  const availableTemplates = useMemo(() => {
-    return templates.filter((t) => !existingTemplateIds.has(t.id));
-  }, [templates, existingTemplateIds]);
 
   if (loading) {
     return <div className="text-sm text-muted">Cargando...</div>;
@@ -187,8 +199,11 @@ export default function AssignAssessmentForm({
             onChange={(e) => setSelectedTemplateId(e.target.value)}
             className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
             required
+            disabled={assigning}
           >
-            <option value="">Selecciona un assessment...</option>
+            <option value="">
+              {availableTemplates.length ? "Selecciona un assessment..." : "No hay assessments disponibles"}
+            </option>
 
             {availableTemplates.map((template) => (
               <option key={template.id} value={template.id}>
@@ -206,6 +221,7 @@ export default function AssignAssessmentForm({
             checked={isRequired}
             onChange={(e) => setIsRequired(e.target.checked)}
             className="rounded"
+            disabled={assigning}
           />
           <label htmlFor="isRequired" className="text-sm text-default">
             Es obligatorio para aplicar
@@ -231,6 +247,7 @@ export default function AssignAssessmentForm({
             }}
             placeholder="Ej: 70"
             className="w-full px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900"
+            disabled={assigning}
           />
 
           <p className="text-xs text-muted mt-1">
@@ -241,7 +258,7 @@ export default function AssignAssessmentForm({
         {/* Botón */}
         <button
           type="submit"
-          disabled={assigning || !selectedTemplateId}
+          disabled={assigning || !selectedTemplateId || availableTemplates.length === 0}
           className="btn btn-primary w-full"
         >
           <Plus className="h-4 w-4 mr-2" />

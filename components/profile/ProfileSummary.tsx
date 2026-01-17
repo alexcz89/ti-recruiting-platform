@@ -1,13 +1,12 @@
 // components/profile/ProfileSummary.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Download, Pencil } from "lucide-react";
 
-// ⬇️ FIX: wrapper que sí acepta children
+// wrapper que sí acepta children
 import DownloadPdfButtonBase from "@/components/resume/DownloadPdfButton";
-import React from "react";
 
 type DownloadPdfButtonProps = React.ComponentProps<typeof DownloadPdfButtonBase> & {
   children?: React.ReactNode;
@@ -104,6 +103,26 @@ export default function ProfileSummary() {
     return () => ac.abort();
   }, []);
 
+  // ✅ FIX rules-of-hooks: hooks antes de returns condicionales
+  const totalYears = useMemo(() => {
+    const exp = data?.experience ?? [];
+    if (!Array.isArray(exp) || exp.length === 0) return null;
+
+    try {
+      const ranges = exp.map((e) => {
+        const s = e.startDate ? new Date(e.startDate) : null;
+        const t = e.isCurrent || !e.endDate ? new Date() : new Date(e.endDate);
+        if (!s || Number.isNaN(s.getTime()) || Number.isNaN(t.getTime())) return 0;
+        const ms = Math.max(0, t.getTime() - s.getTime());
+        return ms / (1000 * 60 * 60 * 24 * 365.25);
+      });
+      const sum = ranges.reduce((a, b) => a + b, 0);
+      return Math.round(sum * 10) / 10;
+    } catch {
+      return null;
+    }
+  }, [data?.experience]);
+
   if (loading) {
     return (
       <div className="max-w-5xl mx-auto py-8 px-4">
@@ -138,22 +157,6 @@ export default function ProfileSummary() {
 
   const p = data.personal;
 
-  const totalYears = useMemo(() => {
-    try {
-      const ranges = data.experience.map((e) => {
-        const s = e.startDate ? new Date(e.startDate) : null;
-        const t = e.isCurrent || !e.endDate ? new Date() : new Date(e.endDate);
-        if (!s || Number.isNaN(s.getTime()) || Number.isNaN(t.getTime())) return 0;
-        const ms = Math.max(0, t.getTime() - s.getTime());
-        return ms / (1000 * 60 * 60 * 24 * 365.25);
-      });
-      const sum = ranges.reduce((a, b) => a + b, 0);
-      return Math.round(sum * 10) / 10;
-    } catch {
-      return null;
-    }
-  }, [data.experience]);
-
   return (
     <main className="max-w-5xl mx-auto py-8 px-4 space-y-6">
       {/* Header */}
@@ -185,33 +188,53 @@ export default function ProfileSummary() {
 
       {/* Contacto */}
       <section className="border rounded-2xl glass-card p-4 md:p-6">
-        <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">Contacto</h2>
+        <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">
+          Contacto
+        </h2>
         <div className="grid sm:grid-cols-2 gap-2 text-sm">
           <p className="text-zinc-700 dark:text-zinc-200">
-            <strong className="text-zinc-800 dark:text-zinc-100">Teléfono:</strong> {p.phone || "—"}
+            <strong className="text-zinc-800 dark:text-zinc-100">Teléfono:</strong>{" "}
+            {p.phone || "—"}
           </p>
           <p className="text-zinc-700 dark:text-zinc-200">
-            <strong className="text-zinc-800 dark:text-zinc-100">Ubicación:</strong> {p.location || "—"}
+            <strong className="text-zinc-800 dark:text-zinc-100">Ubicación:</strong>{" "}
+            {p.location || "—"}
           </p>
           <p className="text-zinc-700 dark:text-zinc-200">
-            <strong className="text-zinc-800 dark:text-zinc-100">Fecha de nacimiento:</strong>{" "}
+            <strong className="text-zinc-800 dark:text-zinc-100">
+              Fecha de nacimiento:
+            </strong>{" "}
             {fmtISOToDMY(p.birthDate) || "—"}
           </p>
           <p className="text-zinc-700 dark:text-zinc-200">
             <strong className="text-zinc-800 dark:text-zinc-100">LinkedIn:</strong>{" "}
             {p.linkedin ? (
-              <a href={safeLink(p.linkedin)} target="_blank" className="text-blue-600 dark:text-blue-400 underline">
+              <a
+                href={safeLink(p.linkedin)}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-blue-600 dark:text-blue-400 underline"
+              >
                 {p.linkedin}
               </a>
-            ) : "—"}
+            ) : (
+              "—"
+            )}
           </p>
           <p className="text-zinc-700 dark:text-zinc-200">
             <strong className="text-zinc-800 dark:text-zinc-100">GitHub:</strong>{" "}
             {p.github ? (
-              <a href={safeLink(p.github)} target="_blank" className="text-blue-600 dark:text-blue-400 underline">
+              <a
+                href={safeLink(p.github)}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-blue-600 dark:text-blue-400 underline"
+              >
                 {p.github}
               </a>
-            ) : "—"}
+            ) : (
+              "—"
+            )}
           </p>
         </div>
       </section>
@@ -219,7 +242,9 @@ export default function ProfileSummary() {
       {/* Resumen */}
       {data.about && (
         <section className="border rounded-2xl glass-card p-4 md:p-6">
-          <h2 className="font-semibold text-lg mb-2 text-zinc-800 dark:text-zinc-100">Resumen</h2>
+          <h2 className="font-semibold text-lg mb-2 text-zinc-800 dark:text-zinc-100">
+            Resumen
+          </h2>
           <p className="text-sm text-zinc-700 dark:text-zinc-200 whitespace-pre-line">
             {data.about}
           </p>
@@ -229,14 +254,22 @@ export default function ProfileSummary() {
       {/* Experiencia */}
       {data.experience?.length > 0 && (
         <section className="border rounded-2xl glass-card p-4 md:p-6">
-          <h2 className="font-semibold text-lg mb-2 text-zinc-800 dark:text-zinc-100">Experiencia</h2>
+          <h2 className="font-semibold text-lg mb-2 text-zinc-800 dark:text-zinc-100">
+            Experiencia
+          </h2>
           <ul className="space-y-2 text-sm">
             {data.experience.map((exp, i) => (
-              <li key={i} className="border-b border-zinc-100 dark:border-zinc-800 pb-2">
-                <p className="font-medium text-zinc-800 dark:text-zinc-100">{exp.role}</p>
+              <li
+                key={i}
+                className="border-b border-zinc-100 dark:border-zinc-800 pb-2"
+              >
+                <p className="font-medium text-zinc-800 dark:text-zinc-100">
+                  {exp.role}
+                </p>
                 <p className="text-zinc-600 dark:text-zinc-300">{exp.company}</p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {fmtISOToMonthYear(exp.startDate)} — {exp.isCurrent ? "Actual" : fmtISOToMonthYear(exp.endDate) || "—"}
+                  {fmtISOToMonthYear(exp.startDate)} —{" "}
+                  {exp.isCurrent ? "Actual" : fmtISOToMonthYear(exp.endDate) || "—"}
                 </p>
                 {(exp as any).description ? (
                   <p className="mt-1 text-zinc-700 dark:text-zinc-200 whitespace-pre-line">
@@ -252,16 +285,24 @@ export default function ProfileSummary() {
       {/* Educación */}
       {data.education?.length > 0 && (
         <section className="border rounded-2xl glass-card p-4 md:p-6">
-          <h2 className="font-semibold text-lg mb-2 text-zinc-800 dark:text-zinc-100">Educación</h2>
+          <h2 className="font-semibold text-lg mb-2 text-zinc-800 dark:text-zinc-100">
+            Educación
+          </h2>
           <ul className="space-y-2 text-sm">
             {data.education.map((ed, i) => (
-              <li key={i} className="border-b border-zinc-100 dark:border-zinc-800 pb-2">
+              <li
+                key={i}
+                className="border-b border-zinc-100 dark:border-zinc-800 pb-2"
+              >
                 <p className="font-medium text-zinc-800 dark:text-zinc-100">
                   {ed.program || ed.level || "—"}
                 </p>
                 <p className="text-zinc-600 dark:text-zinc-300">{ed.institution}</p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  {fmtISOToMonthYear(ed.startDate)} — {ed.status === "ONGOING" ? "En curso" : fmtISOToMonthYear(ed.endDate) || "—"}
+                  {fmtISOToMonthYear(ed.startDate)} —{" "}
+                  {ed.status === "ONGOING"
+                    ? "En curso"
+                    : fmtISOToMonthYear(ed.endDate) || "—"}
                 </p>
               </li>
             ))}
@@ -272,12 +313,20 @@ export default function ProfileSummary() {
       {/* Skills */}
       {data.skills?.length > 0 && (
         <section className="border rounded-2xl glass-card p-4 md:p-6">
-          <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">Skills</h2>
+          <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">
+            Skills
+          </h2>
           <div className="flex flex-wrap gap-2">
             {data.skills.map((s, i) => (
-              <span key={i} className="badge" title={s.level ? `Nivel: ${s.level}/5` : undefined}>
+              <span
+                key={i}
+                className="badge"
+                title={s.level ? `Nivel: ${s.level}/5` : undefined}
+              >
                 {s.name}
-                {s.level != null && <span className="ml-1 text-xs opacity-70">({s.level}/5)</span>}
+                {s.level != null && (
+                  <span className="ml-1 text-xs opacity-70">({s.level}/5)</span>
+                )}
               </span>
             ))}
           </div>
@@ -287,7 +336,9 @@ export default function ProfileSummary() {
       {/* Idiomas */}
       {data.languages?.length > 0 && (
         <section className="border rounded-2xl glass-card p-4 md:p-6">
-          <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">Idiomas</h2>
+          <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">
+            Idiomas
+          </h2>
           <ul className="flex flex-wrap gap-2 text-sm">
             {data.languages.map((l, i) => (
               <li key={i} className="badge">
@@ -301,12 +352,19 @@ export default function ProfileSummary() {
       {/* Certificaciones */}
       {data.certifications?.length > 0 && (
         <section className="border rounded-2xl glass-card p-4 md:p-6">
-          <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">Certificaciones</h2>
+          <h2 className="font-semibold text-lg mb-3 text-zinc-800 dark:text-zinc-100">
+            Certificaciones
+          </h2>
           <ul className="space-y-1 text-sm">
             {data.certifications.map((c, i) => (
               <li key={i} className="text-zinc-800 dark:text-zinc-100">
                 {c.url ? (
-                  <a href={safeLink(c.url)} target="_blank" className="text-blue-600 dark:text-blue-400 underline">
+                  <a
+                    href={safeLink(c.url)}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-blue-600 dark:text-blue-400 underline"
+                  >
                     {c.name}
                   </a>
                 ) : (

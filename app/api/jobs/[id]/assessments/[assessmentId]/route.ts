@@ -3,34 +3,50 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getSessionCompanyId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-// DELETE /api/jobs/[id]/assessments/[assessmentId] - Remover assessment
+function noStoreJson(body: any, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+function requireRecruiterOrAdmin(user: any) {
+  const role = user?.role;
+  return role === "RECRUITER" || role === "ADMIN";
+}
+
+// DELETE /api/jobs/[id]/assessments/[assessmentId] - Remover assessment (✅ multiempresa + rol)
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: { id: string; assessmentId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
-
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+    if (!session?.user) return noStoreJson({ error: "No autorizado" }, 401);
 
     const user = session.user as any;
+    const isAdmin = user?.role === "ADMIN";
+    if (!requireRecruiterOrAdmin(user)) return noStoreJson({ error: "No autorizado" }, 403);
+
+    const sessionCompanyId = await getSessionCompanyId().catch(() => null);
+    if (!sessionCompanyId && !isAdmin) return noStoreJson({ error: "Sin empresa asociada" }, 403);
 
     const job = await prisma.job.findUnique({
       where: { id: params.id },
-      select: { companyId: true },
+      select: { id: true, companyId: true },
     });
 
-    if (!job) {
-      return NextResponse.json({ error: "Vacante no encontrada" }, { status: 404 });
-    }
+    if (!job) return noStoreJson({ error: "Vacante no encontrada" }, 404);
 
-    if (!user.companyId || job.companyId !== user.companyId) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    if (!isAdmin) {
+      if (!sessionCompanyId || job.companyId !== sessionCompanyId) {
+        return noStoreJson({ error: "No autorizado" }, 403);
+      }
     }
 
     // ✅ asegura que el assessmentId pertenece a ESTE job
@@ -42,15 +58,15 @@ export async function DELETE(
     });
 
     if (deleted.count === 0) {
-      return NextResponse.json(
+      return noStoreJson(
         { error: "No se encontró la asignación (o no pertenece a esta vacante)" },
-        { status: 404 }
+        404
       );
     }
 
-    return NextResponse.json({ success: true }, { headers: { "Cache-Control": "no-store" } });
+    return noStoreJson({ success: true }, 200);
   } catch (error) {
     console.error("Error removing assessment:", error);
-    return NextResponse.json({ error: "Error al remover assessment" }, { status: 500 });
+    return noStoreJson({ error: "Error al remover assessment" }, 500);
   }
 }

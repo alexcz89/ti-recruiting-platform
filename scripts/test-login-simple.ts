@@ -2,6 +2,10 @@
 // Simpler test that checks for errors
 import puppeteer from "puppeteer";
 
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 async function testLogin() {
   const browser = await puppeteer.launch({
     headless: false,
@@ -35,7 +39,7 @@ async function testLogin() {
     });
 
     console.log("⏳ Waiting 2 seconds...");
-    await page.waitForTimeout(2000);
+    await sleep(2000);
 
     // Fill form
     console.log("📝 Filling form...");
@@ -43,13 +47,13 @@ async function testLogin() {
     await page.type('input[name="password"]', "TestCandidate123!");
 
     console.log("⏳ Waiting 1 second before submit...");
-    await page.waitForTimeout(1000);
+    await sleep(1000);
 
     console.log("🔐 Clicking submit...");
     await page.click('button[type="submit"]');
 
     console.log("⏳ Waiting 10 seconds to observe...");
-    await page.waitForTimeout(10000);
+    await sleep(10000);
 
     const finalUrl = page.url();
     console.log("\n✅ Final URL:", finalUrl);
@@ -63,14 +67,16 @@ async function testLogin() {
         console.log("   -", text?.trim());
       }
     }
-
   } catch (error: any) {
-    console.error("❌ Error:", error.message);
+    console.error("❌ Error:", error?.message || String(error));
   } finally {
     console.log("\n⏳ Keeping browser open for 30 seconds...");
-    await page.waitForTimeout(30000);
+    await sleep(30000);
     await browser.close();
   }
 }
 
-testLogin();
+testLogin().catch((e) => {
+  console.error("Fatal:", e);
+  process.exit(1);
+});

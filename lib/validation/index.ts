@@ -17,3 +17,13 @@ export {
   RecruiterSimpleSignupSchema,
   type RecruiterSimpleSignupInput,
 } from "./recruiter/simple";
+
+// Password Reset
+export {
+  requestPasswordResetSchema,
+  resetPasswordSchema,
+  verifyResetTokenSchema,
+  type RequestPasswordResetInput,
+  type ResetPasswordInput,
+  type VerifyResetTokenInput,
+} from "./password-reset";

@@ -1,204 +1,220 @@
-// components/dashboard/JobActionsMenu.tsx 
+// components/dashboard/JobActionsMenu.tsx
 "use client";
 
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-import { MoreHorizontal, Edit3, Trash2, Users2, Eye } from "lucide-react";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "@/components/ui/dropdown-menu";
-import { toastSuccess, toastError } from "@/lib/ui/toast";
+  MoreHorizontal,
+  Edit,
+  Eye,
+  Pause,
+  Play,
+  XCircle,
+  Trash2,
+} from "lucide-react";
 
 type Props = {
   jobId: string;
 };
 
+function cn(...xs: Array<string | undefined | null | false>) {
+  return xs.filter(Boolean).join(" ");
+}
+
 export default function JobActionsMenu({ jobId }: Props) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement | null>(null);
 
-  const applicantsHref = `/dashboard/jobs/${jobId}/applications`;
-  const editHref = `/dashboard/jobs/${jobId}/edit`;
-  const publicHref = `/jobs/${jobId}`;
+  React.useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (!rootRef.current) return;
+      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, []);
 
-  const handleDelete = () => {
-    const ok = window.confirm(
-      "¿Eliminar esta vacante? Esta acción no se puede deshacer."
-    );
-    if (!ok) return;
+  async function handleStatusChange(newStatus: "OPEN" | "PAUSED" | "CLOSED") {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
 
-    startTransition(async () => {
-      try {
-        const fd = new FormData();
-        fd.set("jobId", jobId);
-
-        const res = await fetch("/dashboard/jobs/delete", {
-          method: "POST",
-          body: fd,
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data?.error || "No se pudo eliminar la vacante");
-        }
-
-        toastSuccess("Vacante eliminada correctamente");
-        router.refresh();
-      } catch (err: any) {
-        toastError(err?.message || "No se pudo eliminar la vacante");
+      if (!res.ok) {
+        throw new Error("Error actualizando estado");
       }
-    });
-  };
+
+      router.refresh();
+      setOpen(false);
+    } catch (error) {
+      alert("Error al actualizar el estado de la vacante");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDelete() {
+    const confirmed = confirm(
+      "¿Estás seguro de eliminar esta vacante? Esta acción no se puede deshacer."
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Error eliminando vacante");
+      }
+
+      router.push("/dashboard/jobs");
+      router.refresh();
+    } catch (error) {
+      alert("Error al eliminar la vacante");
+    } finally {
+      setBusy(false);
+      setOpen(false);
+    }
+  }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="
-          inline-flex h-8 w-8 items-center justify-center
-          rounded-full border border-zinc-200/80 bg-white/80
-          text-zinc-600 shadow-sm
-          hover:bg-zinc-50 hover:text-zinc-800
-          active:scale-[0.97]
-          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70 focus-visible:ring-offset-2
-          disabled:opacity-60
-          dark:border-zinc-700/80 dark:bg-zinc-900/80 dark:text-zinc-300
-          dark:hover:bg-zinc-800/80 dark:hover:text-zinc-50
-        "
-        disabled={pending}
+    <div ref={rootRef} className={cn("relative inline-flex")}>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex h-9 w-9 items-center justify-center rounded-xl border transition-all",
+          "border-zinc-200 bg-white/90 text-zinc-800 hover:bg-zinc-50 hover:border-zinc-300",
+          "dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:hover:border-zinc-600",
+          busy && "opacity-60 cursor-not-allowed"
+        )}
+        aria-haspopup="menu"
+        aria-expanded={open}
         aria-label="Acciones"
       >
         <MoreHorizontal className="h-4 w-4" />
-      </DropdownMenuTrigger>
+      </button>
 
-      <DropdownMenuContent
-        align="end"
-        className="
-          min-w-[230px] rounded-2xl border border-zinc-100/80
-          bg-white/95 px-1.5 py-1.5 shadow-xl backdrop-blur-md
-          dark:border-zinc-700/80 dark:bg-zinc-900/95
-        "
-      >
-        {/* Ver postulaciones */}
-        <DropdownMenuItem
-          asChild
-          className="
-            group flex items-center gap-2.5 rounded-xl px-2.5 py-2
-            text-[13px] text-zinc-800
-            hover:bg-zinc-50
-            focus:bg-zinc-50
-            dark:text-zinc-100 dark:hover:bg-zinc-800/80 dark:focus:bg-zinc-800/80
-            cursor-pointer
-          "
+      {open && (
+        <div
+          role="menu"
+          className={cn(
+            "absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border shadow-lg",
+            "border-zinc-200 bg-white",
+            "dark:border-zinc-800 dark:bg-zinc-950"
+          )}
         >
-          <Link href={applicantsHref}>
-            <span
-              className="
-                inline-flex h-7 w-7 items-center justify-center
-                rounded-full bg-emerald-50 text-emerald-600
-                group-hover:bg-emerald-100 group-hover:text-emerald-700
-                dark:bg-emerald-500/10 dark:text-emerald-300
-                dark:group-hover:bg-emerald-500/20
-              "
+          <div className="p-2">
+            {/* Ver postulaciones */}
+            <Link
+              href={`/dashboard/jobs/${jobId}/applications`}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              )}
             >
-              <Users2 className="h-3.5 w-3.5" />
-            </span>
-            <span>Ver postulaciones</span>
-          </Link>
-        </DropdownMenuItem>
+              <Eye className="h-4 w-4" />
+              Ver postulaciones
+            </Link>
 
-        {/* Editar */}
-        <DropdownMenuItem
-          asChild
-          className="
-            group flex items-center gap-2.5 rounded-xl px-2.5 py-2
-            text-[13px] text-zinc-800
-            hover:bg-zinc-50
-            focus:bg-zinc-50
-            dark:text-zinc-100 dark:hover:bg-zinc-800/80 dark:focus:bg-zinc-800/80
-            cursor-pointer
-          "
-        >
-          <Link href={editHref}>
-            <span
-              className="
-                inline-flex h-7 w-7 items-center justify-center
-                rounded-full bg-sky-50 text-sky-600
-                group-hover:bg-sky-100 group-hover:text-sky-700
-                dark:bg-sky-500/10 dark:text-sky-300
-                dark:group-hover:bg-sky-500/20
-              "
+            {/* Editar */}
+            <Link
+              href={`/dashboard/jobs/${jobId}/edit`}
+              onClick={() => setOpen(false)}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              )}
             >
-              <Edit3 className="h-3.5 w-3.5" />
-            </span>
-            <span>Editar vacante</span>
-          </Link>
-        </DropdownMenuItem>
+              <Edit className="h-4 w-4" />
+              Editar vacante
+            </Link>
 
-        {/* Ver vacante pública */}
-        <DropdownMenuItem
-          asChild
-          className="
-            group flex items-center gap-2.5 rounded-xl px-2.5 py-2
-            text-[13px] text-zinc-800
-            hover:bg-zinc-50
-            focus:bg-zinc-50
-            dark:text-zinc-100 dark:hover:bg-zinc-800/80 dark:focus:bg-zinc-800/80
-            cursor-pointer
-          "
-        >
-          <Link href={publicHref} target="_blank" rel="noopener noreferrer">
-            <span
-              className="
-                inline-flex h-7 w-7 items-center justify-center
-                rounded-full bg-indigo-50 text-indigo-600
-                group-hover:bg-indigo-100 group-hover:text-indigo-700
-                dark:bg-indigo-500/10 dark:text-indigo-300
-                dark:group-hover:bg-indigo-500/20
-              "
+            <div className="my-2 h-px bg-zinc-100 dark:bg-zinc-800" />
+
+            {/* Pausar/Reabrir */}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleStatusChange("PAUSED")}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                busy
+                  ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                  : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              )}
             >
-              <Eye className="h-3.5 w-3.5" />
-            </span>
-            <span>Ver vacante</span>
-          </Link>
-        </DropdownMenuItem>
+              <Pause className="h-4 w-4" />
+              Pausar vacante
+            </button>
 
-        {/* Separador custom (ya no es un item del dropdown) */}
-        <div className="my-1 h-px bg-zinc-200/60 dark:bg-zinc-700/60" />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleStatusChange("OPEN")}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                busy
+                  ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                  : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              )}
+            >
+              <Play className="h-4 w-4" />
+              Reabrir vacante
+            </button>
 
-        {/* Eliminar */}
-        <DropdownMenuItem
-          onClick={(e) => {
-            e.preventDefault();
-            handleDelete();
-          }}
-          className="
-            group flex items-center gap-2.5 rounded-xl px-2.5 py-2
-            text-[13px] text-rose-600
-            hover:bg-rose-50/80 hover:text-rose-700
-            focus:bg-rose-50/80
-            dark:text-rose-400 dark:hover:bg-rose-500/15 dark:focus:bg-rose-500/15
-            cursor-pointer
-          "
-        >
-          <span
-            className="
-              inline-flex h-7 w-7 items-center justify-center
-              rounded-full bg-rose-50 text-rose-600
-              group-hover:bg-rose-100 group-hover:text-rose-700
-              dark:bg-rose-500/10 dark:text-rose-300
-              dark:group-hover:bg-rose-500/25
-            "
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </span>
-          <span>Eliminar</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handleStatusChange("CLOSED")}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                busy
+                  ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                  : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+              )}
+            >
+              <XCircle className="h-4 w-4" />
+              Cerrar vacante
+            </button>
+
+            <div className="my-2 h-px bg-zinc-100 dark:bg-zinc-800" />
+
+            {/* Eliminar */}
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleDelete}
+              className={cn(
+                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                busy
+                  ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                  : "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+              )}
+            >
+              <Trash2 className="h-4 w-4" />
+              {busy ? "Eliminando..." : "Eliminar vacante"}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

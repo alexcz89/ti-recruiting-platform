@@ -117,10 +117,10 @@ enum BillingPlan {
 // =========================
 
 enum InvoiceStatus {
-  PENDING      // Creada en tu sistema, aún sin timbrar
-  ISSUED       // Timbrada correctamente
-  CANCELED     // Cancelada en el SAT
-  ERROR        // Error al timbrar o al comunicarse con el PAC
+  PENDING // Creada en tu sistema, aún sin timbrar
+  ISSUED // Timbrada correctamente
+  CANCELED // Cancelada en el SAT
+  ERROR // Error al timbrar o al comunicarse con el PAC
 }
 
 // =========================
@@ -144,6 +144,7 @@ enum AttemptStatus {
   IN_PROGRESS
   SUBMITTED
   EVALUATED
+  COMPLETED
 }
 
 // ✅ NUEVO: status para invitaciones (enviar evaluación por candidato)
@@ -152,6 +153,7 @@ enum AssessmentInviteStatus {
   STARTED
   SUBMITTED
   EVALUATED
+  COMPLETED
   CANCELLED
 }
 
@@ -168,25 +170,29 @@ enum RecruiterStatus {
   REJECTED
 }
 
+enum CreditLedgerKind {
+  ASSESSMENT_INVITE
+}
+
 // =========================
 
 model Invoice {
-  id        String   @id @default(cuid())
+  id String @id @default(cuid())
 
   // Relación con la empresa que está usando Bolsa TI
   companyId String
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id])
 
   // Datos del receptor (tu cliente)
   customerName  String
-  customerRfc   String   @db.VarChar(13)
+  customerRfc   String  @db.VarChar(13)
   customerEmail String?
 
   // Campos CFDI típicos
-  cfdiUse       String?  @db.VarChar(5)  // p.ej. "G03"
-  paymentMethod String?  @db.VarChar(3)  // p.ej. "PUE"
-  paymentForm   String?  @db.VarChar(3)  // p.ej. "03" transferencia
-  currency      String   @default("MXN")
+  cfdiUse       String? @db.VarChar(5) // p.ej. "G03"
+  paymentMethod String? @db.VarChar(3) // p.ej. "PUE"
+  paymentForm   String? @db.VarChar(3) // p.ej. "03" transferencia
+  currency      String  @default("MXN")
 
   // Importes
   subtotal Decimal @db.Decimal(10, 2)
@@ -194,7 +200,7 @@ model Invoice {
   total    Decimal @db.Decimal(10, 2)
 
   // Relación con Factura.com / CFDI
-  externalId String?      // id de factura.com (si lo maneja)
+  externalId String? // id de factura.com (si lo maneja)
   uuid       String? @unique // UUID del CFDI una vez timbrado
   series     String?
   folio      String?
@@ -218,7 +224,7 @@ model Company {
   name    String
   country String?
   city    String?
-  domain  String?  @unique   // 👈 clave: un solo registro por dominio
+  domain  String? @unique // 👈 clave: un solo registro por dominio
   website String?
   size    String?
   logoUrl String?
@@ -228,23 +234,25 @@ model Company {
   billingPlan BillingPlan @default(FREE)
 
   // ✅ Datos fiscales para CFDI (facturación)
-  taxLegalName     String?       // Razón social
+  taxLegalName     String? // Razón social
   taxRfc           String? @db.VarChar(13)
-  taxRegime        String? @db.VarChar(3)   // Código de régimen (ej. "601", "612", etc.)
-  taxZip           String? @db.VarChar(5)   // C.P. domicilio fiscal
-  taxAddressLine1  String?                 // Calle y número
-  taxAddressLine2  String?                 // Colonia / interior / detalles
-  taxEmail         String?                 // Correo para envío de CFDI
-  cfdiUseDefault   String? @db.VarChar(5)  // Uso CFDI preferido (ej. "G03")
+  taxRegime        String? @db.VarChar(3) // Código de régimen (ej. "601", "612", etc.)
+  taxZip           String? @db.VarChar(5) // C.P. domicilio fiscal
+  taxAddressLine1  String? // Calle y número
+  taxAddressLine2  String? // Colonia / interior / detalles
+  taxEmail         String? // Correo para envío de CFDI
+  cfdiUseDefault   String? @db.VarChar(5) // Uso CFDI preferido (ej. "G03")
   taxDataCompleted Boolean @default(false)
 
-  users User[]
-  jobs  Job[]
+  users     User[]
+  jobs      Job[]
   // 👇 back-relation para plantillas
   templates JobTemplate[] @relation("CompanyTemplates")
 
   // 👇 back-relation con facturas CFDI
   invoices Invoice[]
+
+  assessmentInviteCharges AssessmentInviteChargeLedger[]
 
   createdAt DateTime @default(now())
 }
@@ -265,7 +273,7 @@ model User {
   emailVerified DateTime?
 
   applications Application[]
-  jobs         Job[] @relation("PostedJobs")
+  jobs         Job[]         @relation("PostedJobs")
 
   company   Company? @relation(fields: [companyId], references: [id])
   companyId String?
@@ -333,16 +341,16 @@ model User {
 
 // =========================
 model WorkExperience {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   userId      String
   role        String
   company     String
   startDate   DateTime
   endDate     DateTime?
-  isCurrent   Boolean  @default(false)
-  description String?  // 1 bullet por línea, texto plano
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isCurrent   Boolean   @default(false)
+  description String? // 1 bullet por línea, texto plano
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -410,12 +418,12 @@ model Job {
   admin1Norm String?
 
   // Publicación
-  employmentType EmploymentType
-  seniority      Seniority? // 👈 NUEVO (lo usa tu seed.ts)
-  description    String     @db.Text
-  descriptionHtml String?   @db.Text
-  schedule       String?    // ej. "L-V 9:00–18:00"
-  publishAt      DateTime?  // publicación programada
+  employmentType  EmploymentType
+  seniority       Seniority? // 👈 NUEVO (lo usa tu seed.ts)
+  description     String         @db.Text
+  descriptionHtml String?        @db.Text
+  schedule        String? // ej. "L-V 9:00–18:00"
+  publishAt       DateTime? // publicación programada
 
   // Lista simple y relación catálogo
   skills         String[]
@@ -452,7 +460,7 @@ model Job {
 
   // Reclutador que publicó
   recruiterId String?
-  recruiter   User? @relation("PostedJobs", fields: [recruiterId], references: [id])
+  recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id])
 
   // Relaciones
   applications Application[]
@@ -490,7 +498,7 @@ model Application {
 
   // Lógica de rechazo diferido
   rejectedAt         DateTime?
-  rejectionEmailSent Boolean @default(false)
+  rejectionEmailSent Boolean   @default(false)
 
   // Interés/estado del reclutador
   recruiterInterest ApplicationInterest @default(REVIEW)
@@ -518,12 +526,12 @@ model Application {
 
 model Plan {
   id                String   @id @default(cuid())
-  name              String   // "Gratis", "Pro", etc.
+  name              String // "Gratis", "Pro", etc.
   slug              String   @unique // "free", "pro", "business", "agency"
-  monthlyPriceCents Int      // en centavos: 99900 = $999.00
-  currency          String   // "MXN"
-  maxActiveJobs     Int?     // null = ilimitado
-  maxUsers          Int?     // null = ilimitado
+  monthlyPriceCents Int // en centavos: 99900 = $999.00
+  currency          String // "MXN"
+  maxActiveJobs     Int? // null = ilimitado
+  maxUsers          Int? // null = ilimitado
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -566,7 +574,7 @@ model JobTemplate {
 
   // (Opcional) quién la creó
   creatorId String?
-  creator   User? @relation(fields: [creatorId], references: [id], name: "UserCreatedTemplates")
+  creator   User?   @relation(fields: [creatorId], references: [id], name: "UserCreatedTemplates")
 
   @@index([companyId, updatedAt])
   @@index([lastUsedAt])
@@ -693,7 +701,7 @@ model CandidateLanguage {
 
 // =========================
 model CandidateCredential {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
   termId       String
   issuer       String?
@@ -765,8 +773,34 @@ model AssessmentTemplate {
   @@index([type, difficulty])
 }
 
+model AssessmentInviteChargeLedger {
+  id String @id @default(cuid())
+
+  // Relación al invite (lo que se está cobrando)
+  inviteId String
+  invite   AssessmentInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+
+  // Para reportes / multiempresa (evita tener que join por Job->Company)
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  kind   CreditLedgerKind @default(ASSESSMENT_INVITE)
+  cycle  Int // == invite.chargeCount en el momento del cobro
+  amount Int              @default(1)
+
+  meta Json?
+
+  createdAt DateTime @default(now())
+
+  // ✅ Idempotencia / anti doble cobro:
+  // Un invite NO puede generar 2 cargos para el mismo ciclo (y mismo kind)
+  @@unique([inviteId, kind, cycle])
+  @@index([companyId, createdAt])
+  @@index([inviteId])
+}
+
 model AssessmentQuestion {
-  id         String @id @default(cuid())
+  id         String             @id @default(cuid())
   templateId String
   template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
@@ -777,13 +811,13 @@ model AssessmentQuestion {
   questionText String  @db.Text
   codeSnippet  String? @db.Text
 
-  options        Json
-  allowMultiple  Boolean @default(false)
-  explanation    String? @db.Text
-  isActive       Boolean  @default(true)
-  timesUsed      Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  options       Json
+  allowMultiple Boolean  @default(false)
+  explanation   String?  @db.Text
+  isActive      Boolean  @default(true)
+  timesUsed     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   answers AttemptAnswer[]
 
@@ -791,12 +825,12 @@ model AssessmentQuestion {
 }
 
 model CodingChallenge {
-  id         String @id @default(cuid())
+  id         String             @id @default(cuid())
   templateId String
   template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   title       String
-  description String @db.Text
+  description String               @db.Text
   difficulty  AssessmentDifficulty
   timeLimit   Int
 
@@ -828,7 +862,7 @@ model JobAssessment {
 
   isRequired Boolean @default(true)
   minScore   Int?
-  triggerAt  String @default("AFTER_APPLY")
+  triggerAt  String  @default("AFTER_APPLY")
 
   createdAt DateTime @default(now())
 
@@ -848,8 +882,12 @@ model AssessmentAttempt {
   applicationId String?
   application   Application? @relation(fields: [applicationId], references: [id])
 
+  // ✅ CORREGIDO: amarre 1–1 attempt ↔ invite (solo aquí)
+  inviteId String?           @unique
+  invite   AssessmentInvite? @relation("InviteAttempt", fields: [inviteId], references: [id], onDelete: SetNull)
+
   status        AttemptStatus @default(NOT_STARTED)
-  attemptNumber Int          @default(1)
+  attemptNumber Int           @default(1)
 
   startedAt   DateTime?
   submittedAt DateTime?
@@ -860,51 +898,96 @@ model AssessmentAttempt {
   sectionScores Json?
   passed        Boolean?
 
-  flagsJson  Json?
-  ipAddress  String?
-  userAgent  String?
+  flagsJson Json?
+  ipAddress String?
+  userAgent String?
+
+  // =========================
+  // Anti-cheat counters (Nivel 2, atómicos)
+  // =========================
+  tabSwitches      Int @default(0)
+  visibilityHidden Int @default(0)
+  copyAttempts     Int @default(0)
+  pasteAttempts    Int @default(0)
+  rightClicks      Int @default(0)
+  focusLoss        Int @default(0)
+  pageHides        Int @default(0)
+
+  // Fingerprint liviano (multi-sesión)
+  firstClientSig String?
+  lastClientSig  String?
+  multiSession   Boolean @default(false)
+
+  // Severidad resumida (para UI recruiter)
+  severityScore Int    @default(0)
+  severity      String @default("NORMAL")
+
+  // 👇 eventos anti-cheat (append-only)
+  events AssessmentAttemptEvent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  answers          AttemptAnswer[]
+  answers           AttemptAnswer[]
   codingSubmissions CodingSubmission[]
 
   @@index([candidateId, status])
   @@index([applicationId])
   @@index([templateId, status])
+  @@index([candidateId, templateId, status])
+  // ✅ NUEVO recomendado (tu flujo de reuse por applicationId exacto)
+  @@index([applicationId, templateId, status])
+  // ✅ útiles para dashboards/alertas
+  @@index([severity, severityScore])
+  @@index([multiSession])
 }
 
-// ✅ NUEVO: invitación para enviar evaluación a un candidato específico (por aplicación)
 model AssessmentInvite {
-  id     String               @id @default(cuid())
-  token  String               @unique
+  id     String                 @id @default(cuid())
+  token  String                 @unique
   status AssessmentInviteStatus @default(SENT)
 
   applicationId String
-  application   Application  @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   jobId String
-  job   Job                @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   candidateId String
-  candidate   User         @relation("AssessmentInviteCandidate", fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate   User   @relation("AssessmentInviteCandidate", fields: [candidateId], references: [id], onDelete: Cascade)
 
   templateId String
   template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   invitedById String?
-  invitedBy   User?        @relation("AssessmentInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitedBy   User?   @relation("AssessmentInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
 
-  sentAt    DateTime?
+  // ✅ recomendado (auditoría)
+  sentAt      DateTime?
+  startedAt   DateTime?
+  submittedAt DateTime?
+  cancelledAt DateTime?
+  expiresAt   DateTime?
+
+  // ✅ Cobro por “ciclo” (cuando NO es reusable y se reinicia)
+  chargeCount Int       @default(0) // incrementa al reiniciar ciclo
+  chargedAt   DateTime? // opcional: cuándo se generó el último cargo del ciclo
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  expiresAt DateTime?
 
+  attempt AssessmentAttempt? @relation("InviteAttempt")
+
+  // ✅ Ledger / bitácora de cargos (anti doble cobro)
+  charges AssessmentInviteChargeLedger[]
+
+  @@unique([applicationId, templateId])
   @@index([applicationId])
   @@index([jobId])
   @@index([candidateId])
   @@index([templateId])
+  @@index([applicationId, templateId, status])
+  @@index([candidateId, updatedAt])
 }
 
 model AttemptAnswer {
@@ -929,6 +1012,27 @@ model AttemptAnswer {
   @@index([questionId])
 }
 
+model AssessmentAttemptEvent {
+  id          String   @id @default(cuid())
+  attemptId   String
+  candidateId String
+  type        String
+  meta        Json?
+  eventId     String? // idempotencia desde cliente (UUID recomendado)
+  clientSig   String? // fingerprint liviano
+  ipPrefix    String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  attempt AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  // ✅ dedupe: evita duplicados cuando el cliente reintenta/batchea
+  @@unique([attemptId, eventId])
+  @@index([attemptId, createdAt])
+  @@index([candidateId, createdAt])
+  @@index([type, createdAt])
+}
+
 model CodingSubmission {
   id String @id @default(cuid())
 
@@ -948,7 +1052,7 @@ model CodingSubmission {
   manualScore  Int?
   finalScore   Int?
 
-  feedback   String? @db.Text
+  feedback   String?   @db.Text
   reviewedBy String?
   reviewedAt DateTime?
 

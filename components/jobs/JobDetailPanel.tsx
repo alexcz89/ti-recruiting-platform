@@ -223,66 +223,73 @@ function formatBenefitLabel(key: string, value: any): string | null {
   const k = key.toString();
   const lower = k.toLowerCase();
 
-  // Campos de control que no queremos mostrar
   if (lower === "showbenefits") return null;
 
   const base =
     BENEFIT_LABELS[k] ?? BENEFIT_LABELS[lower] ?? k.replace(/([A-Z])/g, " $1");
 
-  // Booleanos: solo mostramos el nombre si es true
-  if (typeof value === "boolean") {
-    return value ? base : null;
-  }
+  if (typeof value === "boolean") return value ? base : null;
 
-  // Numéricos especiales
   if (typeof value === "number") {
-    if (lower === "primavacpct") {
-      return `${base}: ${value}%`;
-    }
-    if (lower === "vacacionesdias") {
-      return `${base}: ${value} días`;
-    }
-    if (lower === "aguinaldodias") {
-      return `${base}: ${value} días`;
-    }
+    if (lower === "primavacpct") return `${base}: ${value}%`;
+    if (lower === "vacacionesdias") return `${base}: ${value} días`;
+    if (lower === "aguinaldodias") return `${base}: ${value} días`;
     return `${base}: ${value}`;
   }
 
-  // String u otros
   const vStr = String(value).trim();
   if (!vStr) return base;
   return `${base}: ${vStr}`;
 }
 
 export default function JobDetailPanel({ job, canApply = true, editHref }: Props) {
-  if (!job) {
+  // ✅ Hooks SIEMPRE arriba (sin returns antes)
+  const jobId = job?.id ?? "";
+
+  const rawDesc = job?.description ?? "";
+  const { meta, mainDesc } = React.useMemo(() => parseMeta(rawDesc), [rawDesc]);
+
+  const when = React.useMemo(() => {
+    const d =
+      (job?.updatedAt && new Date(job.updatedAt)) ||
+      (job?.createdAt && new Date(job.createdAt)) ||
+      null;
+    if (!d) return null;
+    return Number.isNaN(d.getTime()) ? null : d;
+  }, [job?.updatedAt, job?.createdAt]);
+
+  const fallbackText = React.useMemo(() => {
+    const base = (mainDesc || rawDesc).replace(/\n/g, "<br/>");
+    return base;
+  }, [mainDesc, rawDesc]);
+
+  const descHtml = React.useMemo(() => {
+    const html = (job as any)?.descriptionHtml || fallbackText;
+    return html || "";
+  }, [job, fallbackText]);
+
+  const companyNameRaw = React.useMemo(() => {
+    return (job as any)?.company?.name ?? job?.company ?? "—";
+  }, [job]);
+
+  const companyLogoRaw = React.useMemo(() => {
     return (
-      <div className="rounded-2xl border glass-card p-4 md:p-6">
-        Selecciona una vacante de la lista para ver el detalle.
-      </div>
+      (job as any)?.company?.logoUrl ??
+      job?.companyLogoUrl ??
+      (job as any)?.logoUrl ??
+      null
     );
-  }
+  }, [job]);
 
-  const when =
-    (job.updatedAt && new Date(job.updatedAt)) ||
-    (job.createdAt && new Date(job.createdAt));
-
-  const rawDesc = job.description ?? "";
-  const { meta, mainDesc } = parseMeta(rawDesc);
-
-  const fallbackText = (mainDesc || rawDesc).replace(/\n/g, "<br/>");
-  const descHtml = (job as any).descriptionHtml || fallbackText;
-
-  const companyNameRaw = (job as any).company?.name ?? job.company ?? "—";
-  const companyLogoRaw =
-    (job as any).company?.logoUrl ?? job.companyLogoUrl ?? (job as any).logoUrl ?? null;
-
-  const confidential =
-    (job as any).companyConfidential ??
-    (job as any).confidential ??
-    (job as any).isConfidential ??
-    (job as any).meta?.confidential ??
-    false;
+  const confidential = React.useMemo(() => {
+    return (
+      (job as any)?.companyConfidential ??
+      (job as any)?.confidential ??
+      (job as any)?.isConfidential ??
+      (job as any)?.meta?.confidential ??
+      false
+    );
+  }, [job]);
 
   const showCompanyName = !confidential && companyNameRaw && companyNameRaw !== "—";
   const companyName = showCompanyName ? companyNameRaw : "";
@@ -296,18 +303,32 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     schedule?: string | null;
     showBenefits?: boolean | null;
     benefitsJson?: Record<string, boolean | number | string> | null;
-  }>({
-    showSalary: job.showSalary,
-    salaryMin: job.salaryMin,
-    salaryMax: job.salaryMax,
-    currency: job.currency,
-    schedule: job.schedule,
-    showBenefits: job.showBenefits,
-    benefitsJson: job.benefitsJson,
-  });
+  }>(() => ({
+    showSalary: job?.showSalary,
+    salaryMin: job?.salaryMin,
+    salaryMax: job?.salaryMax,
+    currency: job?.currency,
+    schedule: job?.schedule,
+    showBenefits: job?.showBenefits,
+    benefitsJson: job?.benefitsJson,
+  }));
+
+  // Si cambia jobId, re-hidrata estado base
+  React.useEffect(() => {
+    setDetail({
+      showSalary: job?.showSalary,
+      salaryMin: job?.salaryMin,
+      salaryMax: job?.salaryMax,
+      currency: job?.currency,
+      schedule: job?.schedule,
+      showBenefits: job?.showBenefits,
+      benefitsJson: job?.benefitsJson,
+    });
+  }, [jobId, job]);
 
   React.useEffect(() => {
     let cancelled = false;
+    if (!jobId) return;
 
     const missing =
       detail.showSalary === undefined ||
@@ -322,7 +343,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
 
     (async () => {
       try {
-        const res = await fetch(`/api/jobs?id=${job.id}`, { cache: "no-store" });
+        const res = await fetch(`/api/jobs?id=${jobId}`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -344,8 +365,16 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.id]);
+  }, [
+    jobId,
+    detail.showSalary,
+    detail.salaryMin,
+    detail.salaryMax,
+    detail.currency,
+    detail.schedule,
+    detail.showBenefits,
+    detail.benefitsJson,
+  ]);
 
   const showSalaryExplicit =
     (detail.showSalary ?? meta?.showSalary) ??
@@ -357,41 +386,51 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
   const schedule = detail.schedule ?? meta?.schedule ?? null;
 
   const benefitsObj: Record<string, boolean | number | string> | null =
-    (detail.showBenefits &&
+    ((detail.showBenefits &&
       detail.benefitsJson &&
       Object.keys(detail.benefitsJson).length > 0 &&
-      detail.benefitsJson) ||
+      detail.benefitsJson) as any) ||
     (meta?.benefits && Object.keys(meta.benefits).length > 0 ? meta.benefits : null);
 
-  // Transformamos prestaciones a etiquetas bonitas y filtramos basura
-  const benefitItems =
-    benefitsObj &&
-    Object.entries(benefitsObj)
+  const benefitItems = React.useMemo(() => {
+    if (!benefitsObj) return null;
+    const items = Object.entries(benefitsObj)
       .map(([k, v]) => {
         const label = formatBenefitLabel(k, v);
         if (!label) return null;
         return { key: k, label };
       })
       .filter(Boolean) as { key: string; label: string }[];
+    return items.length ? items : null;
+  }, [benefitsObj]);
 
-  const { req: reqSkills, nice: niceSkills } = splitSkills(job.skills);
+  const { req: reqSkills, nice: niceSkills } = React.useMemo(
+    () => splitSkills(job?.skills),
+    [job?.skills]
+  );
   const haveAnySkills = reqSkills.length + niceSkills.length > 0;
 
-  const [minDegree, setMinDegree] = React.useState<DegreeLevel | null>(
-    job.minDegree ?? null
+  const [minDegree, setMinDegree] = React.useState<DegreeLevel | null>(() => job?.minDegree ?? null);
+  const [educationJson, setEducationJson] = React.useState<EduItem[]>(() =>
+    Array.isArray(job?.educationJson) ? (job!.educationJson as EduItem[]) : []
   );
-  const [educationJson, setEducationJson] = React.useState<EduItem[]>(
-    Array.isArray(job.educationJson) ? (job.educationJson as EduItem[]) : []
-  );
+
+  // Si cambia jobId, re-hidrata educación base
+  React.useEffect(() => {
+    setMinDegree(job?.minDegree ?? null);
+    setEducationJson(Array.isArray(job?.educationJson) ? (job!.educationJson as EduItem[]) : []);
+  }, [jobId, job]);
 
   React.useEffect(() => {
     let cancelled = false;
+    if (!jobId) return;
+
     const needFetch = !minDegree && educationJson.length === 0;
     if (!needFetch) return;
 
     (async () => {
       try {
-        const res = await fetch(`/api/jobs?id=${job.id}`, { cache: "no-store" });
+        const res = await fetch(`/api/jobs?id=${jobId}`, { cache: "no-store" });
         if (!res.ok) return;
         const data = await res.json();
         const j = data?.job;
@@ -407,18 +446,18 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job.id]);
+  }, [jobId, minDegree, educationJson.length]);
 
   const hasEducation = Boolean(minDegree || educationJson.length);
 
   const [copied, setCopied] = React.useState(false);
-  const handleShare = async () => {
+  const handleShare = React.useCallback(async () => {
+    if (!jobId) return;
     const url =
-      typeof window !== "undefined" ? `${window.location.origin}/jobs/${job.id}` : "";
+      typeof window !== "undefined" ? `${window.location.origin}/jobs/${jobId}` : "";
     const shareData = {
-      title: job.title || "Vacante",
-      text: `${job.title}${showCompanyName ? ` — ${companyName}` : ""}`,
+      title: job?.title || "Vacante",
+      text: `${job?.title || "Vacante"}${showCompanyName ? ` — ${companyName}` : ""}`,
       url,
     };
     try {
@@ -430,24 +469,23 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
         setTimeout(() => setCopied(false), 1800);
       }
     } catch {}
-  };
+  }, [jobId, job?.title, showCompanyName, companyName]);
 
-  // --------- applyAction que consume /api/applications ---------
   const applyAction = React.useCallback(async (): Promise<ApplyResult> => {
+    if (!jobId) return { error: "UNKNOWN", message: "Vacante inválida" };
+
     try {
       const res = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId: job.id }),
+        body: JSON.stringify({ jobId }),
       });
 
       if (res.status === 401) {
         const callback =
           typeof window !== "undefined"
-            ? encodeURIComponent(
-                window.location.pathname + window.location.search
-              )
-            : encodeURIComponent(`/jobs/${job.id}`);
+            ? encodeURIComponent(window.location.pathname + window.location.search)
+            : encodeURIComponent(`/jobs/${jobId}`);
         return {
           error: "AUTH",
           signinUrl: `/auth/signin?callbackUrl=${callback}`,
@@ -474,7 +512,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
         const redirect =
           typeof window !== "undefined"
             ? `${window.location.pathname}?applied=1`
-            : `/jobs/${job.id}`;
+            : `/jobs/${jobId}`;
         return { ok: true, redirect };
       }
 
@@ -490,7 +528,16 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
         message: "No se pudo conectar con el servidor",
       };
     }
-  }, [job.id]);
+  }, [jobId]);
+
+  // ✅ Ahora sí: return temprano, pero DESPUÉS de hooks
+  if (!job) {
+    return (
+      <div className="rounded-2xl border glass-card p-4 md:p-6">
+        Selecciona una vacante de la lista para ver el detalle.
+      </div>
+    );
+  }
 
   return (
     <article className="relative rounded-2xl border glass-card p-4 md:p-6">
@@ -563,9 +610,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
               <Chip tone="blue">{meta?.employmentType || job.employmentType}</Chip>
             )}
             {job.seniority && <Chip tone="violet">{job.seniority}</Chip>}
-            <Chip tone="emerald">
-              {job.remote ? "Remoto" : "Presencial / Híbrido"}
-            </Chip>
+            <Chip tone="emerald">{job.remote ? "Remoto" : "Presencial / Híbrido"}</Chip>
             {schedule && <Chip tone="amber">{schedule}</Chip>}
             {when && (
               <Chip outline tone="zinc" className="text-[11px]">
@@ -707,9 +752,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
                 <BadgeCheck className="h-4 w-4 text-muted" />
                 <p className="text-[12px] font-medium text-muted">Certificaciones</p>
               </div>
-              <p className="text-sm text-default">
-                {meta.certifications.join(", ")}
-              </p>
+              <p className="text-sm text-default">{meta.certifications.join(", ")}</p>
             </div>
           )}
         </section>
@@ -717,9 +760,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
         {/* Descripción */}
         {descHtml && (
           <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-            <h3 className="text-sm font-semibold text-default mb-1.5">
-              Descripción
-            </h3>
+            <h3 className="text-sm font-semibold text-default mb-1.5">Descripción</h3>
             <div
               className="job-html prose prose-sm max-w-none text-sm leading-relaxed text-default/90 dark:prose-invert"
               dangerouslySetInnerHTML={{
@@ -735,5 +776,3 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     </article>
   );
 }
-
-

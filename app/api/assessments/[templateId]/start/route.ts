@@ -3,8 +3,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+function jsonNoStore(data: any, status = 200) {
+  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
+}
 
 function getClientIp(req: Request) {
   const xf = req.headers.get("x-forwarded-for");
@@ -27,7 +33,7 @@ function sanitizeOptions(raw: unknown) {
     if (opt && typeof opt === "object" && !Array.isArray(opt)) {
       const clean: Record<string, any> = {};
       for (const [k, v] of Object.entries(opt)) {
-        const key = k.toLowerCase();
+        const key = String(k).toLowerCase();
         if (
           key.includes("correct") ||
           key.includes("iscorrect") ||
@@ -51,10 +57,7 @@ function buildQuestionsPayload(questionsRaw: any[], meta: any | null) {
     options: sanitizeOptions(q.options),
   }));
 
-  const questionOrder: string[] = Array.isArray(meta?.questionOrder)
-    ? meta.questionOrder
-    : [];
-
+  const questionOrder: string[] = Array.isArray(meta?.questionOrder) ? meta.questionOrder : [];
   if (questionOrder.length) {
     const map = new Map(questions.map((q) => [q.id, q]));
     const ordered = questionOrder.map((id) => map.get(id)).filter(Boolean) as any[];
@@ -78,35 +81,108 @@ function buildQuestionsPayload(questionsRaw: any[], meta: any | null) {
   return questions;
 }
 
-// POST /api/assessments/[templateId]/start
-// Body esperado (recomendado): { applicationId?: string, token?: string }
-export async function POST(
-  request: Request,
-  { params }: { params: { templateId: string } }
-) {
+async function ensureMeta(templateId: string, shuffleQuestions: boolean) {
+  const base = await prisma.assessmentQuestion.findMany({
+    where: { templateId, isActive: true },
+    select: { id: true, options: true },
+  });
+
+  let q = base.map((qq) => ({
+    id: qq.id,
+    options: sanitizeOptions(qq.options),
+  })) as any[];
+
+  if (shuffleQuestions) shuffleInPlace(q);
+
+  const optionOrderByQuestion: Record<string, any[]> = {};
+  q = q.map((qq: any) => {
+    const opts = Array.isArray(qq.options) ? [...qq.options] : [];
+    shuffleInPlace(opts);
+    const keys = opts.map((o: any) => o?.id ?? o?.value ?? JSON.stringify(o));
+    optionOrderByQuestion[qq.id] = keys;
+    return { ...qq, options: opts };
+  });
+
+  return {
+    questionOrder: q.map((qq: any) => qq.id),
+    optionOrderByQuestion,
+  };
+}
+
+function computeExpiresAt(now: Date, timeLimit?: number | null) {
+  const tl =
+    typeof timeLimit === "number" && Number.isFinite(timeLimit) && timeLimit > 0
+      ? Math.floor(timeLimit)
+      : null;
+  return tl ? new Date(now.getTime() + tl * 60 * 1000) : null;
+}
+
+type DbClient = Prisma.TransactionClient;
+
+async function markInviteStartedTx(tx: DbClient, inviteId: string, now: Date) {
+  await tx.assessmentInvite.updateMany({
+    where: { id: inviteId, status: "SENT" as any },
+    data: { status: "STARTED" as any, startedAt: now },
+  });
+}
+
+function isAttemptFinal(status: any) {
+  const s = String(status ?? "").toUpperCase();
+  return s === "SUBMITTED" || s === "EVALUATED" || s === "COMPLETED";
+}
+
+function isExpired(expiresAt: Date | null, now: Date) {
+  return Boolean(expiresAt && expiresAt <= now);
+}
+
+async function buildSaved(attemptId: string) {
+  const saved = await prisma.attemptAnswer.findMany({
+    where: { attemptId },
+    select: { questionId: true, selectedOptions: true, timeSpent: true },
+  });
+
+  const savedAnswers: Record<string, string[]> = {};
+  const savedTimeSpent: Record<string, number> = {};
+
+  for (const a of saved) {
+    savedAnswers[a.questionId] = (a.selectedOptions as any) ?? [];
+    if (typeof a.timeSpent === "number") savedTimeSpent[a.questionId] = a.timeSpent;
+  }
+
+  return { savedAnswers, savedTimeSpent };
+}
+
+export async function POST(request: Request, { params }: { params: { templateId: string } }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+    if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
     const user = session.user as any;
+    const role = String(user?.role ?? "").toUpperCase();
+    if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
+
     const now = new Date();
 
-    // Body opcional
+    // Body opcional: { applicationId?: string, token?: string, attemptId?: string }
     let applicationId: string | null = null;
     let token: string | null = null;
+    let resumeAttemptId: string | null = null;
 
     try {
       const body = await request.json();
-      applicationId = (body?.applicationId as string) || null;
-      token = (body?.token as string) || null;
+      applicationId = body?.applicationId ? String(body.applicationId) : null;
+      token = body?.token ? String(body.token) : null;
+      resumeAttemptId = body?.attemptId ? String(body.attemptId) : null;
     } catch {
       applicationId = null;
       token = null;
+      resumeAttemptId = null;
     }
 
-    // Verificar template existe y está activo
+    if (!token && !applicationId && !resumeAttemptId) {
+      return jsonNoStore({ error: "Falta invitación o contexto (token/applicationId/attemptId)" }, 400);
+    }
+
     const template = await prisma.assessmentTemplate.findUnique({
       where: { id: params.templateId },
       select: {
@@ -120,13 +196,29 @@ export async function POST(
     });
 
     if (!template || !template.isActive) {
-      return NextResponse.json(
-        { error: "Template no encontrado o inactivo" },
-        { status: 404 }
-      );
+      return jsonNoStore({ error: "Template no encontrado o inactivo" }, 404);
     }
 
-    // Si viene token: debe existir invite y debe corresponder a este usuario+template
+    // ✅ Congelar primitivos para evitar "template possibly null" dentro de closures
+    const tmplTimeLimit = template.timeLimit ?? null;
+    const tmplShuffleQuestions = Boolean(template.shuffleQuestions);
+    const tmplAllowRetry = Boolean(template.allowRetry);
+    const tmplMaxAttempts = template.maxAttempts ?? 1;
+
+    const questionsRaw = await prisma.assessmentQuestion.findMany({
+      where: { templateId: params.templateId, isActive: true },
+      select: {
+        id: true,
+        section: true,
+        difficulty: true,
+        questionText: true,
+        codeSnippet: true,
+        options: true,
+        allowMultiple: true,
+      },
+    });
+
+    // 1) Si viene token: valida invite y fija applicationId real
     let invite:
       | {
           id: string;
@@ -153,43 +245,24 @@ export async function POST(
         },
       });
 
-      if (!invite) {
-        return NextResponse.json({ error: "Invitación inválida" }, { status: 400 });
-      }
-
-      if (invite.candidateId !== user.id) {
-        return NextResponse.json({ error: "Invitación no autorizada" }, { status: 403 });
-      }
-
+      if (!invite) return jsonNoStore({ error: "Invitación inválida" }, 400);
+      if (invite.candidateId !== user.id) return jsonNoStore({ error: "Invitación no autorizada" }, 403);
       if (invite.templateId !== params.templateId) {
-        return NextResponse.json(
-          { error: "Invitación no corresponde a este assessment" },
-          { status: 400 }
-        );
+        return jsonNoStore({ error: "Invitación no corresponde a este assessment" }, 400);
+      }
+      if (invite.expiresAt && invite.expiresAt <= now) return jsonNoStore({ error: "Invitación expirada" }, 410);
+
+      const invStatus = String(invite.status ?? "").toUpperCase();
+      if (invStatus === "CANCELLED") return jsonNoStore({ error: "Invitación cancelada" }, 410);
+      if (invStatus === "SUBMITTED" || invStatus === "EVALUATED" || invStatus === "COMPLETED") {
+        return jsonNoStore({ error: "Esta invitación ya fue completada" }, 400);
       }
 
-      if (invite.expiresAt && invite.expiresAt <= now) {
-        return NextResponse.json({ error: "Invitación expirada" }, { status: 410 });
-      }
-
-      if (invite.status === "CANCELLED") {
-        return NextResponse.json({ error: "Invitación cancelada" }, { status: 410 });
-      }
-
-      if (invite.status === "SUBMITTED" || invite.status === "EVALUATED") {
-        return NextResponse.json(
-          { error: "Esta invitación ya fue completada" },
-          { status: 400 }
-        );
-      }
-
-      // El applicationId “real” sale del invite
       applicationId = invite.applicationId;
+      resumeAttemptId = null;
     }
 
-    // Validar applicationId (si existe) y que el template está asignado a la vacante
-    let jobIdFromApp: string | null = null;
-
+    // 2) Validar applicationId (si existe)
     if (applicationId) {
       const app = await prisma.application.findFirst({
         where: { id: applicationId, candidateId: user.id },
@@ -208,265 +281,287 @@ export async function POST(
         },
       });
 
-      if (!app) {
-        return NextResponse.json({ error: "applicationId inválido" }, { status: 400 });
-      }
+      if (!app) return jsonNoStore({ error: "applicationId inválido" }, 400);
 
       if (!app.job.assessments.length) {
-        return NextResponse.json(
-          { error: "Este assessment no está asignado a la vacante" },
-          { status: 400 }
-        );
+        return jsonNoStore({ error: "Este assessment no está asignado a la vacante" }, 400);
       }
 
-      jobIdFromApp = app.jobId;
-
-      // Si viene invite, además amarra jobId del invite = jobId del application
-      if (invite && invite.jobId !== jobIdFromApp) {
-        return NextResponse.json(
-          { error: "Invitación no corresponde a esta postulación" },
-          { status: 400 }
-        );
+      if (invite && invite.jobId !== app.jobId) {
+        return jsonNoStore({ error: "Invitación no corresponde a esta postulación" }, 400);
       }
     }
 
-    // 1) Reusar IN_PROGRESS (incluye expiresAt NULL para intentos viejos)
-    const inProgress = await prisma.assessmentAttempt.findFirst({
-      where: {
-        candidateId: user.id,
-        templateId: params.templateId,
-        status: "IN_PROGRESS",
-        AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
-        ...(applicationId ? { OR: [{ applicationId }, { applicationId: null }] } : {}),
-      },
-      orderBy: { startedAt: "desc" },
-      select: {
-        id: true,
-        expiresAt: true,
-        startedAt: true,
-        flagsJson: true,
-        applicationId: true,
-      },
-    });
-
-    if (inProgress) {
-      // si le falta applicationId, lo amarramos
-      if (applicationId && !inProgress.applicationId) {
-        await prisma.assessmentAttempt.update({
-          where: { id: inProgress.id },
-          data: { applicationId },
-        });
-      }
-
-      // si le falta expiresAt (viejo), lo setea
-      let finalExpiresAt = inProgress.expiresAt;
-      if (!finalExpiresAt) {
-        finalExpiresAt = new Date(now.getTime() + (template.timeLimit ?? 0) * 60 * 1000);
-        await prisma.assessmentAttempt.update({
-          where: { id: inProgress.id },
-          data: { expiresAt: finalExpiresAt, startedAt: inProgress.startedAt ?? now },
-        });
-      }
-
-      // Si el invite estaba SENT, lo marcamos STARTED
-      if (invite && invite.status === "SENT") {
-        await prisma.assessmentInvite.update({
-          where: { id: invite.id },
-          data: { status: "STARTED" as any },
-        });
-      }
-
-      const meta = (inProgress.flagsJson as any) || null;
-
-      const questionsRaw = await prisma.assessmentQuestion.findMany({
-        where: { templateId: params.templateId, isActive: true },
-        select: {
-          id: true,
-          section: true,
-          difficulty: true,
-          tags: true,
-          questionText: true,
-          codeSnippet: true,
-          options: true,
-          allowMultiple: true,
-        },
-      });
-
-      const questions = buildQuestionsPayload(questionsRaw, meta);
-
-      // Rehidratar respuestas
-      const saved = await prisma.attemptAnswer.findMany({
-        where: { attemptId: inProgress.id },
-        select: { questionId: true, selectedOptions: true, timeSpent: true },
-      });
-
-      const savedAnswers: Record<string, string[]> = {};
-      const savedTimeSpent: Record<string, number> = {};
-
-      for (const a of saved) {
-        savedAnswers[a.questionId] = (a.selectedOptions as any) ?? [];
-        if (typeof a.timeSpent === "number") savedTimeSpent[a.questionId] = a.timeSpent;
-      }
-
-      return NextResponse.json(
-        {
-          attemptId: inProgress.id,
-          questions,
-          expiresAt: finalExpiresAt,
-          timeLimit: template.timeLimit,
-          reused: true,
-          savedAnswers,
-          savedTimeSpent,
-        },
-        { headers: { "Cache-Control": "no-store" } }
-      );
-    }
-
-    // 2) Reusar NOT_STARTED (creado al mandar invite) y “arrancarlo”
-    const notStarted = await prisma.assessmentAttempt.findFirst({
-      where: {
-        candidateId: user.id,
-        templateId: params.templateId,
-        status: "NOT_STARTED",
-        ...(applicationId ? { OR: [{ applicationId }, { applicationId: null }] } : {}),
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        applicationId: true,
-        flagsJson: true,
-      },
-    });
-
-    // Contar intentos consumidos (SUBMITTED/EVALUATED)
+    // límites (por template a nivel candidato)
     const attemptsUsed = await prisma.assessmentAttempt.count({
       where: {
         candidateId: user.id,
         templateId: params.templateId,
-        status: { in: ["SUBMITTED", "EVALUATED"] as any },
+        status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] as any },
       },
     });
 
-    if (!template.allowRetry && attemptsUsed > 0) {
-      return NextResponse.json(
-        { error: "Ya completaste esta evaluación" },
-        { status: 400 }
-      );
+    if (!tmplAllowRetry && attemptsUsed > 0) {
+      return jsonNoStore({ error: "Ya completaste esta evaluación" }, 400);
     }
 
-    const maxAttempts = template.maxAttempts ?? 1;
+    const maxAttempts = tmplMaxAttempts;
     if (attemptsUsed >= maxAttempts) {
-      return NextResponse.json(
-        { error: "Límite de intentos alcanzado" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "Límite de intentos alcanzado" }, 400);
     }
 
-    const expiresAt = new Date(now.getTime() + (template.timeLimit ?? 0) * 60 * 1000);
+    // Helper para crear intento nuevo (y liberar inviteId si venía ocupado)
+    async function createFreshAttempt(params2: {
+      oldAttemptId?: string | null;
+      oldInviteId?: string | null;
+      applicationIdToUse: string | null;
+    }) {
+      const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions);
+      const newExpiresAt = computeExpiresAt(now, tmplTimeLimit);
 
-    // Obtener preguntas “base”
-    const questionsRaw = await prisma.assessmentQuestion.findMany({
-      where: { templateId: params.templateId, isActive: true },
-      select: {
-        id: true,
-        section: true,
-        difficulty: true,
-        tags: true,
-        questionText: true,
-        codeSnippet: true,
-        options: true,
-        allowMultiple: true,
-      },
-    });
+      const created = await prisma.$transaction(async (tx) => {
+        if (params2.oldAttemptId && params2.oldInviteId) {
+          // liberar unique inviteId
+          await tx.assessmentAttempt.update({
+            where: { id: params2.oldAttemptId },
+            data: { inviteId: null },
+          });
+        }
 
-    // Meta: si el NOT_STARTED ya la tiene, úsala; si no, genérala
-    let meta = (notStarted?.flagsJson as any) || null;
+        const fresh = await tx.assessmentAttempt.create({
+          data: {
+            candidateId: user.id,
+            templateId: params.templateId,
+            applicationId: params2.applicationIdToUse,
+            inviteId: params2.oldInviteId || (invite ? invite.id : null),
+            status: "IN_PROGRESS" as any,
+            attemptNumber: attemptsUsed + 1,
+            startedAt: now,
+            expiresAt: newExpiresAt,
+            ipAddress: getClientIp(request),
+            userAgent: request.headers.get("user-agent") || "unknown",
+            flagsJson: metaNew,
+          },
+          select: { id: true },
+        });
 
-    if (!meta?.questionOrder || !Array.isArray(meta.questionOrder) || meta.questionOrder.length === 0) {
-      let q = questionsRaw.map((qq) => ({ ...qq, options: sanitizeOptions(qq.options) })) as any[];
-      if (template.shuffleQuestions) shuffleInPlace(q);
+        const inviteIdToMark = params2.oldInviteId || (invite ? invite.id : null);
+        if (inviteIdToMark) {
+          await markInviteStartedTx(tx, inviteIdToMark, now);
+        }
 
-      const optionOrderByQuestion: Record<string, any[]> = {};
-      q = q.map((qq: any) => {
-        const opts = Array.isArray(qq.options) ? [...qq.options] : [];
-        shuffleInPlace(opts);
-        const keys = opts.map((o: any) => o?.id ?? o?.value ?? JSON.stringify(o));
-        optionOrderByQuestion[qq.id] = keys;
-        return { ...qq, options: opts };
+        return { fresh, metaNew, newExpiresAt };
       });
 
-      meta = {
-        questionOrder: q.map((qq) => qq.id),
-        optionOrderByQuestion,
-      };
+      const questions = buildQuestionsPayload(questionsRaw, created.metaNew);
+      const { savedAnswers, savedTimeSpent } = await buildSaved(created.fresh.id);
+
+      return jsonNoStore({
+        attemptId: created.fresh.id,
+        questions,
+        expiresAt: created.newExpiresAt,
+        timeLimit: tmplTimeLimit,
+        reused: false,
+        savedAnswers,
+        savedTimeSpent,
+      });
     }
 
+    // 2.5) Si viene token: si ya existe un attempt ligado a ese invite:
+    // - si está final => bloquear
+    // - si está expirado => crear uno nuevo (liberando inviteId)
+    // - si está activo => reusar
+    if (invite) {
+      const attemptByInvite = await prisma.assessmentAttempt.findFirst({
+        where: { inviteId: invite.id, candidateId: user.id, templateId: params.templateId },
+        select: {
+          id: true,
+          status: true,
+          applicationId: true,
+          expiresAt: true,
+          startedAt: true,
+          flagsJson: true,
+        },
+      });
+
+      if (attemptByInvite) {
+        if (isAttemptFinal(attemptByInvite.status)) {
+          return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+        }
+
+        if (isExpired(attemptByInvite.expiresAt, now)) {
+          return createFreshAttempt({
+            oldAttemptId: attemptByInvite.id,
+            oldInviteId: invite.id,
+            applicationIdToUse: applicationId || attemptByInvite.applicationId || null,
+          });
+        }
+
+        const finalExpiresAt = attemptByInvite.expiresAt ?? computeExpiresAt(now, tmplTimeLimit);
+
+        let meta = (attemptByInvite.flagsJson as any) || null;
+        const hasMeta = Array.isArray(meta?.questionOrder) && meta.questionOrder.length > 0;
+        if (!hasMeta) meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
+
+        await prisma.$transaction(async (tx) => {
+          const atStatus = String(attemptByInvite.status ?? "").toUpperCase();
+
+          const data: any = {};
+          if (applicationId && attemptByInvite.applicationId !== applicationId) data.applicationId = applicationId;
+          if (!attemptByInvite.expiresAt && finalExpiresAt) data.expiresAt = finalExpiresAt;
+          if (!hasMeta) data.flagsJson = meta;
+
+          if (atStatus === "NOT_STARTED") {
+            data.status = "IN_PROGRESS" as any;
+            data.startedAt = now;
+            data.ipAddress = getClientIp(request);
+            data.userAgent = request.headers.get("user-agent") || "unknown";
+          }
+
+          if (Object.keys(data).length) {
+            await tx.assessmentAttempt.update({ where: { id: attemptByInvite.id }, data });
+          }
+
+          await markInviteStartedTx(tx, invite.id, now);
+        });
+
+        const questions = buildQuestionsPayload(questionsRaw, meta);
+        const { savedAnswers, savedTimeSpent } = await buildSaved(attemptByInvite.id);
+
+        return jsonNoStore({
+          attemptId: attemptByInvite.id,
+          questions,
+          expiresAt: finalExpiresAt,
+          timeLimit: tmplTimeLimit,
+          reused: true,
+          savedAnswers,
+          savedTimeSpent,
+        });
+      }
+    }
+
+    // 3) resumeAttemptId sin token
+    if (resumeAttemptId) {
+      const attempt = await prisma.assessmentAttempt.findUnique({
+        where: { id: resumeAttemptId },
+        select: {
+          id: true,
+          candidateId: true,
+          templateId: true,
+          applicationId: true,
+          inviteId: true,
+          status: true,
+          expiresAt: true,
+          startedAt: true,
+          flagsJson: true,
+        },
+      });
+
+      if (!attempt) return jsonNoStore({ error: "Attempt no encontrado" }, 404);
+      if (attempt.candidateId !== user.id) return jsonNoStore({ error: "No autorizado" }, 403);
+      if (attempt.templateId !== params.templateId) {
+        return jsonNoStore({ error: "Attempt no corresponde a este template" }, 400);
+      }
+      if (isAttemptFinal(attempt.status)) {
+        return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+      }
+
+      // ✅ si el attempt que intentan reanudar ya expiró, crear uno nuevo
+      if (isExpired(attempt.expiresAt, now)) {
+        return createFreshAttempt({
+          oldAttemptId: attempt.inviteId ? attempt.id : null,
+          oldInviteId: attempt.inviteId ? String(attempt.inviteId) : null,
+          applicationIdToUse: applicationId || attempt.applicationId || null,
+        });
+      }
+
+      const finalExpiresAt = attempt.expiresAt ?? computeExpiresAt(now, tmplTimeLimit);
+
+      let meta = (attempt.flagsJson as any) || null;
+      const hasMeta = Array.isArray(meta?.questionOrder) && meta.questionOrder.length > 0;
+      if (!hasMeta) meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
+
+      const atStatus = String(attempt.status ?? "").toUpperCase();
+
+      await prisma.$transaction(async (tx) => {
+        const upd: any = {};
+
+        if (atStatus === "NOT_STARTED") {
+          upd.status = "IN_PROGRESS" as any;
+          upd.startedAt = now;
+          upd.ipAddress = getClientIp(request);
+          upd.userAgent = request.headers.get("user-agent") || "unknown";
+          upd.flagsJson = meta;
+          if (!attempt.expiresAt && finalExpiresAt) upd.expiresAt = finalExpiresAt;
+        } else {
+          if (!attempt.expiresAt && finalExpiresAt) upd.expiresAt = finalExpiresAt;
+          if (!hasMeta) upd.flagsJson = meta;
+        }
+
+        if (Object.keys(upd).length) {
+          await tx.assessmentAttempt.update({ where: { id: attempt.id }, data: upd });
+        }
+
+        if (attempt.inviteId) {
+          await markInviteStartedTx(tx, attempt.inviteId as any, now);
+        }
+      });
+
+      const questions = buildQuestionsPayload(questionsRaw, meta);
+      const { savedAnswers, savedTimeSpent } = await buildSaved(attempt.id);
+
+      return jsonNoStore({
+        attemptId: attempt.id,
+        questions,
+        expiresAt: finalExpiresAt,
+        timeLimit: tmplTimeLimit,
+        reused: true,
+        savedAnswers,
+        savedTimeSpent,
+      });
+    }
+
+    // 4) fallback: crear intento nuevo
+    const expiresAt = computeExpiresAt(now, tmplTimeLimit);
+    const meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
     const questions = buildQuestionsPayload(questionsRaw, meta);
 
-    let attemptId: string;
-
-    if (notStarted) {
-      const updated = await prisma.assessmentAttempt.update({
-        where: { id: notStarted.id },
-        data: {
-          applicationId: applicationId || notStarted.applicationId || null,
-          status: "IN_PROGRESS" as any,
-          startedAt: now,
-          expiresAt,
-          ipAddress: getClientIp(request),
-          userAgent: request.headers.get("user-agent") || "unknown",
-          flagsJson: meta,
-          attemptNumber: attemptsUsed + 1,
-        },
-        select: { id: true },
-      });
-
-      attemptId = updated.id;
-    } else {
-      const created = await prisma.assessmentAttempt.create({
-        data: {
-          candidateId: user.id,
-          templateId: params.templateId,
-          applicationId: applicationId || null,
-          status: "IN_PROGRESS" as any,
-          attemptNumber: attemptsUsed + 1,
-          startedAt: now,
-          expiresAt,
-          ipAddress: getClientIp(request),
-          userAgent: request.headers.get("user-agent") || "unknown",
-          flagsJson: meta,
-        },
-        select: { id: true },
-      });
-
-      attemptId = created.id;
-    }
-
-    // Si viene invite (token), marcarlo STARTED
-    if (invite && invite.status === "SENT") {
-      await prisma.assessmentInvite.update({
-        where: { id: invite.id },
-        data: { status: "STARTED" as any },
-      });
-    }
-
-    return NextResponse.json(
-      {
-        attemptId,
-        questions,
+    const created = await prisma.assessmentAttempt.create({
+      data: {
+        candidateId: user.id,
+        templateId: params.templateId,
+        applicationId: applicationId || null,
+        inviteId: invite ? invite.id : null,
+        status: "IN_PROGRESS" as any,
+        attemptNumber: attemptsUsed + 1,
+        startedAt: now,
         expiresAt,
-        timeLimit: template.timeLimit,
-        reused: Boolean(notStarted),
-        savedAnswers: {},
-        savedTimeSpent: {},
+        ipAddress: getClientIp(request),
+        userAgent: request.headers.get("user-agent") || "unknown",
+        flagsJson: meta,
       },
-      { headers: { "Cache-Control": "no-store" } }
-    );
-  } catch (error) {
+      select: { id: true },
+    });
+
+    if (invite) {
+      await prisma.$transaction(async (tx) => {
+        await markInviteStartedTx(tx, invite.id, now);
+      });
+    }
+
+    const { savedAnswers, savedTimeSpent } = await buildSaved(created.id);
+
+    return jsonNoStore({
+      attemptId: created.id,
+      questions,
+      expiresAt,
+      timeLimit: tmplTimeLimit,
+      reused: false,
+      savedAnswers,
+      savedTimeSpent,
+    });
+  } catch (error: any) {
     console.error("Error starting attempt:", error);
-    return NextResponse.json(
-      { error: "Error al iniciar evaluación" },
-      { status: 500 }
-    );
+    return jsonNoStore({ error: "Error al iniciar evaluación", detail: error?.message ?? String(error) }, 500);
   }
 }

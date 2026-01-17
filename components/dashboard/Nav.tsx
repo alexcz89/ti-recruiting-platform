@@ -11,6 +11,7 @@ function NavItem({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
+      aria-current={active ? "page" : undefined}
       className={`px-3 py-2 rounded-md text-sm border transition
         ${
           active
@@ -28,6 +29,7 @@ export default function Nav() {
     <nav className="flex gap-2">
       <NavItem href="/dashboard/overview" label="Overview" />
       <NavItem href="/dashboard/jobs" label="Vacantes" />
+      <NavItem href="/dashboard/assessments" label="Evaluaciones" /> {/* ✅ NUEVO */}
     </nav>
   );
 }

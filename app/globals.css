@@ -19,14 +19,14 @@ html {
 
 body {
   @apply min-h-screen antialiased;
-  background-color: #ffffff !important; /* Blanco sólido en modo claro */
-  color: #27272a; /* zinc-800 */
+  background-color: #fafafa !important; /* zinc-50 - gris muy claro profesional */
+  color: #18181b; /* zinc-900 */
   margin: 0;
   padding: 0;
 }
 
 .dark body {
-  background-color: #09090b !important; /* zinc-950 sólido en modo oscuro */
+  background-color: #09090b !important; /* zinc-950 - negro suave */
   color: #fafafa; /* zinc-50 */
 }
 
@@ -134,9 +134,14 @@ p, span, div {
 
   /* Botones */
   .btn{
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition active:scale-[.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60;
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition active:scale-[.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60 disabled:opacity-50 disabled:cursor-not-allowed;
   }
-  .btn-primary { @apply bg-emerald-600 text-white hover:bg-emerald-700; }
+  .btn-primary { 
+    @apply bg-emerald-600 text-white hover:bg-emerald-700 disabled:hover:bg-emerald-600; 
+  }
+  .btn-secondary { 
+    @apply bg-violet-600 text-white hover:bg-violet-700 disabled:hover:bg-violet-600; 
+  }
 
   /* Ghost con mismas dimensiones que .btn */
   .btn-ghost{
@@ -394,12 +399,53 @@ p, span, div {
   }
 }
 
+@keyframes slide-in-from-top {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
 .animate-fade-in {
   animation: fade-in 0.6s ease-out forwards;
 }
 
 .animate-fade-in-up {
   animation: fade-in-up 0.8s ease-out forwards;
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-top-2 {
+  animation-name: slide-in-from-top;
+}
+
+.duration-200 {
+  animation-duration: 0.2s;
+}
+
+.animate-gradient {
+  background-size: 200% 200%;
+  animation: gradient 3s ease infinite;
 }
 
 .animation-delay-200 {

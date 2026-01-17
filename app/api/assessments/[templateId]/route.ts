@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: { templateId: string } }
 ) {
   try {
@@ -29,6 +29,7 @@ export async function GET(
         totalQuestions: true,
         allowRetry: true,
         maxAttempts: true,
+        isActive: true,
         sections: true,
         createdAt: true,
         updatedAt: true,
@@ -38,9 +39,17 @@ export async function GET(
       },
     });
 
-    if (!template) {
+    if (!template || !template.isActive) {
       return NextResponse.json({ error: "Template no encontrado" }, { status: 404 });
     }
+
+    // ✅ Normalizaciones para evitar UI breaks
+    const normalizedTotalQuestions =
+      typeof template.totalQuestions === "number" && template.totalQuestions > 0
+        ? template.totalQuestions
+        : template._count.questions;
+
+    const normalizedSections = Array.isArray(template.sections) ? template.sections : [];
 
     const user = session.user as any;
 
@@ -50,7 +59,7 @@ export async function GET(
         where: {
           candidateId: user.id,
           templateId: params.templateId,
-          status: { in: ["SUBMITTED", "EVALUATED"] },
+          status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] as any },
         },
       }),
       // ✅ último intento de cualquier status (para UX)
@@ -77,7 +86,11 @@ export async function GET(
 
     return NextResponse.json(
       {
-        template,
+        template: {
+          ...template,
+          totalQuestions: normalizedTotalQuestions,
+          sections: normalizedSections,
+        },
         userStatus: {
           attemptsUsed,
           maxAttempts,

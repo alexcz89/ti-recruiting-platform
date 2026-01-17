@@ -13,8 +13,8 @@ type Flags = {
 
 type Props = {
   enabled: boolean;
-  attemptId: string | null; // 👈 NUEVO
-  onFlagsChange?: (flags: Flags) => void; // ahora opcional (solo UI)
+  attemptId: string | null;
+  onFlagsChange?: (flags: Flags) => void;
   maxTabSwitches?: number;
 };
 
@@ -23,7 +23,9 @@ type AntiCheatEvent =
   | "VISIBILITY_HIDDEN"
   | "COPY"
   | "PASTE"
-  | "RIGHT_CLICK";
+  | "RIGHT_CLICK"
+  | "PAGEHIDE"
+  | "BLUR";
 
 export function useAntiCheating({
   enabled,
@@ -38,20 +40,57 @@ export function useAntiCheating({
     focusLoss: 0,
   });
 
-  const sendEvent = useCallback(
-    async (event: AntiCheatEvent, meta?: any) => {
+  const queueRef = useRef<any[]>([]);
+  const timerRef = useRef<any>(null);
+
+  const emit = useCallback(() => {
+    onFlagsChange?.({ ...flagsRef.current });
+  }, [onFlagsChange]);
+
+  const enqueue = useCallback(
+    (event: AntiCheatEvent, meta?: any) => {
       if (!attemptId) return;
 
-      // fire-and-forget (pero sin tirar warnings en consola si falla)
-      try {
-        await fetch(`/api/assessments/attempts/${attemptId}/flags`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(meta ? { event, meta } : { event }),
-        });
-      } catch {
-        // no-op: no interrumpir al candidato
+      const eventId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+      queueRef.current.push({
+        event,
+        meta,
+        eventId,
+        ts: new Date().toISOString(),
+      });
+    },
+    [attemptId]
+  );
+
+  const flush = useCallback(
+    (useBeacon: boolean) => {
+      if (!attemptId) return;
+
+      const batch = queueRef.current.splice(0, queueRef.current.length);
+      if (!batch.length) return;
+
+      const url = `/api/assessments/attempts/${attemptId}/flags`;
+      const payload = JSON.stringify({ events: batch });
+
+      if (useBeacon && typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+        try {
+          const ok = navigator.sendBeacon(url, payload);
+          if (ok) return;
+        } catch {
+          // fallback a fetch
+        }
       }
+
+      fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {});
     },
     [attemptId]
   );
@@ -59,46 +98,39 @@ export function useAntiCheating({
   useEffect(() => {
     if (!enabled) return;
 
-    const emit = () => onFlagsChange?.({ ...flagsRef.current });
+    // flush periódico (reduce requests)
+    timerRef.current = setInterval(() => flush(false), 2000);
 
-    // Detectar cambio de tab/ventana
     const handleVisibilityChange = () => {
       if (document.hidden) {
         flagsRef.current.tabSwitches += 1;
         flagsRef.current.focusLoss += 1;
         emit();
 
-        // Server-side event
-        sendEvent("TAB_SWITCH");
-        sendEvent("VISIBILITY_HIDDEN");
+        // ✅ envía solo un evento canonical o ambos; aquí dejo ambos porque ya es batch
+        enqueue("TAB_SWITCH");
+        enqueue("VISIBILITY_HIDDEN");
 
         if (flagsRef.current.tabSwitches >= maxTabSwitches) {
-          toast.error("⚠️ Has cambiado de pestaña muchas veces. Esto será reportado.", {
-            duration: 5000,
-          });
+          toast.error("⚠️ Has cambiado de pestaña muchas veces. Esto será reportado.", { duration: 5000 });
         } else {
-          toast.warning(
-            `⚠️ Evita cambiar de pestaña (${flagsRef.current.tabSwitches}/${maxTabSwitches})`,
-            { duration: 3000 }
-          );
+          toast.warning(`⚠️ Evita cambiar de pestaña (${flagsRef.current.tabSwitches}/${maxTabSwitches})`, {
+            duration: 3000,
+          });
         }
       }
     };
 
-    // Detectar pérdida de foco (solo señal local; opcional reportar)
     const handleBlur = () => {
       flagsRef.current.focusLoss += 1;
       emit();
-      // si quieres reportar blur como evento, úsalo como VISIBILITY_HIDDEN también:
-      // sendEvent("VISIBILITY_HIDDEN", { source: "blur" });
+      enqueue("BLUR");
     };
 
     const handleCopy = (e: ClipboardEvent) => {
       flagsRef.current.copyAttempts += 1;
       emit();
-
-      sendEvent("COPY");
-
+      enqueue("COPY");
       toast.warning("⚠️ Copiar está deshabilitado durante la evaluación");
       e.preventDefault();
     };
@@ -106,19 +138,20 @@ export function useAntiCheating({
     const handlePaste = (e: ClipboardEvent) => {
       flagsRef.current.pasteAttempts += 1;
       emit();
-
-      sendEvent("PASTE");
-
+      enqueue("PASTE");
       toast.warning("⚠️ Pegar está deshabilitado durante la evaluación");
       e.preventDefault();
     };
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
-
-      sendEvent("RIGHT_CLICK");
-
+      enqueue("RIGHT_CLICK");
       toast.warning("⚠️ Click derecho deshabilitado");
+    };
+
+    const handlePageHide = () => {
+      enqueue("PAGEHIDE");
+      flush(true); // ✅ intenta beacon al salir
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -126,15 +159,21 @@ export function useAntiCheating({
     document.addEventListener("copy", handleCopy);
     document.addEventListener("paste", handlePaste);
     document.addEventListener("contextmenu", handleContextMenu);
+    window.addEventListener("pagehide", handlePageHide);
 
     return () => {
+      clearInterval(timerRef.current);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       document.removeEventListener("copy", handleCopy);
       document.removeEventListener("paste", handlePaste);
       document.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("pagehide", handlePageHide);
+
+      // flush final
+      flush(true);
     };
-  }, [enabled, sendEvent, maxTabSwitches, onFlagsChange]);
+  }, [enabled, enqueue, flush, emit, maxTabSwitches]);
 
   return flagsRef.current;
 }

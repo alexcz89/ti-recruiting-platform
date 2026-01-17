@@ -5,142 +5,154 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-export async function POST(
-  request: Request,
-  { params }: { params: { attemptId: string } }
-) {
+function jsonNoStore(data: any, status = 200) {
+  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+export async function POST(_request: Request, { params }: { params: { attemptId: string } }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+    if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
     const user = session.user as any;
+    const role = String(user?.role ?? "").toUpperCase();
+    if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
 
     const attempt = await prisma.assessmentAttempt.findUnique({
       where: { id: params.attemptId },
       include: {
-        template: true,
-        answers: { include: { question: true } },
+        template: { select: { passingScore: true, sections: true } },
+        answers: { include: { question: { select: { section: true } } } },
       },
     });
 
-    if (!attempt) {
-      return NextResponse.json({ error: "Intento no encontrado" }, { status: 404 });
+    if (!attempt) return jsonNoStore({ error: "Intento no encontrado" }, 404);
+    if (attempt.candidateId !== user.id) return jsonNoStore({ error: "No autorizado" }, 403);
+
+    // Bloquear double-submit / estados finales
+    const st = String(attempt.status ?? "").toUpperCase();
+    if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(st)) {
+      return jsonNoStore({ error: "El intento ya fue enviado" }, 400);
+    }
+    if (st !== "IN_PROGRESS") {
+      return jsonNoStore({ error: "El intento no está en progreso" }, 400);
     }
 
-    if (attempt.candidateId !== user.id) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
+    // Validar expiración server-side
+    const now = new Date();
+    if (attempt.expiresAt && now > attempt.expiresAt) {
+      return jsonNoStore({ error: "Tiempo expirado" }, 400);
     }
-
-    // ✅ Bloquear estados incorrectos
-    if (attempt.status === "SUBMITTED" || attempt.status === "EVALUATED") {
-      return NextResponse.json({ error: "El intento ya fue enviado" }, { status: 400 });
-    }
-
-    if (attempt.status !== "IN_PROGRESS") {
-      return NextResponse.json(
-        { error: "El intento no está en progreso" },
-        { status: 400 }
-      );
-    }
-
-    // ✅ Validar expiración (server-side)
-    if (attempt.expiresAt && new Date() > attempt.expiresAt) {
-      return NextResponse.json({ error: "Tiempo expirado" }, { status: 400 });
-    }
-
     if (!attempt.startedAt) {
-      return NextResponse.json(
-        { error: "El intento no ha sido iniciado correctamente" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "El intento no ha sido iniciado correctamente" }, 400);
     }
 
     const answeredCount = attempt.answers.length;
 
-    // totalPoints (asumiendo pointsEarned calculado server-side en /answer)
-    const totalPoints = attempt.answers.reduce(
-      (sum, a) => sum + (a.pointsEarned || 0),
-      0
-    );
+    // totalPoints (pointsEarned ya se calculó server-side en /answer)
+    const totalPoints = attempt.answers.reduce((sum, a) => sum + (a.pointsEarned || 0), 0);
 
-    // totalQuestions del template es el denominador (si hoy todo vale 1)
-    const maxPoints = attempt.template.totalQuestions || answeredCount || 0;
+    // Denominador: total de preguntas activas del template
+    const totalQuestions = await prisma.assessmentQuestion.count({
+      where: { templateId: attempt.templateId, isActive: true },
+    });
+
+    const maxPoints = totalQuestions || answeredCount || 0;
     const totalScore =
       maxPoints > 0 ? Math.max(0, Math.round((totalPoints / maxPoints) * 100)) : 0;
 
-    // Scores por sección con guardas (evita /0)
+    // Scores por sección
     const sections = (attempt.template.sections as any[]) || [];
     const sectionScores: Record<string, number> = {};
 
     for (const section of sections) {
-      const sectionAnswers = attempt.answers.filter(
-        (a) => a.question.section === section.name
-      );
-      const sectionPoints = sectionAnswers.reduce(
-        (sum, a) => sum + (a.pointsEarned || 0),
-        0
-      );
+      const sectionName = String(section?.name || "");
+      if (!sectionName) continue;
 
-      const sectionMax = Number(section.questions || 0);
+      const sectionAnswers = attempt.answers.filter((a) => a.question.section === sectionName);
+      const sectionPoints = sectionAnswers.reduce((sum, a) => sum + (a.pointsEarned || 0), 0);
 
-      sectionScores[section.name] =
+      const sectionMax = Number(section?.questions || 0);
+      sectionScores[sectionName] =
         sectionMax > 0 ? Math.max(0, Math.round((sectionPoints / sectionMax) * 100)) : 0;
     }
 
     const timeSpent = attempt.answers.reduce((sum, a) => sum + (a.timeSpent || 0), 0);
 
-    // Flags (merge)
-    const flags: any = { ...(attempt.flagsJson as any) };
+    // Flags merge + “tooFast”
+    const flags: any =
+      attempt.flagsJson && typeof attempt.flagsJson === "object"
+        ? { ...(attempt.flagsJson as any) }
+        : {};
 
-    // Flag: respondió muy rápido (solo si hay respuestas)
     if (answeredCount > 0) {
       const avgTimePerQuestion = timeSpent / answeredCount;
       if (avgTimePerQuestion < 5) flags.tooFast = true;
     }
 
-    const passed = totalScore >= attempt.template.passingScore;
+    const passingScore = Number((attempt.template as any)?.passingScore ?? 0);
+    const passed = totalScore >= passingScore;
 
-    // ✅ Update atómico por estado (evita doble-submit por race condition)
-    const updated = await prisma.assessmentAttempt.updateMany({
-      where: {
-        id: params.attemptId,
-        candidateId: user.id,
-        status: "IN_PROGRESS",
-      },
-      data: {
-        status: "SUBMITTED",
-        submittedAt: new Date(),
-        totalScore,
-        sectionScores,
-        passed,
-        timeSpent,
-        flagsJson: flags,
-      },
-    });
+    // Update atómico por estado + marcar invite SUBMITTED
+    try {
+      await prisma.$transaction(async (tx) => {
+        const updated = await tx.assessmentAttempt.updateMany({
+          where: {
+            id: params.attemptId,
+            candidateId: user.id,
+            status: "IN_PROGRESS" as any,
+          },
+          data: {
+            status: "SUBMITTED" as any,
+            submittedAt: now,
+            totalScore,
+            sectionScores,
+            passed,
+            timeSpent,
+            flagsJson: flags,
+          },
+        });
 
-    if (updated.count === 0) {
-      return NextResponse.json(
-        { error: "No se pudo enviar (estado inválido o ya enviado)" },
-        { status: 400 }
-      );
+        if (updated.count === 0) {
+          throw new Error("STATE_INVALID_OR_ALREADY_SUBMITTED");
+        }
+
+        // Preferir inviteId si existe (más preciso)
+        if (attempt.inviteId) {
+          await tx.assessmentInvite.updateMany({
+            where: { id: attempt.inviteId, status: { in: ["SENT", "STARTED"] as any } },
+            data: { status: "SUBMITTED" as any, submittedAt: now },
+          });
+        } else if (attempt.applicationId) {
+          await tx.assessmentInvite.updateMany({
+            where: {
+              candidateId: user.id,
+              templateId: attempt.templateId,
+              applicationId: attempt.applicationId,
+              status: { in: ["SENT", "STARTED"] as any },
+            },
+            data: { status: "SUBMITTED" as any, submittedAt: now },
+          });
+        }
+      });
+    } catch (e: any) {
+      if (String(e?.message || "").includes("STATE_INVALID_OR_ALREADY_SUBMITTED")) {
+        return jsonNoStore({ error: "No se pudo enviar (estado inválido o ya enviado)" }, 400);
+      }
+      throw e;
     }
 
-    return NextResponse.json(
-      {
-        success: true,
-        totalScore,
-        sectionScores,
-        passed,
-        passingScore: attempt.template.passingScore,
-        timeSpent,
-      },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    return jsonNoStore({
+      success: true,
+      totalScore,
+      sectionScores,
+      passed,
+      timeSpent,
+    });
   } catch (error) {
     console.error("Error submitting assessment:", error);
-    return NextResponse.json({ error: "Error al enviar evaluación" }, { status: 500 });
+    return jsonNoStore({ error: "Error al enviar evaluación" }, 500);
   }
 }

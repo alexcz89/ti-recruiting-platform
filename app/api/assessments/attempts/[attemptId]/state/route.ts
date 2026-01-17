@@ -6,18 +6,27 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
+function jsonNoStore(data: any, status = 200) {
+  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+function answeredLen(v: unknown) {
+  return Array.isArray(v) ? v.length : 0;
+}
+
 // GET /api/assessments/attempts/[attemptId]/state
-export async function GET(
-  _request: Request,
-  { params }: { params: { attemptId: string } }
-) {
+export async function GET(_request: Request, { params }: { params: { attemptId: string } }) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+    if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
     const user = session.user as any;
+    const userId = String(user?.id || "");
+    const role = String(user?.role ?? "").toUpperCase();
+
+    if (!userId) return jsonNoStore({ error: "No autorizado" }, 401);
+    if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
+
     const now = new Date();
 
     const attempt = await prisma.assessmentAttempt.findUnique({
@@ -33,16 +42,10 @@ export async function GET(
       },
     });
 
-    if (!attempt) {
-      return NextResponse.json({ error: "Attempt no encontrado" }, { status: 404 });
-    }
-
-    if (attempt.candidateId !== user.id) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
+    if (!attempt) return jsonNoStore({ error: "Attempt no encontrado" }, 404);
+    if (attempt.candidateId !== userId) return jsonNoStore({ error: "No autorizado" }, 403);
 
     // Traer respuestas guardadas (AttemptAnswer)
-    // ✅ DESC para detectar rápido la “última contestada”
     const rows = await prisma.attemptAnswer.findMany({
       where: { attemptId: attempt.id },
       select: {
@@ -58,7 +61,7 @@ export async function GET(
     const timeSpent: Record<string, number> = {};
 
     for (const r of rows) {
-      answers[r.questionId] = Array.isArray(r.selectedOptions) ? r.selectedOptions : [];
+      answers[r.questionId] = Array.isArray(r.selectedOptions) ? (r.selectedOptions as any) : [];
       timeSpent[r.questionId] = typeof r.timeSpent === "number" ? r.timeSpent : 0;
     }
 
@@ -67,44 +70,41 @@ export async function GET(
     const meta = (attempt.flagsJson as any) || null;
     const order: string[] = Array.isArray(meta?.questionOrder) ? meta.questionOrder : [];
 
-    let currentIndex = 0;
-
-    if (lastAnsweredQuestionId && order.length) {
-      const idx = order.indexOf(lastAnsweredQuestionId);
-      if (idx >= 0) {
-        // siguiente pregunta (si no es la última)
-        currentIndex = Math.min(idx + 1, order.length - 1);
-      }
-    }
-
-    // clamp defensivo
-    if (order.length) {
-      currentIndex = Math.max(0, Math.min(currentIndex, order.length - 1));
-    } else {
-      currentIndex = 0;
-    }
-
     const expired = Boolean(attempt.expiresAt && attempt.expiresAt <= now);
 
-    return NextResponse.json(
-      {
-        attemptId: attempt.id,
-        status: attempt.status,
-        expiresAt: attempt.expiresAt,
-        expired,
-        answers,
-        timeSpent,
-        lastAnsweredQuestionId,
-        currentIndex,
-        answeredCount: Object.keys(answers).length,
-      },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+    const answeredCount = order.length
+      ? order.reduce((acc, qid) => acc + (answeredLen(answers[qid]) > 0 ? 1 : 0), 0)
+      : Object.values(answers).reduce((acc, arr) => acc + (answeredLen(arr) > 0 ? 1 : 0), 0);
+
+    // ✅ currentIndex solo si hay questionOrder; si no, el frontend calcula firstUnansweredIndex()
+    let currentIndex: number | undefined = undefined;
+
+    if (order.length) {
+      const firstUnanswered = order.findIndex((qid) => answeredLen(answers[qid]) === 0);
+
+      if (firstUnanswered >= 0) currentIndex = firstUnanswered;
+      else currentIndex = Math.max(0, order.length - 1);
+
+      // clamp defensivo
+      currentIndex = Math.max(0, Math.min(currentIndex, order.length - 1));
+    }
+
+    const payload: any = {
+      attemptId: attempt.id,
+      status: attempt.status,
+      expiresAt: attempt.expiresAt,
+      expired,
+      answers,
+      timeSpent,
+      lastAnsweredQuestionId,
+      answeredCount,
+    };
+
+    if (typeof currentIndex === "number") payload.currentIndex = currentIndex;
+
+    return jsonNoStore(payload);
   } catch (error) {
     console.error("Error loading attempt state:", error);
-    return NextResponse.json(
-      { error: "Error al cargar estado del intento" },
-      { status: 500 }
-    );
+    return jsonNoStore({ error: "Error al cargar estado del intento" }, 500);
   }
 }

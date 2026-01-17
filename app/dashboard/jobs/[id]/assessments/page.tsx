@@ -20,62 +20,48 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
   }
 
   const user = session.user as any;
-  const companyId = await getSessionCompanyId().catch(() => null);
+  const role = (user?.role as string | undefined) ?? undefined;
+  const userId = (user?.id as string | undefined) ?? undefined;
 
-  // ✅ DEBUG: confirma qué DB está usando Next (sanitizado)
-  console.log("[ENV DATABASE_URL]", (process.env.DATABASE_URL || "").replace(/:\/\/.*@/, "://***@"));
+  if (!userId) redirect("/signin");
 
-  console.log("[DASH JOB ASSESSMENTS PAGE] hit", {
-    jobId: params.id,
-    userId: user?.id,
-    role: user?.role,
-    sessionUserCompanyId: user?.companyId ?? null,
-    getSessionCompanyId: companyId,
-  });
+  const isAdmin = role === "ADMIN";
+  const isRecruiter = role === "RECRUITER";
 
-  if (!companyId) {
-    console.log("[DASH JOB ASSESSMENTS PAGE] no companyId -> redirect");
-    redirect("/dashboard/overview");
-  }
+  // Solo admin o recruiter
+  if (!isAdmin && !isRecruiter) notFound();
 
-  // ✅ DEBUG: trae el job sin filtro para validar existencia y companyId real
-  const rawJob = await prisma.job.findUnique({
-    where: { id: params.id },
-    select: { id: true, companyId: true, title: true },
-  });
+  // companyId real del scope multi-empresa
+  const scopedCompanyId =
+    (await getSessionCompanyId().catch(() => null)) ??
+    (user?.companyId as string | undefined) ??
+    null;
 
-  console.log("[DASH JOB ASSESSMENTS DEBUG]", {
-    paramsJobId: params.id,
-    sessionUserId: user?.id ?? null,
-    sessionUserCompanyId: user?.companyId ?? null,
-    getSessionCompanyId: companyId,
-    rawJobExists: !!rawJob,
-    rawJobCompanyId: rawJob?.companyId ?? null,
-    rawJobTitle: rawJob?.title ?? null,
-  });
+  // Admin: ve cualquier job
+  // Recruiter: SIEMPRE scope por companyId (si no hay companyId, no debe entrar)
+  const job = isAdmin
+    ? await prisma.job.findUnique({
+        where: { id: params.id },
+        select: {
+          id: true,
+          title: true,
+          location: true,
+          company: { select: { name: true } },
+        },
+      })
+    : scopedCompanyId
+      ? await prisma.job.findFirst({
+          where: { id: params.id, companyId: scopedCompanyId },
+          select: {
+            id: true,
+            title: true,
+            location: true,
+            company: { select: { name: true } },
+          },
+        })
+      : null;
 
-  // ✅ Multiempresa: job debe ser de la empresa del usuario
-  const job = await prisma.job.findFirst({
-    where: { id: params.id, companyId },
-    select: {
-      id: true,
-      title: true,
-      location: true,
-      company: { select: { name: true } },
-    },
-  });
-
-  if (!job) {
-    console.log("[DASH JOB ASSESSMENTS PAGE] job not found OR not in company", {
-      requestedJobId: params.id,
-      sessionCompanyId: companyId,
-      jobExists: !!rawJob,
-      jobCompanyId: rawJob?.companyId ?? null,
-      jobTitle: rawJob?.title ?? null,
-    });
-
-    notFound();
-  }
+  if (!job) notFound();
 
   const existingAssessments = await prisma.jobAssessment.findMany({
     where: { jobId: job.id },
@@ -94,10 +80,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
     },
   });
 
-  console.log("[DASH JOB ASSESSMENTS PAGE] loaded", {
-    jobId: job.id,
-    existingAssessmentsCount: existingAssessments.length,
-  });
+  const count = existingAssessments.length;
 
   return (
     <main className="max-w-none p-0">
@@ -127,6 +110,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
             <Link
               href={`/jobs/${job.id}`}
               target="_blank"
+              rel="noreferrer noopener"
               className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
             >
               Ver vacante pública
@@ -141,10 +125,78 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
           </div>
         </header>
 
-        <AssignAssessmentForm
-          jobId={job.id}
-          existingAssessments={existingAssessments as any}
-        />
+        {/* ✅ Estado actual: lista / empty-state */}
+        <section className="rounded-2xl border border-zinc-200/70 bg-white/70 p-4 shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950/30">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                Assessments asignados
+              </h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {count === 0
+                  ? "Aún no has asignado assessments a esta vacante."
+                  : "Estos son los assessments configurados para esta vacante."}
+              </p>
+            </div>
+
+            <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+              {count} {count === 1 ? "asignado" : "asignados"}
+            </span>
+          </div>
+
+          {count === 0 ? (
+            <div className="mt-3 rounded-xl border border-dashed border-zinc-200 bg-white/60 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
+              Selecciona un assessment abajo y presiona <span className="font-medium">“Asignar assessment”</span>.
+            </div>
+          ) : (
+            <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-zinc-50 text-xs text-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Assessment</th>
+                    <th className="px-3 py-2 font-medium">Reglas</th>
+                    <th className="px-3 py-2 font-medium">Tiempo</th>
+                    <th className="px-3 py-2 font-medium">Preguntas</th>
+                    <th className="px-3 py-2 font-medium">Passing</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-200 bg-white dark:divide-zinc-800 dark:bg-zinc-950/20">
+                  {existingAssessments.map((a: any) => (
+                    <tr key={a.id} className="text-zinc-800 dark:text-zinc-100">
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{a.template?.title ?? "—"}</div>
+                        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {a.template?.difficulty ? String(a.template.difficulty) : "—"}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="text-sm">
+                          <span className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
+                            {a.isRequired ? "Obligatorio" : "Opcional"}
+                          </span>
+                          <span className="ml-2 text-xs text-zinc-500 dark:text-zinc-400">
+                            Min score: {typeof a.minScore === "number" ? a.minScore : "N/A"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        {typeof a.template?.timeLimit === "number" ? `${a.template.timeLimit} min` : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {typeof a.template?.totalQuestions === "number" ? a.template.totalQuestions : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {typeof a.template?.passingScore === "number" ? `${a.template.passingScore}%` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <AssignAssessmentForm jobId={job.id} existingAssessments={existingAssessments as any} />
       </div>
     </main>
   );
