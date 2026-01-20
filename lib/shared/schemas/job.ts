@@ -1,4 +1,4 @@
-// lib/schemas/job.ts
+// lib/shared/schemas/job.ts
 import { z } from "zod";
 import { isoCountry2 } from "./common";
 

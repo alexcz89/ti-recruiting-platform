@@ -1,12 +1,12 @@
 // app/dashboard/overview/page.tsx
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import Link from "next/link";
 import Image from "next/image";
 import { fromNow } from "@/lib/dates";
 import SetupChecklist from "../components/SetupChecklist";
 import BannerEmailUnverified from "../components/BannerEmailUnverified";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import clsx from "clsx";
 import { AlertCircle, CheckCircle2, XCircle, Clock, TrendingUp, Bell } from "lucide-react";
 import QuickActionButtons from "./QuickActionButtons";

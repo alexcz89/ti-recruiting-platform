@@ -1,7 +1,7 @@
 // app/cv/builder/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from '@/lib/server/auth';
+import { prisma } from '@/lib/server/prisma';
 import Link from "next/link";
 import CvBuilder from "@/components/cv/CvBuilder";
 

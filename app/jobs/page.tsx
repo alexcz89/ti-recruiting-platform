@@ -1,6 +1,6 @@
 // app/jobs/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import JobSearchBar from "@/components/JobSearchBar";
 import ClientSplitView from "@/components/jobs/ClientSplitView";
 import { redirect } from "next/navigation";

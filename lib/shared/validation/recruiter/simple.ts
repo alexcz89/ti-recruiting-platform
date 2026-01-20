@@ -1,4 +1,4 @@
-// lib/validation/recruiter/simple.ts 
+// lib/shared/validation/recruiter/simple.ts 
 import { z } from "zod";
 import { FREE_DOMAINS } from "./signup";
 

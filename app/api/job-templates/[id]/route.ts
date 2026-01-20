@@ -1,7 +1,7 @@
 // app/api/job-templates/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId, getSessionOrThrow } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId, getSessionOrThrow } from '@/lib/server/session';
 
 export async function GET(
   req: NextRequest,

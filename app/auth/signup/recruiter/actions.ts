@@ -2,17 +2,17 @@
 "use server";
 
 import { headers } from "next/headers";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { hash } from "bcryptjs";
 import {
   RecruiterSimpleSignupSchema,
   type RecruiterSimpleSignupInput,
-} from "@/lib/validation/recruiter/simple";
-import { createEmailVerifyToken } from "@/lib/tokens";
-import { sendVerificationEmail } from "@/lib/mailer";
+} from "@/lib/shared/validation/recruiter/simple";
+import { createEmailVerifyToken } from '@/lib/server/tokens';
+import { sendVerificationEmail } from '@/lib/server/mailer';
 
 // 🔐 Lógica de dominios corporativos (ya la tienes en validation/signup)
-import { isFreeDomain } from "@/lib/validation/recruiter/signup";
+import { isFreeDomain } from "@/lib/shared/validation/recruiter/signup";
 
 // Helper para empresa + dominio (definido en lib/company.ts)
 import { ensureCompanyForRecruiter } from "@/lib/company";

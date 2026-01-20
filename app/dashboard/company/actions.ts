@@ -1,8 +1,8 @@
 // app/dashboard/company/actions.ts
 "use server";
 
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";

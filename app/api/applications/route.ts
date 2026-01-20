@@ -1,10 +1,10 @@
 // app/api/applications/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { getSessionCompanyId } from "@/lib/session";
-import { sendApplicationEmail } from "@/lib/mailer";
+import { authOptions } from '@/lib/server/auth';
+import { getSessionCompanyId } from '@/lib/server/session';
+import { sendApplicationEmail } from '@/lib/server/mailer';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";

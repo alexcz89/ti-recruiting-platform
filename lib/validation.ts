@@ -4,7 +4,7 @@ import { z } from "zod";
 // ================================
 // Helpers
 // ================================
-export * from "@/lib/schemas/profile";
+export * from "@/lib/shared/schemas/profile"; // ✅ CORREGIDO
 
 export const EmailSchema = z.string().email("Email inválido");
 

@@ -1,8 +1,8 @@
 // app/dashboard/admin/taxonomy/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { revalidatePath } from "next/cache";
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/skills";
 import { fromNow } from "@/lib/dates";

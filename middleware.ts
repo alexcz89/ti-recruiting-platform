@@ -13,6 +13,23 @@ export default withAuth(
     const role = token?.role;
     const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
+    // ===== 🔐 DEBUG ENDPOINTS (NUEVO) =====
+    // Bloquear endpoints de debug en producción
+    if (pathname.startsWith("/api/debug-")) {
+      if (process.env.NODE_ENV === "production") {
+        console.warn(`🚨 [SECURITY] Blocked debug endpoint in production: ${pathname}`);
+        return new Response("Not Found", { status: 404 });
+      }
+
+      if (process.env.DEBUG_ROUTES_ENABLED !== "true") {
+        console.warn(`🚨 [SECURITY] Debug routes disabled: ${pathname}`);
+        return new Response("Not Found", { status: 404 });
+      }
+
+      // Log de acceso en desarrollo
+      console.log(`🔧 [DEBUG] Allowed access to: ${pathname}`);
+    }
+
     // ===== /jobs =====
     if (pathname.startsWith("/jobs")) {
       // ✅ Permitir ver /jobs/[id] siempre
@@ -32,9 +49,6 @@ export default withAuth(
     }
 
     // ===== /dashboard =====
-    // Antes redirigíamos a /onboarding/company si no había companyId.
-    // Lo quitamos para evitar el 404, dejando que el dashboard cargue.
-    // (Si después creas la página de onboarding, puedes reactivar la redirección.)
     if (pathname.startsWith("/dashboard")) {
       return NextResponse.next();
     }
@@ -71,7 +85,12 @@ export default withAuth(
   }
 );
 
-// Limita el middleware a estas rutas (no afecta /api)
+// Limita el middleware a estas rutas
 export const config = {
-  matcher: ["/dashboard/:path*", "/profile/:path*", "/jobs/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/profile/:path*",
+    "/jobs/:path*",
+    "/api/debug-:path*", // ✨ NUEVO: Proteger debug endpoints
+  ],
 };

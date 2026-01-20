@@ -1,7 +1,7 @@
 // app/dashboard/billing/page.tsx
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 import { PLANS, type PlanId } from "@/config/plans";
 import { JobStatus } from "@prisma/client";
 import ChangePlanButton from "./ChangePlanButton";

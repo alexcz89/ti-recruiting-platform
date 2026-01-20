@@ -1,8 +1,8 @@
 // app/api/profile/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from '@/lib/server/auth';
+import { prisma } from '@/lib/server/prisma';
 import { z } from "zod";
 
 import {
@@ -10,7 +10,7 @@ import {
   EducationLevel,
   LanguageSchema,
   SkillDetailedSchema,
-} from "@/lib/schemas/profile";
+} from "@/lib/shared/schemas/profile";
 
 /* Helpers */
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;

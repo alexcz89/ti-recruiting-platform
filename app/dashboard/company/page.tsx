@@ -1,6 +1,6 @@
 // app/dashboard/company/page.tsx
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 import Link from "next/link";
 import CompanyForm from "./CompanyForm";
 

@@ -1,9 +1,9 @@
 // app/dashboard/jobs/new/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { redirect } from "next/navigation";
 import JobWizard from "./JobWizard";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/skills";
 
 // Si usas geocoding en server action legacy, deja importado.

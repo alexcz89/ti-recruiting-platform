@@ -1,4 +1,4 @@
-// lib/schemas/common.ts
+// lib/shared/schemas/common.ts
 import { z } from "zod";
 
 export const MonthRE = /^\d{4}-(0[1-9]|1[0-2])$/;

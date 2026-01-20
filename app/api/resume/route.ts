@@ -2,8 +2,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Prisma, TaxonomyKind, LanguageProficiency, EducationLevel } from "@prisma/client"
 import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { authOptions } from '@/lib/server/auth'
+import { prisma } from '@/lib/server/prisma'
 
 // ------------------------------
 // Helpers

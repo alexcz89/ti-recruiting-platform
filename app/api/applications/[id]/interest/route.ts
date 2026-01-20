@@ -1,7 +1,7 @@
 // app/api/applications/[id]/interest/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const ALLOWED: InterestKey[] = ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"];

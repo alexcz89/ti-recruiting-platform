@@ -1,6 +1,6 @@
 // lib/assessments/invites.ts
-import { prisma } from "@/lib/prisma";
-import { sendAssessmentInviteEmail } from "@/lib/mailer";
+import { prisma } from '@/lib/server/prisma';
+import { sendAssessmentInviteEmail } from '@/lib/server/mailer';
 import crypto from "crypto";
 
 type EnsureInviteParams = {

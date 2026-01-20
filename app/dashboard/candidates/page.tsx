@@ -1,6 +1,6 @@
 // app/dashboard/candidates/page.tsx
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 
 export const metadata = { title: "Candidatos | Panel" };
 

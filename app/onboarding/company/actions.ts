@@ -2,14 +2,14 @@
 "use server";
 
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { authOptions } from '@/lib/server/auth';
+import { prisma } from '@/lib/server/prisma';
 import {
   OnboardingCompanyStep1Schema,
   OnboardingCompanyStep2Schema,
   type OnboardingCompanyStep1Input,
   type OnboardingCompanyStep2Input,
-} from "@/lib/validation/recruiter/onboarding";
+} from "@/lib/shared/validation/recruiter/onboarding";
 
 /** Asegura que el usuario logueado sea RECRUITER/ADMIN y devuelve su id+companyId */
 async function requireRecruiter() {

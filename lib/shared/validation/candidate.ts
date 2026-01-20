@@ -1,4 +1,4 @@
-// lib/validation/candidate.ts
+// lib/shared/validation/candidate.ts
 import { z } from "zod";
 
 const pwdRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[\s\S]{8,}$/; // 8+, 1 mayús, 1 min, 1 número

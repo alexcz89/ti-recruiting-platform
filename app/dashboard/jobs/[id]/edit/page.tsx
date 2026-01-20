@@ -1,9 +1,9 @@
 // app/dashboard/jobs/[id]/edit/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { redirect, notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import JobWizard from "../../new/JobWizard";
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/skills";
 import { geocodeCityToPoint } from "@/lib/geo";

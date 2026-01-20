@@ -1,7 +1,7 @@
 // app/profile/page.tsx
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import ProfileSummary from "@/components/profile/ProfileSummary";
 
 export const metadata = { title: "Mi perfil | Bolsa TI" };

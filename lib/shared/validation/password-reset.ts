@@ -1,4 +1,4 @@
-// lib/validation/password-reset.ts
+// lib/shared/validation/password-reset.ts
 import { z } from "zod";
 
 /**

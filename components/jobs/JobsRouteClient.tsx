@@ -1,7 +1,7 @@
 // components/jobs/JobsRouteClient.tsx
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import JobSearchBar from "@/components/JobSearchBar";
 import JobsFeed from "@/components/jobs/JobsFeed";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
@@ -52,31 +52,37 @@ export default function JobsRouteClient({
   } = initialFilters;
 
   // helpers URL
-  const buildQS = (overrides: Record<string, string | undefined | null>) => {
-    const params = new URLSearchParams();
-    const current = {
-      q,
-      location,
-      remote: remote === true ? "true" : remote === false ? "false" : undefined,
-      employmentType,
-      seniority,
-      sort,
-    } as Record<string, string | undefined>;
+  const buildQS = useCallback(
+    (overrides: Record<string, string | undefined | null>) => {
+      const params = new URLSearchParams();
+      const current = {
+        q,
+        location,
+        remote: remote === true ? "true" : remote === false ? "false" : undefined,
+        employmentType,
+        seniority,
+        sort,
+      } as Record<string, string | undefined>;
 
-    for (const [k, v] of Object.entries({ ...current, ...overrides })) {
-      if (v && v !== "" && v !== "undefined" && v !== "null") params.set(k, v);
-    }
-    const qs = params.toString();
-    return qs ? `/jobs?${qs}` : "/jobs";
-  };
+      for (const [k, v] of Object.entries({ ...current, ...overrides })) {
+        if (v && v !== "" && v !== "undefined" && v !== "null") params.set(k, v);
+      }
+      const qs = params.toString();
+      return qs ? `/jobs?${qs}` : "/jobs";
+    },
+    [q, location, remote, employmentType, seniority, sort]
+  );
 
-  const removeFilterLink = (key: keyof Filters | "remote") => {
-    const copy: Record<string, string | null> = {};
-    copy[key] = null;
-    // legacy param
-    if (key === "location") (copy as any)["loc"] = null;
-    return buildQS(copy);
-  };
+  const removeFilterLink = useCallback(
+    (key: keyof Filters | "remote") => {
+      const copy: Record<string, string | null> = {};
+      copy[key] = null;
+      // legacy param
+      if (key === "location") (copy as any)["loc"] = null;
+      return buildQS(copy);
+    },
+    [buildQS]
+  );
 
   const hasAnyFilter = !!(
     q ||
@@ -111,7 +117,7 @@ export default function JobsRouteClient({
       });
     }
     return rows;
-  }, [q, location, remote, employmentType, seniority, sort]);
+  }, [q, location, remote, employmentType, seniority, sort, buildQS, removeFilterLink]);
 
   return (
     <main className="max-w-none p-0">
@@ -139,11 +145,7 @@ export default function JobsRouteClient({
 
             <div className="lg:col-span-4">
               <label className="block text-xs text-muted mb-1">Tipo</label>
-              <select
-                name="employmentType"
-                defaultValue={employmentType || ""}
-                className="field"
-              >
+              <select name="employmentType" defaultValue={employmentType || ""} className="field">
                 <option value="">Todos</option>
                 {EMP_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -155,11 +157,7 @@ export default function JobsRouteClient({
 
             <div className="lg:col-span-4">
               <label className="block text-xs text-muted mb-1">Seniority</label>
-              <select
-                name="seniority"
-                defaultValue={seniority || ""}
-                className="field"
-              >
+              <select name="seniority" defaultValue={seniority || ""} className="field">
                 <option value="">Todos</option>
                 {SENIORITIES.map((s) => (
                   <option key={s} value={s}>
@@ -231,10 +229,7 @@ export default function JobsRouteClient({
             />
           </section>
 
-          <aside
-            aria-label="Detalle de vacante"
-            className="hidden lg:block lg:col-span-5"
-          >
+          <aside aria-label="Detalle de vacante" className="hidden lg:block lg:col-span-5">
             <div className="sticky top-20">
               {selectedJob ? (
                 <JobDetailPanel job={selectedJob} />

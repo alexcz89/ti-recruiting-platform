@@ -1,4 +1,4 @@
-// lib/validation/candidate/signin.ts
+// lib/shared/validation/candidate/signin.ts
 import { z } from "zod";
 
 /**

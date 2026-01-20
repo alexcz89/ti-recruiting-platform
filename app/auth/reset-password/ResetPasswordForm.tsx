@@ -7,7 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Lock, Eye, EyeOff, CheckCircle2, XCircle, Sparkles, Loader2 } from "lucide-react";
 // CAMBIO: Importar directamente desde el archivo
-import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/validation/password-reset";
+import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/shared/validation/password-reset";
 import { verifyResetToken, resetPassword } from "../signin/password-reset-actions";
 
 type PageStatus = "loading" | "valid" | "invalid" | "success" | "error";

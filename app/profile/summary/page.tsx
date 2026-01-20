@@ -1,9 +1,9 @@
 // app/profile/summary/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { fromNow, formatDate } from "@/lib/dates";
 
 export const metadata = { title: "Resumen de perfil | Bolsa TI" };

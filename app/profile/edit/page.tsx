@@ -1,9 +1,9 @@
 // app/profile/edit/page.tsx
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 
 // Form de cliente (tu archivo existente en app/profile/ProfileForm.tsx)
 import ProfileForm from "@/app/profile/ProfileForm";

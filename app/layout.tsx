@@ -6,7 +6,7 @@ import { Inter } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider";
-import { Toaster } from "sonner";
+
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -37,7 +37,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             © {new Date().getFullYear()} Bolsa TI. Todos los derechos reservados.
           </footer>
 
-          <Toaster position="top-right" richColors />
         </Providers>
       </body>
     </html>

@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import JobSearchBar from "@/components/JobSearchBar";
 import PricingSection from "@/components/marketing/PricingSection";
 import {

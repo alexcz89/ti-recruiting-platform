@@ -1,4 +1,4 @@
-// lib/validation/recruiter/signup.ts
+// lib/shared/validation/recruiter/signup.ts
 import { z } from "zod";
 
 // 🔁 Re-exportamos helpers de dominios desde un solo lugar común

@@ -1,7 +1,7 @@
 // app/api/cron/rejections/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { sendRejectionEmail } from "@/lib/mailer";
+import { prisma } from '@/lib/server/prisma';
+import { sendRejectionEmail } from '@/lib/server/mailer';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LOOKBACK_MS = 5 * DAY_MS;

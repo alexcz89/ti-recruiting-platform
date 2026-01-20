@@ -2,10 +2,10 @@
 "use server";
 
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { createEmailVerifyToken } from "@/lib/tokens";
-import { sendVerificationEmail } from "@/lib/mailer";
+import { authOptions } from '@/lib/server/auth';
+import { prisma } from '@/lib/server/prisma';
+import { createEmailVerifyToken } from '@/lib/server/tokens';
+import { sendVerificationEmail } from '@/lib/server/mailer';
 import { redirect } from "next/navigation";
 
 // Rate limit súper simple en memoria por email: 60s

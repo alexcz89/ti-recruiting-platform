@@ -1,7 +1,7 @@
 // app/api/auth/verify/route.ts
 import { NextResponse } from "next/server";
-import { verifyEmailVerifyToken } from "@/lib/tokens";
-import { prisma } from "@/lib/prisma";
+import { verifyEmailVerifyToken } from '@/lib/server/tokens';
+import { prisma } from '@/lib/server/prisma';
 
 // Si planeas usar Node APIs (fs/crypto nativas), descomenta:
 // export const runtime = "nodejs";

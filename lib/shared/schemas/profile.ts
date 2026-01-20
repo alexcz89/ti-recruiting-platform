@@ -1,4 +1,4 @@
-// lib/schemas/profile.ts
+// lib/shared/schemas/profile.ts
 import { z } from "zod";
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;

@@ -1,9 +1,9 @@
 // app/jobs/[id]/page.tsx
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { getSessionCompanyId } from "@/lib/session";
+import { authOptions } from '@/lib/server/auth';
+import { getSessionCompanyId } from '@/lib/server/session';
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
 import AssessmentRequirement from "./AssessmentRequirement";
 

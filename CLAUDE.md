@@ -214,7 +214,7 @@ if (!session?.user) {
 
 Import from `lib/prisma.ts` (handles global singleton in development):
 ```typescript
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/server/prisma";
 ```
 
 ### Path Aliases
@@ -222,7 +222,7 @@ import { prisma } from "@/lib/prisma";
 TypeScript configured with `@/*` pointing to project root:
 ```typescript
 import { Button } from "@/components/ui/Button";
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/server/prisma";
 ```
 
 ### Taxonomy Updates

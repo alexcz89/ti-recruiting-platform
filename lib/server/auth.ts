@@ -1,4 +1,6 @@
-// lib/auth.ts
+import 'server-only';
+
+// lib/server/auth.ts
 import { PrismaClient, Role } from "@prisma/client";
 import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";

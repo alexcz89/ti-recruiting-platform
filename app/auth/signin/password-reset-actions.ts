@@ -1,10 +1,10 @@
 // app/auth/signin/password-reset-actions.ts
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import bcrypt from "bcryptjs";
-import { createPasswordResetToken, verifyPasswordResetToken } from "@/lib/tokens";
-import { sendPasswordResetEmail } from "@/lib/mailer";
+import { createPasswordResetToken, verifyPasswordResetToken } from '@/lib/server/tokens';
+import { sendPasswordResetEmail } from '@/lib/server/mailer';
 
 /**
  * Solicita un restablecimiento de contraseña

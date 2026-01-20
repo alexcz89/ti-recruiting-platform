@@ -1,7 +1,7 @@
 // app/dashboard/invoices/page.tsx
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 import { InvoiceStatus } from "@prisma/client";
 import IssueInvoiceButton from "./IssueInvoiceButton";
 

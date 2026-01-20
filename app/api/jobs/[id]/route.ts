@@ -1,7 +1,7 @@
 // app/api/jobs/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getSessionOrThrow, getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionOrThrow, getSessionCompanyId } from '@/lib/server/session';
 import { EmploymentType, JobStatus, EducationLevel, LocationType } from "@prisma/client";
 
 // -------------------------------

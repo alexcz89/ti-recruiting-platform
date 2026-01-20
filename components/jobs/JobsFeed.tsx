@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
 import { fromNow } from "@/lib/dates";
-import { useJobs } from "@/lib/hooks/useJobs";
+import { useJobs } from "@/lib/client/hooks/useJobs"; // ✅ CORREGIDO
 import { useRouter } from "next/navigation";
 
 type Props = {

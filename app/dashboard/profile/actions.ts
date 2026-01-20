@@ -2,9 +2,9 @@
 "use server";
 
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 
 /** Normaliza lo que el usuario escriba a un dominio limpio (sin http/https, sin paths, sin www.) */
 function normalizeToDomain(input?: string | null): string | undefined {

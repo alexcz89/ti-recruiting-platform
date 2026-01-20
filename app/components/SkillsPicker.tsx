@@ -11,23 +11,29 @@ type Props = {
   label?: string
 }
 
-export default function SkillsPicker({ value, onChange, placeholder = "Busca y selecciona skills…", label = "Skills" }: Props) {
+export default function SkillsPicker({
+  value,
+  onChange,
+  placeholder = "Busca y selecciona skills…",
+  label = "Skills",
+}: Props) {
   const [q, setQ] = React.useState("")
   const [open, setOpen] = React.useState(false)
 
   const lower = q.toLowerCase()
   const filtered = React.useMemo(() => {
-    const base = ALL_SKILLS.filter(s => s.toLowerCase().includes(lower) && !value.includes(s))
+    const base = ALL_SKILLS.filter((s) => s.toLowerCase().includes(lower) && !value.includes(s))
     return base.slice(0, 12) // limita sugerencias
-  }, [q, value])
+  }, [lower, value])
 
   function addSkill(s: string) {
     if (!value.includes(s)) onChange([...value, s])
     setQ("")
     setOpen(false)
   }
+
   function removeSkill(s: string) {
-    onChange(value.filter(v => v !== s))
+    onChange(value.filter((v) => v !== s))
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -45,7 +51,10 @@ export default function SkillsPicker({ value, onChange, placeholder = "Busca y s
       <div className="relative">
         <input
           value={q}
-          onChange={e => { setQ(e.target.value); setOpen(true) }}
+          onChange={(e) => {
+            setQ(e.target.value)
+            setOpen(true)
+          }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={onKeyDown}
@@ -54,7 +63,7 @@ export default function SkillsPicker({ value, onChange, placeholder = "Busca y s
         />
         {open && filtered.length > 0 && (
           <div className="absolute z-10 mt-1 w-full glass-card p-4 md:p-6">
-            {filtered.map(s => (
+            {filtered.map((s) => (
               <button
                 key={s}
                 type="button"
@@ -72,8 +81,11 @@ export default function SkillsPicker({ value, onChange, placeholder = "Busca y s
       {/* chips */}
       {value.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {value.map(s => (
-            <span key={s} className="inline-flex items-center gap-1 border rounded-full px-2 py-1 text-xs bg-gray-50">
+          {value.map((s) => (
+            <span
+              key={s}
+              className="inline-flex items-center gap-1 border rounded-full px-2 py-1 text-xs bg-gray-50"
+            >
               {s}
               <button
                 type="button"

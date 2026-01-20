@@ -1,4 +1,4 @@
-// lib/validation/recruiter/onboarding.ts
+// lib/shared/validation/recruiter/onboarding.ts
 import { z } from "zod";
 
 export const SIZE_OPTIONS = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;

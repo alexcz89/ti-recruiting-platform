@@ -10,7 +10,7 @@ import {
   SIZE_OPTIONS,
   type OnboardingCompanyStep1Input,
   type OnboardingCompanyStep2Input,
-} from "@/lib/validation/recruiter/onboarding";
+} from "@/lib/shared/validation/recruiter/onboarding";
 import { saveCompanyStep1, saveCompanyStep2 } from "./actions";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";

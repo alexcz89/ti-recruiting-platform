@@ -1,9 +1,9 @@
 // app/profile/applications/page.tsx
 import Link from "next/link";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { fromNow } from "@/lib/dates"; // ⬅️ helper "hace X"
 
 export const metadata = { title: "Mis postulaciones | Bolsa TI" };

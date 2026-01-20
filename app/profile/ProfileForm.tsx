@@ -21,7 +21,7 @@ import PhoneInputField from "@/components/PhoneInputField";
 import {
   ProfileFormSchema,
   type ProfileFormData,
-} from "@/lib/schemas/profile";
+} from "@/lib/shared/schemas/profile";
 
 /* =========================
    Clases reutilizables UI

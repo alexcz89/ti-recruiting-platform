@@ -1,10 +1,10 @@
 // app/dashboard/overview/actions.ts
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 
 export async function updateApplicationStatus(
   applicationId: string,

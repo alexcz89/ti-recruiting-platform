@@ -1,5 +1,5 @@
 // lib/search/jobs.ts
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import Fuse from "fuse.js";
 
 type SearchParams = {

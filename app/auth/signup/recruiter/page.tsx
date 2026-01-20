@@ -8,7 +8,7 @@ import { z } from "zod";
 import {
   RecruiterSimpleSignupSchema,
   type RecruiterSimpleSignupInput,
-} from "@/lib/validation/recruiter/simple";
+} from "@/lib/shared/validation/recruiter/simple";
 import { createRecruiterAction } from "./actions";
 
 const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;

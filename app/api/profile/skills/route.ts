@@ -1,7 +1,7 @@
 // app/api/profile/skills/route.ts
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 
 // Permitimos más campos en el body, pero en la DB solo se guarda `certifications`
 type SkillsPayload = {

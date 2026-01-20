@@ -1,6 +1,8 @@
-// lib/session.ts
+import 'server-only';
+
+// lib/server/session.ts
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 
 export async function getSessionOrThrow() {
   const session = await getServerSession(authOptions);

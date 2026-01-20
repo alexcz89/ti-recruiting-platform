@@ -1,7 +1,7 @@
 // app/auth/verify/page.tsx
 import Link from "next/link";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";

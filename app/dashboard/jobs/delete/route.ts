@@ -1,7 +1,7 @@
 // app/dashboard/jobs/delete/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 import { revalidatePath } from "next/cache";
 
 export async function POST(request: Request) {

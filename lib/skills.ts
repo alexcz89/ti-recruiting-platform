@@ -931,7 +931,7 @@ export type LanguageLevelValue = (typeof LANGUAGE_LEVELS)[number]["value"];
 // ──────────────────────────────────────────────────────────────────────────────
 export async function getSkillsFromDB(): Promise<string[]> {
   try {
-    const { prisma } = await import("@/lib/prisma");
+    const { prisma } = await import("@/lib/server/prisma");
     const rows = await prisma.taxonomyTerm.findMany({
       where: { kind: "SKILL" },
       select: { label: true },
@@ -945,7 +945,7 @@ export async function getSkillsFromDB(): Promise<string[]> {
 
 export async function getCertificationsFromDB(): Promise<string[]> {
   try {
-    const { prisma } = await import("@/lib/prisma");
+    const { prisma } = await import("@/lib/server/prisma");
     const rows = await prisma.taxonomyTerm.findMany({
       where: { kind: "CERTIFICATION" },
       select: { label: true },
@@ -959,7 +959,7 @@ export async function getCertificationsFromDB(): Promise<string[]> {
 
 export async function getLanguagesFromDB(): Promise<string[]> {
   try {
-    const { prisma } = await import("@/lib/prisma");
+    const { prisma } = await import("@/lib/server/prisma");
     const rows = await prisma.taxonomyTerm.findMany({
       where: { kind: "LANGUAGE" },
       select: { label: true },

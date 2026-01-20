@@ -1,7 +1,7 @@
 // app/dashboard/jobs/page.tsx
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
 

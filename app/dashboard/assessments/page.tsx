@@ -6,7 +6,7 @@ import { headers, cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import AssessmentActionsMenu from "@/components/dashboard/assessments/AssessmentActionsMenu";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { fromNow } from "@/lib/dates";
 import { 
   CheckCircle2, 

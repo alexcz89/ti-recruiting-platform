@@ -1,8 +1,8 @@
 // app/dashboard/candidates/[id]/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from '@/lib/server/auth';
 import { redirect, notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import Link from "next/link";
 
 export const metadata = { title: "Candidato | Panel" };

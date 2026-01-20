@@ -1,8 +1,8 @@
 // app/mis-evaluaciones/page.tsx
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { prisma } from "@/lib/prisma";
-import { getSessionOrThrow } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionOrThrow } from '@/lib/server/session';
 import { fromNow } from "@/lib/dates";
 import { Award, CheckCircle2, Play, AlertTriangle, ClipboardList } from "lucide-react";
 

@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { X, Mail, CheckCircle2, Loader2 } from "lucide-react";
 // CAMBIO: Importar directamente desde el archivo
-import { requestPasswordResetSchema, type RequestPasswordResetInput } from "@/lib/validation/password-reset";
+import { requestPasswordResetSchema, type RequestPasswordResetInput } from "@/lib/shared/validation/password-reset";
 import { requestPasswordReset } from "./password-reset-actions";
 
 interface ForgotPasswordModalProps {

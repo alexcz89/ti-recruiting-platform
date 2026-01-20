@@ -1,8 +1,8 @@
 // app/dashboard/jobs/[id]/applications/page.tsx
 
 import Link from "next/link";
-import { prisma } from "@/lib/prisma";
-import { getSessionCompanyId } from "@/lib/session";
+import { prisma } from '@/lib/server/prisma';
+import { getSessionCompanyId } from '@/lib/server/session';
 import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";

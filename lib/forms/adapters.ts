@@ -1,6 +1,6 @@
 // lib/forms/adapters.ts
-import { ProfileFormData } from "@/lib/schemas/profile";
-import { dateToMonth, monthToDate, stripDiacritics } from "@/lib/schemas/common";
+import { ProfileFormData } from "@/lib/shared/schemas/profile";
+import { dateToMonth, monthToDate, stripDiacritics } from "@/lib/shared/schemas/common";
 
 /** Defaults para RHF desde DB (centralizado) */
 export function toProfileFormDefaultsFromDb(db: any): ProfileFormData {

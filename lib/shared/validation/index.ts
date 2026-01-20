@@ -1,4 +1,4 @@
-// lib/validation/index.ts
+// lib/shared/validation/index.ts
 
 // Candidate
 export { CandidateSignInSchema as SignInSchema } from "./candidate/signin";

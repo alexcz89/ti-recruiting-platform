@@ -1,7 +1,7 @@
 // app/auth/signup/candidate/actions.ts
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { prisma } from '@/lib/server/prisma';
 import {
   CandidateSignupSchema,
   type CandidateSignupInput,
@@ -87,7 +87,7 @@ async function sendVerificationEmail(email: string, name?: string | null) {
   }
 
   // Generar token seguro (JWT firmado) con expiración de 60 minutos
-  const { createEmailVerifyToken } = await import("@/lib/tokens");
+  const { createEmailVerifyToken } = await import("@/lib/server/tokens");
   const token = await createEmailVerifyToken({ email }, 60);
 
   // URL segura con token firmado (no el email en texto plano)

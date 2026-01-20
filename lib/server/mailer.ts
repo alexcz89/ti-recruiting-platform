@@ -1,4 +1,6 @@
-// lib/mailer.ts
+import 'server-only';
+
+// lib/server/mailer.ts
 import type { Resend } from "resend";
 import crypto from "crypto";
 

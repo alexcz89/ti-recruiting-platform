@@ -1,7 +1,7 @@
 // scripts/create-test-candidate.ts
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
-import { createEmailVerifyToken } from "../lib/tokens";
+import { createEmailVerifyToken } from "../lib/server/tokens";
 
 const prisma = new PrismaClient();
 

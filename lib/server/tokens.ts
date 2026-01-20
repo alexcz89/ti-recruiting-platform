@@ -1,4 +1,6 @@
-// lib/tokens.ts (ACTUALIZADO - agregar al final del archivo existente)
+import 'server-only';
+
+// lib/server/tokens.ts 
 import { SignJWT, jwtVerify } from "jose";
 
 const secret = new TextEncoder().encode(
