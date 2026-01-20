@@ -5,13 +5,37 @@ import { prisma } from '@/lib/server/prisma';
 import bcrypt from "bcryptjs";
 import { createPasswordResetToken, verifyPasswordResetToken } from '@/lib/server/tokens';
 import { sendPasswordResetEmail } from '@/lib/server/mailer';
+import { checkPasswordResetRateLimit, formatRetryAfter, getClientIp } from '@/lib/server/rate-limit';
+import { headers } from 'next/headers';
 
 /**
  * Solicita un restablecimiento de contraseña
  * Envía un correo con un enlace JWT firmado
+ * 
+ * ✅ PROTECCIONES:
+ * - Rate limiting por email (3 intentos / 15 min)
+ * - Rate limiting por IP (10 intentos / hora)
+ * - Respuesta genérica (no revela si el email existe)
  */
 export async function requestPasswordReset(email: string) {
   try {
+    // 🛡️ RATE LIMITING: Verificar antes de hacer queries a la BD
+    const headersList = headers();
+    const clientIp = getClientIp(headersList);
+    
+    const rateLimit = checkPasswordResetRateLimit(email, clientIp);
+    
+    if (!rateLimit.allowed) {
+      const retryMessage = rateLimit.retryAfter 
+        ? `Demasiados intentos. Intenta nuevamente en ${formatRetryAfter(rateLimit.retryAfter)}.`
+        : 'Demasiados intentos. Intenta nuevamente más tarde.';
+      
+      return {
+        success: false,
+        message: retryMessage,
+      };
+    }
+
     // Buscar el usuario por email
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
