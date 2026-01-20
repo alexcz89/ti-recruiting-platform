@@ -1,6 +1,6 @@
 // scripts/refresh-skills.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
-import { ALL_SKILLS } from "@/lib/skills"; // 👈 asegurate que la ruta sea correcta
+import { ALL_SKILLS } from "@/lib/shared/skills-data"; // 👈 asegurate que la ruta sea correcta
 
 const prisma = new PrismaClient();
 

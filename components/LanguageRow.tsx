@@ -2,7 +2,7 @@
 "use client";
 
 import { Controller, useFormContext } from "react-hook-form";
-import { LANGUAGE_LEVELS } from "@/lib/skills";
+import { LANGUAGE_LEVELS } from "@/lib/shared/skills-data";
 
 export type LanguageItem = {
   termId: string;

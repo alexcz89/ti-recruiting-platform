@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/server/auth';
 import { redirect } from "next/navigation";
 import { prisma } from '@/lib/server/prisma';
 import { revalidatePath } from "next/cache";
-import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/skills";
+import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/server/skills";
 import { fromNow } from "@/lib/dates";
 import {
   SkillsFormClient,

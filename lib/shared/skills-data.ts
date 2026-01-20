@@ -1,7 +1,6 @@
-// lib/skills.ts
-// Fuente de catálogos (skills, certificaciones, idiomas) y helpers para UI.
-// Lee de DB (TaxonomyTerm) con fallback a listas estáticas. ¡Server-only en las
-// funciones que golpean Prisma (usamos dynamic import)!
+// lib/shared/skills-data.ts
+// Datos estáticos y helpers puros (sin Prisma, sin I/O)
+// Usable desde cliente y servidor
 
 // ──────────────────────────────────────────────────────────────────────────────
 // FALLBACKS ESTÁTICOS (AMPLIADOS Y ORGANIZADOS)
@@ -927,50 +926,6 @@ export const LANGUAGE_LEVELS = [
 export type LanguageLevelValue = (typeof LANGUAGE_LEVELS)[number]["value"];
 
 // ──────────────────────────────────────────────────────────────────────────────
-// HELPERS DB
-// ──────────────────────────────────────────────────────────────────────────────
-export async function getSkillsFromDB(): Promise<string[]> {
-  try {
-    const { prisma } = await import("@/lib/server/prisma");
-    const rows = await prisma.taxonomyTerm.findMany({
-      where: { kind: "SKILL" },
-      select: { label: true },
-      orderBy: { label: "asc" },
-    });
-    return rows.map((r) => r.label).length ? rows.map((r) => r.label) : [...ALL_SKILLS];
-  } catch {
-    return [...ALL_SKILLS];
-  }
-}
-
-export async function getCertificationsFromDB(): Promise<string[]> {
-  try {
-    const { prisma } = await import("@/lib/server/prisma");
-    const rows = await prisma.taxonomyTerm.findMany({
-      where: { kind: "CERTIFICATION" },
-      select: { label: true },
-      orderBy: { label: "asc" },
-    });
-    return rows.map((r) => r.label).length ? rows.map((r) => r.label) : [...CERTIFICATIONS];
-  } catch {
-    return [...CERTIFICATIONS];
-  }
-}
-
-export async function getLanguagesFromDB(): Promise<string[]> {
-  try {
-    const { prisma } = await import("@/lib/server/prisma");
-    const rows = await prisma.taxonomyTerm.findMany({
-      where: { kind: "LANGUAGE" },
-      select: { label: true },
-      orderBy: { label: "asc" },
-    });
-    return rows.map((r) => r.label).length ? rows.map((r) => r.label) : [...LANGUAGES_FALLBACK];
-  } catch {
-    return [...LANGUAGES_FALLBACK];
-  }
-}
-
 // ──────────────────────────────────────────────────────────────────────────────
 // CLIENT HELPERS
 // ──────────────────────────────────────────────────────────────────────────────

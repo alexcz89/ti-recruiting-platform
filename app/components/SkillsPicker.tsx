@@ -2,7 +2,7 @@
 "use client"
 
 import * as React from "react"
-import { ALL_SKILLS } from "@/lib/skills"
+import { ALL_SKILLS } from "@/lib/shared/skills-data"
 
 type Props = {
   value: string[]

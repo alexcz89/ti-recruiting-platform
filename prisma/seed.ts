@@ -14,7 +14,7 @@ import {
   ALL_SKILLS,
   CERTIFICATIONS,
   LANGUAGES_FALLBACK,
-} from "../lib/skills";
+} from "../lib/shared/skills-data";
 
 const prisma = new PrismaClient();
 

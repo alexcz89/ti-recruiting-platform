@@ -1,6 +1,6 @@
 // scripts/refresh-languages.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
-import { LANGUAGES_FALLBACK } from "@/lib/skills"; // asegúrate que el alias @ funcione en tu tsconfig
+import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data"; // asegúrate que el alias @ funcione en tu tsconfig
 
 const prisma = new PrismaClient();
 

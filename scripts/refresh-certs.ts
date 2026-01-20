@@ -1,6 +1,6 @@
 // scripts/refresh-certs.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
-import { CERTIFICATIONS } from "@/lib/skills";
+import { CERTIFICATIONS } from "@/lib/shared/skills-data";
 
 const prisma = new PrismaClient();
 

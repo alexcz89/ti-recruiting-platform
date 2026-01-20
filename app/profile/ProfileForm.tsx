@@ -14,7 +14,7 @@ import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { PhoneNumberUtil } from "google-libphonenumber";
 import { toastPromise } from "@/lib/ui/toast";
 import UploadCvButton from "@/components/upload/UploadCvButton";
-import { LANGUAGE_LEVELS } from "@/lib/skills";
+import { LANGUAGE_LEVELS } from "@/lib/shared/skills-data";
 import PhoneInputField from "@/components/PhoneInputField";
 
 // ✅ Schema y tipos del perfil

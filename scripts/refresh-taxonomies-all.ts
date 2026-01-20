@@ -1,6 +1,6 @@
 // scripts/refresh-taxonomies-all.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
-import { ALL_SKILLS, LANGUAGES_FALLBACK, CERTIFICATIONS } from "@/lib/skills";
+import { ALL_SKILLS, LANGUAGES_FALLBACK, CERTIFICATIONS } from "@/lib/shared/skills-data";
 
 const prisma = new PrismaClient();
 

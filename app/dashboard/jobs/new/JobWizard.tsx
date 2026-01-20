@@ -17,7 +17,7 @@ import {
   useFieldArray,
 } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LANGUAGES_FALLBACK } from "@/lib/skills";
+import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
 
 // Import from new architecture
 import {
@@ -87,7 +87,7 @@ function plainToBasicHtml(plain: string): string {
 
   if (buffer.length) paragraphs.push(buffer);
 
-  const bulletPrefixes = ["- ", "* ", "• "];
+  const bulletPrefixes = ["- ", "* ", "� "];
   const isBulletLine = (line: string) =>
     bulletPrefixes.some((prefix) => line.startsWith(prefix));
 
@@ -116,16 +116,16 @@ function plainToBasicHtml(plain: string): string {
    Constantes
 ============================= */
 const EDUCATION_SUGGESTIONS = [
-  "Ingeniería en Sistemas",
-  "Ingeniería en tecnologías Computacionales",
-  "Ingeniería en Robótica",
-  "Licenciatura en Informática",
-  "Licenciatura en Ciencias de la Computación",
-  "Maestría en tecnologías de Información",
-  "Maestría en Ciencia de Datos",
+  "Ingenier�a en Sistemas",
+  "Ingenier�a en tecnolog�as Computacionales",
+  "Ingenier�a en Rob�tica",
+  "Licenciatura en Inform�tica",
+  "Licenciatura en Ciencias de la Computaci�n",
+  "Maestr�a en tecnolog�as de Informaci�n",
+  "Maestr�a en Ciencia de Datos",
   "MBA con enfoque en TI",
-  "Técnico en Programación",
-  "Técnico en Redes",
+  "T�cnico en Programaci�n",
+  "T�cnico en Redes",
 ];
 
 const reviewBox =
@@ -326,7 +326,7 @@ export default function JobWizard({
     toast.success("Plantilla aplicada");
   }
 
-  // Env�o
+  // Env?o
   async function onValidSubmit(v: JobForm) {
     setBusy(true);
     try {
@@ -368,7 +368,7 @@ export default function JobWizard({
       fd.set("showBenefits", String(v.showBenefits));
       fd.set("benefitsJson", JSON.stringify(benefitsPayload));
 
-      // Paso 4 � HTML + texto plano
+      // Paso 4 ? HTML + texto plano
       let safeHtml = sanitizeHtml((v.descriptionHtml || "").trim());
       if (!safeHtml.trim() && v.descriptionPlain.trim()) {
         safeHtml = sanitizeHtml(
@@ -378,7 +378,7 @@ export default function JobWizard({
       const safePlain =
         v.descriptionPlain.trim() || htmlToPlain(safeHtml);
 
-      // ahora s� guardamos ambos campos
+      // ahora s? guardamos ambos campos
       fd.set("descriptionHtml", safeHtml);
       fd.set("description", safePlain);
 
@@ -425,12 +425,12 @@ export default function JobWizard({
         if (res.status === 402 && data?.code === "PLAN_LIMIT_REACHED") {
           toast.error(
             data?.error ||
-              "Has alcanzado el l�mite de vacantes activas para tu plan.",
+              "Has alcanzado el l?mite de vacantes activas para tu plan.",
             {
               description:
                 typeof data?.maxActiveJobs === "number"
                   ? `Vacantes activas: ${
-                      data.currentActiveJobs ?? "—"
+                      data.currentActiveJobs ?? "�"
                     } / ${data.maxActiveJobs}. Cierra una vacante o mejora tu plan.`
                   : undefined,
             }
@@ -448,7 +448,7 @@ export default function JobWizard({
       console.error("Error en handlePublish:", err);
       toast.error(
         (err && typeof err.message === "string" && err.message) ||
-          "Ocurri� un error al guardar la vacante"
+          "Ocurri? un error al guardar la vacante"
       );
     } finally {
       setBusy(false);
@@ -464,7 +464,7 @@ export default function JobWizard({
   const eduNice = watch("eduNice");
   const certs = watch("certs");
   const tabItems = [
-    { k: "desc", lbl: "Descripción", done: descLength > 0 },
+    { k: "desc", lbl: "Descripci�n", done: descLength > 0 },
     {
       k: "skills",
       lbl: "Skills / Certs",
@@ -481,7 +481,7 @@ export default function JobWizard({
     },
     {
       k: "edu",
-      lbl: "Educación",
+      lbl: "Educaci�n",
       done: eduRequired.length + eduNice.length > 0,
     },
   ];
@@ -614,7 +614,7 @@ export default function JobWizard({
     }
   }
 
-  // Helper para avanzar controlando paso m�ximo visitado
+  // Helper para avanzar controlando paso m?ximo visitado
   function goNextStep(next: number) {
     // Mark current step as complete
     setStepCompletion((prev) => {
@@ -843,7 +843,7 @@ export default function JobWizard({
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(1)}
                       >
-                        Atrás
+                        Atr�s
                       </button>
                       <button
                         type="button"
@@ -871,7 +871,7 @@ export default function JobWizard({
                 >
                   <div className="text-sm">
                     <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                      Mostrar prestaciones en la publicación
+                      Mostrar prestaciones en la publicaci�n
                     </div>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">
                       Recomendado: aumenta conversiones
@@ -917,13 +917,13 @@ export default function JobWizard({
                       <div className="ml-auto flex items-center gap-3">
                         {checked && b.key === "aguinaldo" && (
                           <NumberMini
-                            label="días"
+                            label="d�as"
                             field="aguinaldoDias"
                           />
                         )}
                         {checked && b.key === "vacaciones" && (
                           <NumberMini
-                            label="días"
+                            label="d�as"
                             field="vacacionesDias"
                           />
                         )}
@@ -946,7 +946,7 @@ export default function JobWizard({
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(2)}
                       >
-                        Atrás
+                        Atr�s
                       </button>
                       <button
                         type="button"
@@ -1003,11 +1003,11 @@ export default function JobWizard({
                 ))}
               </div>
 
-              {/* Descripción */}
+              {/* Descripci�n */}
               {tab4 === "desc" && (
                 <div className="animate-fade-in-up grid gap-4 mt-4">
                   <label className="text-sm font-medium">
-                    Descripción de la vacante *
+                    Descripci�n de la vacante *
                   </label>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
                     Incluye responsabilidades, requisitos y beneficios.
@@ -1036,7 +1036,7 @@ export default function JobWizard({
                             <div className="pointer-events-none absolute left-4 right-4 top-12 text-xs text-zinc-400 dark:text-zinc-500 whitespace-pre-line">
                               Ejemplo:
                               - Responsabilidades principales
-                              - Requisitos clave y tecnologías
+                              - Requisitos clave y tecnolog�as
                               - Beneficios y cultura del equipo
                             </div>
                           )}
@@ -1124,7 +1124,7 @@ export default function JobWizard({
                       <Bin
                         title="Obligatoria"
                         items={requiredSkills}
-                        placeholder="Arrastra aquí"
+                        placeholder="Arrastra aqu�"
                         onRemove={(name) =>
                           setValue(
                             "requiredSkills",
@@ -1268,19 +1268,19 @@ export default function JobWizard({
                       className="rounded-md border px-3 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
                       onClick={() =>
                         addLanguageRow({
-                          name: "Inglés",
+                          name: "Ingl�s",
                           level: "PROFESSIONAL",
                         })
                       }
                     >
-                      + Añadir idioma
+                      + A�adir idioma
                     </button>
                   </div>
 
                   {languageFields.length === 0 && (
                     <p className="text-xs text-zinc-500">
-                      Añade uno o más idiomas relevantes para la
-                      vacante (ej. Inglés profesional).
+                      A�ade uno o m�s idiomas relevantes para la
+                      vacante (ej. Ingl�s profesional).
                     </p>
                   )}
 
@@ -1317,7 +1317,7 @@ export default function JobWizard({
                             Conversacional (B1-B2)
                           </option>
                           <option value="BASIC">
-                            Básico (A1-A2)
+                            B�sico (A1-A2)
                           </option>
                         </select>
 
@@ -1335,12 +1335,12 @@ export default function JobWizard({
                 </div>
               )}
 
-              {/* EDUCACIÓN */}
+              {/* EDUCACI�N */}
               {tab4 === "edu" && (
                 <div className="animate-fade-in-up grid gap-6">
                   <div className="grid md:grid-cols-2 gap-6 min-w-0">
                     <div className="grid gap-2 min-w-0">
-                      <label className="text-sm font-medium">Nivel mínimo</label>
+                      <label className="text-sm font-medium">Nivel m�nimo</label>
                       <select
                         className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                         {...register("minDegree")}
@@ -1348,18 +1348,18 @@ export default function JobWizard({
                         <option value="HIGHSCHOOL">
                           Bachillerato
                         </option>
-                        <option value="TECH">Técnico</option>
+                        <option value="TECH">T�cnico</option>
                         <option value="BACHELOR">
-                          Licenciatura / Ingeniería
+                          Licenciatura / Ingenier�a
                         </option>
-                        <option value="MASTER">Maestría</option>
+                        <option value="MASTER">Maestr�a</option>
                         <option value="PHD">Doctorado</option>
                       </select>
                     </div>
 
                     <div className="grid gap-2 min-w-0">
                       <label className="text-sm font-medium">
-                        Agregar educación (programa / carrera)
+                        Agregar educaci�n (programa / carrera)
                       </label>
                       <div
                         className="relative"
@@ -1367,7 +1367,7 @@ export default function JobWizard({
                       >
                         <input
                           className="w-full min-w-0 h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                          placeholder="Ej. Ingeniería en Sistemas, Maestría en TI... (Enter agrega)"
+                          placeholder="Ej. Ingenier�a en Sistemas, Maestr�a en TI... (Enter agrega)"
                           value={educationQuery}
                           onChange={(e) => {
                             const nextValue = e.target.value;
@@ -1434,7 +1434,7 @@ export default function JobWizard({
                     </div>
                   </div>
 
-                  {/* bins educación */}
+                  {/* bins educaci�n */}
                   <div className="grid sm:grid-cols-2 gap-6">
                     <Bin
                       title="Obligatoria"
@@ -1485,14 +1485,14 @@ export default function JobWizard({
                 </div>
               )}
 
-                    {/* Navegaci�n paso 4 */}
+                    {/* Navegaci?n paso 4 */}
                     <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
                       <button
                         type="button"
                         className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                         onClick={() => setStep(3)}
                       >
-                        Atrás
+                        Atr�s
                       </button>
                       <button
                         type="button"
@@ -1511,14 +1511,14 @@ export default function JobWizard({
                   </div>
                 )}
 
-                {/* Paso 5 - Revisión */}
+                {/* Paso 5 - Revisi�n */}
                 {step === 5 && (
                   <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                     <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                      5) Revisión y publicación
+                      5) Revisi�n y publicaci�n
                     </h3>
 
-                {/* Bloque general de revisi�n */}
+                {/* Bloque general de revisi?n */}
                 <ReviewBlock presetCompany={presetCompany} onEditStep={setStep} onEditTab={setTab4} />
 
                     <div className="pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
@@ -1528,7 +1528,7 @@ export default function JobWizard({
                           className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
                           onClick={() => setStep(4)}
                         >
-                          Atrás
+                          Atr�s
                         </button>
                         <button
                           type="submit"
@@ -1663,7 +1663,7 @@ function ReviewBlock({
   const isRemote = v.locationType === "REMOTE";
   const locationText = isRemote
     ? "Remoto"
-    : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} · ${v.city || ""}`;
+    : `${v.locationType === "HYBRID" ? "H�brido" : "Presencial"} � ${v.city || ""}`;
 
   const salaryMin =
     typeof v.salaryMin === "number" && !Number.isNaN(v.salaryMin)
@@ -1691,9 +1691,9 @@ function ReviewBlock({
   const benefitsList = Object.entries(v.benefits || {})
     .filter(([, val]) => val)
     .map(([k]) => {
-      if (k === "aguinaldo") return `Aguinaldo: ${v.aguinaldoDias} días`;
+      if (k === "aguinaldo") return `Aguinaldo: ${v.aguinaldoDias} d�as`;
       if (k === "vacaciones")
-        return `Vacaciones: ${v.vacacionesDias} días`;
+        return `Vacaciones: ${v.vacacionesDias} d�as`;
       if (k === "primaVac")
         return `Prima vacacional: ${v.primaVacPct}%`;
       const lbl = BENEFITS.find((b) => b.key === k)?.label ?? k;
@@ -1721,7 +1721,7 @@ function ReviewBlock({
         <div className="mb-4 flex items-center justify-between gap-4">
           <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
             <Briefcase className="h-5 w-5 text-emerald-500" />
-            Información básica
+            Informaci�n b�sica
           </h4>
           <button
             type="button"
@@ -1734,7 +1734,7 @@ function ReviewBlock({
         <div className="grid gap-6">
           <div className="grid gap-1">
             <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Título de la vacante
+              T�tulo de la vacante
             </span>
             <span className="text-base font-medium text-zinc-900 dark:text-zinc-100">
               {v.title}
@@ -1755,7 +1755,7 @@ function ReviewBlock({
 
             <div className="grid gap-1">
               <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Ubicación
+                Ubicaci�n
               </span>
               <span className="text-sm text-zinc-700 dark:text-zinc-300">
                 {locationText}
@@ -1772,7 +1772,7 @@ function ReviewBlock({
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5 text-emerald-500">
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
             </svg>
-            Compensación y horario
+            Compensaci�n y horario
           </h4>
           <button
             type="button"
@@ -1793,8 +1793,8 @@ function ReviewBlock({
                 {hasSalary && (
                   <span className="ml-2 text-xs text-zinc-500">
                     {v.showSalary
-                      ? "(visible en publicación)"
-                      : "(oculto en publicación)"}
+                      ? "(visible en publicaci�n)"
+                      : "(oculto en publicaci�n)"}
                   </span>
                 )}
               </span>
@@ -1866,7 +1866,7 @@ function ReviewBlock({
             </div>
           ) : (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Prestaciones configuradas pero ocultas en la publicación
+              Prestaciones configuradas pero ocultas en la publicaci�n
             </p>
           )}
 
@@ -1878,7 +1878,7 @@ function ReviewBlock({
                     <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
                     <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd"/>
                   </svg>
-                  Visibles en la publicación
+                  Visibles en la publicaci�n
                 </>
               ) : (
                 <>
@@ -1886,7 +1886,7 @@ function ReviewBlock({
                     <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd"/>
                     <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z"/>
                   </svg>
-                  Ocultas en la publicación
+                  Ocultas en la publicaci�n
                 </>
               )}
             </span>
@@ -1914,7 +1914,7 @@ function ReviewBlock({
                   onEditTab("edu");
                 }}
               >
-                Editar educación
+                Editar educaci�n
               </button>
               <button
                 type="button"
@@ -1944,7 +1944,7 @@ function ReviewBlock({
             <div className="grid gap-6">
               <div className="grid gap-1">
                 <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Nivel mínimo de educación
+                  Nivel m�nimo de educaci�n
                 </span>
                 <span className="text-sm text-zinc-700 dark:text-zinc-300">
                   {labelDegree(v.minDegree)}
@@ -1996,7 +1996,7 @@ function ReviewBlock({
             {(hasRequiredSkills || hasNiceSkills) && (
               <div className="grid gap-6">
                 <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                  Skills técnicos
+                  Skills t�cnicos
                 </span>
 
                 {hasRequiredSkills && (
@@ -2092,7 +2092,7 @@ function ReviewBlock({
               <line x1="16" y1="17" x2="8" y2="17"/>
               <line x1="10" y1="9" x2="8" y2="9"/>
             </svg>
-            Descripción de la vacante
+            Descripci�n de la vacante
           </h4>
           <button
             type="button"
@@ -2107,7 +2107,7 @@ function ReviewBlock({
         </div>
         {!hasDescription && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-200">
-            <span>La descripción está vacía.</span>
+            <span>La descripci�n est� vac�a.</span>
             <button
               type="button"
               className="rounded-md border border-amber-200 bg-white px-2 py-1 text-xs font-medium text-amber-800 hover:border-amber-300 hover:text-amber-700 dark:border-amber-500/40 dark:bg-amber-950/40 dark:text-amber-200"
@@ -2116,7 +2116,7 @@ function ReviewBlock({
                 onEditTab("desc");
               }}
             >
-              Agregar descripción
+              Agregar descripci�n
             </button>
           </div>
         )}
@@ -2125,7 +2125,7 @@ function ReviewBlock({
           dangerouslySetInnerHTML={{
             __html:
               safeDescriptionHtml ||
-              "<p class='text-zinc-500 dark:text-zinc-400 italic'>Sin descripción</p>",
+              "<p class='text-zinc-500 dark:text-zinc-400 italic'>Sin descripci�n</p>",
           }}
         />
       </div>
@@ -2141,3 +2141,4 @@ function inputCls(err?: any) {
     err ? "border-red-500" : "border-zinc-300"
   );
 }
+

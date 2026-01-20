@@ -13,8 +13,8 @@ import { updateProfileAction } from "../actions";
 import {
   getSkillsFromDB,
   getCertificationsFromDB,
-  LANGUAGES_FALLBACK,
-} from "@/lib/skills";
+  } from "@/lib/server/skills";
+import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
 
 export const metadata = { title: "Mi perfil | Bolsa TI" };
 
@@ -104,7 +104,7 @@ export default async function ProfileEditPage() {
     select: { id: true, label: true },
     orderBy: { label: "asc" },
   });
-  const allowedSet = new Set(LANGUAGES_FALLBACK.map((x) => x.toLowerCase()));
+  const allowedSet = new Set(LANGUAGES_FALLBACK.map((x: string) => x.toLowerCase()));
   const languageOptions = allLangTerms
     .filter((t) => allowedSet.has(t.label.toLowerCase()))
     .map((t) => ({ id: t.id, label: t.label }))
@@ -135,15 +135,15 @@ export default async function ProfileEditPage() {
   const skillTermOptions = [
     ...skillTermsFromDB
       .map((t) => ({ id: t.id, label: t.label }))
-      .filter((t) => {
+      .filter((t: any) => {
         const k = t.label.toLowerCase();
         if (seen.has(k)) return false;
         seen.add(k);
         return true;
       }),
     ...skillsOptions
-      .map((label) => ({ id: "", label }))
-      .filter((t) => {
+      .map((label: string) => ({ id: "", label }))
+      .filter((t: any) => {
         const k = t.label.toLowerCase();
         if (seen.has(k)) return false;
         seen.add(k);
