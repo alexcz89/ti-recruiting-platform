@@ -30,3 +30,11 @@ coverage/
 # tests
 test-screenshots/
 
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output/
+
+# Vitest
+.vitest/
+

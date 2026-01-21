@@ -20,6 +20,37 @@ export default defineConfig({
     ],
     
     retry: 2,
+
+    // Coverage configuration
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      reportsDirectory: './coverage',
+      exclude: [
+        'node_modules/**',
+        'dist/**',
+        '.next/**',
+        '**/*.config.{js,ts}',
+        '**/*.setup.{js,ts}',
+        '**/*.d.ts',
+        '**/types/**',
+        '**/__tests__/**',
+        '**/test-helpers.ts',
+        'vitest.mocks.ts',
+        'postcss.config.mjs',
+        'tailwind.config.ts',
+      ],
+      include: [
+        'lib/**/*.{js,ts}',
+        'app/**/*.{js,ts,tsx}',
+        'components/**/*.{js,ts,tsx}',
+      ],
+      all: true,
+      lines: 80,
+      functions: 80,
+      branches: 80,
+      statements: 80,
+    },
   },
 
   resolve: {
