@@ -21,6 +21,14 @@ const LABEL: Record<InterestKey, string> = {
   REJECTED: "Rechazado",
 };
 
+// 🔔 MAPEO A STATUS DE LA APLICACIÓN (para notificaciones)
+const TO_APPLICATION_STATUS: Record<InterestKey, string> = {
+  REVIEW: "REVIEWING",
+  MAYBE: "REVIEWING", // En duda también es "revisando"
+  ACCEPTED: "OFFER",  // Aceptado = oferta
+  REJECTED: "REJECTED",
+};
+
 const INTEREST_KEYS: InterestKey[] = [
   "REVIEW",
   "MAYBE",
@@ -70,19 +78,29 @@ export default function InterestSelect({
     setValue(next); // UI optimista
 
     try {
-      const res = await fetch(`/api/applications/${applicationId}/interest`, {
+      // 🔔 LLAMAR AL ENDPOINT DE STATUS (que tiene notificaciones)
+      const applicationStatus = TO_APPLICATION_STATUS[next];
+      
+      const res = await fetch(`/api/applications/${applicationId}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: applicationStatus }),
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+
+      // Luego actualizar el recruiterInterest (para la UI)
+      await fetch(`/api/applications/${applicationId}/interest`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ recruiterInterest: next }),
       });
 
-      if (!res.ok) throw new Error(await res.text());
-
-      toast.success("Estado actualizado");
+      toast.success("Nivel de interés actualizado");
       router.refresh();
     } catch (err) {
       setValue(prev);
-      toast.error("No se pudo actualizar el estado");
+      toast.error("No se pudo actualizar");
       console.error(err);
     }
   }

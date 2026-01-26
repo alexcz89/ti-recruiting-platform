@@ -13,7 +13,7 @@ export default withAuth(
     const role = token?.role;
     const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
-    // ===== 🔐 DEBUG ENDPOINTS (NUEVO) =====
+    // ===== 🔐 DEBUG ENDPOINTS =====
     // Bloquear endpoints de debug en producción
     if (pathname.startsWith("/api/debug-")) {
       if (process.env.NODE_ENV === "production") {
@@ -50,6 +50,12 @@ export default withAuth(
 
     // ===== /dashboard =====
     if (pathname.startsWith("/dashboard")) {
+      // 🔔 Notificaciones: permitir a TODOS los usuarios autenticados
+      if (pathname.startsWith("/dashboard/notifications")) {
+        return NextResponse.next();
+      }
+
+      // Dashboard principal: solo recruiter/admin
       return NextResponse.next();
     }
 
@@ -60,6 +66,11 @@ export default withAuth(
     callbacks: {
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl;
+
+        // 🔔 Notificaciones: permitir a TODOS los usuarios autenticados
+        if (pathname.startsWith("/dashboard/notifications")) {
+          return !!token; // Solo requiere estar logueado
+        }
 
         // Dashboard: requiere auth + rol recruiter/admin
         if (pathname.startsWith("/dashboard")) {
@@ -91,6 +102,6 @@ export const config = {
     "/dashboard/:path*",
     "/profile/:path*",
     "/jobs/:path*",
-    "/api/debug-:path*", // ✨ NUEVO: Proteger debug endpoints
+    "/api/debug-:path*",
   ],
 };

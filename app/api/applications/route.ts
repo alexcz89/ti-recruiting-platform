@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { getSessionCompanyId } from '@/lib/server/session';
 import { sendApplicationEmail } from '@/lib/server/mailer';
+import { NotificationService } from '@/lib/notifications/service'; // 🔔 NUEVO
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
         id: true,
         title: true,
         companyId: true,
+        recruiterId: true, // Campo correcto
         company: { select: { name: true } },
       },
     });
@@ -158,6 +160,27 @@ export async function POST(req: NextRequest) {
         });
       } catch (mailErr) {
         console.warn("[POST /api/applications] sendApplicationEmail failed:", mailErr);
+      }
+    })();
+
+    // 🔔 NUEVO: Notificar al recruiter
+    (async () => {
+      try {
+        if (!job.recruiterId) return; // Si no hay recruiter asignado, skip
+        
+        await NotificationService.create({
+          userId: job.recruiterId,
+          type: 'NEW_APPLICATION',
+          metadata: {
+            candidateName: candidate.name || candidate.email || 'Candidato',
+            candidateId: candidate.id,
+            jobTitle: job.title,
+            jobId: job.id,
+            applicationId: app.id,
+          },
+        });
+      } catch (notifErr) {
+        console.warn("[POST /api/applications] Notification failed:", notifErr);
       }
     })();
 

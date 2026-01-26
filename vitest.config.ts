@@ -13,10 +13,13 @@ export default defineConfig({
     hookTimeout: 10000,
     reporters: ['verbose'],
     
-    watchExclude: [
+    // watchExclude moved to root level in Vitest 4
+    exclude: [
       'node_modules/**',
       'dist/**',
       '.next/**',
+      '**/*.config.{js,ts}',
+      '**/*.setup.{js,ts}',
     ],
     
     retry: 2,
@@ -45,11 +48,13 @@ export default defineConfig({
         'app/**/*.{js,ts,tsx}',
         'components/**/*.{js,ts,tsx}',
       ],
-      all: true,
-      lines: 80,
-      functions: 80,
-      branches: 80,
-      statements: 80,
+      // Nueva estructura para thresholds en Vitest 4
+      thresholds: {
+        lines: 80,
+        functions: 80,
+        branches: 80,
+        statements: 80,
+      },
     },
   },
 

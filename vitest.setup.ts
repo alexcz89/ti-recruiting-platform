@@ -6,8 +6,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// Mock environment variables
-process.env.NODE_ENV = 'test';
+// Mock environment variables (without trying to reassign read-only properties)
+if (!process.env.NODE_ENV) {
+  Object.defineProperty(process.env, 'NODE_ENV', {
+    value: 'test',
+    writable: false,
+  });
+}
 
 // Custom matchers
 expect.extend({

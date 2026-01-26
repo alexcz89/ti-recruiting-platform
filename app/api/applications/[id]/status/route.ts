@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
+import { NotificationService } from '@/lib/notifications/service'; // 🔔 NUEVO
 
 const ALLOWED = new Set([
   "SUBMITTED",
@@ -42,7 +43,7 @@ async function updateStatus(id: string, status: string, req: NextRequest) {
     select: {
       id: true,
       status: true,
-      job: { select: { id: true, companyId: true } },
+      job: { select: { id: true, title: true, companyId: true } },
       candidate: { select: { id: true, email: true, name: true } },
     },
   });
@@ -52,6 +53,9 @@ async function updateStatus(id: string, status: string, req: NextRequest) {
   if (role !== "ADMIN" && app.job?.companyId !== companyId) {
     return NextResponse.json({ error: "No autorizado para esta aplicación" }, { status: 403 });
   }
+
+  // 🔔 GUARDAR EL STATUS ANTERIOR PARA LA NOTIFICACIÓN
+  const oldStatus = app.status;
 
   const isRejected = newStatus === "REJECTED";
 
@@ -70,6 +74,27 @@ async function updateStatus(id: string, status: string, req: NextRequest) {
         },
     include: { job: true, candidate: true },
   });
+
+  // 🔔 NUEVO: Notificar al candidato si el status cambió
+  if (oldStatus !== newStatus) {
+    (async () => {
+      try {
+        await NotificationService.create({
+          userId: app.candidate.id,
+          type: 'APPLICATION_STATUS_CHANGE',
+          metadata: {
+            jobTitle: app.job.title,
+            jobId: app.job.id,
+            applicationId: app.id,
+            oldStatus: oldStatus,
+            newStatus: newStatus,
+          },
+        });
+      } catch (notifErr) {
+        console.warn("[PATCH /api/applications/status] Notification failed:", notifErr);
+      }
+    })();
+  }
 
   return NextResponse.json({ ok: true, application: updated });
 }

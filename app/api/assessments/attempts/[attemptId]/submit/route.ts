@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
+import { NotificationService } from '@/lib/notifications/service'; // 🔔 NUEVO
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,6 +26,25 @@ export async function POST(_request: Request, { params }: { params: { attemptId:
       include: {
         template: { select: { passingScore: true, sections: true } },
         answers: { include: { question: { select: { section: true } } } },
+        // 🔔 NUEVO: Incluir datos para la notificación
+        invite: {
+          select: {
+            job: {
+              select: {
+                id: true,
+                title: true,
+                recruiterId: true, // Campo correcto
+              },
+            },
+          },
+        },
+        candidate: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
     });
 
@@ -81,7 +101,7 @@ export async function POST(_request: Request, { params }: { params: { attemptId:
 
     const timeSpent = attempt.answers.reduce((sum, a) => sum + (a.timeSpent || 0), 0);
 
-    // Flags merge + “tooFast”
+    // Flags merge + "tooFast"
     const flags: any =
       attempt.flagsJson && typeof attempt.flagsJson === "object"
         ? { ...(attempt.flagsJson as any) }
@@ -143,6 +163,35 @@ export async function POST(_request: Request, { params }: { params: { attemptId:
       }
       throw e;
     }
+
+    // 🔔 NUEVO: Notificar al recruiter que el assessment fue completado
+    (async () => {
+      try {
+        // Obtener recruiter del job
+        const recruiterId = attempt.invite?.job?.recruiterId;
+        if (!recruiterId) {
+          console.warn("[POST /api/assessments/submit] No recruiterId found, skipping notification");
+          return;
+        }
+
+        await NotificationService.create({
+          userId: recruiterId,
+          type: 'ASSESSMENT_COMPLETED',
+          metadata: {
+            candidateName: attempt.candidate.name || attempt.candidate.email || 'Candidato',
+            candidateId: attempt.candidateId,
+            jobTitle: attempt.invite?.job?.title || 'Vacante',
+            jobId: attempt.invite?.job?.id || '',
+            assessmentId: attempt.inviteId || '',
+            attemptId: attempt.id,
+            score: totalScore,
+            passed: passed,
+          },
+        });
+      } catch (notifErr) {
+        console.warn("[POST /api/assessments/submit] Notification failed:", notifErr);
+      }
+    })();
 
     return jsonNoStore({
       success: true,

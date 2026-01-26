@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import ThemeToggle from "@/components/ThemeToggle";
 import SignOutButton from "@/components/SignOutButton";
 import LogoTaskit from "@/components/LogoTaskit";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ClipboardList, Menu, X } from "lucide-react";
 
 export default function Header() {
@@ -100,8 +101,7 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
     <div className="md:hidden border-t border-zinc-200/60 dark:border-zinc-800/60 py-4">
       <nav className="flex flex-col gap-2">
         <MobileNavLink href="/jobs" onClick={onClose}>
-          Vacantes
-        </MobileNavLink>
+          Vacantes</MobileNavLink>
 
         {isAuthenticated ? (
           <>
@@ -228,6 +228,9 @@ function AuthArea() {
     <div className="flex items-center gap-1.5 sm:gap-2">
       {isRecruiter && <RecruiterNav />}
       {isCandidate && <CandidateNav />}
+
+      {/* 🔔 NOTIFICATION BELL - Solo cuando está autenticado */}
+      <NotificationBell />
 
       <span className="hidden lg:inline text-[12px] text-zinc-500 dark:text-zinc-400">
         {user?.email}

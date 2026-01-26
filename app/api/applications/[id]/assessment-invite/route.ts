@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/server/auth';
 import { getSessionCompanyId } from '@/lib/server/session';
 import crypto from "crypto";
 import { sendAssessmentInviteEmail } from '@/lib/server/mailer';
+import { NotificationService } from '@/lib/notifications/service'; // 🔔 NUEVO
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -315,7 +316,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       emailError = "candidate_email_missing";
     }
 
-    // sentAt = último “intento de envío” (ok o skipped)
+    // sentAt = Último "intento de envío" (ok o skipped)
     if (emailStatus === "sent" || emailStatus === "skipped") {
       invite = await prisma.assessmentInvite.update({
         where: { id: invite.id },
@@ -323,6 +324,25 @@ export async function POST(request: Request, { params }: { params: { id: string 
         select: selectInvite,
       });
     }
+
+    // 🔔 NUEVO: Notificar al candidato sobre la invitación
+    (async () => {
+      try {
+        await NotificationService.create({
+          userId: application.candidateId,
+          type: 'ASSESSMENT_INVITATION',
+          metadata: {
+            jobTitle: application.job.title,
+            jobId: application.jobId,
+            assessmentId: invite!.id,
+            templateId: template.id,
+            dueDate: invite!.expiresAt || newExpiresAt,
+          },
+        });
+      } catch (notifErr) {
+        console.warn("[POST /api/applications/assessment-invite] Notification failed:", notifErr);
+      }
+    })();
 
     // 7) Lookup opcional de attempt "reusable": SOLO si está NO_FINALIZADO y NO EXPIRADO
     //    Si no hay uno activo, regresamos attempt: null (el candidato crea uno nuevo vía /start con token).
@@ -381,7 +401,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
         isRequired: Boolean(chosenJobAssessment.isRequired),
         minScore: chosenJobAssessment.minScore ?? null,
       },
-      attempt: existingAttempt ?? null, // 👈 si no hay activo/no expirado, queda null
+      attempt: existingAttempt ?? null,
       invite,
       inviteUrl: inviteUrl.toString(),
       emailStatus,

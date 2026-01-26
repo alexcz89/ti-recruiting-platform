@@ -5,7 +5,7 @@ import { redirect, notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from '@/lib/server/prisma';
 import JobWizard from "../../new/JobWizard";
-import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/skills";
+import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/server/skills";
 import { geocodeCityToPoint } from "@/lib/geo";
 
 export const dynamic = "force-dynamic";
