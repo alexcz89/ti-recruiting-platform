@@ -3,7 +3,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { Check, X } from "lucide-react";
 
 interface Preference {
@@ -51,15 +51,15 @@ export function PreferencesForm({
         });
 
         if (response.ok) {
-          toast.success('Preferencias guardadas');
+          toastSuccess('Preferencias guardadas');
           setHasChanges(false);
           router.refresh();
         } else {
-          toast.error('Error al guardar preferencias');
+          toastError('Error al guardar preferencias');
         }
       } catch (error) {
         console.error('Error saving preferences:', error);
-        toast.error('Error al guardar preferencias');
+        toastError('Error al guardar preferencias');
       }
     });
   };
@@ -67,7 +67,7 @@ export function PreferencesForm({
   const handleReset = () => {
     setPreferences(initialPreferences);
     setHasChanges(false);
-    toast.info('Cambios descartados');
+    toastInfo('Cambios descartados');
   };
 
   const isEnabled = (type: string, channel: string) => {

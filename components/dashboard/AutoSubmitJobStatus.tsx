@@ -13,18 +13,6 @@ type Props = {
   labels: Record<string, string>;
 };
 
-const STATUS_COLOR_CLASSES: Record<Status, string> = {
-  OPEN:
-    "bg-emerald-50 text-emerald-800 border-emerald-300 " +
-    "dark:bg-emerald-500/20 dark:text-emerald-50 dark:border-emerald-500/60",
-  PAUSED:
-    "bg-amber-50 text-amber-800 border-amber-300 " +
-    "dark:bg-amber-500/20 dark:text-amber-50 dark:border-amber-500/60",
-  CLOSED:
-    "bg-zinc-50 text-zinc-800 border-zinc-300 " +
-    "dark:bg-zinc-800/80 dark:text-zinc-100 dark:border-zinc-600",
-};
-
 export default function AutoSubmitJobStatus({
   jobId,
   defaultValue,
@@ -56,7 +44,7 @@ export default function AutoSubmitJobStatus({
           throw new Error(data?.error || "No se pudo actualizar el estatus");
         }
 
-        toastSuccess(`Estatus actualizado a “${labels[next] ?? next}”`);
+        toastSuccess(`Estatus actualizado a "${labels[next] ?? next}"`);
       } catch (err: any) {
         setValue(prev);
         toastError(err?.message || "No se pudo actualizar el estatus");
@@ -64,16 +52,38 @@ export default function AutoSubmitJobStatus({
     });
   };
 
+  // 🎨 Clases base comunes
   const baseClasses =
     "inline-flex h-9 min-w-[150px] items-center rounded-full " +
     "border px-3 pr-7 text-xs font-medium shadow-sm " +
     "appearance-none cursor-pointer " +
     "focus-visible:outline-none focus-visible:ring-2 " +
     "focus-visible:ring-emerald-500/80 focus-visible:ring-offset-1 " +
-    "disabled:opacity-60 disabled:cursor-not-allowed " +
-    "bg-white/95 text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100";
+    "disabled:opacity-60 disabled:cursor-not-allowed";
 
-  const colorClasses = STATUS_COLOR_CLASSES[value];
+  // 🎨 Función para obtener clases de color según el status
+  const getColorClasses = (status: Status) => {
+    if (status === "OPEN") {
+      return (
+        baseClasses +
+        " bg-green-50 text-green-700 border-green-300 " +
+        "dark:bg-green-900/30 dark:text-green-300 dark:border-green-700"
+      );
+    }
+    if (status === "PAUSED") {
+      return (
+        baseClasses +
+        " bg-yellow-50 text-yellow-700 border-yellow-300 " +
+        "dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700"
+      );
+    }
+    // CLOSED
+    return (
+      baseClasses +
+      " bg-zinc-100 text-zinc-700 border-zinc-300 " +
+      "dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600"
+    );
+  };
 
   return (
     <div className="relative inline-flex">
@@ -81,7 +91,7 @@ export default function AutoSubmitJobStatus({
         value={value}
         onChange={onChange}
         disabled={pending}
-        className={`${baseClasses} ${colorClasses}`}
+        className={getColorClasses(value)}
         aria-label="Estatus de la vacante"
       >
         <option value="OPEN">{labels.OPEN ?? "Abierta"}</option>

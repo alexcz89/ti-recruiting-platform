@@ -3,7 +3,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import {
   MoreHorizontal,
   FileText,
@@ -73,22 +73,22 @@ export default function ActionsMenu(props: Props) {
   };
 
   const showCopyFallback = (url: string) => {
-    toast.success("No se pudo copiar automáticamente");
+    toastSuccess("No se pudo copiar automáticamente");
     window.prompt("Copia este link:", url);
   };
 
   const toastInviteResult = (data: InviteResponse) => {
     const status = data?.emailStatus;
 
-    if (status === "sent") return toast.success("Invitación enviada por correo ✅");
+    if (status === "sent") return toastSuccess("Invitación enviada por correo ✅");
 
     if (status === "failed") {
-      return toast.error(data?.emailError || "No se pudo enviar el correo (pero el link sí fue generado).");
+      return toastError(data?.emailError || "No se pudo enviar el correo (pero el link sí fue generado).");
     }
 
-    if (status === "skipped") return toast.success("Invitación lista ✅ (no se envió correo)");
+    if (status === "skipped") return toastSuccess("Invitación lista ✅ (no se envió correo)");
 
-    toast.success("Invitación lista ✅");
+    toastSuccess("Invitación lista ✅");
   };
 
   const handleAssessmentAction = () => {
@@ -109,7 +109,7 @@ export default function ActionsMenu(props: Props) {
       startTransition(async () => {
         const url = buildInviteUrl(assessment.templateId, String(assessment.token));
         const ok = await copyToClipboard(url);
-        if (ok) toast.success("Link de assessment copiado ✅");
+        if (ok) toastSuccess("Link de assessment copiado ✅");
         else showCopyFallback(url);
       });
       return;
@@ -151,7 +151,7 @@ export default function ActionsMenu(props: Props) {
         router.refresh();
       } catch (err: any) {
         console.error(err);
-        toast.error(err?.message || "No se pudo enviar el assessment");
+        toastError(err?.message || "No se pudo enviar el assessment");
       }
     });
   };
@@ -171,20 +171,20 @@ export default function ActionsMenu(props: Props) {
           throw new Error(text || "No se pudo eliminar la postulación");
         }
 
-        toast.success("Postulación eliminada");
+        toastSuccess("Postulación eliminada");
         window.location.reload();
       } catch (err: any) {
         console.error(err);
-        toast.error(err?.message || "No se pudo eliminar la postulación");
+        toastError(err?.message || "No se pudo eliminar la postulación");
       }
     });
   };
 
   const handleSendWhatsApp = () => {
-    if (!candidatePhone) return toast.error("Este candidato no tiene número de WhatsApp registrado.");
+    if (!candidatePhone) return toastError("Este candidato no tiene número de WhatsApp registrado.");
 
     let digits = candidatePhone.replace(/\D/g, "");
-    if (!digits) return toast.error("Número de WhatsApp inválido.");
+    if (!digits) return toastError("Número de WhatsApp inválido.");
 
     // Si viene en formato local MX (10 dígitos), asumir 52
     if (digits.length === 10) digits = `52${digits}`;
@@ -194,7 +194,7 @@ export default function ActionsMenu(props: Props) {
 
     // Validación básica para MX
     if (digits.startsWith("52") && digits.length !== 12) {
-      return toast.error("Número de WhatsApp inválido (MX debe ser 10 dígitos).");
+      return toastError("Número de WhatsApp inválido (MX debe ser 10 dígitos).");
     }
 
     const baseMessage = `Hola, vi tu postulación${
@@ -208,7 +208,7 @@ export default function ActionsMenu(props: Props) {
   };
 
   const handleOpenResume = () => {
-    if (!resumeUrl) return toast.error("Este candidato no tiene CV adjunto");
+    if (!resumeUrl) return toastError("Este candidato no tiene CV adjunto");
     window.open(resumeUrl, "_blank", "noopener,noreferrer");
   };
 

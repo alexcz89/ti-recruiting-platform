@@ -2,7 +2,7 @@
 "use client";
 
 import { useTransition, useState, useEffect } from "react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { saveRecruiterProfile } from "./actions";
 import PhoneInputField from "@/components/PhoneInputField";
 import { Check, X, ExternalLink, Globe } from "lucide-react";
@@ -63,10 +63,10 @@ export default function ProfileForm({ initial }: Props) {
         startTransition(async () => {
           const res = await saveRecruiterProfile(null as any, formData);
           if (res?.ok) {
-            toast.success(res.message || "Perfil actualizado");
+            toastSuccess(res.message || "Perfil actualizado");
             setHasChanges(false);
           } else {
-            toast.error(res?.message || "Error al guardar");
+            toastError(res?.message || "Error al guardar");
           }
         });
       }}

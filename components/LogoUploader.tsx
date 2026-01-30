@@ -3,7 +3,7 @@
 
 import { UploadButton } from "@uploadthing/react";
 import type { OurFileRouter } from "@/app/api/uploadthing/core";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 type Props = {
   label?: string;
@@ -28,15 +28,15 @@ export default function LogoUploader({ label, className = "", onUploaded }: Prop
           // UploadThing v9: usar ufsUrl si existe, con fallback a url
           const url = f?.ufsUrl || f?.url;
           if (!url) {
-            toast.error("No se recibió URL del logo");
+            toastError("No se recibió URL del logo");
             return;
           }
           onUploaded(url);
-          toast.success("Logo subido correctamente");
+          toastSuccess("Logo subido correctamente");
         }}
         onUploadError={(error) => {
           console.error(error);
-          toast.error(error?.message || "Error al subir el logo");
+          toastError(error?.message || "Error al subir el logo");
         }}
       />
     </div>

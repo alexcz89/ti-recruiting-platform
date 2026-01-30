@@ -4,7 +4,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PlanId } from "@/config/plans";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 type Props = {
   planId: PlanId;
@@ -46,11 +46,11 @@ export default function ChangePlanButton({ planId, isCurrent }: Props) {
 
         if (!res.ok) {
           console.error("Change plan error", data);
-          toast.error(data?.error || "No se pudo cambiar de plan");
+          toastError(data?.error || "No se pudo cambiar de plan");
           return;
         }
 
-        toast.success("Plan actualizado correctamente");
+        toastSuccess("Plan actualizado correctamente");
 
         startTransition(() => {
           router.refresh();
@@ -58,7 +58,7 @@ export default function ChangePlanButton({ planId, isCurrent }: Props) {
       })
       .catch((err) => {
         console.error("Network error changing plan", err);
-        toast.error("No se pudo conectar con el servidor");
+        toastError("No se pudo conectar con el servidor");
       })
       .finally(() => setLoading(false));
   };

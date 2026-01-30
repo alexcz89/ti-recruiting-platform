@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 type Flags = {
   tabSwitches: number;
@@ -112,9 +112,9 @@ export function useAntiCheating({
         enqueue("VISIBILITY_HIDDEN");
 
         if (flagsRef.current.tabSwitches >= maxTabSwitches) {
-          toast.error("⚠️ Has cambiado de pestaña muchas veces. Esto será reportado.", { duration: 5000 });
+          toastError("⚠️ Has cambiado de pestaña muchas veces. Esto será reportado.", { duration: 5000 });
         } else {
-          toast.warning(`⚠️ Evita cambiar de pestaña (${flagsRef.current.tabSwitches}/${maxTabSwitches})`, {
+          toastWarning(`⚠️ Evita cambiar de pestaña (${flagsRef.current.tabSwitches}/${maxTabSwitches})`, {
             duration: 3000,
           });
         }
@@ -131,7 +131,7 @@ export function useAntiCheating({
       flagsRef.current.copyAttempts += 1;
       emit();
       enqueue("COPY");
-      toast.warning("⚠️ Copiar está deshabilitado durante la evaluación");
+      toastWarning("⚠️ Copiar está deshabilitado durante la evaluación");
       e.preventDefault();
     };
 
@@ -139,14 +139,14 @@ export function useAntiCheating({
       flagsRef.current.pasteAttempts += 1;
       emit();
       enqueue("PASTE");
-      toast.warning("⚠️ Pegar está deshabilitado durante la evaluación");
+      toastWarning("⚠️ Pegar está deshabilitado durante la evaluación");
       e.preventDefault();
     };
 
     const handleContextMenu = (e: MouseEvent) => {
       e.preventDefault();
       enqueue("RIGHT_CLICK");
-      toast.warning("⚠️ Click derecho deshabilitado");
+      toastWarning("⚠️ Click derecho deshabilitado");
     };
 
     const handlePageHide = () => {

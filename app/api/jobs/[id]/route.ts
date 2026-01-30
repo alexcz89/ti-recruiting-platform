@@ -137,6 +137,34 @@ export async function PATCH(
       );
     }
 
+    // 🔥 Detectar si es un simple cambio de estado (JSON) o una actualización completa (FormData)
+    const contentType = req.headers.get("content-type") || "";
+    const isJsonRequest = contentType.includes("application/json");
+
+    // Si es JSON, solo actualizar status
+    if (isJsonRequest) {
+      const body = await req.json();
+      const { status } = body;
+
+      if (!status || !["OPEN", "PAUSED", "CLOSED"].includes(status)) {
+        return NextResponse.json(
+          { error: "Estado inválido" },
+          { status: 400 }
+        );
+      }
+
+      await prisma.job.update({
+        where: { id: params.id },
+        data: { 
+          status: status as JobStatus,
+          updatedAt: new Date(),
+        },
+      });
+
+      return NextResponse.json({ ok: true });
+    }
+
+    // Para FormData (actualización completa)
     const fd = await req.formData();
 
     // Básicos

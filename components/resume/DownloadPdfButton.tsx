@@ -3,7 +3,12 @@
 
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import {
+  toastSuccess,
+  toastError,
+  toastLoading,
+  toastDismiss,
+} from "@/lib/ui/toast";
 
 type Props = {
   className?: string;
@@ -12,6 +17,7 @@ type Props = {
 
 function extractFilenameFromContentDisposition(value?: string | null): string | null {
   if (!value) return null;
+
   // Prioriza filename* (UTF-8) y luego filename
   const utf8Match = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(value);
   if (utf8Match?.[1]) {
@@ -21,8 +27,10 @@ function extractFilenameFromContentDisposition(value?: string | null): string | 
       return utf8Match[1].replace(/["']/g, "");
     }
   }
+
   const asciiMatch = /filename\s*=\s*("?)([^";]+)\1/i.exec(value);
   if (asciiMatch?.[2]) return asciiMatch[2];
+
   return null;
 }
 
@@ -31,10 +39,12 @@ async function fallbackFilename(): Promise<string> {
     const r = await fetch("/api/profile", { cache: "no-store" });
     if (!r.ok) throw new Error();
     const j = await r.json();
+
     const raw =
       (j?.name && String(j.name)) ||
       (j?.email && String(j.email).split("@")[0]) ||
       "CV";
+
     const safe = raw
       .normalize("NFKD")
       .replace(/[\u0300-\u036f]/g, "")
@@ -42,6 +52,7 @@ async function fallbackFilename(): Promise<string> {
       .trim()
       .replace(/\s+/g, "-")
       .slice(0, 80);
+
     return `CV-${safe || "Perfil"}.pdf`;
   } catch {
     return "CV.pdf";
@@ -55,33 +66,41 @@ export default function DownloadPdfButton({
   const [loading, setLoading] = useState(false);
 
   async function handleDownload() {
+    if (loading) return;
+
+    let loadingToastId: string | number | undefined;
+
     try {
       setLoading(true);
-      toast.loading("Generando PDF...");
+      loadingToastId = toastLoading("Generando PDF...");
 
       const res = await fetch("/api/profile/export", { method: "POST" });
       if (!res.ok) throw new Error("No se pudo generar el PDF");
 
       // 1) Lee filename del header si existe
-      let filename =
+      const filename =
         extractFilenameFromContentDisposition(res.headers.get("Content-Disposition")) ||
         (await fallbackFilename());
 
       // 2) Descarga
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
+
       const a = document.createElement("a");
       a.href = url;
       a.download = filename || "CV.pdf";
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
 
-      toast.dismiss();
-      toast.success("PDF descargado correctamente 🎉");
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+      toastDismiss(loadingToastId);
+      toastSuccess("PDF descargado correctamente 🎉");
     } catch (e: any) {
       console.error(e);
-      toast.dismiss();
-      toast.error(e?.message || "Error al generar el PDF");
+      toastDismiss(loadingToastId);
+      toastError(e?.message || "Error al generar el PDF");
     } finally {
       setLoading(false);
     }
@@ -91,6 +110,7 @@ export default function DownloadPdfButton({
     <button
       onClick={handleDownload}
       disabled={loading}
+      type="button"
       className={`inline-flex items-center gap-2 rounded-md border border-gray-300 glass-card p-4 md:p-6 text-sm font-medium hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed ${className}`}
     >
       {loading ? (

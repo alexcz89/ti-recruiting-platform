@@ -6,6 +6,11 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     // 1. Check authentication
@@ -14,7 +19,7 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -23,10 +28,13 @@ export async function GET(request: NextRequest) {
       where: { userId: session.user.id },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: { preferences },
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: { preferences },
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
 
   } catch (error: any) {
     console.error('[API] Error fetching preferences:', error);
@@ -36,7 +44,7 @@ export async function GET(request: NextRequest) {
         error: 'Failed to fetch preferences',
         details: error.message,
       },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }
@@ -49,7 +57,7 @@ export async function PUT(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -60,7 +68,7 @@ export async function PUT(request: NextRequest) {
     if (!Array.isArray(preferences)) {
       return NextResponse.json(
         { success: false, error: 'Invalid preferences format' },
-        { status: 400 }
+        { status: 400, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -93,10 +101,13 @@ export async function PUT(request: NextRequest) {
       })),
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Preferences updated',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Preferences updated',
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
 
   } catch (error: any) {
     console.error('[API] Error updating preferences:', error);
@@ -106,7 +117,7 @@ export async function PUT(request: NextRequest) {
         error: 'Failed to update preferences',
         details: error.message,
       },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

@@ -4,7 +4,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Trash2, ExternalLink } from "lucide-react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 interface NotificationActionsProps {
   notificationId: string;
@@ -32,14 +32,14 @@ export function NotificationActions({
         );
 
         if (response.ok) {
-          toast.success("Marcada como leída");
+          toastSuccess("Marcada como leída");
           router.refresh();
         } else {
-          toast.error("Error al marcar como leída");
+          toastError("Error al marcar como leída");
         }
       } catch (error) {
         console.error("Error marking as read:", error);
-        toast.error("Error al marcar como leída");
+        toastError("Error al marcar como leída");
       }
     });
   };
@@ -65,7 +65,7 @@ export function NotificationActions({
       });
 
       if (response.ok) {
-        toast.success("Notificación eliminada");
+        toastSuccess("Notificación eliminada");
         window.location.href = "/dashboard/notifications";
         return;
       }
@@ -78,7 +78,7 @@ export function NotificationActions({
 
       const error = await response.json().catch(() => ({}));
       console.error("Delete error:", error);
-      toast.error(error.error || "Error al eliminar");
+      toastError(error.error || "Error al eliminar");
       setIsDeleting(false);
     } catch (error) {
       // Restore UI if failed
@@ -88,7 +88,7 @@ export function NotificationActions({
       }
 
       console.error("Error deleting notification:", error);
-      toast.error("Error al eliminar");
+      toastError("Error al eliminar");
       setIsDeleting(false);
     }
   };

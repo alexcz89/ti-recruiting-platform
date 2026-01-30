@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { z } from "zod";
 import {
   RecruiterSimpleSignupSchema,
@@ -43,24 +43,24 @@ export default function RecruiterSignupPage() {
       setLoading(true);
       const res = await createRecruiterAction(parsed);
       if (res.ok) {
-        toast.success(
+        toastSuccess(
           res.warningDomain
             ? "Cuenta creada. Revisa tu correo. (Ojo: el dominio del email no coincide con el del sitio)."
             : "Cuenta creada. Revisa tu correo para verificarla."
         );
         router.push("/auth/signin?role=RECRUITER");
       } else {
-        toast.error(
+        toastError(
           res.message || "Error al crear la cuenta"
         );
       }
     } catch (err: any) {
       if (err instanceof z.ZodError) {
-        toast.error(
+        toastError(
           err.errors?.[0]?.message || "Datos inválidos"
         );
       } else {
-        toast.error("Error al crear la cuenta");
+        toastError("Error al crear la cuenta");
       }
     } finally {
       setLoading(false);

@@ -13,7 +13,7 @@ import {
 } from "@/lib/shared/validation/recruiter/onboarding";
 import { saveCompanyStep1, saveCompanyStep2 } from "./actions";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 type Step = 1 | 2;
 
@@ -49,10 +49,10 @@ export default function CompanyOnboardingPage() {
       }));
 
       if ((res as any)?.ok) {
-        toast.success("Empresa guardada");
+        toastSuccess("Empresa guardada");
         setStep(2);
       } else {
-        toast.error((res as any)?.error || "Error al guardar");
+        toastError((res as any)?.error || "Error al guardar");
       }
     });
   };
@@ -73,10 +73,10 @@ export default function CompanyOnboardingPage() {
       }));
 
       if ((res as any)?.ok) {
-        toast.success("¡Listo! Onboarding completado");
+        toastSuccess("¡Listo! Onboarding completado");
         router.push("/dashboard");
       } else {
-        toast.error((res as any)?.error || "Error al guardar");
+        toastError((res as any)?.error || "Error al guardar");
       }
     });
   };

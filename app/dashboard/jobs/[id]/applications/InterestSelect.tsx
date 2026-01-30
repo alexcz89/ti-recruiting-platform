@@ -10,7 +10,7 @@ import {
   MouseEvent,
 } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 
@@ -96,11 +96,11 @@ export default function InterestSelect({
         body: JSON.stringify({ recruiterInterest: next }),
       });
 
-      toast.success("Nivel de interés actualizado");
+      toastSuccess("Nivel de interés actualizado");
       router.refresh();
     } catch (err) {
       setValue(prev);
-      toast.error("No se pudo actualizar");
+      toastError("No se pudo actualizar");
       console.error(err);
     }
   }

@@ -5,7 +5,7 @@ import { useEffect } from "react";
 import { useForm, useFieldArray, FormProvider } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 /* =============== Helpers =============== */
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -230,11 +230,11 @@ export default function ResumeWizard({ initialData }: Props) {
       }
 
       const data = await res.json();
-      toast.success("CV guardado correctamente", {
+      toastSuccess("CV guardado correctamente", {
         description: `Experiencia: ${data.counts?.experience ?? 0} · Educación: ${data.counts?.education ?? 0} · Skills: ${data.counts?.skills ?? 0}`,
       });
     } catch (e: any) {
-      toast.error("Error al guardar", { description: e?.message ?? "Intenta de nuevo" });
+      toastError("Error al guardar", { description: e?.message ?? "Intenta de nuevo" });
     }
   }
 

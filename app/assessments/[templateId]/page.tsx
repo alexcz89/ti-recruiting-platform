@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { toast } from 'sonner';
+import { toastSuccess, toastError, toastInfo, toastWarning } from '@/lib/ui/toast';
 import AssessmentIntro from './AssessmentIntro';
 import AssessmentQuestion from './AssessmentQuestion';
 import AssessmentProgress from './AssessmentProgress';
@@ -113,7 +113,7 @@ export default function AssessmentPage() {
   const handleExpire = () => {
     setExpired((prev) => {
       if (prev) return prev;
-      toast.error('⏰ Tiempo expirado. Ya no puedes responder.');
+      toastError('⏰ Tiempo expirado. Ya no puedes responder.');
       return true;
     });
   };
@@ -140,12 +140,12 @@ export default function AssessmentPage() {
         setTemplate(data.template);
 
         if (!data.userStatus.canStart && !inviteToken && !attemptIdQS) {
-          toast.error('Ya completaste esta evaluación');
+          toastError('Ya completaste esta evaluación');
           router.push('/dashboard');
         }
       } catch (error) {
         console.error(error);
-        toast.error('Error al cargar evaluación');
+        toastError('Error al cargar evaluación');
       } finally {
         setLoading(false);
       }
@@ -273,10 +273,10 @@ export default function AssessmentPage() {
         }
       }
 
-      toast.success(data.reused ? 'Reanudando evaluación…' : '¡Evaluación iniciada! Mucha suerte 🍀');
+      toastSuccess(data.reused ? 'Reanudando evaluación…' : '¡Evaluación iniciada! Mucha suerte 🍀');
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.message || 'Error al iniciar evaluación');
+      toastError(error?.message || 'Error al iniciar evaluación');
     } finally {
       setStarting(false);
     }
@@ -363,7 +363,7 @@ export default function AssessmentPage() {
 
       const result = await res.json();
 
-      toast.success(
+      toastSuccess(
         result.passed
           ? `¡Felicidades! Aprobaste con ${result.totalScore}%`
           : `Evaluación completada. Score: ${result.totalScore}%`
@@ -373,7 +373,7 @@ export default function AssessmentPage() {
       router.push(`/assessments/attempts/${attemptId}/results`);
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.message || 'Error al enviar evaluación');
+      toastError(error?.message || 'Error al enviar evaluación');
       setSubmitting(false);
     }
   };

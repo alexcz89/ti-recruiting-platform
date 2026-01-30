@@ -7,6 +7,11 @@ import { authOptions } from '@/lib/server/auth';
 import { NotificationService } from '@/lib/notifications/service';
 import type { GetNotificationsParams } from '@/lib/notifications/types';
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   try {
     // 1. Check authentication
@@ -15,7 +20,7 @@ export async function GET(request: NextRequest) {
     if (!session?.user?.id) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
-        { status: 401 }
+        { status: 401, headers: { "Cache-Control": "no-store" } }
       );
     }
 
@@ -41,10 +46,13 @@ export async function GET(request: NextRequest) {
       params
     );
 
-    return NextResponse.json({
-      success: true,
-      data: result,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: result,
+      },
+      { headers: { "Cache-Control": "no-store" } }
+    );
 
   } catch (error: any) {
     console.error('[API] Error fetching notifications:', error);
@@ -54,7 +62,7 @@ export async function GET(request: NextRequest) {
         error: 'Failed to fetch notifications',
         details: error.message,
       },
-      { status: 500 }
+      { status: 500, headers: { "Cache-Control": "no-store" } }
     );
   }
 }

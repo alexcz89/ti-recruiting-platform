@@ -6,7 +6,7 @@ import clsx from "clsx";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { createStringFuse, searchStrings } from "@/lib/search/fuse";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import JobRichTextEditor from "@/components/jobs/JobRichTextEditor";
 import { Briefcase, Clock3, Save, CheckCircle2, Check, X } from "lucide-react";
 import {
@@ -174,8 +174,34 @@ export default function JobWizard({
   } = methods;
 
   // Initialize new hooks
-  const { lastSaved, isSaving } = useAutosave(watch, initial?.id);
+  const { lastSaved, isSaving, loadDraft, clearDraft } = useAutosave(watch, initial?.id);
   const qualityScore = useQualityScore(watch);
+
+  const hasRestoredRef = useRef(false);
+
+  useEffect(() => {
+    if (hasRestoredRef.current) return;
+    
+    if (!initial?.id) {
+      const draft = loadDraft();
+      
+      if (draft) {
+        hasRestoredRef.current = true;
+        
+        const confirmed = window.confirm(
+          '¿Deseas continuar con el borrador guardado automáticamente?'
+        );
+        
+        if (confirmed) {
+          reset(draft);
+          // ✅ Sin toast - el confirm es suficiente feedback
+        } else {
+          clearDraft();
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const {
     fields: languageFields,
@@ -323,7 +349,7 @@ export default function JobWizard({
       languages: languagesTpl,
     });
 
-    toast.success("Plantilla aplicada");
+    toastSuccess("Plantilla aplicada");
   }
 
   // Env?o
@@ -409,7 +435,8 @@ export default function JobWizard({
         fd.set("jobId", initial.id);
         const result = await onSubmit(fd);
         if (result?.error) throw new Error(result.error);
-        toast.success("Cambios guardados correctamente");
+        clearDraft();
+        toastSuccess("Cambios guardados correctamente");
         if (result?.redirectTo) router.push(result.redirectTo);
         else router.refresh();
         return;
@@ -423,7 +450,7 @@ export default function JobWizard({
 
       if (!res.ok) {
         if (res.status === 402 && data?.code === "PLAN_LIMIT_REACHED") {
-          toast.error(
+          toastError(
             data?.error ||
               "Has alcanzado el l?mite de vacantes activas para tu plan.",
             {
@@ -442,11 +469,12 @@ export default function JobWizard({
         );
       }
 
-      toast.success("Vacante publicada correctamente ??");
+      clearDraft();
+      toastSuccess("Vacante publicada correctamente 🎉");
       router.push(`/dashboard/jobs/${data.id}/applications`);
     } catch (err: any) {
       console.error("Error en handlePublish:", err);
-      toast.error(
+      toastError(
         (err && typeof err.message === "string" && err.message) ||
           "Ocurri? un error al guardar la vacante"
       );
@@ -636,7 +664,7 @@ export default function JobWizard({
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    toast.error(
+    toastError(
       "Primero completa los pasos anteriores antes de avanzar."
     );
   }

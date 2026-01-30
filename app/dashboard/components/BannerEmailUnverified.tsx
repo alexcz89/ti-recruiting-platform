@@ -3,7 +3,7 @@
 
 import { useTransition } from "react";
 import { resendVerificationActionClient } from "./actions";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 export default function BannerEmailUnverified() {
   const [pending, start] = useTransition();
@@ -11,8 +11,8 @@ export default function BannerEmailUnverified() {
   const onResend = () => {
     start(async () => {
       const res = await resendVerificationActionClient();
-      if (res?.ok) toast.success(res.message || "Verificación reenviada.");
-      else toast.error(res?.message || "No se pudo reenviar.");
+      if (res?.ok) toastSuccess(res.message || "Verificación reenviada.");
+      else toastError(res?.message || "No se pudo reenviar.");
     });
   };
 

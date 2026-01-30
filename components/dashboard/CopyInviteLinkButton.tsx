@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 export default function CopyInviteLinkButton({
   invitePath,
@@ -21,14 +21,14 @@ export default function CopyInviteLinkButton({
 
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(full);
-        toast.success("Link copiado");
+        toastSuccess("Link copiado");
         return;
       }
 
       // Fallback viejo: prompt para copiar manualmente
       window.prompt("Copia el link:", full);
     } catch {
-      toast.error("No se pudo copiar el link");
+      toastError("No se pudo copiar el link");
     }
   };
 

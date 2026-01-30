@@ -47,7 +47,14 @@ export function useAutosave(watch: UseFormWatch<JobForm>, jobId?: string) {
     try {
       const key = jobId ? `${STORAGE_KEY}_${jobId}` : STORAGE_KEY;
       const saved = localStorage.getItem(key);
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      
+      const parsed = JSON.parse(saved);
+      // Verificar que el draft tiene datos válidos
+      if (parsed && typeof parsed === 'object' && parsed.title) {
+        return parsed;
+      }
+      return null;
     } catch (error) {
       console.error("Error loading draft:", error);
       return null;

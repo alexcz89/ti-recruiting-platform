@@ -3,7 +3,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import type { InvoiceStatus } from "@prisma/client";
 
 type Props = {
@@ -34,14 +34,14 @@ export default function IssueInvoiceButton({ invoiceId, status }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         console.error("Issue invoice error", data);
-        toast.error(data?.error || "No se pudo timbrar la factura");
+        toastError(data?.error || "No se pudo timbrar la factura");
         return;
       }
-      toast.success("Factura timbrada correctamente");
+      toastSuccess("Factura timbrada correctamente");
       startTransition(() => router.refresh());
     } catch (err) {
       console.error(err);
-      toast.error("Error de red al timbrar la factura");
+      toastError("Error de red al timbrar la factura");
     } finally {
       setLoading(false);
     }

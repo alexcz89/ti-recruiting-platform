@@ -371,14 +371,22 @@ export default async function JobsPage({
                         </td>
 
                         <td className="py-3.5 px-4 align-top">
-                          <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] text-zinc-700 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium ${
+                              j.status === "OPEN"
+                                ? "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700"
+                                : j.status === "PAUSED"
+                                ? "bg-yellow-50 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700"
+                                : "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600"
+                            }`}
+                          >
                             {STATUS_LABEL[j.status] || j.status}
                           </span>
                         </td>
 
                         <td className="py-3.5 px-4 align-top">
                           <div className="flex items-center justify-end">
-                            <JobActionsMenu jobId={j.id} />
+                            <JobActionsMenu jobId={j.id} currentStatus={j.status} />
                           </div>
                         </td>
                       </tr>

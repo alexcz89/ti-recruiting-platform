@@ -2,7 +2,7 @@
 "use client";
 
 import { useTransition, useState, useRef, useEffect } from "react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { saveCompany, setCompanyLogo } from "@/app/dashboard/company/actions";
 import Image from "next/image";
 import { Upload, X, Check, Building2 } from "lucide-react";
@@ -43,13 +43,13 @@ export default function CompanyForm({ companyId, initial }: Props) {
 
     // Validar tipo
     if (!file.type.startsWith("image/")) {
-      toast.error("Solo se permiten imágenes");
+      toastError("Solo se permiten imágenes");
       return;
     }
 
     // Validar tamaño (4MB)
     if (file.size > 4 * 1024 * 1024) {
-      toast.error("La imagen no debe superar 4 MB");
+      toastError("La imagen no debe superar 4 MB");
       return;
     }
 
@@ -66,7 +66,7 @@ export default function CompanyForm({ companyId, initial }: Props) {
       const uploadedFiles = await startUpload([file]);
 
       if (!uploadedFiles || uploadedFiles.length === 0) {
-        toast.error("Error al subir el archivo");
+        toastError("Error al subir el archivo");
         setLogoPreview(initial.logoUrl); // Revertir preview
         return;
       }
@@ -76,7 +76,7 @@ export default function CompanyForm({ companyId, initial }: Props) {
       const url = uploadedFile.url || uploadedFile.fileUrl;
 
       if (!url) {
-        toast.error("No se recibió URL del archivo");
+        toastError("No se recibió URL del archivo");
         setLogoPreview(initial.logoUrl);
         return;
       }
@@ -86,14 +86,14 @@ export default function CompanyForm({ companyId, initial }: Props) {
 
       if (res.ok) {
         setLogoPreview(url);
-        toast.success("Logo actualizado correctamente");
+        toastSuccess("Logo actualizado correctamente");
       } else {
-        toast.error(res.message || "Error al guardar el logo");
+        toastError(res.message || "Error al guardar el logo");
         setLogoPreview(initial.logoUrl);
       }
     } catch (error: any) {
       console.error("Upload error:", error);
-      toast.error(error?.message || "Error al subir el archivo");
+      toastError(error?.message || "Error al subir el archivo");
       setLogoPreview(initial.logoUrl);
     } finally {
       setIsUploading(false);
@@ -118,12 +118,12 @@ export default function CompanyForm({ companyId, initial }: Props) {
 
       if (res.ok) {
         setLogoPreview("");
-        toast.success("Logo eliminado");
+        toastSuccess("Logo eliminado");
       } else {
-        toast.error(res.message || "Error al eliminar el logo");
+        toastError(res.message || "Error al eliminar el logo");
       }
     } catch (error) {
-      toast.error("Error al eliminar el logo");
+      toastError("Error al eliminar el logo");
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -147,10 +147,10 @@ export default function CompanyForm({ companyId, initial }: Props) {
     startTransition(async () => {
       const res = await saveCompany({ name, size: size || null });
       if (res?.ok) {
-        toast.success(res.message || "Empresa actualizada");
+        toastSuccess(res.message || "Empresa actualizada");
         setHasChanges(false);
       } else {
-        toast.error(res?.message || "Error al guardar");
+        toastError(res?.message || "Error al guardar");
       }
     });
   };

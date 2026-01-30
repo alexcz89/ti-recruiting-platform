@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { saveCompany } from "./actions";
 
 const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
@@ -30,8 +30,8 @@ export default function CompanyForm({ initial }: Props) {
       name: form.name,
       size: form.size || null,
     });
-    if (res.ok) toast.success(res.message || "Empresa actualizada.");
-    else toast.error(res.message || "Error al guardar.");
+    if (res.ok) toastSuccess(res.message || "Empresa actualizada.");
+    else toastError(res.message || "Error al guardar.");
     setLoading(false);
   };
 

@@ -13,16 +13,20 @@ import {
   XCircle,
   Trash2,
 } from "lucide-react";
+import { toastError, toastSuccess } from "@/lib/ui/toast";
+
+type JobStatus = "OPEN" | "PAUSED" | "CLOSED";
 
 type Props = {
   jobId: string;
+  currentStatus: JobStatus; // 👈 NUEVO
 };
 
 function cn(...xs: Array<string | undefined | null | false>) {
   return xs.filter(Boolean).join(" ");
 }
 
-export default function JobActionsMenu({ jobId }: Props) {
+export default function JobActionsMenu({ jobId, currentStatus }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -44,7 +48,7 @@ export default function JobActionsMenu({ jobId }: Props) {
     };
   }, []);
 
-  async function handleStatusChange(newStatus: "OPEN" | "PAUSED" | "CLOSED") {
+  async function handleStatusChange(newStatus: JobStatus) {
     setBusy(true);
     try {
       const res = await fetch(`/api/jobs/${jobId}`, {
@@ -57,10 +61,17 @@ export default function JobActionsMenu({ jobId }: Props) {
         throw new Error("Error actualizando estado");
       }
 
+      const statusLabels = {
+        OPEN: "reabierta",
+        PAUSED: "pausada",
+        CLOSED: "cerrada",
+      };
+      toastSuccess(`Vacante ${statusLabels[newStatus]} correctamente`);
+      
       router.refresh();
       setOpen(false);
     } catch (error) {
-      alert("Error al actualizar el estado de la vacante");
+      toastError("Error al actualizar el estado de la vacante");
     } finally {
       setBusy(false);
     }
@@ -82,15 +93,22 @@ export default function JobActionsMenu({ jobId }: Props) {
         throw new Error("Error eliminando vacante");
       }
 
+      toastSuccess("Vacante eliminada correctamente");
+      
       router.push("/dashboard/jobs");
       router.refresh();
     } catch (error) {
-      alert("Error al eliminar la vacante");
+      toastError("Error al eliminar la vacante");
     } finally {
       setBusy(false);
       setOpen(false);
     }
   }
+
+  // 🎯 Lógica condicional: qué botones mostrar
+  const showPause = currentStatus === "OPEN";
+  const showReopen = currentStatus === "PAUSED" || currentStatus === "CLOSED";
+  const showClose = currentStatus === "OPEN" || currentStatus === "PAUSED";
 
   return (
     <div ref={rootRef} className={cn("relative inline-flex")}>
@@ -149,51 +167,59 @@ export default function JobActionsMenu({ jobId }: Props) {
 
             <div className="my-2 h-px bg-zinc-100 dark:bg-zinc-800" />
 
-            {/* Pausar/Reabrir */}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => handleStatusChange("PAUSED")}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
-                busy
-                  ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
-                  : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-              )}
-            >
-              <Pause className="h-4 w-4" />
-              Pausar vacante
-            </button>
+            {/* 🎯 Pausar (solo si está OPEN) */}
+            {showPause && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleStatusChange("PAUSED")}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                  busy
+                    ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                    : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                )}
+              >
+                <Pause className="h-4 w-4" />
+                Pausar vacante
+              </button>
+            )}
 
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => handleStatusChange("OPEN")}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
-                busy
-                  ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
-                  : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-              )}
-            >
-              <Play className="h-4 w-4" />
-              Reabrir vacante
-            </button>
+            {/* 🎯 Reabrir (solo si está PAUSED o CLOSED) */}
+            {showReopen && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleStatusChange("OPEN")}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                  busy
+                    ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                    : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                )}
+              >
+                <Play className="h-4 w-4" />
+                Reabrir vacante
+              </button>
+            )}
 
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => handleStatusChange("CLOSED")}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
-                busy
-                  ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
-                  : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-              )}
-            >
-              <XCircle className="h-4 w-4" />
-              Cerrar vacante
-            </button>
+            {/* 🎯 Cerrar (solo si está OPEN o PAUSED) */}
+            {showClose && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => handleStatusChange("CLOSED")}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
+                  busy
+                    ? "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
+                    : "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                )}
+              >
+                <XCircle className="h-4 w-4" />
+                Cerrar vacante
+              </button>
+            )}
 
             <div className="my-2 h-px bg-zinc-100 dark:bg-zinc-800" />
 

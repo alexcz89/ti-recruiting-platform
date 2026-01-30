@@ -8,6 +8,7 @@ import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
 import ActionsMenu from "./ActionsMenu";
 import { Phone, FileText as FileTextIcon, Search } from "lucide-react";
+import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 
 /** Normaliza a slug simple para comparar skills */
 function slugSkill(s: string) {
@@ -176,6 +177,7 @@ export default async function JobApplicationsPage({
     select: {
       id: true,
       title: true,
+      status: true,
       company: { select: { name: true } },
       skills: true,
       requiredSkills: {
@@ -527,7 +529,8 @@ export default async function JobApplicationsPage({
     <main className="max-w-none p-0">
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-8 px-6 py-8 lg:px-10">
         {/* Header vacante */}
-        <header className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <header className="space-y-4">
+          {/* Título y descripción */}
           <div>
             <h1 className="text-2xl font-bold leading-tight">{job.title}</h1>
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
@@ -536,7 +539,7 @@ export default async function JobApplicationsPage({
             </p>
           </div>
 
-          {/* Botones en una sola fila, todos iguales */}
+          {/* Botones en una fila completa debajo */}
           <div className="flex flex-row flex-wrap items-center gap-2">
             <Link href={`/dashboard/jobs/${job.id}`} className={headerBtnClasses}>
               Ver Pipeline
@@ -547,6 +550,8 @@ export default async function JobApplicationsPage({
             <Link href="/dashboard/jobs" className={headerBtnClasses}>
               Volver a Vacantes
             </Link>
+            {/* 🎯 Menú de acciones */}
+            <JobActionsMenu jobId={job.id} currentStatus={job.status} />
           </div>
         </header>
 
@@ -565,11 +570,12 @@ export default async function JobApplicationsPage({
         {apps.length === 0 ? (
           <div className="glass-card rounded-2xl border border-dashed p-4 text-center md:p-6">
             <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              {chosenInterest ? `Sin candidatos en “${INTEREST_LABEL[chosenInterest]}”.` : "Aún no hay postulaciones para esta vacante."}
+              {chosenInterest ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.` : "Aún no hay postulaciones para esta vacante."}
             </p>
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Usa el botón “Ver vacante” para compartirla y recibir postulaciones.
+              Usa el botón &ldquo;Ver vacante&rdquo; para compartirla y recibir postulaciones.
             </p>
+
           </div>
         ) : (
           <div

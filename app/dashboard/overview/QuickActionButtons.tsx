@@ -3,7 +3,7 @@
 
 import { useState, useTransition } from "react";
 import { Check, X } from "lucide-react";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { updateApplicationStatus } from "./actions";
 
 type Props = {
@@ -21,14 +21,14 @@ export default function QuickActionButtons({ applicationId }: Props) {
       const result = await updateApplicationStatus(applicationId, status);
       
       if (result.success) {
-        toast.success(
+        toastSuccess(
           status === "REVIEWING" 
             ? "Candidato movido a 'En revisión'" 
             : "Candidato rechazado"
         );
         setHidden(true);
       } else {
-        toast.error(result.error || "Error al actualizar");
+        toastError(result.error || "Error al actualizar");
       }
     });
   };

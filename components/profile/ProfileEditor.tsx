@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import LockEmailNote from "./LockEmailNote";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 type ExperienceItem = {
   role: string;
@@ -81,7 +81,7 @@ export default function ProfileEditor() {
           experiences,
         });
       } catch (e: any) {
-        toast.error(e?.message || "Error al cargar");
+        toastError(e?.message || "Error al cargar");
       } finally {
         setLoading(false);
       }
@@ -156,9 +156,9 @@ export default function ProfileEditor() {
         const err = await r.json().catch(() => ({}));
         throw new Error(err?.detail || err?.error || "No se pudo guardar");
       }
-      toast.success("Perfil actualizado");
+      toastSuccess("Perfil actualizado");
     } catch (e: any) {
-      toast.error(e?.message || "Error al guardar");
+      toastError(e?.message || "Error al guardar");
     } finally {
       setSaving(false);
     }

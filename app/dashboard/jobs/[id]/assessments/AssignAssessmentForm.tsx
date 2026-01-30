@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { Plus, Trash2 } from "lucide-react";
 
 type Props = {
@@ -51,7 +51,7 @@ export default function AssignAssessmentForm({
         setTemplates(Array.isArray(data.templates) ? data.templates : []);
       } catch (error: any) {
         console.error(error);
-        toast.error(error?.message || "Error al cargar assessments");
+        toastError(error?.message || "Error al cargar assessments");
       } finally {
         setLoading(false);
       }
@@ -69,13 +69,13 @@ export default function AssignAssessmentForm({
     e.preventDefault();
 
     if (!selectedTemplateId) {
-      toast.error("Selecciona un assessment");
+      toastError("Selecciona un assessment");
       return;
     }
 
     // ✅ blindaje anti duplicados (por si el estado quedó stale)
     if (existingTemplateIds.has(selectedTemplateId)) {
-      toast.error("Ese assessment ya está asignado a la vacante");
+      toastError("Ese assessment ya está asignado a la vacante");
       return;
     }
 
@@ -100,7 +100,7 @@ export default function AssignAssessmentForm({
 
       if (!res.ok) throw new Error(await readErrorMessage(res));
 
-      toast.success("Assessment asignado exitosamente");
+      toastSuccess("Assessment asignado exitosamente");
 
       // ✅ reset del formulario (evita re-submit accidental)
       setSelectedTemplateId("");
@@ -110,7 +110,7 @@ export default function AssignAssessmentForm({
       router.refresh();
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.message || "Error al asignar assessment");
+      toastError(error?.message || "Error al asignar assessment");
     } finally {
       setAssigning(false);
     }
@@ -127,11 +127,11 @@ export default function AssignAssessmentForm({
 
       if (!res.ok) throw new Error(await readErrorMessage(res));
 
-      toast.success("Assessment removido");
+      toastSuccess("Assessment removido");
       router.refresh();
     } catch (error: any) {
       console.error(error);
-      toast.error(error?.message || "Error al remover assessment");
+      toastError(error?.message || "Error al remover assessment");
     }
   };
 

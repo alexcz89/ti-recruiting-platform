@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import { z } from "zod";
 import {
   CandidateSignupSchema,
@@ -206,12 +206,12 @@ export default function CandidateSignupClient() {
       );
 
       if (!res?.ok) {
-        toast.error(res?.error || "Error al crear la cuenta");
+        toastError(res?.error || "Error al crear la cuenta");
         return;
       }
 
       // Si todo salió bien, avisamos y mandamos a la pantalla de "revisa tu correo"
-      toast.success(
+      toastSuccess(
         fromCvBuilder
           ? "Cuenta creada. Te enviamos un enlace para confirmar tu cuenta y guardar tu CV."
           : "Cuenta creada. Te enviamos un enlace para confirmar tu cuenta."
@@ -230,9 +230,9 @@ export default function CandidateSignupClient() {
       return;
     } catch (err: any) {
       if (err instanceof z.ZodError) {
-        toast.error(err.errors?.[0]?.message || "Datos inválidos");
+        toastError(err.errors?.[0]?.message || "Datos inválidos");
       } else {
-        toast.error("Error al crear la cuenta");
+        toastError("Error al crear la cuenta");
       }
     } finally {
       setLoading(false);

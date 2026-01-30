@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 
 type Props = {
   initial: {
@@ -62,12 +62,12 @@ export default function TaxDataForm({ initial }: Props) {
 
     // Validaciones básicas
     if (!form.taxLegalName.trim() || !form.taxRfc.trim() || !form.taxZip.trim()) {
-      toast.error("Razón social, RFC y C.P. son obligatorios.");
+      toastError("Razón social, RFC y C.P. son obligatorios.");
       return;
     }
 
     if (form.taxRfc.trim().length < 12) {
-      toast.error("El RFC parece incompleto.");
+      toastError("El RFC parece incompleto.");
       return;
     }
 
@@ -83,15 +83,15 @@ export default function TaxDataForm({ initial }: Props) {
 
       if (!res.ok) {
         console.error("Error guardando datos fiscales", data);
-        toast.error(data?.error || "No se pudieron guardar los datos fiscales");
+        toastError(data?.error || "No se pudieron guardar los datos fiscales");
         return;
       }
 
-      toast.success("Datos fiscales guardados correctamente");
+      toastSuccess("Datos fiscales guardados correctamente");
       router.refresh();
     } catch (err) {
       console.error("Network error saving tax data", err);
-      toast.error("No se pudo conectar con el servidor");
+      toastError("No se pudo conectar con el servidor");
     } finally {
       setSaving(false);
     }
