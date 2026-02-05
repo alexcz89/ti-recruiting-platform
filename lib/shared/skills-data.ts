@@ -9,7 +9,7 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // LENGUAJES DE PROGRAMACIÓN
 // ══════════════════════════════════════════════════════════════════════════════
-const PROGRAMMING_LANGUAGES = [
+export const PROGRAMMING_LANGUAGES = [
   "Python","Java","C","C++","C#","Go","Rust","Ruby","PHP","Kotlin","Swift","Dart",
   "Julia","Scala","R","Perl","Visual Basic .NET","Objective-C","Assembly","Zig",
   "TypeScript","JavaScript","Shell Script","Bash","PowerShell","Elixir","Haskell",
@@ -19,7 +19,7 @@ const PROGRAMMING_LANGUAGES = [
 // ══════════════════════════════════════════════════════════════════════════════
 // WEB DEVELOPMENT
 // ══════════════════════════════════════════════════════════════════════════════
-const WEB_FRONTEND = [
+export const WEB_FRONTEND = [
   "HTML","CSS","XML","Markdown","LaTeX",
   "JavaScript","TypeScript","React","Next.js","Vue.js","Nuxt","Angular",
   "Svelte","SvelteKit","Redux","RTK Query","Zustand","Jotai","Recoil",
@@ -30,7 +30,7 @@ const WEB_FRONTEND = [
   "SASS/SCSS","LESS","PostCSS","Emotion","Styled Components",
 ] as const;
 
-const WEB_BACKEND = [
+export const WEB_BACKEND = [
   "Node.js","Express.js","NestJS","Fastify","Koa","Hapi",
   "Django","Flask","FastAPI","Celery",
   "Spring","Spring Boot","Micronaut","Quarkus",
@@ -45,7 +45,7 @@ const WEB_BACKEND = [
 // ══════════════════════════════════════════════════════════════════════════════
 // MOBILE DEVELOPMENT
 // ══════════════════════════════════════════════════════════════════════════════
-const MOBILE = [
+export const MOBILE = [
   "React Native","Expo",
   "Flutter","Dart",
   "SwiftUI","UIKit",
@@ -58,7 +58,7 @@ const MOBILE = [
 // ══════════════════════════════════════════════════════════════════════════════
 // DATA SCIENCE, AI/ML, ANALYTICS
 // ══════════════════════════════════════════════════════════════════════════════
-const AI_ML = [
+export const AI_ML = [
   "TensorFlow","PyTorch","Keras","JAX","Scikit-Learn","XGBoost","LightGBM","CatBoost",
   "OpenCV","YOLO","Detectron2",
   "Apache Spark (MLlib)","Ray","Horovod",
@@ -76,7 +76,7 @@ const AI_ML = [
   "ONNX","TensorRT","CoreML","TFLite",
 ] as const;
 
-const DATA_ANALYTICS = [
+export const DATA_ANALYTICS = [
   "SQL","BigQuery SQL","Snowflake SQL","Redshift SQL",
   "SAS","SAS Viya","SAS Enterprise Miner",
   "Tableau","Tableau Prep","Tableau Desktop","Tableau Server",
@@ -95,7 +95,7 @@ const DATA_ANALYTICS = [
   "A/B Testing","Experimentation","Funnel Analysis","Cohort Analysis",
 ] as const;
 
-const DATA_ENGINEERING = [
+export const DATA_ENGINEERING = [
   "Apache Spark","PySpark","Spark SQL","Spark Streaming",
   "Apache Kafka","Kafka Streams","Kafka Connect","Confluent",
   "Apache Flink","Apache Beam","Apache Storm",
@@ -110,7 +110,7 @@ const DATA_ENGINEERING = [
 // ══════════════════════════════════════════════════════════════════════════════
 // CLOUD & DEVOPS
 // ══════════════════════════════════════════════════════════════════════════════
-const CLOUD_PLATFORMS = [
+export const CLOUD_PLATFORMS = [
   // ── Multi-cloud / General
   "AWS","Microsoft Azure","Google Cloud Platform (GCP)","Oracle Cloud Infrastructure (OCI)",
   "IBM Cloud","Alibaba Cloud","DigitalOcean","Linode","Vultr","Hetzner Cloud",
@@ -151,7 +151,7 @@ const CLOUD_PLATFORMS = [
   "Azure Machine Learning","Cognitive Services","Azure OpenAI Service","Bot Service",
 ] as const;
 
-const DEVOPS_TOOLS = [
+export const DEVOPS_TOOLS = [
   // ── Containers & Orchestration
   "Docker","Docker Compose","Podman","containerd","CRI-O",
   "Kubernetes","K3s","MicroK8s","kind","Minikube","Rancher","OpenShift",
@@ -198,7 +198,7 @@ const DEVOPS_TOOLS = [
 // ══════════════════════════════════════════════════════════════════════════════
 // DATABASES & DATA STORAGE
 // ══════════════════════════════════════════════════════════════════════════════
-const DATABASES = [
+export const DATABASES = [
   // ── Relational (SQL)
   "SQL","MySQL","PostgreSQL","Oracle Database","SQL Server","MariaDB","SQLite",
   "CockroachDB","YugabyteDB","TiDB","VoltDB",
@@ -236,7 +236,7 @@ const DATABASES = [
 // ══════════════════════════════════════════════════════════════════════════════
 // CYBERSECURITY
 // ══════════════════════════════════════════════════════════════════════════════
-const CYBERSECURITY = [
+export const CYBERSECURITY = [
   // ── Security Operations
   "SIEM (Security Information and Event Management)","SOC (Security Operations Center)",
   "IDS/IPS","WAF (Web Application Firewall)","DLP (Data Loss Prevention)",
@@ -276,7 +276,7 @@ const CYBERSECURITY = [
 // ══════════════════════════════════════════════════════════════════════════════
 // TESTING & QA
 // ══════════════════════════════════════════════════════════════════════════════
-const TESTING_QA = [
+export const TESTING_QA = [
   // ── Frontend Testing
   "Jest","Vitest","Mocha","Jasmine","Karma",
   "React Testing Library","Vue Test Utils","Angular Testing",
@@ -320,7 +320,7 @@ const TESTING_QA = [
 // ══════════════════════════════════════════════════════════════════════════════
 // DESIGN & UX/UI
 // ══════════════════════════════════════════════════════════════════════════════
-const DESIGN_UX = [
+export const DESIGN_UX = [
   // ── Design Tools
   "Figma","Sketch","Adobe XD","InVision","Zeplin","Abstract","Marvel","Axure RP",
   "Framer","Framer Motion","Principle","ProtoPie","Origami Studio",
@@ -352,7 +352,7 @@ const DESIGN_UX = [
 // ══════════════════════════════════════════════════════════════════════════════
 // LOW-CODE / NO-CODE
 // ══════════════════════════════════════════════════════════════════════════════
-const LOW_CODE_NO_CODE = [
+export const LOW_CODE_NO_CODE = [
   // ── Enterprise Platforms
   "OutSystems","Mendix","Microsoft Power Apps","Power Automate","Power Platform",
   "Appian","ServiceNow App Engine","Salesforce Lightning Platform",
@@ -379,7 +379,7 @@ const LOW_CODE_NO_CODE = [
 // ══════════════════════════════════════════════════════════════════════════════
 // GAME DEVELOPMENT
 // ══════════════════════════════════════════════════════════════════════════════
-const GAME_DEV = [
+export const GAME_DEV = [
   // ── Engines
   "Unity","Unreal Engine","Godot","GameMaker Studio","CryEngine","Amazon Lumberyard",
   "Construct","Defold","Cocos2d","Phaser.js","PixiJS","PlayCanvas","Babylon.js","Three.js",
@@ -400,7 +400,7 @@ const GAME_DEV = [
 // ══════════════════════════════════════════════════════════════════════════════
 // CMS & E-COMMERCE
 // ══════════════════════════════════════════════════════════════════════════════
-const CMS_ECOMMERCE = [
+export const CMS_ECOMMERCE = [
   // ── CMS (Content Management)
   "WordPress","Drupal","Joomla","TYPO3","Concrete CMS","Umbraco",
   "Strapi","Contentful","Sanity.io","Prismic","Directus","Payload CMS","KeystoneJS",
@@ -426,7 +426,7 @@ const CMS_ECOMMERCE = [
 // ══════════════════════════════════════════════════════════════════════════════
 // ELECTRÓNICA & HARDWARE
 // ══════════════════════════════════════════════════════════════════════════════
-const ELECTRONICS_HARDWARE = [
+export const ELECTRONICS_HARDWARE = [
   // ── Diseño de Circuitos & PCB
   "Altium Designer","KiCad","Eagle (Autodesk)","OrCAD","Proteus","EasyEDA","DipTrace",
   "Fusion 360 Electronics","CircuitMaker","DesignSpark PCB","Fritzing",
@@ -491,7 +491,7 @@ const ELECTRONICS_HARDWARE = [
 // ══════════════════════════════════════════════════════════════════════════════
 // ERP & BUSINESS APPLICATIONS
 // ══════════════════════════════════════════════════════════════════════════════
-const ERP_BUSINESS = [
+export const ERP_BUSINESS = [
   // ── SAP
   "SAP ABAP","SAP HANA","SAP BW/BI","SAP Basis","SAP Fiori/UI5","SAP BAPI","SAP RFC",
   "SAP S/4HANA Finance (FI)","SAP S/4HANA Controlling (CO)","SAP MM (Sourcing & Procurement)",
@@ -537,7 +537,7 @@ const ERP_BUSINESS = [
 // ══════════════════════════════════════════════════════════════════════════════
 // CRM & MARKETING
 // ══════════════════════════════════════════════════════════════════════════════
-const CRM_MARKETING = [
+export const CRM_MARKETING = [
   // ── CRM Platforms
   "Salesforce","HubSpot","HubSpot CRM","HubSpot Marketing Hub","HubSpot Sales Hub","HubSpot Service Hub",
   "Zoho CRM","Zoho One","Microsoft Dynamics 365 CRM","Pipedrive","Freshsales","Freshdesk",
@@ -570,7 +570,7 @@ const CRM_MARKETING = [
 // ══════════════════════════════════════════════════════════════════════════════
 // PROJECT MANAGEMENT & COLLABORATION
 // ══════════════════════════════════════════════════════════════════════════════
-const PROJECT_MANAGEMENT = [
+export const PROJECT_MANAGEMENT = [
   // ── Project Management Tools
   "Jira","Jira Software","Jira Service Management","Confluence","Trello","Asana","Monday.com",
   "ClickUp","Notion","Basecamp","Wrike","Smartsheet","Airtable","Coda",
@@ -604,7 +604,7 @@ const PROJECT_MANAGEMENT = [
 // ══════════════════════════════════════════════════════════════════════════════
 // BLOCKCHAIN & WEB3
 // ══════════════════════════════════════════════════════════════════════════════
-const BLOCKCHAIN_WEB3 = [
+export const BLOCKCHAIN_WEB3 = [
   // ── Blockchain Platforms
   "Ethereum","Bitcoin","Solana","Polygon","Avalanche","Binance Smart Chain (BSC)","Cosmos",
   "Polkadot","Cardano","Algorand","Tezos","Near Protocol","Aptos","Sui","Hedera","Flow",
@@ -638,7 +638,7 @@ const BLOCKCHAIN_WEB3 = [
 // ══════════════════════════════════════════════════════════════════════════════
 // NETWORKING & INFRASTRUCTURE
 // ══════════════════════════════════════════════════════════════════════════════
-const NETWORKING = [
+export const NETWORKING = [
   // ── Fundamentals
   "TCP/IP","UDP","HTTP/HTTPS","HTTP/2","HTTP/3","QUIC","WebSocket","gRPC","REST","GraphQL",
   "DNS","DHCP","NAT","PAT","ARP","ICMP","SNMP","NTP","LDAP",

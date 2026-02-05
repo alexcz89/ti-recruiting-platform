@@ -182,7 +182,7 @@ export default async function CvBuilderPage() {
   }
 
   return (
-    <main className="max-w-6xl mx-auto px-4 py-10 space-y-6">
+    <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 py-10 space-y-6">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">CV Builder</h1>

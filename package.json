@@ -63,6 +63,7 @@
     "react-international-phone": "^4.6.1",
     "react-markdown": "^10.1.0",
     "react-phone-input-2": "^2.15.1",
+    "react-to-print": "^3.2.0",
     "rehype": "^13.0.2",
     "rehype-highlight": "^7.0.2",
     "rehype-raw": "^7.0.0",

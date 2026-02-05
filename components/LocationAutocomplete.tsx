@@ -1,3 +1,4 @@
+// components/LocationAutocomplete.tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -25,29 +26,33 @@ type City = {
   lng?: number;
 };
 
-export default function LocationAutocomplete({
-  value,
-  onChange,
-  onPlace,                 // 👈 nuevo (opcional)
-  countries = ["mx"],
-  className,
-  fetchOnMount = false,
-  minChars = 3,
-  debounceMs = 250,
-  debug = false,
-  usePortal = true,
-}: {
+type Props = {
   value: string;
   onChange: (v: string) => void;
-  onPlace?: (p: PlaceResult) => void;     // 👈 nuevo (opcional)
+  onPlace?: (p: PlaceResult) => void;
   countries?: string[];
   className?: string;
+  placeholder?: string; // ✅ NUEVO
   fetchOnMount?: boolean;
   minChars?: number;
   debounceMs?: number;
   debug?: boolean;
   usePortal?: boolean;
-}) {
+};
+
+export default function LocationAutocomplete({
+  value,
+  onChange,
+  onPlace,
+  countries = ["mx"],
+  className,
+  placeholder, // ✅ NUEVO
+  fetchOnMount = false,
+  minChars = 3,
+  debounceMs = 250,
+  debug = false,
+  usePortal = true,
+}: Props) {
   const [query, setQuery] = useState<string>(value || "");
   const [loading, setLoading] = useState<boolean>(false);
   const [items, setItems] = useState<City[]>([]);
@@ -270,7 +275,12 @@ export default function LocationAutocomplete({
       r?.properties?.admin1;
 
     const country =
-      (r?.country_code || r?.properties?.country_code || r?.countryCode || r?.country)?.toString()?.toUpperCase() ||
+      (r?.country_code ||
+        r?.properties?.country_code ||
+        r?.countryCode ||
+        r?.country)
+        ?.toString()
+        ?.toUpperCase() ||
       r?.properties?.country_name ||
       r?.country_name;
 
@@ -470,7 +480,9 @@ export default function LocationAutocomplete({
             role="option"
             aria-selected={i === hoverIdx}
             className={`px-3 py-2 text-sm cursor-pointer ${
-              i === hoverIdx ? "bg-gray-100 dark:glass-card p-4 md:p-6" : "hover:bg-gray-50 dark:hover:glass-card p-4 md:p-6"
+              i === hoverIdx
+                ? "bg-gray-100 dark:glass-card p-4 md:p-6"
+                : "hover:bg-gray-50 dark:hover:glass-card p-4 md:p-6"
             }`}
             onMouseEnter={() => setHoverIdx(i)}
             onMouseDown={(e) => e.preventDefault()}
@@ -500,7 +512,7 @@ export default function LocationAutocomplete({
           name="location"
           className={className}
           value={query}
-          placeholder="Ciudad, Estado, País"
+          placeholder={placeholder ?? "Ciudad, Estado, País"} // ✅ AHORA es configurable
           autoComplete="off"
           spellCheck={false}
           onChange={(e) => {
