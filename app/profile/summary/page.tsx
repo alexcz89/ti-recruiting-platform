@@ -17,7 +17,6 @@ function formatMonthYear(d: Date | string | null | undefined) {
     .replace(".", "");
 }
 
-// Idiomas
 const LEVEL_LABEL: Record<string, string> = {
   NATIVE: "Nativo",
   PROFESSIONAL: "Profesional (C1–C2)",
@@ -25,7 +24,6 @@ const LEVEL_LABEL: Record<string, string> = {
   BASIC: "Básico (A1–A2)",
 };
 
-// Skills con nivel (1..5)
 const SKILL_LEVEL_LABEL: Record<number, string> = {
   1: "Básico",
   2: "Junior",
@@ -34,7 +32,6 @@ const SKILL_LEVEL_LABEL: Record<number, string> = {
   5: "Experto",
 };
 
-// Escolaridad
 const EDUCATION_LEVEL_LABEL: Record<string, string> = {
   NONE: "Sin estudios formales",
   PRIMARY: "Primaria",
@@ -75,7 +72,6 @@ export default async function ProfileSummaryPage({
       linkedin: true,
       github: true,
       resumeUrl: true,
-      skills: true, // legacy
       certifications: true,
       highestEducationLevel: true,
     },
@@ -84,7 +80,6 @@ export default async function ProfileSummaryPage({
   if (!me) redirect("/profile/edit");
   if (me.role !== "CANDIDATE") redirect("/dashboard");
 
-  // Historial laboral
   const experiences = await prisma.workExperience.findMany({
     where: { userId: me.id },
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
@@ -98,7 +93,6 @@ export default async function ProfileSummaryPage({
     },
   });
 
-  // Educación (lista)
   const education = await prisma.education.findMany({
     where: { userId: me.id },
     orderBy: [{ sortIndex: "asc" }, { startDate: "desc" }, { createdAt: "asc" }],
@@ -118,24 +112,21 @@ export default async function ProfileSummaryPage({
     },
   });
 
-  // Idiomas
   const languages = await prisma.candidateLanguage.findMany({
     where: { userId: me.id },
     include: { term: { select: { label: true } } },
     orderBy: { term: { label: "asc" } },
   });
 
-  // Skills con nivel
+  // ✅ MIGRADO: Usar CandidateSkill en lugar de User.skills[]
   const candidateSkills = await prisma.candidateSkill.findMany({
     where: { userId: me.id },
     include: { term: { select: { label: true } } },
     orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
   });
 
-  // Top-3 stack para cabecera
   const topStack = candidateSkills.slice(0, 3).map((s) => s.term.label);
 
-  // Postulaciones
   const myApps = await prisma.application.findMany({
     where: { candidateId: me.id },
     orderBy: { createdAt: "desc" },
@@ -147,7 +138,6 @@ export default async function ProfileSummaryPage({
     },
   });
 
-  // KPI: años totales aproximados
   const totalYears = (() => {
     try {
       const sumYears = experiences.reduce((acc, e) => {
@@ -178,7 +168,6 @@ export default async function ProfileSummaryPage({
 
   return (
     <main className="max-w-none p-0">
-      {/* Notifs */}
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-6 space-y-3">
         {searchParams?.updated === "1" && (
           <div className="border text-sm rounded-xl px-3 py-2 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
@@ -207,7 +196,6 @@ export default async function ProfileSummaryPage({
         )}
       </div>
 
-      {/* Header */}
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
         <header className="glass-card p-4 md:p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -228,20 +216,10 @@ export default async function ProfileSummaryPage({
 
               {me.resumeUrl ? (
                 <>
-                  <a
-                    href={me.resumeUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-ghost"
-                    title="Ver/descargar CV"
-                  >
+                  <a href={me.resumeUrl} target="_blank" rel="noreferrer" className="btn-ghost" title="Ver/descargar CV">
                     Ver / descargar PDF
                   </a>
-                  <Link
-                    href="/cv/builder"
-                    className="btn btn-primary"
-                    title="Editar/crear tu CV con el constructor"
-                  >
+                  <Link href="/cv/builder" className="btn btn-primary" title="Editar/crear tu CV con el constructor">
                     Editar en CV Builder
                   </Link>
                 </>
@@ -255,12 +233,9 @@ export default async function ProfileSummaryPage({
         </header>
       </div>
 
-      {/* Grid 12 cols */}
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* ===== Izquierda (8/12) ===== */}
           <div className="lg:col-span-8 space-y-6">
-            {/* Información */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Información</h2>
               <div className="mt-3 text-sm grid sm:grid-cols-2 gap-y-1.5 gap-x-6">
@@ -288,7 +263,6 @@ export default async function ProfileSummaryPage({
               </div>
             </section>
 
-            {/* Escolaridad */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100 mb-2">Escolaridad</h2>
               {education.length === 0 ? (
@@ -312,9 +286,7 @@ export default async function ProfileSummaryPage({
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="badge">
-                            {ed.level
-                              ? (EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level)
-                              : "Sin nivel"}
+                            {ed.level ? (EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level) : "Sin nivel"}
                           </span>
                           <span className="badge">
                             {EDUCATION_STATUS_LABEL[ed.status] ?? ed.status}
@@ -329,7 +301,6 @@ export default async function ProfileSummaryPage({
               )}
             </section>
 
-            {/* Historial de trabajo (timeline) */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100 mb-2">Historial de trabajo</h2>
               {experiences.length === 0 ? (
@@ -354,9 +325,7 @@ export default async function ProfileSummaryPage({
             </section>
           </div>
 
-          {/* ===== Derecha (4/12) ===== */}
           <aside className="lg:col-span-4 space-y-6">
-            {/* KPI rápido */}
             <section className="stat">
               <div className="grid grid-cols-3 gap-4">
                 <div>
@@ -374,28 +343,82 @@ export default async function ProfileSummaryPage({
               </div>
             </section>
 
-            {/* CV */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">CV</h2>
-              <div className="mt-3 space-y-2">
-                {me.resumeUrl ? (
-                  <>
-                    <a href={me.resumeUrl} target="_blank" rel="noopener noreferrer" className="btn-ghost w-full justify-center">
-                      Ver / descargar PDF
+              {me.resumeUrl ? (
+                <div className="mt-3 space-y-3">
+                  {/* Preview del CV */}
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-800/40 dark:bg-emerald-950/20">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-emerald-900 dark:text-emerald-100">
+                          CV disponible
+                        </p>
+                      </div>
+                      <span className="inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        ✓
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Visor del CV */}
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden dark:border-zinc-700 dark:bg-zinc-900">
+                    <iframe
+                      src={`${me.resumeUrl}#toolbar=0&navpanes=0&scrollbar=1`}
+                      className="w-full h-[400px] lg:h-[500px]"
+                      title="Vista previa del CV"
+                    />
+                  </div>
+
+                  {/* Botones de acción */}
+                  <div className="flex flex-col gap-2">
+                    <a 
+                      href={me.resumeUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-600 bg-white px-3 py-2 text-sm font-medium text-emerald-700 shadow-sm hover:bg-emerald-50 dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-100 dark:hover:bg-emerald-900/50 transition-colors"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      Abrir en nueva pestaña
                     </a>
-                    <Link href="/cv/builder" className="btn btn-primary w-full justify-center">
-                      Reemplazar en CV Builder
+                    <Link 
+                      href="/cv/builder" 
+                      className="btn btn-primary w-full justify-center"
+                    >
+                      Editar en CV Builder
                     </Link>
-                  </>
-                ) : (
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {/* Empty state */}
+                  <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <svg className="h-5 w-5 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Sin CV
+                    </h3>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      Crea tu currículum profesional
+                    </p>
+                  </div>
                   <Link href="/cv/builder" className="btn btn-primary w-full justify-center">
                     Crear CV en CV Builder
                   </Link>
-                )}
-              </div>
+                </div>
+              )}
             </section>
 
-            {/* Certificaciones */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Certificaciones</h2>
               {me.certifications?.length ? (
@@ -410,7 +433,7 @@ export default async function ProfileSummaryPage({
               )}
             </section>
 
-            {/* Skills con barra de nivel */}
+            {/* ✅ MIGRADO: Skills desde CandidateSkill */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Skills</h2>
               {candidateSkills.length > 0 ? (
@@ -418,11 +441,7 @@ export default async function ProfileSummaryPage({
                   {candidateSkills.map((s) => {
                     const levelValue = s.level ?? 0;
                     const pct = Math.max(0, Math.min(100, Math.round(levelValue * 20)));
-
-                    const levelLabel =
-                      s.level != null
-                        ? SKILL_LEVEL_LABEL[s.level as number] ?? `Nivel ${s.level}`
-                        : "Sin nivel";
+                    const levelLabel = s.level != null ? SKILL_LEVEL_LABEL[s.level as number] ?? `Nivel ${s.level}` : "Sin nivel";
 
                     return (
                       <li key={s.id} className="soft-panel px-3 py-2">
@@ -444,10 +463,6 @@ export default async function ProfileSummaryPage({
                     );
                   })}
                 </ul>
-              ) : me.skills?.length ? (
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {me.skills.map((s) => <Pill key={s}>{s}</Pill>)}
-                </div>
               ) : (
                 <div className="soft-panel p-4 flex items-center justify-between mt-3">
                   <p className="text-sm text-muted">—</p>
@@ -456,7 +471,6 @@ export default async function ProfileSummaryPage({
               )}
             </section>
 
-            {/* Idiomas */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Idiomas</h2>
               {languages.length === 0 ? (
@@ -476,7 +490,6 @@ export default async function ProfileSummaryPage({
               )}
             </section>
 
-            {/* Postulaciones */}
             <section className="glass-card p-4 md:p-6">
               <h2 className="font-semibold text-lg text-zinc-800 dark:text-zinc-100">Mis postulaciones</h2>
               {myApps.length === 0 ? (
@@ -507,7 +520,6 @@ export default async function ProfileSummaryPage({
           </aside>
         </div>
 
-        {/* Acciones inferiores */}
         <div className="flex items-center gap-3 mt-6">
           <a href="/jobs" className="text-sm text-blue-600 hover:underline dark:text-blue-400">← Buscar vacantes</a>
           <a href="/profile/edit" className="text-sm text-blue-600 hover:underline dark:text-blue-400">Editar mi perfil</a>

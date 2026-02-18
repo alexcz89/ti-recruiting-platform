@@ -1,5 +1,20 @@
 // =========================================================
-// Prisma Schema
+// Prisma Schema - MEJORADO PARA SIGNUP OPTIMIZADO
+// =========================================================
+//
+// CAMBIOS APLICADOS:
+// ✅ User: firstName/lastName requeridos, maternalSurname agregado
+// ✅ User: Metadata de onboarding (onboardingStep, profileCompleted, etc)
+// ✅ User: Preferencias de búsqueda laboral (seekingRemote, desiredSalary, etc)
+// ✅ User: Timestamps mejorados (lastLoginAt, lastActivityAt)
+// ✅ User: Enum Gender agregado
+// ✅ Company: Ubicación estructurada (locationLat/Lng, placeId, etc)
+// ✅ RecruiterProfile: Campos profesionales expandidos
+// ✅ Application: Timestamps por estado y tracking mejorado
+// ✅ onDelete: Cascade agregado a TODAS las relaciones críticas
+//
+// NOTA: El campo User.name se mantiene temporalmente para migración
+//       Se debe remover después de migrar datos existentes
 // =========================================================
 
 generator client {
@@ -12,10 +27,21 @@ datasource db {
 }
 
 // =========================
+// ENUMS
+// =========================
+
 enum Role {
   ADMIN
   RECRUITER
   CANDIDATE
+}
+
+// ✅ NUEVO: Enum para género
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
 }
 
 enum EmploymentType {
@@ -25,7 +51,6 @@ enum EmploymentType {
   INTERNSHIP
 }
 
-// 👇 NUEVO: seniority para vacantes
 enum Seniority {
   JUNIOR
   MID
@@ -42,7 +67,6 @@ enum ApplicationStatus {
   REJECTED
 }
 
-// 👇 Interés del reclutador
 enum ApplicationInterest {
   REVIEW
   MAYBE
@@ -50,21 +74,18 @@ enum ApplicationInterest {
   REJECTED
 }
 
-// 👇 Estatus de la vacante
 enum JobStatus {
   OPEN
   CLOSED
   PAUSED
 }
 
-// Catálogo: tipo de término
 enum TaxonomyKind {
   SKILL
   CERTIFICATION
   LANGUAGE
 }
 
-// Nivel de idiomas
 enum LanguageProficiency {
   NATIVE
   PROFESSIONAL
@@ -72,9 +93,6 @@ enum LanguageProficiency {
   BASIC
 }
 
-// =========================
-// Escolaridad (para candidatos y minDegree en Job)
-// =========================
 enum EducationLevel {
   NONE
   PRIMARY
@@ -93,18 +111,12 @@ enum EducationStatus {
   INCOMPLETE
 }
 
-// =========================
-// Ubicación de la vacante
-// =========================
 enum LocationType {
   REMOTE
   HYBRID
   ONSITE
 }
 
-// =========================
-// Plan de facturación de la empresa (para límites de vacantes)
-// =========================
 enum BillingPlan {
   FREE
   PRO
@@ -112,20 +124,12 @@ enum BillingPlan {
   AGENCY
 }
 
-// =========================
-// CFDI / Facturas
-// =========================
-
 enum InvoiceStatus {
-  PENDING // Creada en tu sistema, aún sin timbrar
-  ISSUED // Timbrada correctamente
-  CANCELED // Cancelada en el SAT
-  ERROR // Error al timbrar o al comunicarse con el PAC
+  PENDING
+  ISSUED
+  CANCELED
+  ERROR
 }
-
-// =========================
-// ASSESSMENT SYSTEM
-// =========================
 
 enum AssessmentType {
   MCQ
@@ -147,7 +151,6 @@ enum AttemptStatus {
   COMPLETED
 }
 
-// ✅ NUEVO: status para invitaciones (enviar evaluación por candidato)
 enum AssessmentInviteStatus {
   SENT
   STARTED
@@ -174,228 +177,265 @@ enum CreditLedgerKind {
   ASSESSMENT_INVITE
 }
 
-// ============================================
-// 🔔 NOTIFICATIONS SYSTEM - ENUMS
-// ============================================
-
 enum NotificationType {
-  // Application Events
-  NEW_APPLICATION           
-  APPLICATION_STATUS_CHANGE 
-  APPLICATION_COMMENT       
-  
-  // Assessment Events
-  ASSESSMENT_INVITATION     
-  ASSESSMENT_REMINDER       
-  ASSESSMENT_COMPLETED      
-  ASSESSMENT_RESULTS        
-  
-  // Job Events
-  JOB_POSTED                
-  JOB_CLOSING_SOON          
-  JOB_EXPIRED               
-  
-  // Team Events
-  TEAM_MENTION              
-  TEAM_ASSIGNED             
-  
-  // System Events
-  ACCOUNT_VERIFIED          
-  PASSWORD_RESET            
-  SUBSCRIPTION_EXPIRING     
+  NEW_APPLICATION
+  APPLICATION_STATUS_CHANGE
+  APPLICATION_COMMENT
+  ASSESSMENT_INVITATION
+  ASSESSMENT_REMINDER
+  ASSESSMENT_COMPLETED
+  ASSESSMENT_RESULTS
+  JOB_POSTED
+  JOB_CLOSING_SOON
+  JOB_EXPIRED
+  TEAM_MENTION
+  TEAM_ASSIGNED
+  ACCOUNT_VERIFIED
+  PASSWORD_RESET
+  SUBSCRIPTION_EXPIRING
 }
 
 enum NotificationChannel {
-  IN_APP    
-  EMAIL     
-  WEBHOOK   
+  IN_APP
+  EMAIL
+  WEBHOOK
 }
 
 enum NotificationPriority {
-  LOW       
-  MEDIUM    
-  HIGH      
-  URGENT    
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
 }
 
+enum QuestionType {
+  MULTIPLE_CHOICE
+  OPEN_ENDED
+  CODING
+}
+
+// =========================
+// MODELS
 // =========================
 
 model Invoice {
   id String @id @default(cuid())
 
-  // Relación con la empresa que está usando Bolsa TI
   companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  // Datos del receptor (tu cliente)
   customerName  String
   customerRfc   String  @db.VarChar(13)
   customerEmail String?
 
-  // Campos CFDI típicos
-  cfdiUse       String? @db.VarChar(5) // p.ej. "G03"
-  paymentMethod String? @db.VarChar(3) // p.ej. "PUE"
-  paymentForm   String? @db.VarChar(3) // p.ej. "03" transferencia
+  cfdiUse       String? @db.VarChar(5)
+  paymentMethod String? @db.VarChar(3)
+  paymentForm   String? @db.VarChar(3)
   currency      String  @default("MXN")
 
-  // Importes
   subtotal Decimal @db.Decimal(10, 2)
   tax      Decimal @db.Decimal(10, 2)
   total    Decimal @db.Decimal(10, 2)
 
-  // Relación con Factura.com / CFDI
-  externalId String? // id de factura.com (si lo maneja)
-  uuid       String? @unique // UUID del CFDI una vez timbrado
+  externalId String?
+  uuid       String? @unique
   series     String?
   folio      String?
 
-  // Enlaces a archivos (puedes guardarlos en S3 luego)
   pdfUrl String?
   xmlUrl String?
 
   status    InvoiceStatus @default(PENDING)
   createdAt DateTime      @default(now())
   issuedAt  DateTime?
-  updatedAt DateTime      @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([companyId, status])
   @@index([uuid])
 }
 
-// =========================
 model Company {
   id      String  @id @default(cuid())
   name    String
-  country String?
-  city    String?
-  domain  String? @unique // 👈 clave: un solo registro por dominio
+  domain  String? @unique
   website String?
   size    String?
   logoUrl String?
   logoKey String?
 
-  // Plan de facturación actual (lo usa /api/jobs con config/plans.ts)
   billingPlan BillingPlan @default(FREE)
 
-  // ✅ Datos fiscales para CFDI (facturación)
-  taxLegalName     String? // Razón social
+  // ✅ UBICACIÓN ESTRUCTURADA (mejorada)
+  country     String?
+  city        String?
+  location    String? // "Monterrey, NL, México"
+  locationLat Float? // 25.6866
+  locationLng Float? // -100.3161
+  placeId     String? // Google Places ID
+  state       String? // "Nuevo León"
+  postalCode  String? // "64000"
+  address     String? // Dirección completa
+  cityNorm    String? // "monterrey" (normalizado para búsquedas)
+  stateNorm   String? // "nuevo leon" (normalizado)
+
+  // Datos fiscales (México)
+  taxLegalName     String?
   taxRfc           String? @db.VarChar(13)
-  taxRegime        String? @db.VarChar(3) // Código de régimen (ej. "601", "612", etc.)
-  taxZip           String? @db.VarChar(5) // C.P. domicilio fiscal
-  taxAddressLine1  String? // Calle y número
-  taxAddressLine2  String? // Colonia / interior / detalles
-  taxEmail         String? // Correo para envío de CFDI
-  cfdiUseDefault   String? @db.VarChar(5) // Uso CFDI preferido (ej. "G03")
+  taxRegime        String? @db.VarChar(3)
+  taxZip           String? @db.VarChar(5)
+  taxAddressLine1  String?
+  taxAddressLine2  String?
+  taxEmail         String?
+  cfdiUseDefault   String? @db.VarChar(5)
   taxDataCompleted Boolean @default(false)
 
-  users     User[]
-  jobs      Job[]
-  // 👇 back-relation para plantillas
-  templates JobTemplate[] @relation("CompanyTemplates")
-
-  // 👇 back-relation con facturas CFDI
-  invoices Invoice[]
-
+  users                   User[]
+  jobs                    Job[]
+  templates               JobTemplate[]                  @relation("CompanyTemplates")
+  invoices                Invoice[]
   assessmentInviteCharges AssessmentInviteChargeLedger[]
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  // ✅ ÍNDICES MEJORADOS
+  @@index([domain])
+  @@index([cityNorm])
+  @@index([country, city])
+  @@index([billingPlan])
 }
 
-// =========================
 model User {
   id           String   @id @default(cuid())
-  name         String?
-  firstName    String?
-  middleName   String?
-  lastName     String?
   email        String   @unique
   passwordHash String?
   role         Role     @default(CANDIDATE)
-  createdAt    DateTime @default(now())
-
-  // ✅ nuevo (requerido por tu flujo de verificación)
   emailVerified DateTime?
 
-  applications Application[]
-  jobs         Job[]         @relation("PostedJobs")
+  // ✅ NOMBRES ESTRUCTURADOS
+  // IMPORTANTE: 'name' se mantiene temporalmente para migración
+  // TODO: Remover después de migrar datos existentes
+  name           String? // DEPRECATED - usar firstName/lastName
+  firstName      String? // Será REQUERIDO después de migración
+  lastName       String? // Será REQUERIDO después de migración
+  middleName     String? // Segundo nombre (opcional)
+  maternalSurname String? // ✅ NUEVO: Apellido materno (común en LATAM)
 
-  company   Company? @relation(fields: [companyId], references: [id])
-  companyId String?
+  // CONTACTO
+  phone            String?
+  phoneVerified    DateTime?
+  phoneCountryCode String?  @default("+52")
 
-  // EXISTENTES
+  // UBICACIÓN (mantener estructura existente)
   location    String?
   locationLat Float?
   locationLng Float?
-
-  // Nuevos para filtros de ubicación
-  country    String? @db.VarChar(2)
-  admin1     String?
-  city       String?
-  cityNorm   String?
-  admin1Norm String?
-
-  // Opcionales (proveedor de geodatos)
+  country     String? @db.VarChar(2)
+  admin1      String?
+  city        String?
+  cityNorm    String?
+  admin1Norm  String?
   placeId     String?
   placeSource String?
 
-  phone     String?
-  birthdate DateTime?
+  // PERFIL PROFESIONAL (mantener existente)
   linkedin  String?
   github    String?
   resumeUrl String?
+  birthdate DateTime?
 
-  // Skills y certificaciones simples
-  skills         String[] @default([])
-  certifications String[] @default([])
+  // ✅ NUEVO: Género
+  gender Gender?
 
-  // Relaciones detalladas
-  candidateSkills      CandidateSkill[]
-  candidateCredentials CandidateCredential[]
-  candidateLanguages   CandidateLanguage[]
+  // ✅ NUEVO: ONBOARDING Y COMPLETITUD
+  onboardingStep     Int     @default(0) // 0-3: pasos del signup completados
+  profileCompleted   Boolean @default(false) // true cuando perfil está completo
+  profileCompletion  Int     @default(0) // 0-100: porcentaje de completitud
 
-  recruiterProfile RecruiterProfile?
+  // ✅ NUEVO: METADATA DE SIGNUP
+  signupSource    String? // "organic", "linkedin", "google", "referral"
+  signupDevice    String? // "mobile", "desktop", "tablet"
+  signupIp        String?
+  signupUserAgent String?
 
-  // Historial laboral
-  experiences WorkExperience[]
+  // ✅ NUEVO: PREFERENCIAS DE BÚSQUEDA LABORAL
+  seekingRemote    Boolean @default(false)
+  seekingHybrid    Boolean @default(false)
+  seekingOnsite    Boolean @default(false)
+  desiredSalaryMin Int?
+  desiredSalaryMax Int?
+  desiredCurrency  String? @default("MXN")
+  openToRelocate   Boolean @default(false)
+  availableFrom    DateTime?
 
-  // Escolaridad
+  // ✅ NUEVO: NOTIFICACIONES POR TIPO DE TRABAJO
+  notifyRemoteJobs Boolean @default(true)
+  notifyOnsiteJobs Boolean @default(true)
+  notifyHybridJobs Boolean @default(true)
+
+  // ✅ NUEVO: CONFIGURACIÓN
+  timezone String? @default("America/Monterrey")
+  locale   String? @default("es-MX")
+  theme    String? @default("light")
+
+  // SKILLS Y EDUCACIÓN (mantener existente)
+  certifications        String[]       @default([])
   highestEducationLevel EducationLevel @default(NONE)
-  education             Education[]
 
-  // 👇 back-relation para plantillas creadas por el usuario
-  createdTemplates JobTemplate[] @relation("UserCreatedTemplates")
+  // ✅ NUEVO: TIMESTAMPS MEJORADOS
+  createdAt          DateTime  @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  lastLoginAt        DateTime?
+  lastActivityAt     DateTime?
+  profileLastUpdated DateTime?
 
-  // 👇 NUEVO: versiones de CV guardadas
-  resumes Resume[]
+  // ✅ NUEVO: ESTADO DE CUENTA
+  isActive        Boolean   @default(true)
+  isSuspended     Boolean   @default(false)
+  suspendedAt     DateTime?
+  suspendedReason String?
+  deletedAt       DateTime? // Soft delete
 
-  // 👇 NUEVO: assessment attempts
-  assessmentAttempts AssessmentAttempt[]
+  // RELACIONES (mantener todas las existentes)
+  applications              Application[]
+  jobs                      Job[]                   @relation("PostedJobs")
+  company                   Company?                @relation(fields: [companyId], references: [id])
+  companyId                 String?
+  candidateSkills           CandidateSkill[]
+  candidateCredentials      CandidateCredential[]
+  candidateLanguages        CandidateLanguage[]
+  recruiterProfile          RecruiterProfile?
+  experiences               WorkExperience[]
+  education                 Education[]
+  createdTemplates          JobTemplate[]           @relation("UserCreatedTemplates")
+  resumes                   Resume[]
+  assessmentAttempts        AssessmentAttempt[]
+  assessmentInvitesReceived AssessmentInvite[]      @relation("AssessmentInviteCandidate")
+  assessmentInvitesSent     AssessmentInvite[]      @relation("AssessmentInviteInvitedBy")
+  codeExecutions            CodeExecution[]
+  notifications             Notification[]
+  notificationPreferences   NotificationPreference[]
 
-  // 👇 NUEVO: invites de assessments
-  assessmentInvitesReceived AssessmentInvite[] @relation("AssessmentInviteCandidate")
-  assessmentInvitesSent     AssessmentInvite[] @relation("AssessmentInviteInvitedBy")
-
-  // ============================================
-  // 🔔 NOTIFICATIONS SYSTEM
-  // ============================================
-  
-  // Relaciones de notificaciones
-  notifications            Notification[]
-  notificationPreferences  NotificationPreference[]
-  
-  // Configuración global de notificaciones
+  // FLAGS DE NOTIFICACIONES (mantener)
   emailNotificationsEnabled Boolean @default(true)
   pushNotificationsEnabled  Boolean @default(false)
 
+  // ✅ ÍNDICES MEJORADOS
+  @@index([email])
+  @@index([role])
+  @@index([companyId])
   @@index([locationLat, locationLng])
   @@index([country])
   @@index([country, admin1])
   @@index([country, city])
   @@index([cityNorm])
   @@index([admin1Norm])
+  @@index([profileCompleted]) // NUEVO
+  @@index([onboardingStep]) // NUEVO
+  @@index([lastActivityAt]) // NUEVO
+  @@index([createdAt])
 }
 
-// =========================
 model WorkExperience {
   id          String    @id @default(cuid())
   userId      String
@@ -404,9 +444,9 @@ model WorkExperience {
   startDate   DateTime
   endDate     DateTime?
   isCurrent   Boolean   @default(false)
-  description String? // 1 bullet por línea, texto plano
+  description String?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -414,9 +454,6 @@ model WorkExperience {
   @@index([userId, isCurrent])
 }
 
-// =========================
-// Educación (lista)
-// =========================
 model Education {
   id     String @id @default(cuid())
   userId String
@@ -435,96 +472,75 @@ model Education {
   grade       String?
   description String?
 
-  // Orden manual para drag & drop
   sortIndex Int @default(0)
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([userId, status])
   @@index([userId, sortIndex])
   @@index([userId, endDate])
 }
 
-// =========================
-// Vacantes
-// =========================
 model Job {
   id    String @id @default(cuid())
   title String
 
-  // Slug para URL pública (opcional)
   slug String? @unique
 
-  // Requerido (multiempresa)
   companyId String
-  company   Company @relation(fields: [companyId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  // Ubicación y tipo
   location     String
   locationLat  Float?
   locationLng  Float?
   locationType LocationType @default(ONSITE)
 
-  // Filtros por ubicación (estructurado)
   country    String? @db.VarChar(2)
   admin1     String?
   city       String?
   cityNorm   String?
   admin1Norm String?
 
-  // Publicación
   employmentType  EmploymentType
-  seniority       Seniority? // 👈 NUEVO (lo usa tu seed.ts)
+  seniority       Seniority?
   description     String         @db.Text
   descriptionHtml String?        @db.Text
-  schedule        String? // ej. "L-V 9:00–18:00"
-  publishAt       DateTime? // publicación programada
+  schedule        String?
+  publishAt       DateTime?
 
-  // Lista simple y relación catálogo
   skills         String[]
   requiredSkills JobRequiredSkill[]
 
-  // Compensación
   salaryMin  Int?
   salaryMax  Int?
   currency   String? @default("MXN")
   showSalary Boolean @default(false)
 
-  // Remoto (compatibilidad). Preferir locationType
   remote Boolean @default(false)
 
-  // Prestaciones y banderas de visibilidad
   benefitsJson Json?
   showBenefits Boolean @default(true)
 
-  // Educación / Skills / Certs (payloads del wizard)
   educationJson Json?
   minDegree     EducationLevel?
   skillsJson    Json?
   certsJson     Json?
 
-  // Privacidad
   companyConfidential Boolean @default(false)
 
-  // Estatus de la vacante
   status JobStatus @default(OPEN)
 
-  // Auditoría
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
-  // Reclutador que publicó
   recruiterId String?
-  recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id])
+  recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id], onDelete: SetNull)
 
-  // Relaciones
   applications Application[]
 
-  // 👇 NUEVO: assessments
   assessments JobAssessment[]
 
-  // 👇 NUEVO: invites enviados para esta vacante
   assessmentInvites AssessmentInvite[]
 
   @@index([companyId])
@@ -541,7 +557,6 @@ model Job {
   @@index([publishAt])
 }
 
-// =========================
 model Application {
   id          String            @id @default(cuid())
   jobId       String
@@ -549,56 +564,89 @@ model Application {
   resumeUrl   String?
   coverLetter String?
   status      ApplicationStatus @default(SUBMITTED)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @default(now()) @updatedAt
+  
+  // ✅ TIMESTAMPS MEJORADOS
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  
+  // ✅ NUEVO: Timestamps detallados por estado
+  submittedAt DateTime  @default(now())
+  reviewingAt DateTime?
+  interviewAt DateTime?
+  offerAt     DateTime?
+  hiredAt     DateTime?
+  rejectedAt  DateTime?
 
-  // Lógica de rechazo diferido
-  rejectedAt         DateTime?
-  rejectionEmailSent Boolean   @default(false)
+  rejectionEmailSent Boolean @default(false)
 
-  // Interés/estado del reclutador
   recruiterInterest ApplicationInterest @default(REVIEW)
 
-  candidate User @relation(fields: [candidateId], references: [id])
-  job       Job  @relation(fields: [jobId], references: [id])
+  // ✅ NUEVO: Razones y notas
+  rejectionReason String? @db.Text
+  internalNotes   String? @db.Text
+  recruiterNotes  String? @db.Text
+
+  // ✅ NUEVO: Fuente y tracking
+  source      String? // "direct", "linkedin", "referral", "indeed"
+  referredBy  String?
+  utmSource   String?
+  utmMedium   String?
+  utmCampaign String?
+
+  // ✅ NUEVO: Vistas y engagement
+  viewCount    Int       @default(0)
+  lastViewedAt DateTime?
+  lastViewedBy String?
+  starred      Boolean   @default(false)
+  starredAt    DateTime?
+
+  // ✅ NUEVO: Colaboración
+  assignedTo String?
+  assignedAt DateTime?
+
+  // ✅ NUEVO: Recordatorios
+  followUpAt   DateTime?
+  followUpDone Boolean   @default(false)
+
+  candidate User @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   messages Message[]
 
-  // 👇 NUEVO: assessments
   assessmentAttempts AssessmentAttempt[]
 
-  // 👇 NUEVO: invites (enviar evaluación por postulación)
   assessmentInvites AssessmentInvite[]
 
   @@unique([candidateId, jobId])
   @@index([status, createdAt])
   @@index([status, rejectedAt, rejectionEmailSent])
   @@index([recruiterInterest])
+  // ✅ NUEVOS ÍNDICES
+  @@index([jobId, status])
+  @@index([assignedTo])
+  @@index([starred])
+  @@index([source])
 }
-
-// ==========================
-// Planes de suscripción (tabla genérica, para cuando quieras Stripe, etc.)
-// ==========================
 
 model Plan {
   id                String   @id @default(cuid())
-  name              String // "Gratis", "Pro", etc.
-  slug              String   @unique // "free", "pro", "business", "agency"
-  monthlyPriceCents Int // en centavos: 99900 = $999.00
-  currency          String // "MXN"
-  maxActiveJobs     Int? // null = ilimitado
-  maxUsers          Int? // null = ilimitado
+  name              String
+  slug              String   @unique
+  monthlyPriceCents Int
+  currency          String
+  maxActiveJobs     Int?
+  maxUsers          Int?
   createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   subscriptions Subscription[]
 }
 
 model Subscription {
   id        String @id @default(cuid())
-  accountId String // o companyId, según tu modelo futuro
+  accountId String
   planId    String
-  plan      Plan   @relation(fields: [planId], references: [id])
+  plan      Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   status           SubscriptionStatus @default(ACTIVE)
   startedAt        DateTime           @default(now())
@@ -609,34 +657,29 @@ model Subscription {
   stripeSubscriptionId String?
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
-// =========================
-// Plantillas de vacante (para "Usar vacante anterior")
-// =========================
 model JobTemplate {
   id String @id @default(cuid())
 
   companyId String
-  company   Company @relation(fields: [companyId], references: [id], name: "CompanyTemplates")
+  company   Company @relation(fields: [companyId], references: [id], name: "CompanyTemplates", onDelete: Cascade)
 
   title   String
-  payload Json // snapshot del wizard (todos los campos)
+  payload Json
 
   createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
   lastUsedAt DateTime?
 
-  // (Opcional) quién la creó
   creatorId String?
-  creator   User?   @relation(fields: [creatorId], references: [id], name: "UserCreatedTemplates")
+  creator   User?   @relation(fields: [creatorId], references: [id], name: "UserCreatedTemplates", onDelete: SetNull)
 
   @@index([companyId, updatedAt])
   @@index([lastUsedAt])
 }
 
-// =========================
 model CodexEntry {
   id        String   @id @default(cuid())
   title     String
@@ -647,27 +690,58 @@ model CodexEntry {
   tech      String?
   published Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   @@index([published, createdAt])
 }
 
-// =========================
-
 model RecruiterProfile {
-  id        String          @id @default(cuid())
-  userId    String          @unique
-  company   String
-  website   String?
-  phone     String?
-  status    RecruiterStatus @default(PENDING)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
+  id     String          @id @default(cuid())
+  userId String          @unique
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status RecruiterStatus @default(PENDING)
 
-  user User @relation(fields: [userId], references: [id])
+  // Campos existentes
+  company String
+  website String?
+  phone   String?
+
+  // ✅ NUEVO: Información profesional
+  jobTitle       String? // "Senior Technical Recruiter"
+  department     String? // "Human Resources"
+  phoneExtension String?
+  directPhone    String?
+  bio            String? @db.Text
+
+  // ✅ NUEVO: Metadata de actividad
+  activeJobsCount   Int @default(0)
+  totalHires        Int @default(0)
+  avgTimeToHire     Int? // Días promedio
+  totalApplications Int @default(0)
+
+  // ✅ NUEVO: Preferencias
+  preferredLanguage String? @default("es")
+  timezone          String? @default("America/Monterrey")
+
+  // ✅ NUEVO: Aprobación detallada
+  approvedAt     DateTime?
+  approvedBy     String?
+  rejectedAt     DateTime?
+  rejectedReason String?  @db.Text
+
+  // ✅ NUEVO: Especialización
+  specializations String[] @default([]) // ["tech", "sales", "marketing"]
+  industries      String[] @default([]) // ["software", "fintech", "ecommerce"]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  // ✅ NUEVOS ÍNDICES
+  @@index([userId])
+  @@index([status])
+  @@index([activeJobsCount])
 }
 
-// =========================
 model Message {
   id            String   @id @default(cuid())
   applicationId String
@@ -676,10 +750,9 @@ model Message {
   body          String
   createdAt     DateTime @default(now())
 
-  application Application @relation(fields: [applicationId], references: [id])
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 }
 
-// Auditoría genérica
 model AuditLog {
   id        String   @id @default(cuid())
   actorId   String?
@@ -689,9 +762,6 @@ model AuditLog {
   createdAt DateTime @default(now())
 }
 
-// =========================================================
-// Catálogo editable de skills / certificaciones / idiomas
-// =========================================================
 model TaxonomyTerm {
   id          String       @id @default(cuid())
   kind        TaxonomyKind
@@ -700,7 +770,7 @@ model TaxonomyTerm {
   aliases     String[]     @default([])
   description String?
   createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   requiredByJobs  JobRequiredSkill[]
   candidateSkills CandidateSkill[]
@@ -711,7 +781,6 @@ model TaxonomyTerm {
   @@index([kind])
 }
 
-// =========================
 model JobRequiredSkill {
   id     String  @id @default(cuid())
   jobId  String
@@ -719,14 +788,13 @@ model JobRequiredSkill {
   must   Boolean @default(true)
   weight Int?
 
-  job  Job          @relation(fields: [jobId], references: [id])
-  term TaxonomyTerm @relation(fields: [termId], references: [id])
+  job  Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  term TaxonomyTerm @relation(fields: [termId], references: [id], onDelete: Cascade)
 
   @@unique([jobId, termId])
   @@index([termId])
 }
 
-// =========================
 model CandidateSkill {
   id     String @id @default(cuid())
   userId String
@@ -734,28 +802,26 @@ model CandidateSkill {
   level  Int?
   years  Int?
 
-  user User         @relation(fields: [userId], references: [id])
-  term TaxonomyTerm @relation(fields: [termId], references: [id])
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term TaxonomyTerm @relation(fields: [termId], references: [id], onDelete: Cascade)
 
   @@unique([userId, termId])
   @@index([termId])
 }
 
-// =========================
 model CandidateLanguage {
   id     String              @id @default(cuid())
   userId String
   termId String
   level  LanguageProficiency
 
-  user User         @relation(fields: [userId], references: [id])
-  term TaxonomyTerm @relation(fields: [termId], references: [id])
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term TaxonomyTerm @relation(fields: [termId], references: [id], onDelete: Cascade)
 
   @@unique([userId, termId])
   @@index([termId])
 }
 
-// =========================
 model CandidateCredential {
   id           String    @id @default(cuid())
   userId       String
@@ -766,16 +832,13 @@ model CandidateCredential {
   credentialId String?
   url          String?
 
-  user User         @relation(fields: [userId], references: [id])
-  term TaxonomyTerm @relation(fields: [termId], references: [id])
+  user User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  term TaxonomyTerm @relation(fields: [termId], references: [id], onDelete: Cascade)
 
   @@index([termId])
   @@index([userId, termId])
 }
 
-// =========================
-// NUEVO: Versiones de CV (para snapshots y PDF)
-// =========================
 model Resume {
   id           String   @id @default(cuid())
   userId       String
@@ -815,14 +878,13 @@ model AssessmentTemplate {
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   questions        AssessmentQuestion[]
   codingChallenges CodingChallenge[]
   jobAssessments   JobAssessment[]
   attempts         AssessmentAttempt[]
 
-  // 👇 NUEVO: invites por template
   invites AssessmentInvite[]
 
   @@index([slug])
@@ -832,24 +894,20 @@ model AssessmentTemplate {
 model AssessmentInviteChargeLedger {
   id String @id @default(cuid())
 
-  // Relación al invite (lo que se está cobrando)
   inviteId String
   invite   AssessmentInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
 
-  // Para reportes / multiempresa (evita tener que join por Job->Company)
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   kind   CreditLedgerKind @default(ASSESSMENT_INVITE)
-  cycle  Int // == invite.chargeCount en el momento del cobro
+  cycle  Int
   amount Int              @default(1)
 
   meta Json?
 
   createdAt DateTime @default(now())
 
-  // ✅ Idempotencia / anti doble cobro:
-  // Un invite NO puede generar 2 cargos para el mismo ciclo (y mismo kind)
   @@unique([inviteId, kind, cycle])
   @@index([companyId, createdAt])
   @@index([inviteId])
@@ -868,16 +926,51 @@ model AssessmentQuestion {
   codeSnippet  String? @db.Text
 
   options       Json
-  allowMultiple Boolean  @default(false)
-  explanation   String?  @db.Text
-  isActive      Boolean  @default(true)
-  timesUsed     Int      @default(0)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  allowMultiple Boolean @default(false)
+  explanation   String? @db.Text
+  isActive      Boolean @default(true)
+  timesUsed     Int     @default(0)
 
-  answers AttemptAnswer[]
+  type QuestionType @default(MULTIPLE_CHOICE)
+
+  language         String? // javascript, python, java, cpp
+  starterCode      String? @db.Text
+  solutionCode     String? @db.Text
+  allowedLanguages String?
+  codingConfig     Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  answers         AttemptAnswer[]
+  testCases       CodeTestCase[]
+  executions      CodeExecution[]
+  PlagiarismCheck PlagiarismCheck[]
 
   @@index([templateId, section])
+  @@index([type])
+}
+
+model CodeTestCase {
+  id         String             @id @default(cuid())
+  questionId String
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  input          String  @db.Text
+  expectedOutput String  @db.Text
+  isHidden       Boolean @default(false)
+  points         Int     @default(1)
+
+  timeoutMs     Int @default(5000)
+  memoryLimitMb Int @default(256)
+
+  orderIndex Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([questionId])
+  @@index([questionId, isHidden])
 }
 
 model CodingChallenge {
@@ -901,7 +994,7 @@ model CodingChallenge {
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   submissions CodingSubmission[]
 
@@ -914,7 +1007,7 @@ model JobAssessment {
   job   Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   templateId String
-  template   AssessmentTemplate @relation(fields: [templateId], references: [id])
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   isRequired Boolean @default(true)
   minScore   Int?
@@ -933,12 +1026,11 @@ model AssessmentAttempt {
   candidate   User   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   templateId String
-  template   AssessmentTemplate @relation(fields: [templateId], references: [id])
+  template   AssessmentTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   applicationId String?
-  application   Application? @relation(fields: [applicationId], references: [id])
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
-  // ✅ CORREGIDO: amarre 1–1 attempt ↔ invite (solo aquí)
   inviteId String?           @unique
   invite   AssessmentInvite? @relation("InviteAttempt", fields: [inviteId], references: [id], onDelete: SetNull)
 
@@ -958,9 +1050,6 @@ model AssessmentAttempt {
   ipAddress String?
   userAgent String?
 
-  // =========================
-  // Anti-cheat counters (Nivel 2, atómicos)
-  // =========================
   tabSwitches      Int @default(0)
   visibilityHidden Int @default(0)
   copyAttempts     Int @default(0)
@@ -969,31 +1058,27 @@ model AssessmentAttempt {
   focusLoss        Int @default(0)
   pageHides        Int @default(0)
 
-  // Fingerprint liviano (multi-sesión)
   firstClientSig String?
   lastClientSig  String?
   multiSession   Boolean @default(false)
 
-  // Severidad resumida (para UI recruiter)
   severityScore Int    @default(0)
   severity      String @default("NORMAL")
 
-  // 👇 eventos anti-cheat (append-only)
   events AssessmentAttemptEvent[]
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   answers           AttemptAnswer[]
   codingSubmissions CodingSubmission[]
+  codeExecutions    CodeExecution[]
 
   @@index([candidateId, status])
   @@index([applicationId])
   @@index([templateId, status])
   @@index([candidateId, templateId, status])
-  // ✅ NUEVO recomendado (tu flujo de reuse por applicationId exacto)
   @@index([applicationId, templateId, status])
-  // ✅ útiles para dashboards/alertas
   @@index([severity, severityScore])
   @@index([multiSession])
 }
@@ -1018,23 +1103,20 @@ model AssessmentInvite {
   invitedById String?
   invitedBy   User?   @relation("AssessmentInviteInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
 
-  // ✅ recomendado (auditoría)
   sentAt      DateTime?
   startedAt   DateTime?
   submittedAt DateTime?
   cancelledAt DateTime?
   expiresAt   DateTime?
 
-  // ✅ Cobro por “ciclo” (cuando NO es reusable y se reinicia)
-  chargeCount Int       @default(0) // incrementa al reiniciar ciclo
-  chargedAt   DateTime? // opcional: cuándo se generó el último cargo del ciclo
+  chargeCount Int       @default(0)
+  chargedAt   DateTime?
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   attempt AssessmentAttempt? @relation("InviteAttempt")
 
-  // ✅ Ledger / bitácora de cargos (anti doble cobro)
   charges AssessmentInviteChargeLedger[]
 
   @@unique([applicationId, templateId])
@@ -1053,7 +1135,7 @@ model AttemptAnswer {
   attempt   AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
 
   questionId String
-  question   AssessmentQuestion @relation(fields: [questionId], references: [id])
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   selectedOptions String[]
 
@@ -1063,9 +1145,64 @@ model AttemptAnswer {
 
   answeredAt DateTime @default(now())
 
+  codeSubmission   String? @db.Text
+  language         String?
+  executionResults Json?
+  passedTests      Int     @default(0)
+  totalTests       Int     @default(0)
+  executionTime    Int?
+  memoryUsed       Int?
+
+  plagiarismChecks PlagiarismCheck[]
+
   @@unique([attemptId, questionId])
   @@index([attemptId])
   @@index([questionId])
+}
+
+model CodeExecution {
+  id          String             @id @default(cuid())
+  attemptId   String
+  attempt     AssessmentAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId  String
+  question    AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  candidateId String
+  candidate   User               @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  code     String @db.Text
+  language String
+  status   String
+
+  output          String? @db.Text
+  error           String? @db.Text
+  executionTimeMs Int?
+  memoryUsedMb    Int?
+
+  testResults  Json?
+  isSubmission Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([attemptId])
+  @@index([questionId])
+  @@index([candidateId])
+  @@index([isSubmission])
+}
+
+model PlagiarismCheck {
+  id         String             @id @default(cuid())
+  answerId   String
+  answer     AttemptAnswer      @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  questionId String
+  question   AssessmentQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  similarityScore Float
+  matchedSources  Json?
+
+  checkedAt DateTime @default(now())
+
+  @@index([answerId])
+  @@index([similarityScore])
 }
 
 model AssessmentAttemptEvent {
@@ -1074,15 +1211,14 @@ model AssessmentAttemptEvent {
   candidateId String
   type        String
   meta        Json?
-  eventId     String? // idempotencia desde cliente (UUID recomendado)
-  clientSig   String? // fingerprint liviano
+  eventId     String?
+  clientSig   String?
   ipPrefix    String?
   userAgent   String?
   createdAt   DateTime @default(now())
 
   attempt AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
 
-  // ✅ dedupe: evita duplicados cuando el cliente reintenta/batchea
   @@unique([attemptId, eventId])
   @@index([attemptId, createdAt])
   @@index([candidateId, createdAt])
@@ -1096,7 +1232,7 @@ model CodingSubmission {
   attempt   AssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
 
   challengeId String
-  challenge   CodingChallenge @relation(fields: [challengeId], references: [id])
+  challenge   CodingChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
 
   code     String @db.Text
   language String
@@ -1119,44 +1255,36 @@ model CodingSubmission {
 }
 
 // ============================================
-// 🔔 NOTIFICATIONS SYSTEM - MODELS
+// NOTIFICATIONS SYSTEM
 // ============================================
 
 model Notification {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
-  // Receptor
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Tipo y contenido
   type     NotificationType
   priority NotificationPriority @default(MEDIUM)
-  
-  title    String  @db.VarChar(255)
-  message  String  @db.Text
-  
-  // Metadata contextual (JSON flexible)
+
+  title   String @db.VarChar(255)
+  message String @db.Text
+
   metadata Json?
-  
-  // Acción (link y botón)
+
   actionUrl  String? @db.VarChar(500)
   actionText String? @db.VarChar(100)
 
-  // Estado de lectura
-  read      Boolean   @default(false)
-  readAt    DateTime?
-  
-  // Archivado (soft delete)
+  read   Boolean   @default(false)
+  readAt DateTime?
+
   archived   Boolean   @default(false)
   archivedAt DateTime?
 
-  // Tracking de delivery
   deliveries NotificationDelivery[]
 
-  // Índices para performance
   @@index([userId, read])
   @@index([userId, createdAt])
   @@index([type])
@@ -1166,33 +1294,28 @@ model Notification {
 model NotificationDelivery {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
-  
+
   notificationId String
   notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
-  
-  channel   NotificationChannel
-  
-  // Estado de delivery
-  sent      Boolean   @default(false)
-  sentAt    DateTime?
-  
-  delivered Boolean   @default(false)
+
+  channel NotificationChannel
+
+  sent   Boolean   @default(false)
+  sentAt DateTime?
+
+  delivered   Boolean   @default(false)
   deliveredAt DateTime?
-  
-  failed    Boolean   @default(false)
-  failedAt  DateTime?
-  error     String?   @db.Text
-  
-  // Metadata específica del canal
-  // Para EMAIL
+
+  failed   Boolean   @default(false)
+  failedAt DateTime?
+  error    String?   @db.Text
+
   emailTo      String? @db.VarChar(255)
   emailSubject String? @db.VarChar(255)
-  
-  // Para WEBHOOK (futuro)
+
   webhookUrl      String? @db.Text
   webhookResponse String? @db.Text
 
-  // Índices
   @@index([notificationId])
   @@index([channel, sent])
   @@map("notification_deliveries")
@@ -1201,20 +1324,18 @@ model NotificationDelivery {
 model NotificationPreference {
   id        String   @id @default(cuid())
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  type   NotificationType
-  
-  // Canales habilitados para este tipo de notificación
+  type NotificationType
+
   inApp   Boolean @default(true)
   email   Boolean @default(true)
   webhook Boolean @default(false)
-  
-  // Frecuencia de entrega (para future digest feature)
-  frequency String @default("IMMEDIATE") // IMMEDIATE, HOURLY, DAILY, WEEKLY
+
+  frequency String @default("IMMEDIATE")
 
   @@unique([userId, type])
   @@index([userId])

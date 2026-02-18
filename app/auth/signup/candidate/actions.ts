@@ -2,18 +2,65 @@
 "use server";
 
 import { prisma } from '@/lib/server/prisma';
-import {
-  CandidateSignupSchema,
-  type CandidateSignupInput,
-} from "@/lib/validation";
 import { hash } from "bcryptjs";
 import type { Role } from "@prisma/client";
+import { z } from 'zod';
 
-/* ========= Tipos del borrador que viene del CV Builder ========= */
+// ============================================
+// SCHEMAS DE VALIDACIÓN
+// ============================================
+
+// Schema para el signup multi-step mejorado
+const ImprovedSignupSchema = z.object({
+  // Paso 1: Datos básicos
+  firstName: z.string().min(2).max(50),
+  lastName: z.string().min(2).max(50),
+  maternalSurname: z.string().max(50).optional(),
+  email: z.string().email().toLowerCase(),
+  
+  // Paso 2: Contraseña
+  password: z.string().min(8).max(100),
+  
+  // Paso 3: Perfil profesional (opcional)
+  phone: z.string().optional(),
+  location: z.string().optional(),
+  locationLat: z.number().optional(),
+  locationLng: z.number().optional(),
+  placeId: z.string().optional(),
+  
+  // Paso 3: Ubicación desglosada (del LocationAutocomplete)
+  city: z.string().optional(),
+  admin1: z.string().optional(),
+  country: z.string().optional(),
+  cityNorm: z.string().optional(),
+  admin1Norm: z.string().optional(),
+  
+  linkedin: z.string().url().optional(),
+  github: z.string().url().optional(),
+  
+  // Metadata
+  role: z.enum(['CANDIDATE', 'RECRUITER']).default('CANDIDATE'),
+});
+
+type ImprovedSignupInput = z.infer<typeof ImprovedSignupSchema>;
+
+// Schema legacy para compatibilidad con CV Builder
+const LegacySignupSchema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+type LegacySignupInput = z.infer<typeof LegacySignupSchema>;
+
+// ============================================
+// TIPOS DEL CV DRAFT
+// ============================================
+
 type CvDraftIdentity = {
   location?: string;
   phone?: string;
-  birthdate?: string; // "YYYY-MM-DD"
+  birthdate?: string;
   linkedin?: string;
   github?: string;
 };
@@ -21,8 +68,8 @@ type CvDraftIdentity = {
 type CvDraftExperience = {
   role?: string;
   company?: string;
-  startDate?: string | null; // "YYYY-MM"
-  endDate?: string | null; // "YYYY-MM"
+  startDate?: string | null;
+  endDate?: string | null;
   isCurrent?: boolean;
   bulletsText?: string;
   descriptionHtml?: string;
@@ -31,8 +78,8 @@ type CvDraftExperience = {
 type CvDraftEducation = {
   institution?: string;
   program?: string | null;
-  startDate?: string | null; // "YYYY-MM"
-  endDate?: string | null; // "YYYY-MM"
+  startDate?: string | null;
+  endDate?: string | null;
 };
 
 type CvDraftSkill = {
@@ -55,7 +102,9 @@ type CvDraft = {
   languages?: CvDraftLanguage[];
 };
 
-/* ========= Helpers ========= */
+// ============================================
+// HELPERS
+// ============================================
 
 function parseMonthToDate(ym?: string | null): Date | null {
   if (!ym) return null;
@@ -67,15 +116,21 @@ function parseMonthToDate(ym?: string | null): Date | null {
 }
 
 /**
- * Envía un correo de verificación.
- *
- * Está pensado para usar un proveedor tipo Resend vía HTTP.
- * - Si faltan variables de entorno, simplemente no hace nada (no truena el signup).
- * - Más adelante puedes cambiar el HTML, el proveedor o la URL sin tocar el resto del flujo.
+ * Normaliza texto para búsquedas
  */
-async function sendVerificationEmail(email: string, name?: string | null) {
+function normalize(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // Remover acentos
+}
+
+/**
+ * Envía email de verificación
+ */
+async function sendVerificationEmail(email: string, firstName?: string) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM; // ej: "Bolsa TI <no-reply@bolsati.mx>"
+  const from = process.env.EMAIL_FROM;
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000";
 
@@ -86,19 +141,17 @@ async function sendVerificationEmail(email: string, name?: string | null) {
     return;
   }
 
-  // Generar token seguro (JWT firmado) con expiración de 60 minutos
   const { createEmailVerifyToken } = await import("@/lib/server/tokens");
   const token = await createEmailVerifyToken({ email }, 60);
 
-  // URL segura con token firmado (no el email en texto plano)
   const verifyUrl = `${baseUrl.replace(/\/$/, "")}/api/auth/verify?token=${token}`;
 
-  const firstName = (name || "").split(" ")[0] || "¡Hola!";
+  const name = firstName || "¡Hola!";
 
   const subject = "Confirma tu correo en Bolsa TI";
   const html = `
-    <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding:24px;">
-      <h1 style="font-size:20px; margin-bottom:12px;">${firstName}, confirma tu correo</h1>
+    <div style="font-family: system-ui, -apple-system, sans-serif; padding:24px;">
+      <h1 style="font-size:20px; margin-bottom:12px;">${name}, confirma tu correo</h1>
       <p style="font-size:14px; line-height:1.5; margin-bottom:16px;">
         Gracias por crear tu cuenta en <strong>Bolsa TI</strong>.
         Antes de empezar a usarla, necesitamos confirmar que este correo es tuyo.
@@ -135,10 +188,13 @@ async function sendVerificationEmail(email: string, name?: string | null) {
   }
 }
 
+/**
+ * Importa datos del CV Builder al perfil del usuario
+ */
 async function importDraftToUser(userId: string, draft: CvDraft) {
   const tx: any[] = [];
 
-  // ---- Identidad básica al User ----
+  // Identidad básica
   if (draft.identity) {
     const { location, phone, birthdate, linkedin, github } = draft.identity;
     let birth: Date | null = null;
@@ -161,7 +217,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
     );
   }
 
-  // ---- Experiencia laboral ----
+  // Experiencia laboral
   if (Array.isArray(draft.experiences) && draft.experiences.length) {
     const data = draft.experiences
       .filter(
@@ -185,7 +241,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
         };
 
         if (start) row.startDate = start;
-        row.endDate = end; // nullable en el modelo
+        row.endDate = end;
 
         return row;
       });
@@ -195,7 +251,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
     }
   }
 
-  // ---- Educación ----
+  // Educación
   if (Array.isArray(draft.education) && draft.education.length) {
     const data = draft.education
       .filter((e) => e.institution)
@@ -223,7 +279,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
     }
   }
 
-  // ---- Skills ----
+  // Skills
   if (Array.isArray(draft.skills) && draft.skills.length) {
     const data = draft.skills
       .filter((s) => s.termId && s.label && s.label.trim())
@@ -243,7 +299,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
     }
   }
 
-  // ---- Idiomas ----
+  // Idiomas
   if (Array.isArray(draft.languages) && draft.languages.length) {
     const data = draft.languages
       .filter((l) => l.termId && l.label && l.label.trim())
@@ -268,14 +324,154 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
   }
 }
 
-/* ========= Acción principal ========= */
+// ============================================
+// ACCIÓN: SIGNUP MEJORADO (MULTI-STEP)
+// ============================================
 
-export async function createCandidateAction(
-  input: CandidateSignupInput,
+export async function createCandidateImproved(
+  input: Partial<ImprovedSignupInput>,
   rawDraft?: unknown
 ) {
   try {
-    const data = CandidateSignupSchema.parse(input);
+    // Validar datos
+    const data = ImprovedSignupSchema.parse(input);
+
+    const email = data.email.toLowerCase().trim();
+
+    // Verificar que no exista
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existing) {
+      return { ok: false, error: "Ya existe una cuenta con este correo." };
+    }
+
+    // Hash de contraseña
+    const passwordHash = await hash(data.password, 10);
+
+    // ✅ CREAR USUARIO CON NUEVOS CAMPOS
+    
+    // Fallback: si el usuario no seleccionó del autocomplete,
+    // derivar city/admin1/country del string de location
+    let city = data.city || null;
+    let admin1 = data.admin1 || null;
+    let country = data.country || null;
+    let cityNorm = data.cityNorm || null;
+    let admin1Norm = data.admin1Norm || null;
+
+    if (data.location && !city) {
+      // Parsear "Monterrey, Nuevo León, México" → city, admin1, country
+      const parts = data.location.split(",").map((p) => p.trim()).filter(Boolean);
+      if (parts.length >= 1) city = parts[0];
+      if (parts.length >= 3) admin1 = parts[parts.length - 2];
+      else if (parts.length === 2) admin1 = parts[1];
+      cityNorm = city
+        ? city.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim()
+        : null;
+      admin1Norm = admin1
+        ? admin1.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim()
+        : null;
+    }
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash,
+        role: data.role as Role,
+        
+        // ✅ Nombres separados
+        firstName: data.firstName,
+        lastName: data.lastName,
+        maternalSurname: data.maternalSurname || null,
+        
+        // ✅ Nombre completo (legacy compatibility)
+        name: [data.firstName, data.lastName, data.maternalSurname]
+          .filter(Boolean)
+          .join(' '),
+        
+        // ✅ Contacto
+        phone: data.phone || null,
+        
+        // ✅ Ubicación completa
+        location: data.location || null,
+        locationLat: data.locationLat || null,
+        locationLng: data.locationLng || null,
+        placeId: data.placeId || null,
+        
+        // ✅ Ubicación desglosada (del autocomplete o del fallback)
+        country: country,
+        admin1: admin1,
+        city: city,
+        cityNorm: cityNorm,
+        admin1Norm: admin1Norm,
+        
+        // ✅ Perfil profesional
+        linkedin: data.linkedin || null,
+        github: data.github || null,
+        
+        // ✅ Onboarding
+        onboardingStep: 3,
+        profileCompleted: !!(data.phone && data.location),
+        profileCompletion: calculateProfileCompletion(data),
+        
+        // ✅ Metadata de signup
+        signupSource: 'organic',
+        signupDevice: 'web',
+      },
+      select: { id: true, firstName: true, email: true },
+    });
+
+    // Importar draft del CV si existe
+    let cvDraft: CvDraft | null = null;
+    if (rawDraft && typeof rawDraft === "object") {
+      cvDraft = rawDraft as CvDraft;
+    }
+
+    if (cvDraft) {
+      await importDraftToUser(user.id, cvDraft);
+    }
+
+    // Enviar correo de verificación
+    await sendVerificationEmail(user.email, data.firstName);
+
+    return { ok: true, emailVerificationSent: true };
+  } catch (err) {
+    console.error("Error createCandidateImproved", err);
+    return { ok: false, error: "No se pudo crear la cuenta" };
+  }
+}
+
+/**
+ * Calcula porcentaje de completitud del perfil
+ */
+function calculateProfileCompletion(data: Partial<ImprovedSignupInput>): number {
+  let completed = 0;
+  const total = 8;
+  
+  // Campos básicos (siempre completos)
+  completed += 3; // firstName, lastName, email
+  
+  // Campos opcionales
+  if (data.phone) completed++;
+  if (data.location) completed++;
+  if (data.linkedin) completed++;
+  if (data.github) completed++;
+  if (data.maternalSurname) completed++;
+  
+  return Math.round((completed / total) * 100);
+}
+
+// ============================================
+// ACCIÓN LEGACY (COMPATIBILIDAD CV BUILDER)
+// ============================================
+
+export async function createCandidateAction(
+  input: LegacySignupInput,
+  rawDraft?: unknown
+) {
+  try {
+    const data = LegacySignupSchema.parse(input);
 
     const email = data.email.toLowerCase().trim();
 
@@ -289,17 +485,25 @@ export async function createCandidateAction(
 
     const passwordHash = await hash(data.password, 10);
 
+    // Parsear nombre (legacy)
+    const nameParts = data.name.split(' ');
+    const firstName = nameParts[0] || data.name;
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     const user = await prisma.user.create({
       data: {
         email,
         name: data.name,
+        firstName,
+        lastName,
         passwordHash,
         role: "CANDIDATE" as Role,
+        onboardingStep: 1, // Solo completó paso básico
+        profileCompleted: false,
       },
       select: { id: true, name: true, email: true },
     });
 
-    // Intentar importar el borrador del CV (si vino algo)
     let cvDraft: CvDraft | null = null;
     if (rawDraft && typeof rawDraft === "object") {
       cvDraft = rawDraft as CvDraft;
@@ -309,8 +513,7 @@ export async function createCandidateAction(
       await importDraftToUser(user.id, cvDraft);
     }
 
-    // Enviar correo de verificación (no bloquea el flujo si falla)
-    await sendVerificationEmail(user.email, data.name);
+    await sendVerificationEmail(user.email, firstName);
 
     return { ok: true, emailVerificationSent: true };
   } catch (err) {

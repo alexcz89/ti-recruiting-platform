@@ -54,7 +54,7 @@ function gatherCandidateSkills(
     | undefined
 ) {
   const fromRelations = (c?.candidateSkills ?? []).map((cs) => cs.term.label);
-  const flat = [...(c?.skills ?? []), ...(c?.certifications ?? []), ...fromRelations]
+  const flat = [...(c?.certifications ?? []), ...fromRelations]
     .map((s) => String(s || "").trim())
     .filter(Boolean);
 
@@ -220,7 +220,6 @@ export default async function JobApplicationsPage({
           resumeUrl: true,
           phone: true,
           location: true,
-          skills: true,
           certifications: true,
           candidateSkills: { select: { term: { select: { label: true } } } },
           candidateLanguages: {
@@ -796,6 +795,7 @@ export default async function JobApplicationsPage({
                         <td className="py-2 px-3 align-top">
                           <ActionsMenu
                             applicationId={a.id}
+                            jobId={job.id}
                             candidateHref={candidateHref}
                             resumeUrl={resumeUrl ?? null}
                             candidateEmail={a.candidate?.email ?? ""}

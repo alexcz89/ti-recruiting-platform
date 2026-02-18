@@ -110,11 +110,12 @@ export async function createRecruiterAction(
     const user = await prisma.user.create({
       data: {
         email,
-        name: fullName,
+        name: fullName,           // ✅ Nombre completo
+        firstName: data.firstName, // ✅ Nombre separado
+        lastName: data.lastName,   // ✅ Apellido separado
         passwordHash,
         role: "RECRUITER",
         company: { connect: { id: company.id } },
-        // emailVerified queda null hasta que confirme el correo
       },
       select: { id: true, email: true },
     });

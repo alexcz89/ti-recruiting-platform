@@ -26,6 +26,13 @@ type Question = {
   codeSnippet?: string;
   options: Option[];
   allowMultiple: boolean;
+  // 🆕 Campos para CODING
+  type?: 'MULTIPLE_CHOICE' | 'OPEN_ENDED' | 'CODING';
+  language?: string;
+  allowedLanguages?: string[];
+  starterCode?: string;
+  testCases?: any[];
+  points?: number;
 };
 
 type AttemptState = {
@@ -46,6 +53,8 @@ type StartResponse = {
   savedAnswers?: Record<string, string[]>;
   savedTimeSpent?: Record<string, number>;
 };
+
+const CODE_SENTINEL = '__CODE_SUBMITTED__';
 
 function keyOfOption(o: any) {
   return String(o?.id ?? o?.value ?? JSON.stringify(o));
@@ -68,6 +77,13 @@ function normalizeQuestions(raw: any[]): Question[] {
         value: o?.value != null ? String(o.value) : undefined,
         text: o?.text != null ? String(o.text) : o?.label != null ? String(o.label) : undefined,
       })),
+      // 🆕 PRESERVAR campos de CODING
+      type: q.type || 'MULTIPLE_CHOICE',
+      language: q.language,
+      allowedLanguages: q.allowedLanguages ? JSON.parse(q.allowedLanguages) : undefined,
+      starterCode: q.starterCode,
+      testCases: q.testCases || [],
+      points: typeof q.points === 'number' ? q.points : 10,
     };
   });
 }
@@ -334,6 +350,12 @@ export default function AssessmentPage() {
     if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   };
 
+  // ✅ CODING: marcar como respondida y avanzar
+  const handleCodeSubmitted = (qid: string) => {
+    setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
+    handleNext();
+  };
+
   const handleSubmit = async () => {
     if (!attemptId || submitting) return;
 
@@ -434,35 +456,60 @@ export default function AssessmentPage() {
     );
   }
 
+  const isCodingQuestion = currentQuestion.type === 'CODING';
+
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[1200px] px-6 lg:px-10 py-8">
-        <div className="sticky top-0 z-30 mb-6 pb-4 bg-white dark:bg-zinc-950">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-default">{template.title}</h1>
-              <p className="text-sm text-muted">
-                Pregunta {currentIndex + 1} de {total}
-              </p>
+      <div className={`mx-auto px-6 lg:px-10 py-8 ${isCodingQuestion ? 'max-w-[1800px]' : 'max-w-[1200px]'}`}>
+        {/* Header - Solo mostrar en preguntas NO-CODING */}
+        {!isCodingQuestion && (
+          <div className="sticky top-0 z-30 mb-6 pb-4 bg-white dark:bg-zinc-950">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-bold text-default">{template.title}</h1>
+                <p className="text-sm text-muted">
+                  Pregunta {currentIndex + 1} de {total}
+                </p>
+              </div>
+
+              {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
             </div>
 
-            {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
+            <AssessmentProgress current={currentIndex + 1} total={total} answered={answeredCount} />
+
+            {expired && (
+              <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
+                ⏰ Tiempo expirado. La evaluación quedó bloqueada.
+              </div>
+            )}
           </div>
+        )}
 
-          <AssessmentProgress current={currentIndex + 1} total={total} answered={answeredCount} />
-
-          {expired && (
-            <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
-              ⏰ Tiempo expirado. La evaluación quedó bloqueada.
+        {/* Header Simplificado para CODING */}
+        {isCodingQuestion && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="text-2xl font-bold text-default">{template.title}</h1>
+                <p className="text-sm text-muted">
+                  Pregunta {currentIndex + 1} de {total}
+                </p>
+              </div>
+              {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
             </div>
-          )}
-        </div>
 
+            {expired && (
+              <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
+                ⏰ Tiempo expirado. La evaluación quedó bloqueada.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Question Component */}
         <AssessmentQuestion
           question={{
             ...currentQuestion,
-            // Importante: el componente usa option.id como “id” visual,
-            // pero la selección real viaja por keyOfOption(option).
             options: currentQuestion.options.map((o) => ({
               id: keyOfOption(o),
               text: String(o.text ?? o.label ?? o.value ?? ''),
@@ -471,57 +518,79 @@ export default function AssessmentPage() {
           selectedOptions={currentAnswer}
           onAnswer={(optionKeys) => handleAnswer(currentQuestion.id, optionKeys)}
           disabled={expired}
+          // 🆕 Props para CODING
+          attemptId={attemptId || undefined}
+          onCodeSubmit={() => handleCodeSubmitted(currentQuestion.id)}
         />
 
-        <div className="mt-8 flex items-center justify-between gap-4">
-          <button
-            onClick={handlePrevious}
-            disabled={currentIndex === 0 || expired}
-            className="btn-ghost disabled:opacity-50"
-          >
-            ← Anterior
-          </button>
+        {/* Navegación - SOLO para preguntas NO-CODING */}
+        {!isCodingQuestion && (
+          <div className="mt-8 flex items-center justify-between gap-4">
+            <button
+              onClick={handlePrevious}
+              disabled={currentIndex === 0 || expired}
+              className="btn-ghost disabled:opacity-50"
+            >
+              ← Anterior
+            </button>
 
-          <div className="flex items-center gap-2">
-            {currentIndex === total - 1 ? (
-              <button onClick={handleSubmit} disabled={submitting || expired} className="btn btn-primary">
-                {submitting ? 'Enviando...' : 'Enviar evaluación ✓'}
-              </button>
-            ) : (
-              <button onClick={handleNext} disabled={expired} className="btn btn-primary">
-                Siguiente →
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-8 p-6 rounded-2xl border glass-card">
-          <h3 className="text-sm font-semibold mb-3">Mapa de preguntas</h3>
-          <div className="grid grid-cols-10 gap-2">
-            {questions.map((q, idx) => {
-              const isAnswered = isAnsweredId(q.id);
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => !expired && setCurrentIndex(idx)}
-                  className={`
-                    h-10 w-10 rounded-lg text-sm font-medium transition
-                    ${
-                      idx === currentIndex
-                        ? 'bg-emerald-600 text-white'
-                        : isAnswered
-                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                        : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
-                    }
-                    ${expired ? 'opacity-60 cursor-not-allowed' : ''}
-                  `}
-                >
-                  {idx + 1}
+            <div className="flex items-center gap-2">
+              {currentIndex === total - 1 ? (
+                <button onClick={handleSubmit} disabled={submitting || expired} className="btn btn-primary">
+                  {submitting ? 'Enviando...' : 'Enviar evaluación ✓'}
                 </button>
-              );
-            })}
+              ) : (
+                <button onClick={handleNext} disabled={expired} className="btn btn-primary">
+                  Siguiente →
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Para CODING: Solo botón de finalizar si es última pregunta */}
+        {isCodingQuestion && currentIndex === total - 1 && (
+          <div className="mt-8 flex justify-center">
+            <button 
+              onClick={handleSubmit} 
+              disabled={submitting || expired} 
+              className="btn btn-primary px-8 text-lg"
+            >
+              {submitting ? 'Enviando...' : 'Finalizar evaluación ✓'}
+            </button>
+          </div>
+        )}
+
+        {/* Mapa de preguntas - SOLO para preguntas NO-CODING */}
+        {!isCodingQuestion && (
+          <div className="mt-8 p-6 rounded-2xl border glass-card">
+            <h3 className="text-sm font-semibold mb-3">Mapa de preguntas</h3>
+            <div className="grid grid-cols-10 gap-2">
+              {questions.map((q, idx) => {
+                const isAnswered = isAnsweredId(q.id);
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => !expired && setCurrentIndex(idx)}
+                    className={`
+                      h-10 w-10 rounded-lg text-sm font-medium transition
+                      ${
+                        idx === currentIndex
+                          ? 'bg-emerald-600 text-white'
+                          : isAnswered
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+                          : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                      }
+                      ${expired ? 'opacity-60 cursor-not-allowed' : ''}
+                    `}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );

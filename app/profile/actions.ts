@@ -17,7 +17,7 @@ function val(fd: FormData, k: string) {
   return s.length ? s : "";
 }
 
-/* ─── Experiencias helpers (igual que antes) ─── */
+/* ─── Experiencias helpers ─── */
 type ExpInput = { role: string; company: string; startDate: string; endDate?: string | null; isCurrent?: boolean; };
 const YM_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 function toISODateFromYM(s?: string | null): string | null {
@@ -141,11 +141,10 @@ function parseSkillsDetailed(json?: string | null):
 type EducationRow = {
   id?: string;
   level: "HIGH_SCHOOL" | "TECHNICAL" | "BACHELOR" | "MASTER" | "DOCTORATE" | "OTHER" | null;
-  // status no viene de UI; lo derivamos (endDate vacía => ONGOING, con fecha => COMPLETED)
   institution: string;
   program?: string | null;
-  startDate?: string | null; // YYYY-MM
-  endDate?: string | null;   // YYYY-MM o null
+  startDate?: string | null;
+  endDate?: string | null;
   sortIndex: number;
 };
 
@@ -157,7 +156,7 @@ function ymToDate(s?: string | null): Date | null {
   if (!m) return null;
   const yyyy = Number(m[1]);
   const mm = Number(m[2]);
-  // Ancla al MEDIODÍA UTC del día 1 para evitar que la zona horaria lo “empuje” al mes anterior.
+  // ✅ Ancla al MEDIODÍA UTC para evitar desfase de zona horaria
   const d = new Date(Date.UTC(yyyy, mm - 1, 1, 12, 0, 0));
   return isNaN(d.getTime()) ? null : d;
 }
@@ -202,19 +201,18 @@ function parseEducation(json?: string | null):
     const status: "ONGOING" | "COMPLETED" = end ? "COMPLETED" : "ONGOING";
     const sortIndex = Number.isFinite(r?.sortIndex) ? Number(r.sortIndex) : i;
 
-    // fila vacía -> la omitimos
     if (!institution && !level && !start && !end) return;
-
-    // validación soft: si hay end y start > end, lo ignoramos
-    if (start && end && start.getTime() > end.getTime()) {
-      // puedes cambiar esto por throw si quieres bloquear
-      return;
-    }
+    if (start && end && start.getTime() > end.getTime()) return;
 
     out.push({ level, status, institution, program, startDate: start, endDate: end, sortIndex });
   });
 
   return { ok: true, data: out.sort((a, b) => a.sortIndex - b.sortIndex) };
+}
+
+/* ─── Helpers ubicación ─── */
+function stripDiacritics(s: string) {
+  return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
 }
 
 export async function updateProfileAction(fd: FormData) {
@@ -224,17 +222,17 @@ export async function updateProfileAction(fd: FormData) {
 
     const me = await prisma.user.findUnique({
       where: { email: session.user.email! },
-      select: { id: true, role: true },
+      select: { id: true, role: true, resumeUrl: true },
     });
     if (!me) return { error: "Usuario no encontrado" };
     if (me.role !== "CANDIDATE") return { error: "Solo candidatos pueden editar perfil" };
 
-    // Nombre
-    const firstName = String(val(fd, "firstName") ?? "");
-    const lastName1 = String(val(fd, "lastName1") ?? "");
-    const lastName2 = String(val(fd, "lastName2") ?? "");
+    // ✅ BUG FIX #2: Guardar firstName, lastName, maternalSurname por separado
+    const firstName = String(val(fd, "firstName") ?? "").trim();
+    const lastName1 = String(val(fd, "lastName1") ?? "").trim();
+    const lastName2 = String(val(fd, "lastName2") ?? "").trim();
     if (!firstName || !lastName1) return { error: "Nombre y Apellido paterno son obligatorios." };
-    const fullName = lastName2 ? `${firstName} ${lastName1} ${lastName2}` : `${firstName} ${lastName1}`;
+    const fullName = [firstName, lastName1, lastName2].filter(Boolean).join(" ");
 
     // Teléfono
     const phone = (() => {
@@ -246,14 +244,21 @@ export async function updateProfileAction(fd: FormData) {
     })();
     if (phone === ("INVALID" as any)) return { error: "El teléfono no tiene formato internacional válido (E.164)." };
 
-    // Birthdate
+    // ✅ BUG FIX #1: Birthdate con mediodía UTC para evitar desfase de zona horaria
     let safeBirthdate: Date | null | undefined = undefined;
     if (fd.has("birthdate")) {
-      const raw = String(fd.get("birthdate") ?? "");
-      if (!raw) safeBirthdate = null;
-      else {
-        const d = new Date(raw);
-        safeBirthdate = Number.isNaN(d.getTime()) ? null : d;
+      const raw = String(fd.get("birthdate") ?? "").trim();
+      if (!raw) {
+        safeBirthdate = null;
+      } else {
+        // "2000-12-16" → Date.UTC(2000, 11, 16, 12, 0, 0) para evitar UTC-6 desfase
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+        if (m) {
+          const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0));
+          safeBirthdate = isNaN(d.getTime()) ? null : d;
+        } else {
+          safeBirthdate = null;
+        }
       }
     }
 
@@ -261,11 +266,27 @@ export async function updateProfileAction(fd: FormData) {
     const location = val(fd, "location");
     let locationLat: number | null | undefined = undefined;
     let locationLng: number | null | undefined = undefined;
+
+    // Campos de ubicación desglosada desde el form
+    const cityFromForm   = val(fd, "city")      ?? undefined;
+    const admin1FromForm = val(fd, "admin1")     ?? undefined;
+    const countryCode    = val(fd, "countryCode") ?? undefined;
+    const cityNorm       = val(fd, "cityNorm")   ?? undefined;
+    const admin1Norm     = val(fd, "admin1Norm") ?? undefined;
+
     if (typeof location !== "undefined") {
       if (location) {
-        const pt = await geocodeCityToPoint(location);
-        locationLat = pt?.lat ?? null;
-        locationLng = pt?.lng ?? null;
+        // Si no vienen del form (usuario escribió manual), intentar geocodificar
+        if (!cityFromForm) {
+          const pt = await geocodeCityToPoint(location);
+          locationLat = pt?.lat ?? null;
+          locationLng = pt?.lng ?? null;
+        } else {
+          // Vienen del autocomplete, usar coords si están disponibles
+          const pt = await geocodeCityToPoint(location);
+          locationLat = pt?.lat ?? null;
+          locationLng = pt?.lng ?? null;
+        }
       } else {
         locationLat = null;
         locationLng = null;
@@ -274,8 +295,14 @@ export async function updateProfileAction(fd: FormData) {
 
     // Links / CV
     const linkedin = val(fd, "linkedin");
-    const github = val(fd, "github");
-    const resumeUrl = val(fd, "resumeUrl");
+    const github   = val(fd, "github");
+
+    // ✅ BUG FIX #3: resumeUrl - preferir el nuevo upload, caer al existente
+    let resumeUrl: string | null | undefined = undefined;
+    if (fd.has("resumeUrl")) {
+      const newUrl = String(fd.get("resumeUrl") ?? "").trim();
+      resumeUrl = newUrl || me.resumeUrl || null;
+    }
 
     // Certs
     const certsCsv = val(fd, "certifications");
@@ -285,23 +312,23 @@ export async function updateProfileAction(fd: FormData) {
         : undefined;
 
     // Experiencias
-    const expsRaw = val(fd, "experiences");
-    const parsed = parseAndValidateExperiences(expsRaw ?? "");
+    const expsRaw  = val(fd, "experiences");
+    const parsed   = parseAndValidateExperiences(expsRaw ?? "");
     if (!parsed.ok) return { error: parsed.error };
 
     // Idiomas
-    const langsRaw = val(fd, "languages");
+    const langsRaw   = val(fd, "languages");
     const parsedLangs = parseLanguages(langsRaw ?? "");
     if (!parsedLangs.ok) return { error: parsedLangs.error };
     const languageItems = parsedLangs.data;
 
     // Skills con nivel
-    const skillsRaw = val(fd, "skillsDetailed");
+    const skillsRaw    = val(fd, "skillsDetailed");
     const parsedSkills = parseSkillsDetailed(skillsRaw ?? "");
     if (!parsedSkills.ok) return { error: parsedSkills.error };
     const skillItems = parsedSkills.data;
 
-    // EDUCACIÓN (acepta "education", "educations" o "educationJson")
+    // Educación
     const eduRaw =
       val(fd, "educationJson") ??
       val(fd, "educations") ??
@@ -310,17 +337,17 @@ export async function updateProfileAction(fd: FormData) {
     if (!parsedEdu.ok) return { error: parsedEdu.error };
     const educationItems = parsedEdu.data;
 
-    // Resolver idiomas (solo existentes)
+    // Resolver idiomas
     type ResolvedLang = { termId: string; level: LanguageInput["level"] };
     let resolvedLangs: ResolvedLang[] = [];
     if (languageItems.length) {
-      const ids = Array.from(new Set(languageItems.map((l) => l.termId).filter(Boolean))) as string[];
+      const ids   = Array.from(new Set(languageItems.map((l) => l.termId).filter(Boolean))) as string[];
       const slugs = Array.from(new Set(languageItems.map((l) => l.label ? slugify(l.label) : undefined).filter(Boolean))) as string[];
       const terms = await prisma.taxonomyTerm.findMany({
-        where: { kind: "LANGUAGE", OR: [ ids.length ? { id: { in: ids } } : undefined, slugs.length ? { slug: { in: slugs } } : undefined ].filter(Boolean) as any },
+        where: { kind: "LANGUAGE", OR: [ids.length ? { id: { in: ids } } : undefined, slugs.length ? { slug: { in: slugs } } : undefined].filter(Boolean) as any },
         select: { id: true, slug: true, label: true },
       });
-      const byId = new Map(terms.map((t) => [t.id, t]));
+      const byId   = new Map(terms.map((t) => [t.id, t]));
       const bySlug = new Map(terms.map((t) => [t.slug, t]));
       for (const it of languageItems) {
         if (it.termId) {
@@ -336,17 +363,17 @@ export async function updateProfileAction(fd: FormData) {
       resolvedLangs = Array.from(lastByTerm.entries()).map(([termId, level]) => ({ termId, level }));
     }
 
-    // Resolver skills (solo existentes)
+    // Resolver skills
     type ResolvedSkill = { termId: string; level: number };
     let resolvedSkills: ResolvedSkill[] = [];
     if (skillItems.length) {
-      const ids = Array.from(new Set(skillItems.map((s) => s.termId).filter(Boolean))) as string[];
+      const ids    = Array.from(new Set(skillItems.map((s) => s.termId).filter(Boolean))) as string[];
       const labels = Array.from(new Set(skillItems.map((s) => s.label?.toLowerCase()).filter(Boolean))) as string[];
-      const terms = await prisma.taxonomyTerm.findMany({
+      const terms  = await prisma.taxonomyTerm.findMany({
         where: {
           kind: "SKILL",
           OR: [
-            ids.length ? { id: { in: ids } } : undefined,
+            ids.length    ? { id:    { in: ids }                     } : undefined,
             labels.length ? { label: { in: labels.map((l) => l!) } } : undefined,
           ].filter(Boolean) as any,
         },
@@ -368,19 +395,34 @@ export async function updateProfileAction(fd: FormData) {
       resolvedSkills = Array.from(lastByTerm.entries()).map(([termId, level]) => ({ termId, level }));
     }
 
-    // Build update
-    const data: any = { name: fullName };
-    if (typeof phone !== "undefined") data.phone = phone;
-    if (typeof safeBirthdate !== "undefined") data.birthdate = safeBirthdate;
-    if (typeof location !== "undefined") data.location = location;
-    if (typeof locationLat !== "undefined") data.locationLat = locationLat;
-    if (typeof locationLng !== "undefined") data.locationLng = locationLng;
-    if (typeof linkedin !== "undefined") data.linkedin = linkedin;
-    if (typeof github !== "undefined") data.github = github;
-    if (typeof resumeUrl !== "undefined") data.resumeUrl = resumeUrl;
-    if (typeof certifications !== "undefined") data.certifications = certifications;
+    // ✅ Build update con campos separados del schema nuevo
+    const data: any = {
+      name:                fullName,
+      firstName:           firstName,
+      lastName:            lastName1,
+      maternalSurname:     lastName2 || null,
+      // ✅ Timestamp de última actualización de perfil
+      profileLastUpdated:  new Date(),
+    };
 
-    // Persistir (incluye EDUCATION)
+    if (typeof phone             !== "undefined") data.phone         = phone;
+    if (typeof safeBirthdate     !== "undefined") data.birthdate     = safeBirthdate;
+    if (typeof location          !== "undefined") data.location      = location;
+    if (typeof locationLat       !== "undefined") data.locationLat   = locationLat;
+    if (typeof locationLng       !== "undefined") data.locationLng   = locationLng;
+    if (typeof linkedin          !== "undefined") data.linkedin      = linkedin;
+    if (typeof github            !== "undefined") data.github        = github;
+    if (typeof resumeUrl         !== "undefined") data.resumeUrl     = resumeUrl;
+    if (typeof certifications    !== "undefined") data.certifications = certifications;
+
+    // Ubicación desglosada
+    if (cityFromForm   !== undefined) { data.city      = cityFromForm;   data.cityNorm  = stripDiacritics(cityFromForm); }
+    if (admin1FromForm !== undefined) { data.admin1     = admin1FromForm; data.admin1Norm = stripDiacritics(admin1FromForm); }
+    if (countryCode    !== undefined) { data.country   = countryCode; }
+    if (cityNorm       !== undefined)   data.cityNorm  = cityNorm;
+    if (admin1Norm     !== undefined)   data.admin1Norm = admin1Norm;
+
+    // Persistir
     await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: me.id }, data });
 
@@ -403,7 +445,7 @@ export async function updateProfileAction(fd: FormData) {
         });
       }
 
-      // Skills con nivel
+      // ✅ Skills con nivel — se guardan en CandidateSkill, no en User.skills[]
       await tx.candidateSkill.deleteMany({ where: { userId: me.id } });
       if (resolvedSkills.length) {
         await tx.candidateSkill.createMany({
@@ -411,19 +453,19 @@ export async function updateProfileAction(fd: FormData) {
         });
       }
 
-      // EDUCATION (sin combobox de estado; status derivado por endDate)
+      // Educación
       await tx.education.deleteMany({ where: { userId: me.id } });
       if (educationItems.length) {
         await tx.education.createMany({
           data: educationItems.map((ed) => ({
-            userId: me.id,
-            level: ed.level,                                 // enum o null
-            status: ed.status,                               // "ONGOING" | "COMPLETED"
-            institution: ed.institution,                     // string (puede ser "")
-            program: ed.program,                             // string | null
-            startDate: ed.startDate,                         // Date | null
-            endDate: ed.endDate,                             // Date | null (ongoing = null)
-            sortIndex: ed.sortIndex,                         // number
+            userId:      me.id,
+            level:       ed.level,
+            status:      ed.status,
+            institution: ed.institution,
+            program:     ed.program,
+            startDate:   ed.startDate,
+            endDate:     ed.endDate,
+            sortIndex:   ed.sortIndex,
           })),
         });
       }

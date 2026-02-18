@@ -5,32 +5,18 @@ import { authOptions } from '@/lib/server/auth';
 import Link from "next/link";
 import { prisma } from '@/lib/server/prisma';
 
-// Form de cliente (tu archivo existente en app/profile/ProfileForm.tsx)
 import ProfileForm from "@/app/profile/ProfileForm";
 import { updateProfileAction } from "../actions";
 
-// Catálogos
 import {
   getSkillsFromDB,
   getCertificationsFromDB,
-  } from "@/lib/server/skills";
+} from "@/lib/server/skills";
 import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
 
 export const metadata = { title: "Mi perfil | Bolsa TI" };
 
-/** Divide nombre completo a { firstName, lastName1, lastName2 } */
-function splitName(full?: string | null) {
-  const parts = (full ?? "").trim().split(/\s+/);
-  if (parts.length === 0) return { firstName: "", lastName1: "", lastName2: "" };
-  if (parts.length === 1) return { firstName: parts[0], lastName1: "", lastName2: "" };
-  if (parts.length === 2) return { firstName: parts[0], lastName1: parts[1], lastName2: "" };
-  const lastName2 = parts.pop() as string;
-  const lastName1 = parts.pop() as string;
-  const firstName = parts.join(" ");
-  return { firstName, lastName1, lastName2 };
-}
-
-/** E.164 -> { phoneCountry, phoneLocal } (heurística simple con MX por defecto) */
+/** E.164 → { phoneCountry, phoneLocal } */
 function parseE164ToParts(e164?: string | null) {
   if (!e164) return { phoneCountry: "52", phoneLocal: "" };
   const digits = e164.replace(/\D+/g, "");
@@ -39,7 +25,7 @@ function parseE164ToParts(e164?: string | null) {
   if (digits.length > 9) countryLen = 3;
   else if (digits.length > 8) countryLen = 2;
   const phoneCountry = digits.slice(0, countryLen) || "52";
-  const phoneLocal = digits.slice(countryLen);
+  const phoneLocal   = digits.slice(countryLen);
   return { phoneCountry, phoneLocal };
 }
 
@@ -50,58 +36,84 @@ export default async function ProfileEditPage() {
   const me = session.user as any;
   if (me.role === "RECRUITER" || me.role === "ADMIN") redirect("/dashboard");
 
-  // Asegura que exista el usuario (MVP)
+  // Asegura que exista el usuario
   const dbUser = await prisma.user.upsert({
-    where: { email: me.email! },
+    where:  { email: me.email! },
     update: {},
     create: {
-      email: me.email!,
-      name: me.name ?? me.email!.split("@")[0],
+      email:        me.email!,
+      name:         me.name ?? me.email!.split("@")[0],
       passwordHash: "demo",
-      role: "CANDIDATE",
+      role:         "CANDIDATE",
     },
   });
 
-  // Datos principales del usuario
+  // ✅ FIX: Leer campos separados del schema nuevo
   const fullUser = await prisma.user.findUnique({
-    where: { id: dbUser.id },
+    where:  { id: dbUser.id },
     select: {
-      id: true,
-      name: true,
-      email: true,
-      phone: true,
-      location: true,
-      birthdate: true,
-      linkedin: true,
-      github: true,
-      resumeUrl: true,
-      skills: true,
+      id:             true,
+      email:          true,
+      // ✅ Campos separados del schema nuevo
+      firstName:      true,
+      lastName:       true,
+      maternalSurname: true,
+      // Legacy (por si hay usuarios viejos sin campos separados)
+      name:           true,
+      phone:          true,
+      location:       true,
+      birthdate:      true,
+      linkedin:       true,
+      github:         true,
+      resumeUrl:      true,
       certifications: true,
+      // Ubicación desglosada
+      city:           true,
+      admin1:         true,
+      country:        true,
     },
   });
   if (!fullUser) redirect("/profile");
 
-  // Experiencias (más reciente primero)
+  // ✅ FIX: Usar campos separados, con fallback al name legacy
+  let firstName: string;
+  let lastName1:  string;
+  let lastName2:  string;
+
+  if (fullUser.firstName) {
+    // Schema nuevo — tiene campos separados
+    firstName = fullUser.firstName ?? "";
+    lastName1 = fullUser.lastName  ?? "";
+    lastName2 = fullUser.maternalSurname ?? "";
+  } else {
+    // Fallback legacy — partir el name completo
+    const parts   = (fullUser.name ?? "").trim().split(/\s+/);
+    lastName2     = parts.length >= 3 ? parts.pop()! : "";
+    lastName1     = parts.length >= 2 ? parts.pop()! : "";
+    firstName     = parts.join(" ");
+  }
+
+  // Experiencias
   const experiences = await prisma.workExperience.findMany({
-    where: { userId: dbUser.id },
+    where:   { userId: dbUser.id },
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
-    select: { id: true, role: true, company: true, startDate: true, endDate: true, isCurrent: true },
+    select:  { id: true, role: true, company: true, startDate: true, endDate: true, isCurrent: true },
   });
 
-  // Educación ordenada
+  // Educación
   const education = await prisma.education.findMany({
-    where: { userId: dbUser.id },
+    where:   { userId: dbUser.id },
     orderBy: [{ sortIndex: "asc" }, { startDate: "desc" }, { createdAt: "desc" }],
-    select: {
+    select:  {
       id: true, level: true, status: true, institution: true, program: true,
       startDate: true, endDate: true, sortIndex: true
     },
   });
 
-  // Idiomas: catálogos + valores del candidato (filtrados por lista oficial)
+  // Idiomas
   const allLangTerms = await prisma.taxonomyTerm.findMany({
-    where: { kind: "LANGUAGE" },
-    select: { id: true, label: true },
+    where:   { kind: "LANGUAGE" },
+    select:  { id: true, label: true },
     orderBy: { label: "asc" },
   });
   const allowedSet = new Set(LANGUAGES_FALLBACK.map((x: string) => x.toLowerCase()));
@@ -111,7 +123,7 @@ export default async function ProfileEditPage() {
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const candidateLangsRaw = await prisma.candidateLanguage.findMany({
-    where: { userId: dbUser.id },
+    where:   { userId: dbUser.id },
     include: { term: { select: { id: true, label: true } } },
   });
   const candidateLangs = candidateLangsRaw
@@ -124,13 +136,11 @@ export default async function ProfileEditPage() {
     getCertificationsFromDB(),
   ]);
 
-  // Términos SKILL (para agregar con id real)
   const skillTermsFromDB = await prisma.taxonomyTerm.findMany({
-    where: { kind: "SKILL" },
-    select: { id: true, label: true },
+    where:   { kind: "SKILL" },
+    select:  { id: true, label: true },
     orderBy: { label: "asc" },
   });
-  // De-dup entre DB terms y fallback list
   const seen = new Set<string>();
   const skillTermOptions = [
     ...skillTermsFromDB
@@ -151,20 +161,18 @@ export default async function ProfileEditPage() {
       }),
   ].sort((a, b) => a.label.localeCompare(b.label));
 
-  // Skills actuales con nivel del candidato
+  // ✅ Skills reales desde CandidateSkill (no del array User.skills)
   const candidateSkillsRaw = await prisma.candidateSkill.findMany({
-    where: { userId: dbUser.id },
+    where:   { userId: dbUser.id },
     include: { term: { select: { id: true, label: true } } },
     orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
   });
   const candidateSkills = candidateSkillsRaw.map((s) => ({
     termId: s.termId,
-    label: s.term?.label || "",
-    level: s.level as 1 | 2 | 3 | 4 | 5,
+    label:  s.term?.label || "",
+    level:  s.level as 1 | 2 | 3 | 4 | 5,
   }));
 
-  // Iniciales para el form
-  const { firstName, lastName1, lastName2 } = splitName(fullUser.name);
   const phoneParts = parseE164ToParts(fullUser.phone);
 
   return (
@@ -177,7 +185,6 @@ export default async function ProfileEditPage() {
             <Link href="/profile/summary" className="text-sm border rounded-lg px-3 py-2 hover:bg-gray-50">
               Ver resumen
             </Link>
-            {/* ⛔️ Se eliminó el botón de CV Builder aquí */}
           </div>
         </div>
 
@@ -200,37 +207,41 @@ export default async function ProfileEditPage() {
                   firstName,
                   lastName1,
                   lastName2,
-                  email: fullUser.email,
+                  email:        fullUser.email,
                   phoneCountry: phoneParts.phoneCountry,
                   phoneLocal:
                     phoneParts.phoneCountry === "52"
                       ? (phoneParts.phoneLocal || "").replace(/\D+/g, "").slice(-10)
                       : (phoneParts.phoneLocal || "").replace(/\D+/g, "").slice(0, 15),
-                  location: fullUser.location ?? "",
-                  birthdate: fullUser.birthdate ? fullUser.birthdate.toISOString().slice(0, 10) : "",
-                  linkedin: fullUser.linkedin ?? "",
-                  github: fullUser.github ?? "",
-                  resumeUrl: fullUser.resumeUrl ?? "",
+                  location:  fullUser.location ?? "",
+                  // ✅ BUG FIX #1: Birthdate con mediodía UTC al leer para evitar desfase
+                  birthdate: fullUser.birthdate
+                    ? fullUser.birthdate.toISOString().slice(0, 10)
+                    : "",
+                  linkedin:       fullUser.linkedin   ?? "",
+                  github:         fullUser.github     ?? "",
+                  resumeUrl:      fullUser.resumeUrl  ?? "",
                   certifications: fullUser.certifications ?? [],
-                  experiences: experiences.map((e) => ({
-                    id: e.id,
-                    role: e.role,
-                    company: e.company,
+                  experiences:    experiences.map((e) => ({
+                    id:        e.id,
+                    role:      e.role,
+                    company:   e.company,
                     startDate: e.startDate ? e.startDate.toISOString().slice(0, 7) : "",
-                    endDate: e.endDate ? e.endDate.toISOString().slice(0, 7) : "",
+                    endDate:   e.endDate   ? e.endDate.toISOString().slice(0, 7)   : "",
                     isCurrent: e.isCurrent,
                   })),
                   languages: candidateLangs,
                   education: education.map((ed, i) => ({
-                    id: ed.id,
-                    level: (ed.level as any) ?? null,
-                    status: (ed.status as any) ?? "COMPLETED",
+                    id:          ed.id,
+                    level:       (ed.level  as any) ?? null,
+                    status:      (ed.status as any) ?? "COMPLETED",
                     institution: ed.institution ?? "",
-                    program: ed.program ?? "",
-                    startDate: ed.startDate ? ed.startDate.toISOString().slice(0, 7) : "",
-                    endDate: ed.endDate ? ed.endDate.toISOString().slice(0, 7) : "",
-                    sortIndex: typeof ed.sortIndex === "number" ? ed.sortIndex : i,
+                    program:     ed.program     ?? "",
+                    startDate:   ed.startDate   ? ed.startDate.toISOString().slice(0, 7) : "",
+                    endDate:     ed.endDate     ? ed.endDate.toISOString().slice(0, 7)   : "",
+                    sortIndex:   typeof ed.sortIndex === "number" ? ed.sortIndex : i,
                   })),
+                  // ✅ BUG FIX #2: Skills desde CandidateSkill, no desde User.skills[]
                   skillsDetailed: candidateSkills,
                 }}
                 certOptions={certOptions}

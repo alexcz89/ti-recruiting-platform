@@ -139,22 +139,35 @@ export async function GET(_request: Request, { params }: { params: { id: string 
       }
     }
 
-    const assessments = await prisma.jobAssessment.findMany({
+    // 🆕 Incluir todos los campos necesarios
+    const jobAssessments = await prisma.jobAssessment.findMany({
       where: { jobId: params.id },
       include: {
         template: {
           select: {
             id: true,
             title: true,
+            description: true,
+            type: true,
             difficulty: true,
             totalQuestions: true,
             timeLimit: true,
             passingScore: true,
+            isActive: true,
           },
         },
       },
       orderBy: { createdAt: "asc" },
     });
+
+    // 🆕 Filtrar solo activos y aplanar estructura
+    const assessments = jobAssessments
+      .filter(ja => ja.template.isActive)
+      .map(ja => ({
+        ...ja.template,
+        isRequired: ja.isRequired,
+        minScore: ja.minScore,
+      }));
 
     return noStoreJson({ assessments }, 200);
   } catch (error) {

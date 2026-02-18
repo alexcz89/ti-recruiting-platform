@@ -59,7 +59,6 @@ export default async function CandidateDetailPage({
       github: true,
       resumeUrl: true,
       role: true,
-      skills: true,
       certifications: true,
       candidateSkills: {
         select: {
@@ -226,7 +225,7 @@ export default async function CandidateDetailPage({
 
   const candidateSkillNames = detailedSkills.length
     ? detailedSkills.map((s) => s.label)
-    : candidate.skills;
+    : [];  // ✅ Si no hay CandidateSkill, array vacío
 
   // Idiomas desde candidateLanguages
   const languageItems =
@@ -470,10 +469,9 @@ export default async function CandidateDetailPage({
                   })}
                 </ul>
               ) : (
-                <List
-                  items={candidate.skills}
-                  emptyLabel="Sin skills capturados"
-                />
+                <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+                  Sin skills capturados
+                </p>
               )}
             </div>
 

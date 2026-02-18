@@ -64,7 +64,13 @@ export default async function JobPipelinePage({ params }: PageProps) {
           name: true,
           email: true,
           resumeUrl: true,
-          skills: true,
+          candidateSkills: {
+            select: {
+              level: true,
+              term: { select: { label: true } },
+            },
+            orderBy: [{ level: "desc" }],
+          }, 
         },
       },
     },
@@ -80,7 +86,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       name: a.candidate.name ?? a.candidate.email,
       email: a.candidate.email,
       resumeUrl: a.candidate.resumeUrl,
-      skills: a.candidate.skills,
+      _skills: (a.candidate.candidateSkills ?? []).map(cs => cs.term.label),
     },
   }));
 

@@ -1,10 +1,40 @@
 // app/assessments/[templateId]/AssessmentQuestion.tsx
 'use client';
 
+import dynamic from 'next/dynamic';
+import { Loader2 } from 'lucide-react';
+
+// Lazy load CodeEditor para mejor performance
+const CodeEditor = dynamic(() => import('@/components/assessments/CodeEditor'), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[700px] items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 rounded-2xl border border-slate-800/50">
+      <div className="text-center">
+        <div className="relative mb-4">
+          <div className="absolute inset-0 animate-ping">
+            <Loader2 className="h-12 w-12 text-violet-500/30 mx-auto" />
+          </div>
+          <Loader2 className="relative h-12 w-12 animate-spin text-violet-500 mx-auto" />
+        </div>
+        <p className="text-sm font-medium text-slate-300">Cargando editor de código...</p>
+        <p className="text-xs text-slate-500 mt-1">Preparando el entorno</p>
+      </div>
+    </div>
+  ),
+});
+
 type Option = {
-  id?: string;        // puede existir
-  value?: string;     // puede existir
-  text?: string;      // tu UI lo usa
+  id?: string;
+  value?: string;
+  text?: string;
+};
+
+type TestCase = {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  isHidden: boolean;
+  points: number;
 };
 
 type Question = {
@@ -15,6 +45,13 @@ type Question = {
   codeSnippet?: string;
   options: Option[];
   allowMultiple: boolean;
+  // 🆕 Campos para CODING
+  type?: 'MULTIPLE_CHOICE' | 'OPEN_ENDED' | 'CODING';
+  language?: string;
+  allowedLanguages?: string[];
+  starterCode?: string;
+  testCases?: TestCase[];
+  points?: number;
 };
 
 type Props = {
@@ -22,6 +59,9 @@ type Props = {
   selectedOptions: string[];
   onAnswer: (options: string[]) => void;
   disabled?: boolean;
+  // 🆕 Props adicionales para CODING
+  attemptId?: string;
+  onCodeSubmit?: (code: string, language: string) => void;
 };
 
 function keyOfOption(o: any) {
@@ -33,7 +73,39 @@ export default function AssessmentQuestion({
   selectedOptions,
   onAnswer,
   disabled = false,
+  attemptId,
+  onCodeSubmit,
 }: Props) {
+  // 🆕 Si es pregunta de CODING, renderizar CodeEditor
+  if (question.type === 'CODING') {
+    if (!attemptId) {
+      return (
+        <div className="p-6 md:p-8 rounded-2xl border border-red-500/30 bg-red-500/5">
+          <p className="text-red-600 font-semibold">❌ Error: attemptId no disponible para pregunta de código</p>
+          <p className="text-sm text-red-500 mt-2">Por favor, recarga la página o contacta soporte.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="rounded-2xl overflow-hidden h-[700px]">
+        <CodeEditor
+          questionId={question.id}
+          attemptId={attemptId}
+          questionText={question.questionText}
+          initialCode={question.starterCode || ''}
+          language={question.language || 'javascript'}
+          allowedLanguages={question.allowedLanguages || ['javascript']}
+          testCases={question.testCases || []}
+          points={question.points || 10}
+          onSubmit={onCodeSubmit}
+          readOnly={disabled}
+        />
+      </div>
+    );
+  }
+
+  // Código existente para MULTIPLE_CHOICE
   const handleSelect = (optionKey: string) => {
     if (disabled) return;
 

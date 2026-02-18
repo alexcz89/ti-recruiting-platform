@@ -1,8 +1,8 @@
 // app/api/assessments/[templateId]/start/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -51,11 +51,45 @@ function sanitizeOptions(raw: unknown) {
   });
 }
 
+function normalizeAllowedLanguages(value: unknown): string | null {
+  if (value == null) return null;
+
+  // si ya es string (guardado como texto JSON) lo regresamos tal cual
+  if (typeof value === "string") return value;
+
+  // si prisma lo trae como Json (array/object), lo serializamos para que el FE haga JSON.parse sin romper
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return null;
+  }
+}
+
 function buildQuestionsPayload(questionsRaw: any[], meta: any | null) {
-  let questions = questionsRaw.map((q) => ({
-    ...q,
-    options: sanitizeOptions(q.options),
-  }));
+  let questions = questionsRaw.map((q) => {
+    const type = String(q?.type ?? "MULTIPLE_CHOICE").toUpperCase();
+
+    const base = {
+      ...q,
+      allowedLanguages: normalizeAllowedLanguages(q.allowedLanguages),
+    };
+
+    if (type === "CODING") {
+      // ✅ Para CODING: enviar todos los testCases (incluidos hidden)
+      // El frontend decidirá cuáles mostrar
+      return {
+        ...base,
+        options: sanitizeOptions(q.options),
+        testCases: Array.isArray(q.testCases) ? q.testCases : [],
+      };
+    }
+
+    // MULTIPLE_CHOICE / OPEN_ENDED: mantenemos el saneado de options
+    return {
+      ...base,
+      options: sanitizeOptions(q.options),
+    };
+  });
 
   const questionOrder: string[] = Array.isArray(meta?.questionOrder) ? meta.questionOrder : [];
   if (questionOrder.length) {
@@ -163,7 +197,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
 
     const now = new Date();
 
-    // Body opcional: { applicationId?: string, token?: string, attemptId?: string }
     let applicationId: string | null = null;
     let token: string | null = null;
     let resumeAttemptId: string | null = null;
@@ -199,12 +232,13 @@ export async function POST(request: Request, { params }: { params: { templateId:
       return jsonNoStore({ error: "Template no encontrado o inactivo" }, 404);
     }
 
-    // ✅ Congelar primitivos para evitar "template possibly null" dentro de closures
     const tmplTimeLimit = template.timeLimit ?? null;
     const tmplShuffleQuestions = Boolean(template.shuffleQuestions);
     const tmplAllowRetry = Boolean(template.allowRetry);
     const tmplMaxAttempts = template.maxAttempts ?? 1;
 
+    // ✅ CAMBIO IMPORTANTE: Traer TODOS los testCases (incluidos hidden)
+    // El frontend los necesita para ejecutar, pero solo mostrará detalles de los no-hidden
     const questionsRaw = await prisma.assessmentQuestion.findMany({
       where: { templateId: params.templateId, isActive: true },
       select: {
@@ -215,10 +249,26 @@ export async function POST(request: Request, { params }: { params: { templateId:
         codeSnippet: true,
         options: true,
         allowMultiple: true,
+        type: true,
+        language: true,
+        allowedLanguages: true,
+        starterCode: true,
+        timesUsed: true,
+        testCases: {
+          // ✅ TODOS los test cases (sin filtro de isHidden)
+          select: {
+            id: true,
+            input: true,
+            expectedOutput: true,
+            isHidden: true,  // ← Importante: incluir este flag
+            points: true,
+            orderIndex: true,
+          },
+          orderBy: { orderIndex: 'asc' },
+        },
       },
     });
 
-    // 1) Si viene token: valida invite y fija applicationId real
     let invite:
       | {
           id: string;
@@ -262,7 +312,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
       resumeAttemptId = null;
     }
 
-    // 2) Validar applicationId (si existe)
     if (applicationId) {
       const app = await prisma.application.findFirst({
         where: { id: applicationId, candidateId: user.id },
@@ -292,7 +341,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
       }
     }
 
-    // límites (por template a nivel candidato)
     const attemptsUsed = await prisma.assessmentAttempt.count({
       where: {
         candidateId: user.id,
@@ -310,7 +358,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
       return jsonNoStore({ error: "Límite de intentos alcanzado" }, 400);
     }
 
-    // Helper para crear intento nuevo (y liberar inviteId si venía ocupado)
     async function createFreshAttempt(params2: {
       oldAttemptId?: string | null;
       oldInviteId?: string | null;
@@ -321,7 +368,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
 
       const created = await prisma.$transaction(async (tx) => {
         if (params2.oldAttemptId && params2.oldInviteId) {
-          // liberar unique inviteId
           await tx.assessmentAttempt.update({
             where: { id: params2.oldAttemptId },
             data: { inviteId: null },
@@ -353,7 +399,7 @@ export async function POST(request: Request, { params }: { params: { templateId:
         return { fresh, metaNew, newExpiresAt };
       });
 
-      const questions = buildQuestionsPayload(questionsRaw, created.metaNew);
+      const questions = buildQuestionsPayload(questionsRaw as any[], created.metaNew);
       const { savedAnswers, savedTimeSpent } = await buildSaved(created.fresh.id);
 
       return jsonNoStore({
@@ -367,10 +413,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
       });
     }
 
-    // 2.5) Si viene token: si ya existe un attempt ligado a ese invite:
-    // - si está final => bloquear
-    // - si está expirado => crear uno nuevo (liberando inviteId)
-    // - si está activo => reusar
     if (invite) {
       const attemptByInvite = await prisma.assessmentAttempt.findFirst({
         where: { inviteId: invite.id, candidateId: user.id, templateId: params.templateId },
@@ -425,7 +467,7 @@ export async function POST(request: Request, { params }: { params: { templateId:
           await markInviteStartedTx(tx, invite.id, now);
         });
 
-        const questions = buildQuestionsPayload(questionsRaw, meta);
+        const questions = buildQuestionsPayload(questionsRaw as any[], meta);
         const { savedAnswers, savedTimeSpent } = await buildSaved(attemptByInvite.id);
 
         return jsonNoStore({
@@ -440,7 +482,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
       }
     }
 
-    // 3) resumeAttemptId sin token
     if (resumeAttemptId) {
       const attempt = await prisma.assessmentAttempt.findUnique({
         where: { id: resumeAttemptId },
@@ -459,14 +500,9 @@ export async function POST(request: Request, { params }: { params: { templateId:
 
       if (!attempt) return jsonNoStore({ error: "Attempt no encontrado" }, 404);
       if (attempt.candidateId !== user.id) return jsonNoStore({ error: "No autorizado" }, 403);
-      if (attempt.templateId !== params.templateId) {
-        return jsonNoStore({ error: "Attempt no corresponde a este template" }, 400);
-      }
-      if (isAttemptFinal(attempt.status)) {
-        return jsonNoStore({ error: "El intento ya fue completado" }, 400);
-      }
+      if (attempt.templateId !== params.templateId) return jsonNoStore({ error: "Attempt no corresponde a este template" }, 400);
+      if (isAttemptFinal(attempt.status)) return jsonNoStore({ error: "El intento ya fue completado" }, 400);
 
-      // ✅ si el attempt que intentan reanudar ya expiró, crear uno nuevo
       if (isExpired(attempt.expiresAt, now)) {
         return createFreshAttempt({
           oldAttemptId: attempt.inviteId ? attempt.id : null,
@@ -507,7 +543,7 @@ export async function POST(request: Request, { params }: { params: { templateId:
         }
       });
 
-      const questions = buildQuestionsPayload(questionsRaw, meta);
+      const questions = buildQuestionsPayload(questionsRaw as any[], meta);
       const { savedAnswers, savedTimeSpent } = await buildSaved(attempt.id);
 
       return jsonNoStore({
@@ -521,10 +557,9 @@ export async function POST(request: Request, { params }: { params: { templateId:
       });
     }
 
-    // 4) fallback: crear intento nuevo
     const expiresAt = computeExpiresAt(now, tmplTimeLimit);
     const meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
-    const questions = buildQuestionsPayload(questionsRaw, meta);
+    const questions = buildQuestionsPayload(questionsRaw as any[], meta);
 
     const created = await prisma.assessmentAttempt.create({
       data: {

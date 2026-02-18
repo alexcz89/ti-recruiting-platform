@@ -17,7 +17,7 @@ type Candidate = {
   name: string;
   email: string;
   resumeUrl?: string | null;
-  skills?: string[] | null;
+  _skills?: string[]; 
 };
 
 type AppCard = {
@@ -301,10 +301,10 @@ export default function Kanbanboard({
           ) : null}
         </header>
 
-        {Array.isArray(card.candidate.skills) &&
-          card.candidate.skills.length > 0 && (
+        {Array.isArray(card.candidate._skills) &&
+          card.candidate._skills.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
-              {card.candidate.skills.slice(0, 4).map((s) => (
+              {card.candidate._skills.slice(0, 4).map((s) => (
                 <span
                   key={s}
                   className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
@@ -312,9 +312,9 @@ export default function Kanbanboard({
                   {s}
                 </span>
               ))}
-              {card.candidate.skills.length > 4 && (
+              {card.candidate._skills.length > 4 && (
                 <span className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                  +{card.candidate.skills.length - 4}
+                  +{card.candidate._skills.length - 4}
                 </span>
               )}
             </div>

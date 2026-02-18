@@ -120,7 +120,6 @@ async function seedDemoData() {
         github: "https://github.com/carolinatorres",
         resumeUrl: "/resumes/carolina.pdf",
         // Estos arrays legacy siguen siendo strings en tu schema
-        skills: ["React", "Node.js", "AWS"],
         certifications: ["CompTIA"],
       },
     });

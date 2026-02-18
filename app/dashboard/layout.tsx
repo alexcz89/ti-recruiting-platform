@@ -30,7 +30,8 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
+  // ✅ Cambiado a coincidencia exacta para evitar rutas múltiples activas
+  const isActive = (href: string) => pathname === href;
 
   return (
     <main className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 lg:px-6 py-4 lg:py-6">
