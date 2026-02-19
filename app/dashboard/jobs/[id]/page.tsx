@@ -5,7 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
-import Kanbanboard from "./Kanbanboard";
+import Kanbanboard from "./KanbanBoard";
 import { ApplicationInterest, ApplicationStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
