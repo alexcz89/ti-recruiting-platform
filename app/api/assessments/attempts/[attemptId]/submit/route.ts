@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
-import { NotificationService } from '@/lib/notifications/service'; // 🔔 NUEVO
+import { NotificationService } from '@/lib/notifications/service';
+// ✅ NUEVO: Sistema de créditos
+import { chargeCompletionCredits } from '@/lib/assessments/credits';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,14 +28,16 @@ export async function POST(_request: Request, { params }: { params: { attemptId:
       include: {
         template: { select: { passingScore: true, sections: true } },
         answers: { include: { question: { select: { section: true } } } },
-        // 🔔 NUEVO: Incluir datos para la notificación
+        // 🔔 Incluir datos para la notificación
         invite: {
           select: {
+            id: true, // ✅ NUEVO: Necesario para cobrar créditos
             job: {
               select: {
                 id: true,
                 title: true,
-                recruiterId: true, // Campo correcto
+                recruiterId: true,
+                companyId: true, // ✅ NUEVO: Para logs
               },
             },
           },
@@ -164,7 +168,36 @@ export async function POST(_request: Request, { params }: { params: { attemptId:
       throw e;
     }
 
-    // 🔔 NUEVO: Notificar al recruiter que el assessment fue completado
+    // ✅ NUEVO: Cobrar créditos adicionales al completar
+    (async () => {
+      try {
+        if (!attempt.inviteId) {
+          console.warn(
+            "[POST /api/assessments/submit] No inviteId, skipping credit charge " +
+            `(attempt: ${attempt.id})`
+          );
+          return;
+        }
+
+        const chargeResult = await chargeCompletionCredits(attempt.inviteId);
+
+        if (chargeResult.success) {
+          console.log(
+            `[POST /api/assessments/submit] ✓ Credits charged for invite ${attempt.inviteId} ` +
+            `(company: ${attempt.invite?.job?.companyId}, candidate: ${attempt.candidateId})`
+          );
+        } else {
+          console.error(
+            `[POST /api/assessments/submit] ✗ Failed to charge credits: ${chargeResult.message}`
+          );
+        }
+      } catch (creditErr) {
+        console.error("[POST /api/assessments/submit] Credit charge error:", creditErr);
+        // No fallar el submit por error de créditos
+      }
+    })();
+
+    // 🔔 Notificar al recruiter que el assessment fue completado
     (async () => {
       try {
         // Obtener recruiter del job

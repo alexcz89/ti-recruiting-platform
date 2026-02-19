@@ -1,4 +1,4 @@
-// JobWizard/types.ts
+// app/dashboard/jobs/new/JobWizard/types.ts
 import { z } from "zod";
 
 export type LocationType = "REMOTE" | "HYBRID" | "ONSITE";
@@ -73,6 +73,7 @@ export type JobWizardProps = {
     skills?: Array<{ name: string; required: boolean }>;
     certs?: string[];
     languages?: Array<{ name: string; level: LanguageProficiency }>;
+    assessmentTemplateId?: string | null; // ✅ NUEVO
   };
 };
 
@@ -114,7 +115,9 @@ export const jobSchema = z.object({
   aguinaldoDias: z.number().min(0),
   vacacionesDias: z.number().min(0),
   primaVacPct: z.number().min(0).max(100),
-  // Paso 4
+  // ✅ Paso 4 - Evaluaciones (NUEVO)
+  assessmentTemplateId: z.string().nullable().optional(),
+  // Paso 5 (antes paso 4)
   descriptionHtml: z.string().optional(),
   descriptionPlain: z.string().min(50, "Mínimo 50 caracteres."),
   minDegree: z.enum(["HIGHSCHOOL", "TECH", "BACHELOR", "MASTER", "PHD"]),

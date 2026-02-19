@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
+// ✅ NUEVO: Sistema de créditos
+import { getAssessmentCost } from '@/lib/assessments/pricing';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,15 +46,49 @@ export async function GET(_request: Request) {
         sections: true,
         penalizeWrong: true,
         shuffleQuestions: true,
+        // ✅ NUEVO: Campos de créditos
+        baseCreditCost: true,
+        pricingConfig: true,
         createdAt: true,
         updatedAt: true,
         _count: {
-          select: { questions: true, codingChallenges: true },
+          select: { 
+            questions: true, 
+            codingChallenges: true,
+            // ✅ NUEVO: Stats de uso
+            attempts: true,
+            invites: true,
+          },
         },
       },
     });
 
-    return jsonNoStore({ templates });
+    // ✅ NUEVO: Agregar info de costos calculados a cada template
+    const templatesWithCosts = templates.map((template) => {
+      // Calcular costo real basado en tipo y dificultad
+      const cost = getAssessmentCost(template.type, template.difficulty);
+      
+      return {
+        ...template,
+        // Convertir Decimal a number
+        baseCreditCost: Number(template.baseCreditCost),
+        // ✅ NUEVO: Info de costos
+        pricing: {
+          reserve: cost.reserve,
+          complete: cost.complete,
+          total: cost.total,
+        },
+        // ✅ NUEVO: Stats de uso
+        usage: {
+          totalQuestions: template._count.questions,
+          totalCodingChallenges: template._count.codingChallenges,
+          totalAttempts: template._count.attempts,
+          totalInvites: template._count.invites,
+        },
+      };
+    });
+
+    return jsonNoStore({ templates: templatesWithCosts });
   } catch (error) {
     console.error("Error fetching templates:", error);
     return jsonNoStore({ error: "Error al cargar templates" }, 500);

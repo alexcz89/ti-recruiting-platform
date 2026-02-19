@@ -6,6 +6,9 @@ import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
 import AssignAssessmentForm from "./AssignAssessmentForm";
+// ✅ NUEVO: Info de créditos
+import { getCreditBalance } from '@/lib/assessments/credits';
+import { formatCredits } from '@/lib/assessments/pricing';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,6 +49,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
           id: true,
           title: true,
           location: true,
+          companyId: true, // ✅ NUEVO: Necesario para créditos
           company: { select: { name: true } },
         },
       })
@@ -56,6 +60,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
             id: true,
             title: true,
             location: true,
+            companyId: true, // ✅ NUEVO: Necesario para créditos
             company: { select: { name: true } },
           },
         })
@@ -71,6 +76,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
         select: {
           id: true,
           title: true,
+          type: true, // ✅ NUEVO: Para calcular costos
           difficulty: true,
           totalQuestions: true,
           timeLimit: true,
@@ -81,6 +87,13 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
   });
 
   const count = existingAssessments.length;
+
+  // ✅ NUEVO: Obtener balance de créditos de la empresa
+  const creditBalance = await getCreditBalance(job.companyId);
+  const availableCredits = creditBalance?.available || 0;
+  const reservedCredits = creditBalance?.reserved || 0;
+  const effectiveBalance = creditBalance?.effectiveBalance || 0;
+  const hasLowCredits = effectiveBalance < 5;
 
   return (
     <main className="max-w-none p-0">
@@ -125,7 +138,88 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
           </div>
         </header>
 
-        {/* ✅ Estado actual: lista / empty-state */}
+        {/* ✅ NUEVO: Balance de Créditos */}
+        <section className="rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-50/50 to-purple-50/50 p-4 shadow-sm dark:border-violet-800/70 dark:from-violet-900/10 dark:to-purple-900/10">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+                Balance de Créditos
+              </h2>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                Los créditos se consumen cuando los candidatos completan las evaluaciones
+              </p>
+            </div>
+
+            <div className="flex items-center gap-6">
+              <div className="text-right">
+                <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">
+                  {formatCredits(availableCredits)}
+                </p>
+                <p className="text-xs text-zinc-500">disponibles</p>
+              </div>
+              {reservedCredits > 0 && (
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-amber-600 dark:text-amber-400">
+                    {formatCredits(reservedCredits)}
+                  </p>
+                  <p className="text-xs text-zinc-500">reservados</p>
+                </div>
+              )}
+              <Link
+                href="/dashboard/billing/credits"
+                className="rounded-full border border-violet-200 dark:border-violet-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+              >
+                Ver historial →
+              </Link>
+            </div>
+          </div>
+
+          {/* ✅ Warning si hay pocos créditos */}
+          {hasLowCredits && (
+            <div className="mt-3 p-3 rounded-lg bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
+              <div className="flex items-start gap-2">
+                <svg className="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <div className="text-xs">
+                  <p className="font-semibold text-amber-900 dark:text-amber-100">Créditos Bajos</p>
+                  <p className="text-amber-800 dark:text-amber-200 mt-0.5">
+                    Tienes menos de 5 créditos disponibles. Los nuevos candidatos no recibirán evaluaciones automáticamente.{" "}
+                    <Link href="/dashboard/billing/credits" className="underline font-medium">
+                      Comprar más créditos
+                    </Link>
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* ✅ Info de cómo funcionan */}
+        <section className="rounded-2xl border border-blue-200/70 bg-blue-50/50 p-4 dark:border-blue-800/70 dark:bg-blue-900/10">
+          <div className="flex gap-3">
+            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div className="text-sm">
+              <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                ¿Cómo funcionan las evaluaciones automáticas?
+              </p>
+              <ul className="text-blue-800 dark:text-blue-200 space-y-1 text-xs">
+                <li>• Cuando un candidato aplica, se le envía automáticamente la evaluación por correo</li>
+                <li>• Se reservan 0.5 créditos al enviar y se cobra el resto cuando completa</li>
+                <li>• Si no completa en 7 días, se reembolsan los créditos reservados</li>
+                <li>• Los resultados aparecen automáticamente en el dashboard</li>
+                <li>• El costo varía según el tipo (MCQ: 1.0, Coding: 2.5-4.0 créditos)</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Estado actual: lista / empty-state */}
         <section className="rounded-2xl border border-zinc-200/70 bg-white/70 p-4 shadow-sm dark:border-zinc-800/70 dark:bg-zinc-950/30">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -146,7 +240,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
 
           {count === 0 ? (
             <div className="mt-3 rounded-xl border border-dashed border-zinc-200 bg-white/60 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/30 dark:text-zinc-300">
-              Selecciona un assessment abajo y presiona <span className="font-medium">“Asignar assessment”</span>.
+              Selecciona un assessment abajo y presiona <span className="font-medium">&quot;Asignar assessment&quot;</span>.
             </div>
           ) : (
             <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -154,6 +248,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
                 <thead className="bg-zinc-50 text-xs text-zinc-600 dark:bg-zinc-900/50 dark:text-zinc-300">
                   <tr>
                     <th className="px-3 py-2 font-medium">Assessment</th>
+                    <th className="px-3 py-2 font-medium">Tipo</th>
                     <th className="px-3 py-2 font-medium">Reglas</th>
                     <th className="px-3 py-2 font-medium">Tiempo</th>
                     <th className="px-3 py-2 font-medium">Preguntas</th>
@@ -168,6 +263,12 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
                         <div className="text-xs text-zinc-500 dark:text-zinc-400">
                           {a.template?.difficulty ? String(a.template.difficulty) : "—"}
                         </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs">
+                          {a.template?.type === "CODING" ? "💻" : "📝"}
+                          {a.template?.type ?? "—"}
+                        </span>
                       </td>
                       <td className="px-3 py-2">
                         <div className="text-sm">
@@ -196,7 +297,12 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
           )}
         </section>
 
-        <AssignAssessmentForm jobId={job.id} existingAssessments={existingAssessments as any} />
+        {/* ✅ MODIFICADO: Pasar créditos al formulario */}
+        <AssignAssessmentForm 
+          jobId={job.id} 
+          existingAssessments={existingAssessments as any}
+          availableCredits={availableCredits}
+        />
       </div>
     </main>
   );

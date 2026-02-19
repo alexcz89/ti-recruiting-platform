@@ -1,4 +1,4 @@
-// JobWizard/utils/helpers.ts
+// app/dashboard/jobs/new/JobWizard/utils/helpers.ts
 import DOMPurify from "dompurify";
 import {
   EmploymentType,
@@ -185,6 +185,8 @@ export function makeDefaultValues({
     aguinaldoDias,
     vacacionesDias,
     primaVacPct,
+    // ✅ NUEVO: Evaluación
+    assessmentTemplateId: initial?.assessmentTemplateId ?? null,
     descriptionHtml: html,
     descriptionPlain: plain,
     minDegree: initial?.minDegree ?? "BACHELOR",

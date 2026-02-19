@@ -248,7 +248,7 @@ model Invoice {
   status    InvoiceStatus @default(PENDING)
   createdAt DateTime      @default(now())
   issuedAt  DateTime?
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt DateTime      @default(now()) @updatedAt
 
   @@index([companyId, status])
   @@index([uuid])
@@ -295,6 +295,17 @@ model Company {
   invoices                Invoice[]
   assessmentInviteCharges AssessmentInviteChargeLedger[]
 
+  // ✅ NUEVO: Sistema de créditos para evaluaciones
+  assessmentCredits         Decimal   @default(0) @db.Decimal(10, 2)
+  assessmentCreditsUsed     Decimal   @default(0) @db.Decimal(10, 2)
+  assessmentCreditsReserved Decimal   @default(0) @db.Decimal(10, 2)
+  lastCreditRefill          DateTime?
+
+  // Plan de evaluaciones
+  assessmentPlan                String? // "BASIC" | "PRO" | "ENTERPRISE"
+  assessmentPlanCreditsPerMonth Int       @default(0)
+  assessmentPlanStartedAt       DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
@@ -303,28 +314,29 @@ model Company {
   @@index([cityNorm])
   @@index([country, city])
   @@index([billingPlan])
+  @@index([assessmentCredits])
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String?
-  role         Role     @default(CANDIDATE)
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  role          Role      @default(CANDIDATE)
   emailVerified DateTime?
 
   // ✅ NOMBRES ESTRUCTURADOS
   // IMPORTANTE: 'name' se mantiene temporalmente para migración
   // TODO: Remover después de migrar datos existentes
-  name           String? // DEPRECATED - usar firstName/lastName
-  firstName      String? // Será REQUERIDO después de migración
-  lastName       String? // Será REQUERIDO después de migración
-  middleName     String? // Segundo nombre (opcional)
+  name            String? // DEPRECATED - usar firstName/lastName
+  firstName       String? // Será REQUERIDO después de migración
+  lastName        String? // Será REQUERIDO después de migración
+  middleName      String? // Segundo nombre (opcional)
   maternalSurname String? // ✅ NUEVO: Apellido materno (común en LATAM)
 
   // CONTACTO
   phone            String?
   phoneVerified    DateTime?
-  phoneCountryCode String?  @default("+52")
+  phoneCountryCode String?   @default("+52")
 
   // UBICACIÓN (mantener estructura existente)
   location    String?
@@ -348,9 +360,9 @@ model User {
   gender Gender?
 
   // ✅ NUEVO: ONBOARDING Y COMPLETITUD
-  onboardingStep     Int     @default(0) // 0-3: pasos del signup completados
-  profileCompleted   Boolean @default(false) // true cuando perfil está completo
-  profileCompletion  Int     @default(0) // 0-100: porcentaje de completitud
+  onboardingStep    Int     @default(0) // 0-3: pasos del signup completados
+  profileCompleted  Boolean @default(false) // true cuando perfil está completo
+  profileCompletion Int     @default(0) // 0-100: porcentaje de completitud
 
   // ✅ NUEVO: METADATA DE SIGNUP
   signupSource    String? // "organic", "linkedin", "google", "referral"
@@ -359,13 +371,13 @@ model User {
   signupUserAgent String?
 
   // ✅ NUEVO: PREFERENCIAS DE BÚSQUEDA LABORAL
-  seekingRemote    Boolean @default(false)
-  seekingHybrid    Boolean @default(false)
-  seekingOnsite    Boolean @default(false)
+  seekingRemote    Boolean   @default(false)
+  seekingHybrid    Boolean   @default(false)
+  seekingOnsite    Boolean   @default(false)
   desiredSalaryMin Int?
   desiredSalaryMax Int?
-  desiredCurrency  String? @default("MXN")
-  openToRelocate   Boolean @default(false)
+  desiredCurrency  String?   @default("MXN")
+  openToRelocate   Boolean   @default(false)
   availableFrom    DateTime?
 
   // ✅ NUEVO: NOTIFICACIONES POR TIPO DE TRABAJO
@@ -384,7 +396,7 @@ model User {
 
   // ✅ NUEVO: TIMESTAMPS MEJORADOS
   createdAt          DateTime  @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt          DateTime  @default(now()) @updatedAt
   lastLoginAt        DateTime?
   lastActivityAt     DateTime?
   profileLastUpdated DateTime?
@@ -398,8 +410,8 @@ model User {
 
   // RELACIONES (mantener todas las existentes)
   applications              Application[]
-  jobs                      Job[]                   @relation("PostedJobs")
-  company                   Company?                @relation(fields: [companyId], references: [id])
+  jobs                      Job[]                    @relation("PostedJobs")
+  company                   Company?                 @relation(fields: [companyId], references: [id])
   companyId                 String?
   candidateSkills           CandidateSkill[]
   candidateCredentials      CandidateCredential[]
@@ -407,11 +419,11 @@ model User {
   recruiterProfile          RecruiterProfile?
   experiences               WorkExperience[]
   education                 Education[]
-  createdTemplates          JobTemplate[]           @relation("UserCreatedTemplates")
+  createdTemplates          JobTemplate[]            @relation("UserCreatedTemplates")
   resumes                   Resume[]
   assessmentAttempts        AssessmentAttempt[]
-  assessmentInvitesReceived AssessmentInvite[]      @relation("AssessmentInviteCandidate")
-  assessmentInvitesSent     AssessmentInvite[]      @relation("AssessmentInviteInvitedBy")
+  assessmentInvitesReceived AssessmentInvite[]       @relation("AssessmentInviteCandidate")
+  assessmentInvitesSent     AssessmentInvite[]       @relation("AssessmentInviteInvitedBy")
   codeExecutions            CodeExecution[]
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
@@ -446,7 +458,7 @@ model WorkExperience {
   isCurrent   Boolean   @default(false)
   description String?
   createdAt   DateTime  @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt   DateTime  @default(now()) @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -564,11 +576,11 @@ model Application {
   resumeUrl   String?
   coverLetter String?
   status      ApplicationStatus @default(SUBMITTED)
-  
+
   // ✅ TIMESTAMPS MEJORADOS
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
-  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
   // ✅ NUEVO: Timestamps detallados por estado
   submittedAt DateTime  @default(now())
   reviewingAt DateTime?
@@ -637,7 +649,7 @@ model Plan {
   maxActiveJobs     Int?
   maxUsers          Int?
   createdAt         DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt         DateTime @default(now()) @updatedAt
 
   subscriptions Subscription[]
 }
@@ -670,7 +682,7 @@ model JobTemplate {
   payload Json
 
   createdAt  DateTime  @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt  DateTime  @default(now()) @updatedAt
   lastUsedAt DateTime?
 
   creatorId String?
@@ -714,10 +726,10 @@ model RecruiterProfile {
   bio            String? @db.Text
 
   // ✅ NUEVO: Metadata de actividad
-  activeJobsCount   Int @default(0)
-  totalHires        Int @default(0)
+  activeJobsCount   Int  @default(0)
+  totalHires        Int  @default(0)
   avgTimeToHire     Int? // Días promedio
-  totalApplications Int @default(0)
+  totalApplications Int  @default(0)
 
   // ✅ NUEVO: Preferencias
   preferredLanguage String? @default("es")
@@ -727,7 +739,7 @@ model RecruiterProfile {
   approvedAt     DateTime?
   approvedBy     String?
   rejectedAt     DateTime?
-  rejectedReason String?  @db.Text
+  rejectedReason String?   @db.Text
 
   // ✅ NUEVO: Especialización
   specializations String[] @default([]) // ["tech", "sales", "marketing"]
@@ -770,7 +782,7 @@ model TaxonomyTerm {
   aliases     String[]     @default([])
   description String?
   createdAt   DateTime     @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt   DateTime     @default(now()) @updatedAt
 
   requiredByJobs  JobRequiredSkill[]
   candidateSkills CandidateSkill[]
@@ -875,6 +887,11 @@ model AssessmentTemplate {
   maxAttempts      Int     @default(1)
   shuffleQuestions Boolean @default(true)
   penalizeWrong    Boolean @default(false)
+  // ✅ NUEVO: Configuración de costos
+  baseCreditCost   Decimal @default(1.0) @db.Decimal(10, 2)
+
+  // Metadata de pricing
+  pricingConfig Json? // { reserve: 0.5, onComplete: 0.5, refundIfNotCompleted: true }
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -900,16 +917,33 @@ model AssessmentInviteChargeLedger {
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  kind   CreditLedgerKind @default(ASSESSMENT_INVITE)
-  cycle  Int
-  amount Int              @default(1)
+  kind  CreditLedgerKind @default(ASSESSMENT_INVITE)
+  cycle Int
+
+  // ✅ CAMBIAR: amount ahora es Decimal
+  amount Decimal @db.Decimal(10, 2)
+
+  // ✅ NUEVO: Tracking detallado de estados
+  status String @default("RESERVED") // RESERVED | CHARGED | REFUNDED | CANCELLED
+
+  reservedAmount Decimal? @db.Decimal(10, 2)
+  chargedAmount  Decimal? @db.Decimal(10, 2)
+  refundedAmount Decimal? @db.Decimal(10, 2)
+
+  // Metadata
+  assessmentType AssessmentType?
+  difficulty     AssessmentDifficulty?
 
   meta Json?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  @@unique([inviteId, kind, cycle])
-  @@index([companyId, createdAt])
+  // ✅ NUEVO: Índices para queries eficientes
+  @@unique([inviteId, kind, cycle, status])
+  @@index([companyId, status])
+  @@index([status, createdAt])
+  @@index([cycle])
   @@index([inviteId])
 }
 
