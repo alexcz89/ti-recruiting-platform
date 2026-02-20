@@ -10,9 +10,6 @@ import { ensureUserCompanyByEmail } from "@/lib/company";
 const prisma = (globalThis as any).prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") (globalThis as any).prisma = prisma;
 
-/* ===========================================================
- * NextAuth configuration
- * =========================================================== */
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -20,7 +17,7 @@ export const authOptions: AuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
-        role: { label: "Role", type: "text" }, // "RECRUITER" | "CANDIDATE"
+        role: { label: "Role", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
@@ -39,6 +36,7 @@ export const authOptions: AuthOptions = {
             role: true,
             companyId: true,
             passwordHash: true,
+            emailVerified: true, // 👈 agregado
           },
         });
 
@@ -58,12 +56,16 @@ export const authOptions: AuthOptions = {
         }
 
         // 🎭 3) Rol: solo permitimos entrar al rol correcto
-        // (Admin puede entrar a ambos si quieres; aquí lo dejamos estricto)
         if (dbUser.role !== intendedRole) {
           return null;
         }
 
-        // 🏢 4) Si es RECRUITER y no tiene companyId, ligamos por dominio
+        // 📧 4) Verificar que el email esté confirmado
+        if (!dbUser.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED:" + email);
+        }
+
+        // 🏢 5) Si es RECRUITER y no tiene companyId, ligamos por dominio
         let companyId = dbUser.companyId ?? null;
         if (intendedRole === "RECRUITER" && !companyId) {
           const company = await ensureUserCompanyByEmail({
@@ -92,7 +94,6 @@ export const authOptions: AuthOptions = {
 
   callbacks: {
     async jwt({ token, user }) {
-      // Primer login → propaga datos básicos
       if (user) {
         token.email = (user as any).email;
         (token as any).id = (user as any).id;
@@ -100,7 +101,6 @@ export const authOptions: AuthOptions = {
         (token as any).companyId = (user as any).companyId ?? null;
       }
 
-      // Renovaciones → sincroniza SIEMPRE contra la BD (incluye emailVerified)
       const email = token.email as string | undefined;
       if (email) {
         const dbUser = await prisma.user.findUnique({
