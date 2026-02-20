@@ -1,9 +1,10 @@
-import 'server-only';
-
 // lib/server/auth.ts
+
+import 'server-only';
 import { PrismaClient, Role } from "@prisma/client";
 import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { ensureUserCompanyByEmail } from "@/lib/company";
 
@@ -12,6 +13,17 @@ if (process.env.NODE_ENV !== "production") (globalThis as any).prisma = prisma;
 
 export const authOptions: AuthOptions = {
   providers: [
+    GoogleProvider({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      authorization: {
+        params: {
+          prompt: "consent",
+          access_type: "offline",
+          response_type: "code",
+        },
+      },
+    }),
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -26,7 +38,6 @@ export const authOptions: AuthOptions = {
         const intendedRole: Role =
           credentials.role === "RECRUITER" ? "RECRUITER" : "CANDIDATE";
 
-        // 🔎 1) Buscar usuario en BD
         const dbUser = await prisma.user.findUnique({
           where: { email },
           select: {
@@ -36,36 +47,24 @@ export const authOptions: AuthOptions = {
             role: true,
             companyId: true,
             passwordHash: true,
-            emailVerified: true, // 👈 agregado
+            emailVerified: true,
           },
         });
 
-        // ❌ Si no existe usuario → credenciales inválidas
-        if (!dbUser || !dbUser.passwordHash) {
-          return null;
-        }
+        if (!dbUser || !dbUser.passwordHash) return null;
 
-        // 🔐 2) Verificar contraseña con bcrypt
         const isValidPassword = await bcrypt.compare(
           credentials.password,
           dbUser.passwordHash
         );
+        if (!isValidPassword) return null;
 
-        if (!isValidPassword) {
-          return null;
-        }
+        if (dbUser.role !== intendedRole) return null;
 
-        // 🎭 3) Rol: solo permitimos entrar al rol correcto
-        if (dbUser.role !== intendedRole) {
-          return null;
-        }
-
-        // 📧 4) Verificar que el email esté confirmado
         if (!dbUser.emailVerified) {
           throw new Error("EMAIL_NOT_VERIFIED:" + email);
         }
 
-        // 🏢 5) Si es RECRUITER y no tiene companyId, ligamos por dominio
         let companyId = dbUser.companyId ?? null;
         if (intendedRole === "RECRUITER" && !companyId) {
           const company = await ensureUserCompanyByEmail({
@@ -78,7 +77,6 @@ export const authOptions: AuthOptions = {
           companyId = company?.id ?? null;
         }
 
-        // ✅ Usuario autenticado
         return {
           id: dbUser.id,
           name: dbUser.name ?? email.split("@")[0],
@@ -93,7 +91,41 @@ export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
 
   callbacks: {
-    async jwt({ token, user }) {
+    async signIn({ user, account }) {
+      // Solo Google sign-in requiere lógica especial
+      if (account?.provider === "google") {
+        const email = user.email?.toLowerCase().trim();
+        if (!email) return false;
+
+        // Buscar si ya existe el usuario
+        const existingUser = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true, role: true, emailVerified: true },
+        });
+
+        if (existingUser) {
+          // Solo permitir Google sign-in para CANDIDATOS
+          if (existingUser.role !== "CANDIDATE") return false;
+
+          // Marcar email como verificado si no lo estaba
+          if (!existingUser.emailVerified) {
+            await prisma.user.update({
+              where: { email },
+              data: { emailVerified: new Date() },
+            });
+          }
+          return true;
+        }
+
+        // Si no existe, no creamos cuenta automáticamente
+        // El usuario debe registrarse primero
+        return "/auth/signin?error=google_no_account";
+      }
+
+      return true;
+    },
+
+    async jwt({ token, user, account }) {
       if (user) {
         token.email = (user as any).email;
         (token as any).id = (user as any).id;
@@ -135,6 +167,7 @@ export const authOptions: AuthOptions = {
 
   pages: {
     signIn: "/auth/signin",
+    error: "/auth/signin",
   },
 
   debug: process.env.NODE_ENV !== "production",
