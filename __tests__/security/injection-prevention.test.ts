@@ -19,20 +19,17 @@ describe('Security - Injection Prevention', () => {
   describe('SQL Injection Prevention', () => {
     it('should sanitize SQL injection in email rate limit', () => {
       sqlInjectionPayloads.forEach(payload => {
-        // Should not crash or allow bypass
         expect(() => checkEmailRateLimit(payload)).not.toThrow();
       });
     });
 
     it('should handle SQL injection attempts in formatRetryAfter', () => {
-      // Attempting to inject through number parameter
       const maliciousInputs = [
         "1'; DROP TABLE users--",
         "1 OR 1=1",
       ];
 
       maliciousInputs.forEach(input => {
-        // Should handle gracefully (parseFloat will convert to number)
         const result = formatRetryAfter(parseFloat(input) || 0);
         expect(typeof result).toBe('string');
       });
@@ -47,10 +44,10 @@ describe('Security - Injection Prevention', () => {
       const response = jsonSuccess(maliciousData);
       const body = await response.json();
 
-      // Data should be properly escaped in JSON
-      const jsonString = JSON.stringify(body);
-      expect(jsonString).not.toContain('DROP TABLE');
-      expect(body.data.name).toBe(maliciousData.name); // But preserve original data
+      // JSON serialization preserves data safely as strings — not executed as SQL
+      expect(body.data.name).toBe(maliciousData.name);
+      expect(body.data.email).toBe(maliciousData.email);
+      expect(() => JSON.stringify(body)).not.toThrow();
     });
 
     it('should prevent SQL injection in error messages', async () => {
@@ -58,9 +55,7 @@ describe('Security - Injection Prevention', () => {
       const response = jsonError(maliciousMessage);
       const body = await response.json();
 
-      // Error message should be safely stored
       expect(body.error.message).toBe(maliciousMessage);
-      // But when serialized, should be safe
       expect(JSON.stringify(body)).toBeDefined();
     });
   });
@@ -68,10 +63,7 @@ describe('Security - Injection Prevention', () => {
   describe('XSS Prevention', () => {
     it('should prevent XSS in email parameter', () => {
       xssPayloads.forEach(payload => {
-        // Email validation should reject or sanitize XSS attempts
         expect(() => checkEmailRateLimit(payload)).not.toThrow();
-        
-        // The payload should not be executed (no <script> tags should work)
         const result = checkEmailRateLimit(payload);
         expect(result).toHaveProperty('allowed');
       });
@@ -85,13 +77,13 @@ describe('Security - Injection Prevention', () => {
       });
 
       const body = await response.json();
-      
-      // JSON should be properly escaped
-      const jsonString = JSON.stringify(body);
-      expect(jsonString).not.toContain('<script>alert');
-      
-      // But original data should be preserved
+
+      // Data is preserved as plain string — safe because JSON doesn't execute scripts
+      // XSS prevention happens at the HTML rendering layer, not JSON serialization
       expect(body.data.message).toBe(xssAttempt);
+      // Content-Type application/json prevents script execution in browsers
+      expect(response.headers.get('Content-Type')).toBe('application/json');
+      expect(() => JSON.stringify(body)).not.toThrow();
     });
 
     it('should prevent XSS in error responses', async () => {
@@ -99,21 +91,16 @@ describe('Security - Injection Prevention', () => {
       const response = badRequest(xssError);
       const body = await response.json();
 
-      // Error message should be safely encoded
       expect(body.error.message).toBe(xssError);
-      
-      // Content-Type should be application/json
       expect(response.headers.get('Content-Type')).toBe('application/json');
     });
 
     it('should set security headers', async () => {
       const response = jsonSuccess({ test: true });
 
-      // Should have security headers
       expect(response.headers.get('Content-Type')).toBe('application/json');
       expect(response.headers.get('Cache-Control')).toContain('no-store');
       
-      // JSON responses auto-escape dangerous content
       const body = await response.json();
       expect(JSON.stringify(body)).toBeDefined();
     });
@@ -131,8 +118,6 @@ describe('Security - Injection Prevention', () => {
 
       commandInjectionPayloads.forEach(payload => {
         expect(() => checkEmailRateLimit(payload)).not.toThrow();
-        
-        // Should treat as regular string, not execute commands
         const result = checkEmailRateLimit(payload);
         expect(result).toHaveProperty('allowed');
       });
@@ -149,7 +134,6 @@ describe('Security - Injection Prevention', () => {
       ];
 
       pathTraversalPayloads.forEach(payload => {
-        // Functions should not interpret these as file paths
         expect(() => checkEmailRateLimit(payload)).not.toThrow();
       });
     });
@@ -165,7 +149,6 @@ describe('Security - Injection Prevention', () => {
       ];
 
       nosqlPayloads.forEach(payload => {
-        // Should treat as regular strings, not parse as queries
         expect(() => checkEmailRateLimit(payload)).not.toThrow();
       });
     });
@@ -190,7 +173,6 @@ describe('Security - Injection Prevention', () => {
       const crlfPayload = "test\r\nX-Injected-Header: malicious";
       const response = jsonError(crlfPayload);
 
-      // Headers should not be injected
       expect(response.headers.get('X-Injected-Header')).toBeNull();
       
       const body = await response.json();
@@ -209,7 +191,6 @@ describe('Security - Injection Prevention', () => {
 
       templatePayloads.forEach(payload => {
         const result = checkEmailRateLimit(payload);
-        // Should not execute template code
         expect(result).toHaveProperty('allowed');
       });
     });
@@ -224,7 +205,6 @@ describe('Security - Injection Prevention', () => {
 
       const body = await response.json();
       
-      // Should be double-encoded, not parsed as JSON
       expect(typeof body.data.userInput).toBe('string');
       expect(body.data.userInput).toBe(maliciousJson);
     });
@@ -247,10 +227,10 @@ describe('Security - Injection Prevention', () => {
   describe('Unicode/UTF-8 Exploits Prevention', () => {
     it('should handle unicode exploits', () => {
       const unicodePayloads = [
-        'test@example.com\u202e', // Right-to-left override
-        'test\uFEFF@example.com', // Zero-width no-break space
-        'test@example\u200b.com', // Zero-width space
-        'тест@example.com', // Cyrillic lookalikes
+        'test@example.com\u202e',
+        'test\uFEFF@example.com',
+        'test@example\u200b.com',
+        'тест@example.com',
       ];
 
       unicodePayloads.forEach(payload => {
@@ -277,8 +257,6 @@ describe('Security - Injection Prevention', () => {
         }
         
         const duration = performance.now() - start;
-        
-        // Should complete quickly, not hang
         expect(duration).toBeLessThan(1000);
       });
     });
@@ -294,7 +272,6 @@ describe('Security - Injection Prevention', () => {
       const response = jsonSuccess(pollutionAttempt);
       const body = await response.json();
 
-      // Check that prototype is not polluted
       expect(({}as any).polluted).toBeUndefined();
       expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
     });
@@ -304,7 +281,7 @@ describe('Security - Injection Prevention', () => {
     it('should not allow mass assignment of sensitive fields', async () => {
       const maliciousUpdate = {
         email: 'user@test.com',
-        role: 'admin', // Attempting to escalate privileges
+        role: 'admin',
         isAdmin: true,
         permissions: ['ALL'],
       };
@@ -312,11 +289,7 @@ describe('Security - Injection Prevention', () => {
       const response = jsonSuccess(maliciousUpdate);
       const body = await response.json();
 
-      // Data is accepted but application logic should validate
       expect(body.data).toEqual(maliciousUpdate);
-      
-      // Note: Actual prevention happens at the business logic level
-      // This test ensures JSON handling doesn't introduce vulnerabilities
     });
   });
 
@@ -327,7 +300,6 @@ describe('Security - Injection Prevention', () => {
       const response = jsonSuccess({ xml: xxeAttempt });
       const body = await response.json();
 
-      // Should be treated as plain string
       expect(body.data.xml).toBe(xxeAttempt);
       expect(body.data.xml).toContain('<!ENTITY');
     });
@@ -345,8 +317,6 @@ describe('Security - Injection Prevention', () => {
       for (const url of ssrfAttempts) {
         const response = jsonSuccess({ callback: url });
         const body = await response.json();
-
-        // URL should be stored as string, not fetched
         expect(body.data.callback).toBe(url);
       }
     });
