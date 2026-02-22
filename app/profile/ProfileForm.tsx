@@ -948,11 +948,11 @@ function SectionSkills({
   return (
     <section id="skills" className={`${SECTION_CARD} scroll-mt-24`}>
       <header className="space-y-1">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Skills técnicos</h2>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Skills</h2>
         <p className={SUBTEXT_BASE}>Agrega tus tecnologías clave y el nivel que dominas.</p>
       </header>
 
-      <div className="flex flex-col gap-3 md:flex-row">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end">
         <div className="relative flex-1">
           <input 
             className={INPUT_BASE} 
@@ -982,7 +982,7 @@ function SectionSkills({
           )}
         </div>
         <div className="w-full md:w-44">
-          <label className={LABEL_BASE}>Nivel por defecto</label>
+          <label className={LABEL_BASE}>Nivel</label>
           <select className={INPUT_BASE} value={pendingLevel}
             onChange={(e) => setPendingLevel(parseInt(e.target.value, 10))}
             aria-label="Nivel del skill a agregar">
