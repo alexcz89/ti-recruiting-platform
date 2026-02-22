@@ -122,6 +122,14 @@ const SKILL_BAR_COLORS: Record<number, string> = {
   5: "bg-emerald-600",
 };
 
+const SKILL_PILL_ACTIVE: Record<number, string> = {
+  1: "bg-zinc-400 text-white shadow-sm",
+  2: "bg-blue-400 text-white shadow-sm",
+  3: "bg-yellow-400 text-white shadow-sm",
+  4: "bg-emerald-400 text-white shadow-sm",
+  5: "bg-emerald-600 text-white shadow-sm",
+};
+
 /* ===== Phone helpers ===== */
 const phoneUtil  = PhoneNumberUtil.getInstance();
 const onlyDigits = (s: string) => s.replace(/\D+/g, "");
@@ -300,7 +308,7 @@ export default function ProfileForm({
   /* ===== Certificaciones ===== */
   const [certQuery, setCertQuery] = useState("");
   const [isCertDropdownOpen, setIsCertDropdownOpen] = useState(false);
-  
+
   const filteredCerts = useMemo(() => {
     const q      = certQuery.trim().toLowerCase();
     const chosen = new Set((certifications as string[]).map((c) => c.toLowerCase()));
@@ -316,7 +324,7 @@ export default function ProfileForm({
     setCertQuery("");
     setIsCertDropdownOpen(false);
   };
-  
+
   const removeCert = (label: string) => {
     setValue("certifications",
       (certifications as string[]).filter((x) => x.toLowerCase() !== label.toLowerCase()),
@@ -334,9 +342,8 @@ export default function ProfileForm({
   }, [getValues, setValue]);
 
   /* ===== Skills ===== */
-  const [skillQuery,   setSkillQuery]   = useState("");
+  const [skillQuery, setSkillQuery]     = useState("");
   const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false);
-  const [pendingLevel, setPendingLevel] = useState<number>(3);
 
   const filteredSkillOptions = useMemo(() => {
     const q        = skillQuery.trim().toLowerCase();
@@ -348,11 +355,11 @@ export default function ProfileForm({
 
   function addSkillWithLevel(opt: SkillOption) {
     if ((skillsDetailed as any[]).some((s) => s.termId === opt.id)) return;
-    skillFA.append({ termId: opt.id, label: opt.label, level: pendingLevel });
+    skillFA.append({ termId: opt.id, label: opt.label, level: 3 });
     setSkillQuery("");
     setIsSkillDropdownOpen(false);
   }
-  
+
   function removeSkillWithLevel(termId: string) {
     const idx = (skillsDetailed as any[]).findIndex((s) => s.termId === termId);
     if (idx >= 0) skillFA.remove(idx);
@@ -487,32 +494,30 @@ export default function ProfileForm({
           expFA={expFA} register={register} setValue={setValue}
           experiences={experiences as WorkExperience[]} makeCurrent={makeCurrent}
         />
-        
+
         <SectionCerts
-          certifications={certifications as string[]} 
+          certifications={certifications as string[]}
           certQuery={certQuery}
-          setCertQuery={setCertQuery} 
+          setCertQuery={setCertQuery}
           filteredCerts={filteredCerts}
-          addCert={addCert} 
+          addCert={addCert}
           removeCert={removeCert}
           isCertDropdownOpen={isCertDropdownOpen}
           setIsCertDropdownOpen={setIsCertDropdownOpen}
         />
-        
+
         <SectionSkills
-          skillsDetailed={skillsDetailed} 
+          skillsDetailed={skillsDetailed}
           filteredSkillOptions={filteredSkillOptions}
-          skillFA={skillFA} 
-          pendingLevel={pendingLevel} 
-          setPendingLevel={setPendingLevel}
-          skillQuery={skillQuery} 
+          skillFA={skillFA}
+          skillQuery={skillQuery}
           setSkillQuery={setSkillQuery}
-          addSkillWithLevel={addSkillWithLevel} 
+          addSkillWithLevel={addSkillWithLevel}
           removeSkillWithLevel={removeSkillWithLevel}
           isSkillDropdownOpen={isSkillDropdownOpen}
           setIsSkillDropdownOpen={setIsSkillDropdownOpen}
         />
-        
+
         <SectionLanguages
           langFA={langFA} languages={languages} languageOptions={languageOptions}
           handlePatchLang={(idx, patch) => {
@@ -520,7 +525,7 @@ export default function ProfileForm({
             langFA.update(idx, { ...curr, ...patch });
           }}
         />
-        
+
         <SectionEducation eduFA={eduFA} addEducation={addEducation} moveEducation={moveEducation} />
 
         {errors.root?.message && (
@@ -674,19 +679,14 @@ function SectionCV({
       </header>
 
       {resumeUrl ? (
-        /* Estado: CV ya subido */
         <div className="space-y-3">
-          {/* Preview card del CV */}
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 dark:border-emerald-800/40 dark:bg-emerald-950/20">
             <div className="flex items-start gap-3">
-              {/* Ícono de documento */}
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
               </div>
-
-              {/* Info del CV */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
@@ -701,8 +701,6 @@ function SectionCV({
                 </p>
               </div>
             </div>
-
-            {/* Acciones */}
             <div className="mt-3 flex flex-wrap gap-2">
               <a
                 href={resumeUrl}
@@ -731,9 +729,7 @@ function SectionCV({
           </div>
         </div>
       ) : (
-        /* Estado: Sin CV */
         <div className="space-y-3">
-          {/* Empty state mejorado */}
           <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
               <svg className="h-6 w-6 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -750,8 +746,6 @@ function SectionCV({
               <UploadCvButton onUploaded={onUploaded} />
             </div>
           </div>
-
-          {/* Info adicional */}
           <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/20">
             <div className="flex gap-2">
               <svg className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -886,10 +880,10 @@ function SectionCerts({
       )}
 
       <div className="relative">
-        <input 
-          className={INPUT_BASE} 
+        <input
+          className={INPUT_BASE}
           placeholder="Busca o escribe una certificación…"
-          value={certQuery} 
+          value={certQuery}
           onChange={(e) => {
             setCertQuery(e.target.value);
             setIsCertDropdownOpen(true);
@@ -933,64 +927,56 @@ function SectionCerts({
 }
 
 function SectionSkills({
-  skillsDetailed, filteredSkillOptions, skillFA, pendingLevel, setPendingLevel,
+  skillsDetailed, filteredSkillOptions, skillFA,
   skillQuery, setSkillQuery, addSkillWithLevel, removeSkillWithLevel,
   isSkillDropdownOpen, setIsSkillDropdownOpen,
 }: {
-  skillsDetailed: any[]; filteredSkillOptions: { id: string; label: string }[];
+  skillsDetailed: any[];
+  filteredSkillOptions: { id: string; label: string }[];
   skillFA: ReturnType<typeof useFieldArray<ProfileFormData>>;
-  pendingLevel: number; setPendingLevel: (n: number) => void;
-  skillQuery: string; setSkillQuery: (s: string) => void;
+  skillQuery: string;
+  setSkillQuery: (s: string) => void;
   addSkillWithLevel: (opt: { id: string; label: string }) => void;
   removeSkillWithLevel: (termId: string) => void;
-  isSkillDropdownOpen: boolean; setIsSkillDropdownOpen: (v: boolean) => void;
+  isSkillDropdownOpen: boolean;
+  setIsSkillDropdownOpen: (v: boolean) => void;
 }) {
   return (
     <section id="skills" className={`${SECTION_CARD} scroll-mt-24`}>
       <header className="space-y-1">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Skills</h2>
-        <p className={SUBTEXT_BASE}>Agrega tus tecnologías clave y el nivel que dominas.</p>
+        <p className={SUBTEXT_BASE}>Agrega tus tecnologías clave y ajusta el nivel en cada una.</p>
       </header>
 
-      <div className="flex flex-col gap-3 md:flex-row md:items-end">
-        <div className="relative flex-1">
-          <input 
-            className={INPUT_BASE} 
-            placeholder="Ej. React, Node.js, AWS…"
-            value={skillQuery} 
-            onChange={(e) => {
-              setSkillQuery(e.target.value);
-              setIsSkillDropdownOpen(true);
-            }}
-            onFocus={() => setIsSkillDropdownOpen(true)}
-            onBlur={() => setTimeout(() => setIsSkillDropdownOpen(false), 200)}
-          />
-          {isSkillDropdownOpen && skillQuery.trim().length > 0 && (
-            <ul className="absolute z-10 mt-1 w-full glass-card rounded-2xl border border-zinc-200/80 bg-white/95 p-1 text-sm shadow-lg dark:border-zinc-700/70 dark:bg-zinc-900/95 max-h-48 overflow-y-auto">
-              {filteredSkillOptions.length === 0 ? (
-                <li className="px-3 py-2 text-xs text-zinc-500">Sin coincidencias</li>
-              ) : (
-                filteredSkillOptions.map((opt) => (
-                  <li key={opt.id}
-                    className="cursor-pointer rounded-xl px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/70"
-                    onMouseDown={(e) => { e.preventDefault(); addSkillWithLevel(opt); }}>
-                    {opt.label}
-                  </li>
-                ))
-              )}
-            </ul>
-          )}
-        </div>
-        <div className="w-full md:w-44">
-          <label className={LABEL_BASE}>Nivel</label>
-          <select className={INPUT_BASE} value={pendingLevel}
-            onChange={(e) => setPendingLevel(parseInt(e.target.value, 10))}
-            aria-label="Nivel del skill a agregar">
-            {SKILL_LEVELS.map((lvl) => (
-              <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
-            ))}
-          </select>
-        </div>
+      <div className="relative">
+        <input
+          className={INPUT_BASE}
+          placeholder="Ej. React, Node.js, AWS…"
+          value={skillQuery}
+          onChange={(e) => {
+            setSkillQuery(e.target.value);
+            setIsSkillDropdownOpen(true);
+          }}
+          onFocus={() => setIsSkillDropdownOpen(true)}
+          onBlur={() => setTimeout(() => setIsSkillDropdownOpen(false), 200)}
+        />
+        {isSkillDropdownOpen && skillQuery.trim().length > 0 && (
+          <ul className="absolute z-10 mt-1 w-full glass-card rounded-2xl border border-zinc-200/80 bg-white/95 p-1 text-sm shadow-lg dark:border-zinc-700/70 dark:bg-zinc-900/95 max-h-48 overflow-y-auto">
+            {filteredSkillOptions.length === 0 ? (
+              <li className="px-3 py-2 text-xs text-zinc-500">Sin coincidencias</li>
+            ) : (
+              filteredSkillOptions.map((opt) => (
+                <li
+                  key={opt.id}
+                  className="cursor-pointer rounded-xl px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/70"
+                  onMouseDown={(e) => { e.preventDefault(); addSkillWithLevel(opt); }}
+                >
+                  {opt.label}
+                </li>
+              ))
+            )}
+          </ul>
+        )}
       </div>
 
       {skillsDetailed.length === 0 ? (
@@ -1003,25 +989,44 @@ function SectionSkills({
           {skillsDetailed.map((s: any, idx: number) => {
             const pct = Math.round((s.level / 5) * 100);
             return (
-              <li key={s.termId}
-                className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-zinc-50/80 px-3 py-2.5 dark:border-zinc-700 dark:bg-zinc-900/70 md:flex-row md:items-center">
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-50">{s.label}</span>
-                  <div className="mt-1 h-1 w-full rounded-full bg-zinc-200 dark:bg-zinc-700">
-                    <div className={`h-1 rounded-full transition-all ${SKILL_BAR_COLORS[s.level] ?? "bg-emerald-500"}`}
-                      style={{ width: `${pct}%` }} />
+              <li
+                key={s.termId}
+                className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900/70"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-50 min-w-[80px]">
+                    {s.label}
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {SKILL_LEVELS.map((lvl) => (
+                      <button
+                        key={lvl.value}
+                        type="button"
+                        onClick={() => skillFA.update(idx, { ...s, level: lvl.value })}
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all ${
+                          s.level === lvl.value
+                            ? SKILL_PILL_ACTIVE[lvl.value]
+                            : "bg-zinc-200 text-zinc-500 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600"
+                        }`}
+                      >
+                        {lvl.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="ml-1 text-xs font-medium text-red-400 hover:text-red-600 transition-colors"
+                      onClick={() => removeSkillWithLevel(s.termId)}
+                    >
+                      ✕
+                    </button>
                   </div>
                 </div>
-                <select
-                  className={`${INPUT_BASE} w-full md:w-36 shrink-0`}
-                  value={s.level}
-                  onChange={(e) => skillFA.update(idx, { ...s, level: parseInt(e.target.value, 10) })}>
-                  {SKILL_LEVELS.map((lvl) => (
-                    <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
-                  ))}
-                </select>
-                <button type="button" className={`${BTN_DANGER} md:ml-1 shrink-0`}
-                  onClick={() => removeSkillWithLevel(s.termId)}>✕</button>
+                <div className="mt-2 h-1 w-full rounded-full bg-zinc-200 dark:bg-zinc-700">
+                  <div
+                    className={`h-1 rounded-full transition-all ${SKILL_BAR_COLORS[s.level] ?? "bg-emerald-500"}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
               </li>
             );
           })}
