@@ -1040,9 +1040,17 @@ function SectionLanguages({
   langFA, languages, languageOptions, handlePatchLang,
 }: {
   langFA: ReturnType<typeof useFieldArray<ProfileFormData>>;
-  languages: any[]; languageOptions: { id: string; label: string }[];
+  languages: any[];
+  languageOptions: { id: string; label: string }[];
   handlePatchLang: (idx: number, patch: Partial<{ termId: string; label: string; level: any }>) => void;
 }) {
+  const LANG_LEVELS = [
+    { value: "NATIVE",         label: "Nativo",        color: "bg-emerald-600 text-white shadow-sm" },
+    { value: "PROFESSIONAL",   label: "Profesional",   color: "bg-emerald-400 text-white shadow-sm" },
+    { value: "CONVERSATIONAL", label: "Conversacional",color: "bg-yellow-400 text-white shadow-sm"  },
+    { value: "BASIC",          label: "Básico",        color: "bg-blue-400 text-white shadow-sm"    },
+  ];
+
   return (
     <section id="languages" className={`${SECTION_CARD} scroll-mt-24`}>
       <div className="flex items-center justify-between gap-3">
@@ -1050,8 +1058,15 @@ function SectionLanguages({
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Idiomas</h2>
           <p className={SUBTEXT_BASE}>Indica los idiomas que hablas y tu nivel.</p>
         </div>
-        <button type="button" className={BTN_OUTLINE}
-          onClick={() => langFA.append({ termId: languageOptions[0]?.id || "", label: languageOptions[0]?.label || "", level: "CONVERSATIONAL" })}>
+        <button
+          type="button"
+          className={BTN_OUTLINE}
+          onClick={() => langFA.append({
+            termId: languageOptions[0]?.id || "",
+            label: languageOptions[0]?.label || "",
+            level: "CONVERSATIONAL",
+          })}
+        >
           + Añadir
         </button>
       </div>
@@ -1065,26 +1080,49 @@ function SectionLanguages({
           {langFA.fields.map((f, idx) => {
             const item = languages[idx] || { termId: "", label: "", level: "CONVERSATIONAL" };
             return (
-              <div key={f.id}
-                className="flex flex-col gap-2 rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-900/70 md:flex-row md:items-center">
-                <select className={`${INPUT_BASE} flex-1`} value={item.termId}
-                  onChange={(e) => {
-                    const term = languageOptions.find((o) => o.id === e.target.value);
-                    handlePatchLang(idx, { termId: term?.id || "", label: term?.label || "" });
-                  }}>
-                  <option value="">Selecciona idioma</option>
-                  {languageOptions.map((opt) => (
-                    <option key={opt.id} value={opt.id}>{opt.label}</option>
-                  ))}
-                </select>
-                <select className={`${INPUT_BASE} w-full md:w-52`} value={item.level}
-                  onChange={(e) => handlePatchLang(idx, { level: e.target.value as any })}>
-                  {LANGUAGE_LEVELS.map((lvl) => (
-                    <option key={lvl.value} value={lvl.value}>{lvl.label}</option>
-                  ))}
-                </select>
-                <button type="button" onClick={() => langFA.remove(idx)}
-                  className={`${BTN_DANGER} shrink-0`}>✕</button>
+              <div
+                key={f.id}
+                className="rounded-xl border border-zinc-200 bg-zinc-50/80 px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900/70"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <select
+                    className={`${INPUT_BASE} w-auto max-w-[200px]`}
+                    value={item.termId}
+                    onChange={(e) => {
+                      const term = languageOptions.find((o) => o.id === e.target.value);
+                      handlePatchLang(idx, { termId: term?.id || "", label: term?.label || "" });
+                    }}
+                  >
+                    <option value="">Selecciona idioma</option>
+                    {languageOptions.map((opt) => (
+                      <option key={opt.id} value={opt.id}>{opt.label}</option>
+                    ))}
+                  </select>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {LANG_LEVELS.map((lvl) => (
+                      <button
+                        key={lvl.value}
+                        type="button"
+                        onClick={() => handlePatchLang(idx, { level: lvl.value })}
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium transition-all ${
+                          item.level === lvl.value
+                            ? lvl.color
+                            : "bg-zinc-200 text-zinc-500 hover:bg-zinc-300 dark:bg-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-600"
+                        }`}
+                      >
+                        {lvl.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      className="ml-1 text-xs font-medium text-red-400 hover:text-red-600 transition-colors"
+                      onClick={() => langFA.remove(idx)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
               </div>
             );
           })}
