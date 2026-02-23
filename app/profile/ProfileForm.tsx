@@ -1045,11 +1045,15 @@ function SectionLanguages({
   handlePatchLang: (idx: number, patch: Partial<{ termId: string; label: string; level: any }>) => void;
 }) {
   const LANG_LEVELS = [
-    { value: "NATIVE",         label: "Nativo",        color: "bg-emerald-600 text-white shadow-sm" },
-    { value: "PROFESSIONAL",   label: "Profesional",   color: "bg-emerald-400 text-white shadow-sm" },
-    { value: "CONVERSATIONAL", label: "Conversacional",color: "bg-yellow-400 text-white shadow-sm"  },
-    { value: "BASIC",          label: "Básico",        color: "bg-blue-400 text-white shadow-sm"    },
+    { value: "NATIVE",         label: "Nativo",                 color: "bg-emerald-600 text-white shadow-sm" },
+    { value: "PROFESSIONAL",   label: "Profesional (C1–C2)",    color: "bg-emerald-400 text-white shadow-sm" },
+    { value: "CONVERSATIONAL", label: "Conversacional (B1–B2)", color: "bg-yellow-400 text-white shadow-sm"  },
+    { value: "BASIC",          label: "Básico (A1–A2)",          color: "bg-blue-400 text-white shadow-sm"   },
   ];
+
+  const addedIds = new Set(languages.map((l: any) => l.termId));
+  const availableLanguages = languageOptions.filter((o) => !addedIds.has(o.id));
+  const firstAvailable = availableLanguages[0];
 
   return (
     <section id="languages" className={`${SECTION_CARD} scroll-mt-24`}>
@@ -1061,11 +1065,11 @@ function SectionLanguages({
         <button
           type="button"
           className={BTN_OUTLINE}
-          onClick={() => langFA.append({
-            termId: languageOptions[0]?.id || "",
-            label: languageOptions[0]?.label || "",
-            level: "CONVERSATIONAL",
-          })}
+          disabled={!firstAvailable}
+          onClick={() => {
+            if (!firstAvailable) return;
+            langFA.append({ termId: firstAvailable.id, label: firstAvailable.label, level: "CONVERSATIONAL" });
+          }}
         >
           + Añadir
         </button>
@@ -1079,6 +1083,11 @@ function SectionLanguages({
         <div className="space-y-2">
           {langFA.fields.map((f, idx) => {
             const item = languages[idx] || { termId: "", label: "", level: "CONVERSATIONAL" };
+            const currentOpt = languageOptions.find((o) => o.id === item.termId);
+            const optionsForRow = [
+              ...(currentOpt ? [currentOpt] : []),
+              ...languageOptions.filter((o) => !addedIds.has(o.id)),
+            ];
             return (
               <div
                 key={f.id}
@@ -1094,7 +1103,7 @@ function SectionLanguages({
                     }}
                   >
                     <option value="">Selecciona idioma</option>
-                    {languageOptions.map((opt) => (
+                    {optionsForRow.map((opt) => (
                       <option key={opt.id} value={opt.id}>{opt.label}</option>
                     ))}
                   </select>
