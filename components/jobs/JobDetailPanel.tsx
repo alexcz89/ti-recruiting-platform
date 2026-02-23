@@ -14,7 +14,7 @@ import {
   BadgeCheck,
   Wrench,
   Sparkles,
-  MapPin,                       // CAMBIO: nuevo ícono
+  MapPin,
 } from "lucide-react";
 import { fromNow } from "@/lib/dates";
 import ApplyButton, { ApplyResult } from "./ApplyButton";
@@ -32,29 +32,23 @@ type Job = {
   description?: string | null;
   descriptionHtml?: string | null;
   skills?: string[] | null;
-
   companyLogoUrl?: string | null;
   logoUrl?: string | null;
   companyObj?: { name?: string | null; logoUrl?: string | null } | null;
-
   confidential?: boolean | null;
   isConfidential?: boolean | null;
   companyConfidential?: boolean | null;
   meta?: { confidential?: boolean | null };
-
   salaryMin?: number | null;
   salaryMax?: number | null;
   currency?: string | null;
   showSalary?: boolean | null;
-
   schedule?: string | null;
   benefitsJson?: Record<string, boolean | number | string> | null;
   showBenefits?: boolean | null;
-
   remote?: boolean | null;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
-
   minDegree?: DegreeLevel | null;
   educationJson?: EduItem[] | null;
 };
@@ -63,6 +57,8 @@ type Props = {
   job: Job | null;
   canApply?: boolean;
   editHref?: string;
+  /** Desktop split view: el toolbar ya se renderiza fuera, no duplicar */
+  hideToolbar?: boolean;
 };
 
 type MetaParsed = {
@@ -80,30 +76,21 @@ function parseMeta(description: string | null | undefined): { meta: MetaParsed |
   const raw = description ?? "";
   const match = raw.match(/---\s*\[Meta\]([\s\S]*)$/i);
   if (!match) return { meta: null, mainDesc: raw.trim() };
-
   const metaBlock = match[1].trim();
-  const tokens = metaBlock
-    .split(/\r?\n/)
-    .flatMap((l) => l.split(";"))
-    .map((t) => t.trim())
-    .filter(Boolean);
-
+  const tokens = metaBlock.split(/\r?\n/).flatMap((l) => l.split(";")).map((t) => t.trim()).filter(Boolean);
   const parsed: MetaParsed = {};
   for (const tok of tokens) {
     const i = tok.indexOf("=");
     if (i < 0) continue;
     const key = tok.slice(0, i).trim();
     const valRaw = tok.slice(i + 1).trim();
-
     if (valRaw === "true" || valRaw === "false") { (parsed as any)[key] = valRaw === "true"; continue; }
     if (/^-?\d+(\.\d+)?$/.test(valRaw)) { (parsed as any)[key] = Number(valRaw); continue; }
     if (valRaw === "" || valRaw.toLowerCase() === "null") { (parsed as any)[key] = null; continue; }
     if (valRaw.startsWith("{") || valRaw.startsWith("[")) { try { (parsed as any)[key] = JSON.parse(valRaw); continue; } catch {} }
     (parsed as any)[key] = valRaw;
   }
-
-  const mainDesc = raw.slice(0, match.index).trim();
-  return { meta: parsed, mainDesc };
+  return { meta: parsed, mainDesc: raw.slice(0, match.index).trim() };
 }
 
 function Chip({ children, tone = "zinc", outline = false, className = "" }: {
@@ -131,8 +118,7 @@ function Chip({ children, tone = "zinc", outline = false, className = "" }: {
 }
 
 function splitSkills(skills?: string[] | null) {
-  const req: string[] = [];
-  const nice: string[] = [];
+  const req: string[] = []; const nice: string[] = [];
   if (!Array.isArray(skills)) return { req, nice };
   for (const raw of skills) {
     const s = String(raw || "").trim();
@@ -165,8 +151,7 @@ const BENEFIT_LABELS: Record<string, string> = {
 };
 
 function formatBenefitLabel(key: string, value: any): string | null {
-  const k = key.toString();
-  const lower = k.toLowerCase();
+  const k = key.toString(); const lower = k.toLowerCase();
   if (lower === "showbenefits") return null;
   const base = BENEFIT_LABELS[k] ?? BENEFIT_LABELS[lower] ?? k.replace(/([A-Z])/g, " $1");
   if (typeof value === "boolean") return value ? base : null;
@@ -181,7 +166,7 @@ function formatBenefitLabel(key: string, value: any): string | null {
   return `${base}: ${vStr}`;
 }
 
-export default function JobDetailPanel({ job, canApply = true, editHref }: Props) {
+export default function JobDetailPanel({ job, canApply = true, editHref, hideToolbar = false }: Props) {
   const jobId = job?.id ?? "";
   const rawDesc = job?.description ?? "";
   const { meta, mainDesc } = React.useMemo(() => parseMeta(rawDesc), [rawDesc]);
@@ -202,7 +187,6 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
   const companyName = showCompanyName ? companyNameRaw : "";
   const companyLogo = !confidential ? companyLogoRaw : null;
 
-  // CAMBIO: normaliza "Remote" → "Remoto" y cae a remote flag
   const locationDisplay = React.useMemo(() => {
     const loc = job?.location?.trim();
     if (!loc || loc === "—") return job?.remote ? "Remoto" : null;
@@ -211,43 +195,29 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
   }, [job?.location, job?.remote]);
 
   const [detail, setDetail] = React.useState<{
-    showSalary?: boolean | null;
-    salaryMin?: number | null;
-    salaryMax?: number | null;
-    currency?: string | null;
-    schedule?: string | null;
-    showBenefits?: boolean | null;
-    benefitsJson?: Record<string, boolean | number | string> | null;
+    showSalary?: boolean | null; salaryMin?: number | null; salaryMax?: number | null;
+    currency?: string | null; schedule?: string | null;
+    showBenefits?: boolean | null; benefitsJson?: Record<string, boolean | number | string> | null;
   }>(() => ({
-    showSalary: job?.showSalary,
-    salaryMin: job?.salaryMin,
-    salaryMax: job?.salaryMax,
-    currency: job?.currency,
-    schedule: job?.schedule,
-    showBenefits: job?.showBenefits,
-    benefitsJson: job?.benefitsJson,
+    showSalary: job?.showSalary, salaryMin: job?.salaryMin, salaryMax: job?.salaryMax,
+    currency: job?.currency, schedule: job?.schedule,
+    showBenefits: job?.showBenefits, benefitsJson: job?.benefitsJson,
   }));
 
   React.useEffect(() => {
     setDetail({
-      showSalary: job?.showSalary,
-      salaryMin: job?.salaryMin,
-      salaryMax: job?.salaryMax,
-      currency: job?.currency,
-      schedule: job?.schedule,
-      showBenefits: job?.showBenefits,
-      benefitsJson: job?.benefitsJson,
+      showSalary: job?.showSalary, salaryMin: job?.salaryMin, salaryMax: job?.salaryMax,
+      currency: job?.currency, schedule: job?.schedule,
+      showBenefits: job?.showBenefits, benefitsJson: job?.benefitsJson,
     });
   }, [jobId, job]);
 
   React.useEffect(() => {
     let cancelled = false;
     if (!jobId) return;
-    const missing =
-      detail.showSalary === undefined || detail.salaryMin === undefined ||
+    const missing = detail.showSalary === undefined || detail.salaryMin === undefined ||
       detail.salaryMax === undefined || detail.currency === undefined ||
-      detail.schedule === undefined || detail.showBenefits === undefined ||
-      detail.benefitsJson === undefined;
+      detail.schedule === undefined || detail.showBenefits === undefined || detail.benefitsJson === undefined;
     if (!missing) return;
     (async () => {
       try {
@@ -331,9 +301,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
     if (!jobId) return { error: "UNKNOWN", message: "Vacante inválida" };
     try {
       const res = await fetch("/api/applications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId }),
       });
       if (res.status === 401) {
         const callback = typeof window !== "undefined" ? encodeURIComponent(window.location.pathname + window.location.search) : encodeURIComponent(`/jobs/${jobId}`);
@@ -341,10 +309,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
       }
       if (res.status === 403) { const data = await res.json().catch(() => null); return { error: "ROLE", message: data?.error || "Solo candidatos pueden postular" }; }
       if (res.status === 409) { const data = await res.json().catch(() => null); return { error: "ALREADY_APPLIED", message: data?.error || "Ya postulaste a esta vacante" }; }
-      if (res.ok) {
-        const redirect = typeof window !== "undefined" ? `${window.location.pathname}?applied=1` : `/jobs/${jobId}`;
-        return { ok: true, redirect };
-      }
+      if (res.ok) return { ok: true, redirect: typeof window !== "undefined" ? `${window.location.pathname}?applied=1` : `/jobs/${jobId}` };
       const data = await res.json().catch(() => null);
       return { error: "UNKNOWN", message: data?.error || "Error al postular" };
     } catch (e) {
@@ -362,75 +327,57 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
   }
 
   return (
-    <article className="relative rounded-2xl border glass-card overflow-hidden">
+    // Cuando hideToolbar=true (desktop split), no necesitamos el borde/overflow del article
+    // porque el wrapper en ClientSplitView ya lo provee.
+    <article className={hideToolbar ? "" : "relative rounded-2xl border glass-card overflow-hidden"}>
 
-      {/*
-        CAMBIO: toolbar
-        - Antes: flex fila única → título truncado en móvil
-        - Ahora: columna en móvil (título completo), fila en sm+
-      */}
-      <div className="sticky top-0 z-10 border-b glass-card px-4 py-3">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-
-          {/* Título: 2 líneas máx en móvil, truncado en sm+ */}
-          <h2 className="text-sm font-semibold text-default leading-snug line-clamp-2 sm:truncate sm:flex-1 sm:pr-2">
-            {job.title}
-          </h2>
-
-          {/* Botones: siempre en fila */}
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={handleShare}
-              title="Compartir"
-              className="inline-flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
-            >
-              <Share2 className="h-4 w-4 text-muted shrink-0" />
-              <span className="hidden sm:inline text-xs">Compartir</span>
-            </button>
-
-            {copied && (
-              <span className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-300/50 rounded px-2 py-1 whitespace-nowrap">
-                Link copiado
-              </span>
-            )}
-
-            {canApply ? (
-              <ApplyButton applyAction={applyAction} jobKey={job.id} />
-            ) : editHref ? (
-              <Link
-                href={editHref}
-                className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+      {/* Toolbar: solo cuando NO está oculto (móvil / página individual) */}
+      {!hideToolbar && (
+        <div className="border-b glass-card px-4 py-3">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+            <h2 className="text-sm font-semibold text-default leading-snug line-clamp-2 sm:truncate sm:flex-1 sm:pr-2">
+              {job.title}
+            </h2>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShare}
+                title="Compartir"
+                className="inline-flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
               >
-                Editar vacante
-              </Link>
-            ) : null}
+                <Share2 className="h-4 w-4 text-muted shrink-0" />
+                <span className="hidden sm:inline text-xs">Compartir</span>
+              </button>
+              {copied && (
+                <span className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-300/50 rounded px-2 py-1 whitespace-nowrap">
+                  Link copiado
+                </span>
+              )}
+              {canApply ? (
+                <ApplyButton applyAction={applyAction} jobKey={job.id} />
+              ) : editHref ? (
+                <Link href={editHref} className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap">
+                  Editar vacante
+                </Link>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="overflow-y-auto px-6 py-5 space-y-6">
+      {/* Contenido */}
+      <div className="px-6 py-5 space-y-6">
         <header className="space-y-3">
           <div className="flex items-start gap-3">
             {companyLogo && (
-              <div className="h-12 w-12 rounded-xl border bg-zinc-200/60 dark:bg-zinc-700/50">
+              <div className="h-12 w-12 shrink-0 rounded-xl border bg-zinc-200/60 dark:bg-zinc-700/50 overflow-hidden">
                 <Image src={companyLogo} alt={companyName || "Logo"} width={48} height={48} className="h-12 w-12 object-contain" />
               </div>
             )}
             <div className="min-w-0">
-              {/* CAMBIO: text-xl en móvil, text-2xl en md+ para que no desborde */}
-              <h1 className="text-xl md:text-2xl font-semibold leading-tight text-default break-words">
-                {job.title}
-              </h1>
-              {/*
-                CAMBIO: empresa y ubicación separadas, con ícono MapPin
-                Antes: `{companyName} — {job.location || "—"}`  (podía mostrar "—")
-                Ahora: empresa en negrita, ubicación con ícono solo si existe
-              */}
+              <h1 className="text-xl md:text-2xl font-semibold leading-tight text-default break-words">{job.title}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
-                {showCompanyName && (
-                  <span className="font-medium text-default">{companyName}</span>
-                )}
+                {showCompanyName && <span className="font-medium text-default">{companyName}</span>}
                 {locationDisplay && (
                   <span className="inline-flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5 shrink-0" />
@@ -440,7 +387,6 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
               </div>
             </div>
           </div>
-
           <div className="flex flex-wrap gap-2">
             {(meta?.employmentType || job.employmentType) && <Chip tone="blue">{meta?.employmentType || job.employmentType}</Chip>}
             {job.seniority && <Chip tone="violet">{job.seniority}</Chip>}
@@ -491,7 +437,6 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
 
         <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
           <h3 className="text-sm font-semibold text-default mb-2">Detalles de la vacante</h3>
-          {/* CAMBIO: grid-cols-2 en móvil (antes sin columnas → apilado) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-xl border glass-card p-4 md:p-6">
             <div className="flex items-center gap-2 min-w-0">
               <Briefcase className="h-4 w-4 text-muted shrink-0" />
