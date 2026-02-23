@@ -42,6 +42,11 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
       setTimeout(() => {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }, 50);
+    } else {
+      // CAMBIO: en desktop, scroll al top del panel de detalle
+      setTimeout(() => {
+        detailRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      }, 50);
     }
   };
 
@@ -93,14 +98,19 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
         <JobsFeed
           initial={filters}
           selectedId={selectedJob?.id ?? null}
-          onSelect={(job) => setSelectedJob(job)}
+          onSelect={handleSelect}
           onFirstLoad={(job) => {
             setSelectedJob((curr: SelectedJob) => curr ?? job ?? null);
           }}
         />
       </aside>
 
-      <section id="job-detail-panel" className="md:col-span-7">
+      {/* CAMBIO: ref={detailRef} para poder hacer scroll programático */}
+      <section
+        ref={detailRef}
+        id="job-detail-panel"
+        className="md:col-span-7 overflow-y-auto"
+      >
         {selectedJob ? (
           <JobDetailPanel
             key={selectedJob.id ?? "empty"}
