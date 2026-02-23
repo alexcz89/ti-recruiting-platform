@@ -24,7 +24,6 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
   const [selectedJob, setSelectedJob] = React.useState<SelectedJob>(null);
   const [isMobile, setIsMobile] = React.useState(false);
   const [showDetail, setShowDetail] = React.useState(false);
-  const detailRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
@@ -42,10 +41,8 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
         window.scrollTo({ top: 0, behavior: "smooth" });
       }, 50);
     } else {
-      // Desktop: scroll al top del panel interno
-      setTimeout(() => {
-        if (detailRef.current) detailRef.current.scrollTop = 0;
-      }, 50);
+      // Desktop: scroll al top de la página para que el panel sea visible desde arriba
+      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
@@ -90,10 +87,14 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
     );
   }
 
-  // ── Desktop: LinkedIn-style sticky split ─────────────────────────────
+  // ── Desktop ──────────────────────────────────────────────────────────
+  // El panel derecho es sticky al viewport (top-4).
+  // NO tiene overflow-y-auto propio — la página hace scroll normalmente.
+  // Esto permite que el toolbar interno con sticky top-0 funcione
+  // relativo al scroll de la página, manteniéndose siempre visible.
   return (
     <div className="flex gap-6 items-start">
-      {/* Feed — scroll normal de página */}
+      {/* Columna izquierda: feed, scroll normal de página */}
       <div className="w-5/12 shrink-0">
         <JobsFeed
           initial={filters}
@@ -105,11 +106,10 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
         />
       </div>
 
-      {/* Panel detalle — sticky + scroll propio interno */}
+      {/* Columna derecha: sticky al viewport, sin overflow propio */}
       <div
-        ref={detailRef}
         id="job-detail-panel"
-        className="w-7/12 sticky top-4 max-h-[calc(100vh-5rem)] overflow-y-auto"
+        className="w-7/12 sticky top-4"
       >
         {selectedJob ? (
           <JobDetailPanel
