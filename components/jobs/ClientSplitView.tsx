@@ -38,16 +38,11 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
     setSelectedJob(job);
     if (isMobile) {
       setShowDetail(true);
-      // Scroll to top of page so user sees detail from the start
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }, 50);
-    } else {
-      // CAMBIO: en desktop, scroll al top del panel de detalle
-      setTimeout(() => {
-        detailRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-      }, 50);
     }
+    // Siempre scroll al top de la página al seleccionar una vacante
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 50);
   };
 
   const handleBack = () => {
@@ -105,12 +100,7 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
         />
       </aside>
 
-      {/* CAMBIO: ref={detailRef} para poder hacer scroll programático */}
-      <section
-        ref={detailRef}
-        id="job-detail-panel"
-        className="md:col-span-7 overflow-y-auto"
-      >
+      <section id="job-detail-panel" ref={detailRef} className="md:col-span-7">
         {selectedJob ? (
           <JobDetailPanel
             key={selectedJob.id ?? "empty"}
