@@ -17,28 +17,53 @@ type Filters = {
   limit?: number;
 };
 
-// Si quieres, luego tipamos mejor este Job en lugar de "any"
 type SelectedJob = any | null;
 
 export default function ClientSplitView({ filters }: { filters: Filters }) {
   const [selectedJob, setSelectedJob] = React.useState<SelectedJob>(null);
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const handleSelect = (job: any) => {
+    setSelectedJob(job);
+    // En móvil, scroll al panel de detalle
+    if (isMobile) {
+      setTimeout(() => {
+        document.getElementById("job-detail-panel")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 50);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-      {/* Lista de vacantes (5/12) */}
+      {/* Lista de vacantes */}
       <aside className="md:col-span-5 space-y-3">
         <JobsFeed
           initial={filters}
           selectedId={selectedJob?.id ?? null}
-          onSelect={(job) => setSelectedJob(job)}
+          onSelect={handleSelect}
           onFirstLoad={(job) => {
-            setSelectedJob((curr: SelectedJob) => curr ?? job ?? null);
+            // En desktop cargamos la primera vacante automáticamente
+            // En móvil no, para no empujar el feed fuera de la vista
+            if (!isMobile) {
+              setSelectedJob((curr: SelectedJob) => curr ?? job ?? null);
+            }
           }}
         />
       </aside>
 
-      {/* Detalle de vacante (7/12) */}
-      <section className="md:col-span-7">
+      {/* Detalle de vacante */}
+      <section id="job-detail-panel" className="md:col-span-7">
         {selectedJob ? (
           <JobDetailPanel
             key={selectedJob.id ?? "empty"}
@@ -46,7 +71,8 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
             canApply
           />
         ) : (
-          <div className="glass-card p-6 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+          // En móvil ocultamos el placeholder vacío para no confundir
+          <div className={`glass-card p-6 text-center rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm ${isMobile ? "hidden" : ""}`}>
             <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">
               Selecciona una vacante
             </p>
