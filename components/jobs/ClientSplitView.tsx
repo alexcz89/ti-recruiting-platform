@@ -38,11 +38,15 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
     setSelectedJob(job);
     if (isMobile) {
       setShowDetail(true);
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }, 50);
+    } else {
+      // Desktop: scroll al top del panel interno
+      setTimeout(() => {
+        if (detailRef.current) detailRef.current.scrollTop = 0;
+      }, 50);
     }
-    // Siempre scroll al top de la página al seleccionar una vacante
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 50);
   };
 
   const handleBack = () => {
@@ -50,7 +54,7 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
     setSelectedJob(null);
   };
 
-  // Mobile: show either feed OR detail, not both
+  // ── Mobile ───────────────────────────────────────────────────────────
   if (isMobile) {
     if (showDetail && selectedJob) {
       return (
@@ -63,7 +67,7 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
             <ArrowLeft className="h-4 w-4" />
             Volver a vacantes
           </button>
-          <div ref={detailRef} id="job-detail-panel">
+          <div id="job-detail-panel">
             <JobDetailPanel
               key={selectedJob.id ?? "empty"}
               job={selectedJob}
@@ -86,10 +90,11 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
     );
   }
 
-  // Desktop: split view
+  // ── Desktop: LinkedIn-style sticky split ─────────────────────────────
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-      <aside className="md:col-span-5 space-y-3">
+    <div className="flex gap-6 items-start">
+      {/* Feed — scroll normal de página */}
+      <div className="w-5/12 shrink-0">
         <JobsFeed
           initial={filters}
           selectedId={selectedJob?.id ?? null}
@@ -98,9 +103,14 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
             setSelectedJob((curr: SelectedJob) => curr ?? job ?? null);
           }}
         />
-      </aside>
+      </div>
 
-      <section id="job-detail-panel" ref={detailRef} className="md:col-span-7">
+      {/* Panel detalle — sticky + scroll propio interno */}
+      <div
+        ref={detailRef}
+        id="job-detail-panel"
+        className="w-7/12 sticky top-4 max-h-[calc(100vh-5rem)] overflow-y-auto"
+      >
         {selectedJob ? (
           <JobDetailPanel
             key={selectedJob.id ?? "empty"}
@@ -117,7 +127,7 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
             </p>
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }
