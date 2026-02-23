@@ -3,7 +3,6 @@
 
 import * as React from "react";
 import { ArrowLeft, Share2 } from "lucide-react";
-import Link from "next/link";
 import JobsFeed from "@/components/jobs/JobsFeed";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
 import ApplyButton, { ApplyResult } from "@/components/jobs/ApplyButton";
@@ -22,6 +21,9 @@ type Filters = {
 
 type SelectedJob = any | null;
 
+// Altura del navbar — ajusta este valor si cambias el navbar
+const NAVBAR_HEIGHT = 64; // px
+
 export default function ClientSplitView({ filters }: { filters: Filters }) {
   const [selectedJob, setSelectedJob] = React.useState<SelectedJob>(null);
   const [isMobile, setIsMobile] = React.useState(false);
@@ -37,7 +39,6 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Reset copied when job changes
   React.useEffect(() => { setCopied(false); }, [selectedJob?.id]);
 
   const handleSelect = (job: any) => {
@@ -46,7 +47,6 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
       setShowDetail(true);
       setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 50);
     } else {
-      // Scroll al top del área scrolleable del panel
       setTimeout(() => {
         if (detailScrollRef.current) detailScrollRef.current.scrollTop = 0;
       }, 50);
@@ -109,16 +109,11 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
             Volver a vacantes
           </button>
           <div id="job-detail-panel">
-            <JobDetailPanel
-              key={selectedJob.id ?? "empty"}
-              job={selectedJob}
-              canApply
-            />
+            <JobDetailPanel key={selectedJob.id ?? "empty"} job={selectedJob} canApply />
           </div>
         </div>
       );
     }
-
     return (
       <JobsFeed
         initial={filters}
@@ -130,15 +125,6 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
   }
 
   // ── Desktop ──────────────────────────────────────────────────────────
-  // Panel derecho sticky con altura fija = viewport - navbar - gap.
-  // Estructura:
-  //   ┌─ sticky wrapper ──────────────────────────┐
-  //   │  ┌─ toolbar (siempre visible) ──────────┐ │
-  //   │  └─────────────────────────────────────── │
-  //   │  ┌─ contenido scrolleable ──────────────┐ │
-  //   │  │  <JobDetailPanel hideToolbar />       │ │
-  //   │  └─────────────────────────────────────── │
-  //   └───────────────────────────────────────────┘
   return (
     <div className="flex gap-6 items-start">
       {/* Feed */}
@@ -153,15 +139,18 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
         />
       </div>
 
-      {/* Panel derecho — sticky, altura fija, scroll interno */}
+      {/* Panel derecho — sticky justo debajo del navbar */}
       <div
         id="job-detail-panel"
-        className="w-7/12 sticky top-4 flex flex-col rounded-2xl border glass-card overflow-hidden"
-        style={{ height: "calc(100vh - 5rem)" }}
+        className="w-7/12 sticky flex flex-col rounded-2xl border glass-card overflow-hidden"
+        style={{
+          top: NAVBAR_HEIGHT + 16, // navbar + 1rem de margen
+          height: `calc(100vh - ${NAVBAR_HEIGHT + 16 + 16}px)`, // viewport - top - bottom gap
+        }}
       >
         {selectedJob ? (
           <>
-            {/* ── Toolbar siempre visible ── */}
+            {/* Toolbar — nunca hace scroll, siempre visible */}
             <div className="flex items-center justify-between gap-2 border-b glass-card px-4 py-3 shrink-0">
               <div className="min-w-0 flex-1">
                 <h2 className="truncate text-sm font-semibold text-default pr-2">
@@ -176,35 +165,32 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
                   className="inline-flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
                 >
                   <Share2 className="h-4 w-4 text-muted shrink-0" />
-                  <span className="hidden sm:inline text-xs">Compartir</span>
+                  <span className="text-xs">Compartir</span>
                 </button>
                 {copied && (
                   <span className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-300/50 rounded px-2 py-1 whitespace-nowrap">
                     Link copiado
                   </span>
                 )}
-                <ApplyButton applyAction={applyAction} jobKey={selectedJob.id} />
+                <ApplyButton applyAction={applyAction} jobKey={selectedJob.id} label="Postularme" />
               </div>
             </div>
 
-            {/* ── Contenido scrolleable ── */}
+            {/* Contenido con scroll propio */}
             <div ref={detailScrollRef} className="flex-1 overflow-y-auto">
               <JobDetailPanel
                 key={selectedJob.id ?? "empty"}
                 job={selectedJob}
-                canApply={false}   /* toolbar ya está arriba, no duplicar */
+                canApply={false}
+                hideToolbar
               />
             </div>
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center p-6 text-center">
             <div>
-              <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">
-                Selecciona una vacante
-              </p>
-              <p className="text-sm text-muted mt-1">
-                Aquí verás los detalles completos de la vacante seleccionada.
-              </p>
+              <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">Selecciona una vacante</p>
+              <p className="text-sm text-muted mt-1">Aquí verás los detalles completos.</p>
             </div>
           </div>
         )}
