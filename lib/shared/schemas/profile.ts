@@ -122,7 +122,7 @@ export const ProfileFormSchema = z.object({
   firstName: z.string().min(2, "Nombre requerido"),
   lastName1: z.string().min(2, "Apellido paterno requerido"),
   lastName2: z.string().optional(),
-  location: z.string().min(2, "Ubicación requerida"),
+  location: z.string().optional().default(""),
   birthdate: z.string().optional(),
   linkedin: UrlLoose,
   github: UrlLoose,
