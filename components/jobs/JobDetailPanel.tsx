@@ -1,5 +1,4 @@
 // components/jobs/JobDetailPanel.tsx
-// components/jobs/JobDetailPanel.tsx
 "use client";
 
 import * as React from "react";
@@ -15,6 +14,7 @@ import {
   BadgeCheck,
   Wrench,
   Sparkles,
+  MapPin,                       // CAMBIO: nuevo ícono
 } from "lucide-react";
 import { fromNow } from "@/lib/dates";
 import ApplyButton, { ApplyResult } from "./ApplyButton";
@@ -202,6 +202,14 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
   const companyName = showCompanyName ? companyNameRaw : "";
   const companyLogo = !confidential ? companyLogoRaw : null;
 
+  // CAMBIO: normaliza "Remote" → "Remoto" y cae a remote flag
+  const locationDisplay = React.useMemo(() => {
+    const loc = job?.location?.trim();
+    if (!loc || loc === "—") return job?.remote ? "Remoto" : null;
+    if (/^remote$/i.test(loc)) return "Remoto";
+    return loc;
+  }, [job?.location, job?.remote]);
+
   const [detail, setDetail] = React.useState<{
     showSalary?: boolean | null;
     salaryMin?: number | null;
@@ -354,49 +362,53 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
   }
 
   return (
-    // FIX 1: overflow-hidden en el article, sin padding (el toolbar lo maneja internamente)
     <article className="relative rounded-2xl border glass-card overflow-hidden">
 
-      {/* FIX 2: toolbar con px/py en lugar de p-4 md:p-6, gap reducido */}
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b glass-card px-4 py-3">
+      {/*
+        CAMBIO: toolbar
+        - Antes: flex fila única → título truncado en móvil
+        - Ahora: columna en móvil (título completo), fila en sm+
+      */}
+      <div className="sticky top-0 z-10 border-b glass-card px-4 py-3">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
 
-        {/* FIX 3: flex-1 + pr-2 para que el título no empuje los botones */}
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-sm font-semibold text-default pr-2">{job.title}</h2>
-        </div>
+          {/* Título: 2 líneas máx en móvil, truncado en sm+ */}
+          <h2 className="text-sm font-semibold text-default leading-snug line-clamp-2 sm:truncate sm:flex-1 sm:pr-2">
+            {job.title}
+          </h2>
 
-        {/* FIX 4: shrink-0 en el contenedor de botones */}
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={handleShare}
-            title="Compartir"
-            className="inline-flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
-          >
-            <Share2 className="h-4 w-4 text-muted shrink-0" />
-            <span className="hidden sm:inline text-xs">Compartir</span>
-          </button>
-
-          {copied && (
-            <span className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-300/50 rounded px-2 py-1 whitespace-nowrap">
-              Link copiado
-            </span>
-          )}
-
-          {canApply ? (
-            <ApplyButton applyAction={applyAction} jobKey={job.id} />
-          ) : editHref ? (
-            <Link
-              href={editHref}
-              className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+          {/* Botones: siempre en fila */}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={handleShare}
+              title="Compartir"
+              className="inline-flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
             >
-              Editar vacante
-            </Link>
-          ) : null}
+              <Share2 className="h-4 w-4 text-muted shrink-0" />
+              <span className="hidden sm:inline text-xs">Compartir</span>
+            </button>
+
+            {copied && (
+              <span className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-300/50 rounded px-2 py-1 whitespace-nowrap">
+                Link copiado
+              </span>
+            )}
+
+            {canApply ? (
+              <ApplyButton applyAction={applyAction} jobKey={job.id} />
+            ) : editHref ? (
+              <Link
+                href={editHref}
+                className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+              >
+                Editar vacante
+              </Link>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* Contenido scrollable — sin cambios respecto al original */}
       <div className="overflow-y-auto px-6 py-5 space-y-6">
         <header className="space-y-3">
           <div className="flex items-start gap-3">
@@ -406,11 +418,26 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="text-2xl font-semibold leading-tight text-default">{job.title}</h1>
-              <p className="text-sm text-muted">
-                {showCompanyName ? `${companyName} — ` : ""}
-                {job.location || "—"}
-              </p>
+              {/* CAMBIO: text-xl en móvil, text-2xl en md+ para que no desborde */}
+              <h1 className="text-xl md:text-2xl font-semibold leading-tight text-default break-words">
+                {job.title}
+              </h1>
+              {/*
+                CAMBIO: empresa y ubicación separadas, con ícono MapPin
+                Antes: `{companyName} — {job.location || "—"}`  (podía mostrar "—")
+                Ahora: empresa en negrita, ubicación con ícono solo si existe
+              */}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
+                {showCompanyName && (
+                  <span className="font-medium text-default">{companyName}</span>
+                )}
+                {locationDisplay && (
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5 shrink-0" />
+                    {locationDisplay}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -464,29 +491,30 @@ export default function JobDetailPanel({ job, canApply = true, editHref }: Props
 
         <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
           <h3 className="text-sm font-semibold text-default mb-2">Detalles de la vacante</h3>
-          <div className="grid sm:grid-cols-3 gap-3 rounded-xl border glass-card p-4 md:p-6">
+          {/* CAMBIO: grid-cols-2 en móvil (antes sin columnas → apilado) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-xl border glass-card p-4 md:p-6">
             <div className="flex items-center gap-2 min-w-0">
-              <Briefcase className="h-4 w-4 text-muted" />
-              <div>
+              <Briefcase className="h-4 w-4 text-muted shrink-0" />
+              <div className="min-w-0">
                 <p className="text-[11px] text-muted">Tipo</p>
-                <p className="font-medium text-default truncate">{meta?.employmentType || job.employmentType || "—"}</p>
+                <p className="font-medium text-default text-sm truncate">{meta?.employmentType || job.employmentType || "—"}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 min-w-0">
-              <Wallet className="h-4 w-4 text-muted" />
-              <div>
+              <Wallet className="h-4 w-4 text-muted shrink-0" />
+              <div className="min-w-0">
                 <p className="text-[11px] text-muted">Sueldo</p>
-                <p className="font-medium text-default truncate">
+                <p className="font-medium text-default text-sm truncate">
                   {showSalaryExplicit ? `${salaryMin?.toLocaleString() ?? "—"} – ${salaryMax?.toLocaleString() ?? "—"} ${currency}` : "Oculto"}
                 </p>
               </div>
             </div>
             {schedule && (
               <div className="flex items-center gap-2 min-w-0">
-                <Clock3 className="h-4 w-4 text-muted" />
-                <div>
+                <Clock3 className="h-4 w-4 text-muted shrink-0" />
+                <div className="min-w-0">
                   <p className="text-[11px] text-muted">Horario</p>
-                  <p className="font-medium text-default truncate">{schedule}</p>
+                  <p className="font-medium text-default text-sm truncate">{schedule}</p>
                 </div>
               </div>
             )}

@@ -95,17 +95,18 @@ export default function ApplyButton({
       {pending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
-          <span>Enviando…</span>
+          {/* CAMBIO: oculto en móvil, visible en sm+ */}
+          <span className="hidden sm:inline">Enviando…</span>
         </>
       ) : justApplied ? (
         <>
           <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>¡Listo!</span>
+          <span className="hidden sm:inline">¡Listo!</span>
         </>
       ) : (
         <>
           <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>{label}</span>
+          <span className="hidden sm:inline">{label}</span>
         </>
       )}
     </button>

@@ -3,8 +3,9 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import Image from "next/image";
+import { MapPin } from "lucide-react";   // CAMBIO: nuevo ícono
 import { fromNow } from "@/lib/dates";
-import { useJobs } from "@/lib/client/hooks/useJobs"; // ✅ CORREGIDO
+import { useJobs } from "@/lib/client/hooks/useJobs";
 import { useRouter } from "next/navigation";
 
 type Props = {
@@ -131,6 +132,15 @@ function isEnglishRequired(j: any): boolean {
         : raw?.label ?? raw?.name ?? raw?.language ?? "";
     return /inglés|ingles|english/i.test(label || "");
   });
+}
+
+// CAMBIO: normaliza ubicación — "Remote" → "Remoto", vacío → null
+function resolveLocation(j: any): string | null {
+  if (j.remote) return "Remoto";
+  const loc = j.location?.trim();
+  if (!loc || loc === "—") return null;
+  if (/^remote$/i.test(loc)) return "Remoto";
+  return loc;
 }
 
 export default function JobsFeed({
@@ -279,16 +289,13 @@ export default function JobsFeed({
           const isSelected = j.id === selectedId;
 
           const onActivate = () => {
-            // avisamos al padre qué vacante se seleccionó
             onSelect(j);
 
-            // En móviles / pantallas chicas, hacer scroll hacia el detalle
             if (typeof window === "undefined") return;
             if (
               window.matchMedia &&
               window.matchMedia("(min-width: 1024px)").matches
             ) {
-              // en desktop no movemos el scroll
               return;
             }
 
@@ -304,9 +311,9 @@ export default function JobsFeed({
           const logo = companyLogo(j);
           const confidential = isConfidential(j);
           const companyName = companyNameRaw(j);
-
           const skillLabels = getSkillLabels(j);
           const english = isEnglishRequired(j);
+          const location = resolveLocation(j); // CAMBIO
 
           return (
             <li
@@ -330,7 +337,6 @@ export default function JobsFeed({
               ].join(" ")}
             >
               <div className="flex items-start justify-between gap-3">
-                {/* Logo real o avatar genérico */}
                 {logo && !confidential ? (
                   <div className="shrink-0 mt-0.5">
                     <div className="h-9 w-9 rounded-lg border border-zinc-200/70 dark:border-zinc-700/60 bg-white/70 dark:bg-zinc-900/60 flex items-center justify-center">
@@ -351,12 +357,29 @@ export default function JobsFeed({
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold truncate text-default">
+                  {/*
+                    CAMBIO: title
+                    Antes: truncate (1 línea, corta en móvil)
+                    Ahora: line-clamp-2 en móvil, line-clamp-1 en sm+
+                  */}
+                  <h3 className="font-semibold text-default leading-snug line-clamp-2 sm:line-clamp-1">
                     {j.title ?? "Sin título"}
                   </h3>
-                  <p className="text-sm text-muted truncate">
-                    {displayCompany(j)} — {j.location ?? "—"}
+
+                  {/*
+                    CAMBIO: empresa y ubicación separadas
+                    Antes: `{displayCompany(j)} — {j.location ?? "—"}`
+                    Ahora: empresa en su propia línea, ubicación con ícono debajo
+                  */}
+                  <p className="text-sm text-muted truncate mt-0.5">
+                    {displayCompany(j)}
                   </p>
+                  {location && (
+                    <p className="inline-flex items-center gap-1 text-xs text-muted mt-0.5">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      {location}
+                    </p>
+                  )}
 
                   <div className="mt-1 flex flex-wrap items-center gap-2">
                     <TypeChip j={j} />
