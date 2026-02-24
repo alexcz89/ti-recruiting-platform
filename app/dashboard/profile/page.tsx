@@ -13,19 +13,26 @@ export default async function ProfilePage() {
 
   const user = session.user as any;
   const userId = user.id as string;
-  const companyId = user.companyId as string | undefined;
 
-  const [dbUser, profile, company] = await Promise.all([
-    prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        emailVerified: true,
-        createdAt: true,
-      },
-    }),
+  // ✅ Leer companyId desde la BD, no del JWT
+  // El JWT puede estar desactualizado si se asignó la empresa después del login
+  const dbUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      emailVerified: true,
+      createdAt: true,
+      companyId: true, // ✅ desde BD, no del session
+    },
+  });
+
+  if (!dbUser) redirect("/auth/signin");
+
+  const companyId = dbUser.companyId ?? undefined; // ✅ siempre fresco
+
+  const [profile, company] = await Promise.all([
     prisma.recruiterProfile.findUnique({
       where: { userId },
       select: { phone: true, website: true, status: true },
@@ -43,8 +50,6 @@ export default async function ProfilePage() {
         })
       : null,
   ]);
-
-  if (!dbUser) redirect("/auth/signin");
 
   const emailVerified = !!dbUser.emailVerified;
   const profileStatus = profile?.status || "PENDING";
@@ -88,15 +93,18 @@ export default async function ProfilePage() {
                   <div>
                     <h2 className="text-lg font-semibold text-default">Mi empresa</h2>
                     <p className="text-sm text-muted">
-                      Empresa actual: <span className="font-medium text-default">{company?.name || "TestCorp"}</span>
+                      Empresa actual:{" "}
+                      <span className="font-medium text-default">
+                        {company?.name || ""}
+                      </span>
                     </p>
                   </div>
-                  
+
                   {company && company._count.jobs > 0 && (
                     <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-500/40 px-3 py-1.5">
                       <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                       <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                        {company._count.jobs} vacante{company._count.jobs !== 1 ? 's' : ''}
+                        {company._count.jobs} vacante{company._count.jobs !== 1 ? "s" : ""}
                       </span>
                     </div>
                   )}
@@ -119,7 +127,7 @@ export default async function ProfilePage() {
             {/* Account Card */}
             <section className="rounded-2xl border glass-card p-6">
               <h2 className="text-lg font-semibold text-default mb-4">Tu cuenta</h2>
-              
+
               <div className="space-y-4">
                 {/* User Info */}
                 <div className="flex items-start gap-3">
@@ -195,6 +203,7 @@ export default async function ProfilePage() {
                 </div>
               </div>
             </section>
+
             {/* Help Card */}
             <section className="rounded-2xl border border-blue-200 dark:border-blue-500/30 bg-blue-50/60 dark:bg-blue-900/20 p-6">
               <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
@@ -204,7 +213,6 @@ export default async function ProfilePage() {
                 Si tienes problemas con tu cuenta o necesitas cambiar información,
                 contáctanos.
               </p>
-
               <a
                 href="mailto:support@taskit.com"
                 className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
