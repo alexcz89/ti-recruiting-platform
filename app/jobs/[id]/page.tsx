@@ -6,27 +6,86 @@ import { authOptions } from '@/lib/server/auth';
 import { getSessionCompanyId } from '@/lib/server/session';
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
 import AssessmentRequirement from "./AssessmentRequirement";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type Params = { params: { id: string } };
 
-// ——— Helper para recortar texto seguro
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
+const SITE_NAME = "TaskIO";
+const DEFAULT_OG_IMAGE = `${APP_URL}/og-default.png`; // imagen fallback 1200x630
+
+/* ─── Helpers ─── */
 function excerpt(text: string | null | undefined, max = 160) {
   const t = (text || "").replace(/\s+/g, " ").trim();
   if (!t) return "";
   return t.length > max ? t.slice(0, max - 1) + "…" : t;
 }
 
-// ——— Helper para quitar etiquetas HTML (para SEO)
 function stripHtml(html: string | null | undefined) {
   if (!html) return "";
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-// ——— Metadata para SEO/Social
-export async function generateMetadata({ params }: Params) {
+function labelEmploymentType(type: string | null | undefined) {
+  switch (type) {
+    case "FULL_TIME":   return "Tiempo completo";
+    case "PART_TIME":   return "Medio tiempo";
+    case "CONTRACT":    return "Por periodo";
+    case "INTERNSHIP":  return "Prácticas profesionales";
+    default:            return null;
+  }
+}
+
+function buildDescription(job: {
+  title: string;
+  description?: string | null;
+  descriptionHtml?: string | null;
+  city?: string | null;
+  employmentType?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  currency?: string | null;
+  company?: { name?: string | null } | null;
+}): string {
+  const parts: string[] = [];
+
+  // Empresa
+  if (job.company?.name) parts.push(job.company.name);
+
+  // Ubicación
+  if (job.city) parts.push(job.city);
+
+  // Tipo de empleo
+  const empLabel = labelEmploymentType(job.employmentType);
+  if (empLabel) parts.push(empLabel);
+
+  // Salario
+  if (job.salaryMin || job.salaryMax) {
+    const currency = job.currency ?? "MXN";
+    const fmt = (n: number) => new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
+    if (job.salaryMin && job.salaryMax) {
+      parts.push(`${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`);
+    } else if (job.salaryMin) {
+      parts.push(`Desde ${currency} ${fmt(job.salaryMin)}`);
+    } else if (job.salaryMax) {
+      parts.push(`Hasta ${currency} ${fmt(job.salaryMax)}`);
+    }
+  }
+
+  const header = parts.join(" · ");
+
+  // Descripción truncada
+  const rawDesc = job.description || stripHtml(job.descriptionHtml || "");
+  const desc = excerpt(rawDesc, 120);
+
+  return header && desc ? `${header}\n${desc}` : header || desc || `Vacante: ${job.title}`;
+}
+
+/* ─── Metadata ─── */
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const job = await prisma.job.findUnique({
     where: { id: params.id },
     select: {
@@ -34,47 +93,73 @@ export async function generateMetadata({ params }: Params) {
       title: true,
       description: true,
       descriptionHtml: true,
-      company: { select: { name: true } },
-      location: true,
+      city: true,
+      employmentType: true,
+      salaryMin: true,
+      salaryMax: true,
+      currency: true,
+      company: { select: { name: true, logoUrl: true } },
     },
   });
 
   if (!job) return {};
 
-  const title = `${job.title} ${job.company?.name ? "— " + job.company.name : ""}`;
+  const companyName = job.company?.name ?? null;
+  const title = companyName
+    ? `${job.title} — ${companyName} | ${SITE_NAME}`
+    : `${job.title} | ${SITE_NAME}`;
 
-  const baseDescription = job.description || stripHtml(job.descriptionHtml || "");
-  const description = excerpt(baseDescription, 160);
+  const description = buildDescription(job);
+  const url = `${APP_URL}/jobs/${job.id}`;
 
-  const url = `${
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  }/jobs/${job.id}`;
+  // Imagen OG: logo de empresa si existe, si no la imagen default del sitio
+  const ogImage = job.company?.logoUrl ?? DEFAULT_OG_IMAGE;
 
   return {
     title,
     description,
     alternates: { canonical: url },
-    openGraph: { title, description, url, type: "website" },
-    twitter: { card: "summary", title, description },
+
+    openGraph: {
+      title: companyName ? `${job.title} — ${companyName}` : job.title,
+      description,
+      url,
+      siteName: SITE_NAME,
+      locale: "es_MX",
+      type: "website",
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: companyName ? `${job.title} en ${companyName}` : job.title,
+        },
+      ],
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title: companyName ? `${job.title} — ${companyName}` : job.title,
+      description,
+      images: [ogImage],
+    },
   };
 }
 
+/* ─── Page ─── */
 export default async function JobDetail({ params }: Params) {
-  // 1) Sesión y rol
   const session = await getServerSession(authOptions);
   const user = (session?.user as any) || null;
-
-  const role =
-    (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
+  const role = (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
   const isCandidate = role === "CANDIDATE";
 
-  // 2) Cargar vacante + assessment requerido (si existe)
   const job = await prisma.job.findUnique({
     where: { id: params.id },
     select: {
       id: true,
       title: true,
       location: true,
+      city: true,
       employmentType: true,
       remote: true,
       description: true,
@@ -88,11 +173,9 @@ export default async function JobDetail({ params }: Params) {
       companyId: true,
       company: { select: { name: true } },
       status: true,
-
-      // 👇 assessment requerido (solo 1 por ahora)
       assessments: {
         where: { isRequired: true },
-        orderBy: { createdAt: "asc" }, // ✅ determinístico
+        orderBy: { createdAt: "asc" },
         take: 1,
         select: {
           id: true,
@@ -115,9 +198,7 @@ export default async function JobDetail({ params }: Params) {
   });
 
   if (!job) notFound();
-  // if (job.status !== "OPEN") notFound();
 
-  // ✅ Log temporal para detectar si trae assessment requerido
   console.log("[PUBLIC JOB]", {
     jobId: job?.id,
     requiredAssessmentsCount: job?.assessments?.length ?? 0,
@@ -125,17 +206,13 @@ export default async function JobDetail({ params }: Params) {
     requiredAssessmentTitle: job?.assessments?.[0]?.template?.title ?? null,
   });
 
-  // 3) Permisos recruiter/admin: solo su empresa
   let canEdit = false;
   if (role === "RECRUITER" || role === "ADMIN") {
     const myCompanyId = await getSessionCompanyId().catch(() => null);
-    if (!myCompanyId || job.companyId !== myCompanyId) {
-      notFound();
-    }
+    if (!myCompanyId || job.companyId !== myCompanyId) notFound();
     canEdit = true;
   }
 
-  // 4) Intento del candidato (solo si está logueado como candidato y hay assessment)
   const requiredAssessment = job.assessments?.[0] ?? null;
 
   const userAttempt =
@@ -147,16 +224,10 @@ export default async function JobDetail({ params }: Params) {
             status: { in: ["SUBMITTED", "EVALUATED"] },
           },
           orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            status: true,
-            totalScore: true,
-            passed: true,
-          },
+          select: { id: true, status: true, totalScore: true, passed: true },
         })
       : null;
 
-  // 5) Shape para JobDetailPanel
   const panelJob = {
     id: job.id,
     title: job.title,
@@ -174,7 +245,6 @@ export default async function JobDetail({ params }: Params) {
     updatedAt: job.updatedAt,
   };
 
-  // 6) JSON-LD
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "JobPosting",
@@ -186,35 +256,20 @@ export default async function JobDetail({ params }: Params) {
     jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
     jobLocation: job.remote
       ? undefined
-      : [
-          {
-            "@type": "Place",
-            address: {
-              "@type": "PostalAddress",
-              addressLocality: job.location || "México",
-              addressCountry: "MX",
-            },
-          },
-        ],
+      : [{ "@type": "Place", address: { "@type": "PostalAddress", addressLocality: job.location || "México", addressCountry: "MX" } }],
     description: job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
     employmentType: job.employmentType,
-    identifier: {
-      "@type": "PropertyValue",
-      name: job.company?.name ?? "Confidencial",
-      value: job.id,
-    },
+    identifier: { "@type": "PropertyValue", name: job.company?.name ?? "Confidencial", value: job.id },
   };
 
   return (
     <main className="max-w-[1100px] xl:max-w-[1200px] mx-auto px-6 lg:px-10 py-8 space-y-6">
       <script
         type="application/ld+json"
-        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
 
-      {/* ✅ Badge / bloque de evaluación requerida */}
       {requiredAssessment && (
         <AssessmentRequirement
           assessment={requiredAssessment as any}
