@@ -84,9 +84,30 @@ export async function createRecruiterAction(
     // ¿Usuario ya existe?
     const exists = await prisma.user.findUnique({
       where: { email },
-      select: { id: true },
+      select: { id: true, email: true, emailVerified: true },
     });
+
     if (exists) {
+      // ✅ Si existe pero NO ha verificado su correo → reenviar email de verificación
+      if (!exists.emailVerified) {
+        const token = await createEmailVerifyToken(
+          { email: exists.email },
+          60
+        );
+        const baseUrl =
+          process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+        const verifyUrl = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(
+          token
+        )}`;
+        await sendVerificationEmail(exists.email, verifyUrl);
+        return {
+          ok: true,
+          message:
+            "Te reenviamos el correo de verificación. Revisa tu bandeja de entrada (y carpeta spam).",
+        };
+      }
+
+      // ❌ Ya existe y ya verificó → bloquear
       return {
         ok: false,
         message: "Este correo ya está registrado.",
@@ -110,7 +131,7 @@ export async function createRecruiterAction(
     const user = await prisma.user.create({
       data: {
         email,
-        name: fullName,           // ✅ Nombre completo
+        name: fullName,            // ✅ Nombre completo
         firstName: data.firstName, // ✅ Nombre separado
         lastName: data.lastName,   // ✅ Apellido separado
         passwordHash,

@@ -651,7 +651,7 @@ export default async function Home() {
           <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
             <div className="text-center sm:text-left">
               <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                TaskIT
+                TaskIO
               </p>
               <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
                 Conectando talento tech con oportunidades
