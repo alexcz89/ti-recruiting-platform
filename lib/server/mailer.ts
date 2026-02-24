@@ -13,7 +13,7 @@ import crypto from "crypto";
  * - NEXT_PUBLIC_APP_NAME="Bolsa TI"
  */
 
-const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "Bolsa TI";
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "TaskIO";
 
 function resolveBaseUrl() {
   const env =
@@ -37,7 +37,7 @@ const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
 const RESEND_FROM =
   process.env.RESEND_FROM ||
   process.env.EMAIL_FROM ||
-  "Bolsa TI <noreply@example.com>";
+  "Taskio <noreply@taskio.com.mx>";
 
 // ⚠️ No instancies Resend globalmente si no vas a enviar emails reales.
 let resend: Resend | null = null;
