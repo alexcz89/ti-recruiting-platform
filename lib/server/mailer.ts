@@ -154,7 +154,8 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
     `Verifica tu correo en ${APP_NAME}:\n${verifyUrl}\n\n` +
     `Si no solicitaste este registro, puedes ignorar este mensaje.`;
 
-  return sendEmail({ to, subject, html, text, dedupeKey: `verify:${to}` });
+  // ✅ dedupeKey única por intento para evitar bloqueos de idempotencia en Resend
+  return sendEmail({ to, subject, html, text, dedupeKey: `verify:${to}:${Date.now()}` });
 }
 
 /* ====================== Assessments ======================= */
@@ -510,4 +511,4 @@ function escapeHtml(s: string) {
 
 function truncate(s: string, n: number) {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
-} 
+}
