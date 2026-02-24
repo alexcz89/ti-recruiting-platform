@@ -14,7 +14,7 @@ import { createRecruiterAction } from "./actions";
 const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
 
 type Step = 1 | 2 | 3;
-type EmailValidationState = "idle" | "checking" | "available" | "taken" | "invalid";
+type EmailValidationState = "idle" | "checking" | "available" | "taken" | "invalid" | "freedomain";
 
 export default function RecruiterSignupPage() {
   const router = useRouter();
@@ -31,11 +31,9 @@ export default function RecruiterSignupPage() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   
-  // ✅ NUEVO: Estado para mostrar/ocultar contraseñas
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // ✅ NUEVO: Estado para validación de email en tiempo real
   const [emailValidation, setEmailValidation] = useState<EmailValidationState>("idle");
   const [emailCheckTimeout, setEmailCheckTimeout] = useState<NodeJS.Timeout | null>(null);
 
@@ -45,7 +43,6 @@ export default function RecruiterSignupPage() {
     const { name, value } = e.target;
     setForm((p) => ({ ...p, [name]: value }));
     
-    // Limpiar error del campo al escribir
     if (errors[name]) {
       setErrors((prev) => {
         const next = { ...prev };
@@ -54,16 +51,13 @@ export default function RecruiterSignupPage() {
       });
     }
 
-    // ✅ NUEVO: Trigger validación de email al escribir
     if (name === "email") {
       setEmailValidation("idle");
       
-      // Limpiar timeout anterior
       if (emailCheckTimeout) {
         clearTimeout(emailCheckTimeout);
       }
 
-      // Validación básica de formato antes de hacer request
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(value)) {
         if (value.length > 0) {
@@ -72,7 +66,6 @@ export default function RecruiterSignupPage() {
         return;
       }
 
-      // Debounce: esperar 800ms después de que el usuario deje de escribir
       const timeout = setTimeout(() => {
         checkEmailAvailability(value);
       }, 800);
@@ -81,19 +74,22 @@ export default function RecruiterSignupPage() {
     }
   };
 
-  // ✅ NUEVO: Función para verificar disponibilidad del email
   const checkEmailAvailability = async (email: string) => {
     if (!email) return;
-      // ✅ Validar dominio gratuito ANTES de hacer el request
-    const freeDomains = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", 
-      "live.com", "icloud.com", "msn.com", "hotmail.es", "yahoo.es"];
+
+    // ✅ Bloquear dominios gratuitos ANTES del fetch
+    const freeDomains = [
+      "gmail.com", "hotmail.com", "yahoo.com", "outlook.com",
+      "live.com", "icloud.com", "msn.com", "hotmail.es", "yahoo.es",
+      "gmail.es", "yahoo.com.mx", "hotmail.com.mx"
+    ];
     const domain = email.split("@")[1]?.toLowerCase();
     if (freeDomains.includes(domain)) {
-      setEmailValidation("taken");
-      setErrors(prev => ({ ...prev, email: "No aceptamos dominios gratuitos (Gmail, Hotmail, etc.)" }));
+      setEmailValidation("freedomain");
+      setErrors(prev => ({ ...prev, email: "No aceptamos dominios gratuitos para reclutadores" }));
       return;
     }
-    
+
     setEmailValidation("checking");
 
     try {
@@ -117,7 +113,6 @@ export default function RecruiterSignupPage() {
     }
   };
 
-  // Limpiar timeout al desmontar
   useEffect(() => {
     return () => {
       if (emailCheckTimeout) {
@@ -126,7 +121,6 @@ export default function RecruiterSignupPage() {
     };
   }, [emailCheckTimeout]);
 
-  // Validar paso actual antes de avanzar
   const validateStep = (step: Step): boolean => {
     const newErrors: Record<string, string> = {};
 
@@ -150,8 +144,8 @@ export default function RecruiterSignupPage() {
         newErrors.email = "El correo es requerido";
       } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
         newErrors.email = "Correo inválido";
-      } else if (emailValidation === "taken") {
-        newErrors.email = "Este correo ya está registrado";
+      } else if (emailValidation === "taken" || emailValidation === "freedomain") {
+        newErrors.email = errors.email || "Correo no válido";
       }
     }
 
@@ -212,7 +206,6 @@ export default function RecruiterSignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-2xl">
-        {/* Header con logo y título */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-100">
             Registro de Reclutador
@@ -222,7 +215,6 @@ export default function RecruiterSignupPage() {
           </p>
         </div>
 
-        {/* Barra de progreso */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
             <StepIndicator step={1} currentStep={currentStep} label="Empresa" />
@@ -237,7 +229,6 @@ export default function RecruiterSignupPage() {
           </div>
         </div>
 
-        {/* Card del formulario */}
         <div className="glass-card rounded-2xl border border-zinc-200/70 dark:border-zinc-700/60 p-6 md:p-8">
           {/* Paso 1: Datos de la empresa */}
           {currentStep === 1 && (
@@ -363,7 +354,6 @@ export default function RecruiterSignupPage() {
                 </div>
               </div>
 
-              {/* ✅ NUEVO: Campo de email con validación en tiempo real */}
               <div>
                 <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2">
                   Correo corporativo *
@@ -376,7 +366,7 @@ export default function RecruiterSignupPage() {
                     onChange={onChange}
                     placeholder="tu@empresa.com"
                     className={`w-full rounded-xl border px-4 py-3 pr-12 text-sm transition-colors ${
-                      errors.email || emailValidation === "taken"
+                      errors.email || emailValidation === "taken" || emailValidation === "freedomain"
                         ? "border-red-300 focus:ring-red-500"
                         : emailValidation === "available"
                         ? "border-emerald-300 focus:ring-emerald-500"
@@ -384,7 +374,6 @@ export default function RecruiterSignupPage() {
                     } focus:ring-2 focus:border-transparent dark:border-zinc-700 dark:bg-zinc-900/50`}
                   />
                   
-                  {/* Indicador de estado en el input */}
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     {emailValidation === "checking" && (
                       <svg className="w-5 h-5 text-zinc-400 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -397,7 +386,7 @@ export default function RecruiterSignupPage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                       </svg>
                     )}
-                    {emailValidation === "taken" && (
+                    {(emailValidation === "taken" || emailValidation === "freedomain") && (
                       <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                       </svg>
@@ -416,9 +405,19 @@ export default function RecruiterSignupPage() {
                     ✓ Email disponible
                   </p>
                 )}
+                {/* ✅ Dominio gratuito — mensaje específico */}
+                {emailValidation === "freedomain" && (
+                  <p className="mt-1 text-xs text-red-500">
+                    ❌ No aceptamos dominios gratuitos (Gmail, Hotmail, Yahoo, etc.) para reclutadores
+                  </p>
+                )}
+                {/* ✅ Correo ya registrado — mensaje específico */}
                 {emailValidation === "taken" && (
                   <p className="mt-1 text-xs text-red-500">
-                    Este correo ya está registrado. <a href="/auth/signin?role=RECRUITER" className="underline">Inicia sesión</a>
+                    Este correo ya está registrado.{" "}
+                    <a href="/auth/signin?role=RECRUITER" className="underline">
+                      Inicia sesión
+                    </a>
                   </p>
                 )}
                 {emailValidation === "invalid" && (
@@ -426,7 +425,7 @@ export default function RecruiterSignupPage() {
                     Formato de correo inválido
                   </p>
                 )}
-                {errors.email && emailValidation !== "taken" && (
+                {errors.email && emailValidation !== "taken" && emailValidation !== "freedomain" && (
                   <p className="mt-1 text-xs text-red-500">{errors.email}</p>
                 )}
                 
@@ -454,7 +453,6 @@ export default function RecruiterSignupPage() {
                 </p>
               </div>
 
-              {/* ✅ NUEVO: Campo de contraseña con toggle */}
               <div>
                 <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2">
                   Contraseña *
@@ -472,8 +470,6 @@ export default function RecruiterSignupPage() {
                         : "border-zinc-300 focus:ring-violet-500"
                     } focus:ring-2 focus:border-transparent dark:border-zinc-700 dark:bg-zinc-900/50`}
                   />
-                  
-                  {/* Botón toggle mostrar/ocultar */}
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
@@ -511,7 +507,6 @@ export default function RecruiterSignupPage() {
                 </ul>
               </div>
 
-              {/* ✅ NUEVO: Campo de confirmar contraseña con toggle */}
               <div>
                 <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-200 mb-2">
                   Confirmar contraseña *
@@ -531,8 +526,6 @@ export default function RecruiterSignupPage() {
                         : "border-zinc-300 focus:ring-violet-500"
                     } focus:ring-2 focus:border-transparent dark:border-zinc-700 dark:bg-zinc-900/50`}
                   />
-                  
-                  {/* Botón toggle mostrar/ocultar */}
                   <button
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
@@ -561,7 +554,6 @@ export default function RecruiterSignupPage() {
                 )}
               </div>
 
-              {/* Resumen de datos */}
               <div className="mt-6 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200 dark:border-zinc-700">
                 <p className="text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-2">
                   Resumen de tu registro:
@@ -575,7 +567,6 @@ export default function RecruiterSignupPage() {
             </div>
           )}
 
-          {/* Botones de navegación */}
           <div className="mt-8 flex items-center justify-between gap-4">
             {currentStep > 1 ? (
               <button
@@ -630,7 +621,6 @@ export default function RecruiterSignupPage() {
           </div>
         </div>
 
-        {/* Link para login */}
         <p className="mt-6 text-center text-sm text-zinc-600 dark:text-zinc-400">
           ¿Ya tienes cuenta?{" "}
           <a
@@ -645,7 +635,6 @@ export default function RecruiterSignupPage() {
   );
 }
 
-// Componente de indicador de paso
 function StepIndicator({
   step,
   currentStep,
