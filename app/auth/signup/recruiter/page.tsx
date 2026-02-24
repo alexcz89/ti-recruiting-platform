@@ -84,7 +84,16 @@ export default function RecruiterSignupPage() {
   // ✅ NUEVO: Función para verificar disponibilidad del email
   const checkEmailAvailability = async (email: string) => {
     if (!email) return;
-
+      // ✅ Validar dominio gratuito ANTES de hacer el request
+    const freeDomains = ["gmail.com", "hotmail.com", "yahoo.com", "outlook.com", 
+      "live.com", "icloud.com", "msn.com", "hotmail.es", "yahoo.es"];
+    const domain = email.split("@")[1]?.toLowerCase();
+    if (freeDomains.includes(domain)) {
+      setEmailValidation("taken");
+      setErrors(prev => ({ ...prev, email: "No aceptamos dominios gratuitos (Gmail, Hotmail, etc.)" }));
+      return;
+    }
+    
     setEmailValidation("checking");
 
     try {
