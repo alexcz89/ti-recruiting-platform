@@ -2,9 +2,7 @@
 import { NextResponse } from "next/server";
 import { verifyEmailVerifyToken } from '@/lib/server/tokens';
 import { prisma } from '@/lib/server/prisma';
-
-// Si planeas usar Node APIs (fs/crypto nativas), descomenta:
-// export const runtime = "nodejs";
+import crypto from "crypto";
 
 /** Solo aceptamos rutas relativas para evitar open redirects */
 function sanitizeCallbackUrl(cb?: string | null): string | undefined {
@@ -36,11 +34,20 @@ export async function GET(req: Request) {
       });
     }
 
-    // Redirige a la nueva pantalla de resultado con contexto
+    // ✅ Generar token de auto-login de un solo uso (válido 5 minutos)
+    const autoLoginToken = crypto.randomBytes(32).toString("hex");
+    await prisma.autoLoginToken.create({
+      data: {
+        token: autoLoginToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      },
+    });
+
     const dest = new URL("/auth/verify", req.url);
     dest.searchParams.set("status", "ok");
-    // Pasamos el rol para pintar el CTA correcto
     dest.searchParams.set("role", user.role || "CANDIDATE");
+    dest.searchParams.set("alt", autoLoginToken); // ✅ para auto-login en el cliente
     if (callbackUrl) dest.searchParams.set("callbackUrl", callbackUrl);
 
     return NextResponse.redirect(dest);

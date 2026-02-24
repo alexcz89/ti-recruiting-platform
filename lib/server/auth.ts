@@ -24,6 +24,8 @@ export const authOptions: AuthOptions = {
         },
       },
     }),
+
+    // ✅ Provider normal con email/password
     CredentialsProvider({
       name: "Credentials",
       credentials: {
@@ -86,28 +88,84 @@ export const authOptions: AuthOptions = {
         } as any;
       },
     }),
+
+    // ✅ Provider de auto-login con token de un solo uso (post-verificación de email)
+    CredentialsProvider({
+      id: "auto-login-token",
+      name: "AutoLoginToken",
+      credentials: {
+        token: { label: "Token", type: "text" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token) return null;
+
+        const record = await prisma.autoLoginToken.findUnique({
+          where: { token: credentials.token },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                role: true,
+                companyId: true,
+                emailVerified: true,
+              },
+            },
+          },
+        });
+
+        if (!record) return null;
+        if (record.usedAt) return null;
+        if (record.expiresAt < new Date()) return null;
+
+        // Marcar como usado (one-time use)
+        await prisma.autoLoginToken.update({
+          where: { token: credentials.token },
+          data: { usedAt: new Date() },
+        });
+
+        const user = record.user;
+
+        let companyId = user.companyId ?? null;
+        if (user.role === "RECRUITER" && !companyId) {
+          const company = await ensureUserCompanyByEmail({
+            userId: user.id,
+            email: user.email,
+            suggestedName: null,
+            country: null,
+            city: null,
+          });
+          companyId = company?.id ?? null;
+        }
+
+        return {
+          id: user.id,
+          name: user.name ?? user.email.split("@")[0],
+          email: user.email,
+          role: user.role,
+          companyId,
+        } as any;
+      },
+    }),
   ],
 
   session: { strategy: "jwt" },
 
   callbacks: {
     async signIn({ user, account }) {
-      // Solo Google sign-in requiere lógica especial
       if (account?.provider === "google") {
         const email = user.email?.toLowerCase().trim();
         if (!email) return false;
 
-        // Buscar si ya existe el usuario
         const existingUser = await prisma.user.findUnique({
           where: { email },
           select: { id: true, role: true, emailVerified: true },
         });
 
         if (existingUser) {
-          // Solo permitir Google sign-in para CANDIDATOS
           if (existingUser.role !== "CANDIDATE") return false;
 
-          // Marcar email como verificado si no lo estaba
           if (!existingUser.emailVerified) {
             await prisma.user.update({
               where: { email },
@@ -117,15 +175,13 @@ export const authOptions: AuthOptions = {
           return true;
         }
 
-        // Si no existe, no creamos cuenta automáticamente
-        // El usuario debe registrarse primero
         return "/auth/signin?error=google_no_account";
       }
 
       return true;
     },
 
-    async jwt({ token, user, account }) {
+    async jwt({ token, user }) {
       if (user) {
         token.email = (user as any).email;
         (token as any).id = (user as any).id;

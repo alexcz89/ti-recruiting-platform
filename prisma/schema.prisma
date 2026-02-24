@@ -427,6 +427,7 @@ model User {
   codeExecutions            CodeExecution[]
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
+  autoLoginTokens           AutoLoginToken[] 
 
   // FLAGS DE NOTIFICACIONES (mantener)
   emailNotificationsEnabled Boolean @default(true)
@@ -446,6 +447,19 @@ model User {
   @@index([onboardingStep]) // NUEVO
   @@index([lastActivityAt]) // NUEVO
   @@index([createdAt])
+}
+
+model AutoLoginToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
 }
 
 model WorkExperience {
