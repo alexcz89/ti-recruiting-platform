@@ -16,13 +16,14 @@ const STEP_LABELS = [
   "Básicos",
   "Empleo",
   "Prestaciones",
+  "Evaluaciones",
   "Detalles",
   "Revisión",
 ];
 
 export default function Stepper({
   step,
-  total = 5,
+  total = 6,
   maxStepVisited,
   stepCompletion,
   onJump,
@@ -70,8 +71,7 @@ export default function Stepper({
                   ) : (
                     <span>{n}</span>
                   )}
-                  
-                  {/* Checkmark for completed step */}
+
                   {isComplete && !done && !active && (
                     <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white ring-2 ring-white dark:ring-zinc-900">
                       <Check className="h-3 w-3" />

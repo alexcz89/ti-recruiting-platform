@@ -2,139 +2,60 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import clsx from "clsx";
-import LocationAutocomplete from "@/components/LocationAutocomplete";
-import { createStringFuse, searchStrings } from "@/lib/search/fuse";
-import { useRouter } from "next/navigation";
-import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
-import JobRichTextEditor from "@/components/jobs/JobRichTextEditor";
-import { Briefcase, Clock3, Save, CheckCircle2, Check, X } from "lucide-react";
-import {
-  Controller,
-  FormProvider,
-  useForm,
-  useFormContext,
-  useFieldArray,
-} from "react-hook-form";
+import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
+import { useRouter } from "next/navigation";
+import { Save, CheckCircle2 } from "lucide-react";
 
-// Import from new architecture
-import {
-  JobForm,
-  JobWizardProps,
-  PresetCompany,
-  LanguageProficiency,
-  EmploymentType,
-  DegreeLevel,
-} from "./JobWizard/types";
+import { JobForm, JobWizardProps } from "./JobWizard/types";
 import { jobSchema } from "./JobWizard/types";
-import {
-  BENEFITS,
-  EMPLOYMENT_OPTIONS,
-  SCHEDULE_PRESETS,
-} from "./JobWizard/constants";
-import {
-  makeDefaultValues,
-  sanitizeHtml,
-  htmlToPlain,
-  clampNonNegative,
-  labelEmployment,
-  labelDegree,
-  labelLanguageLevel,
-} from "./JobWizard/utils/helpers";
+import { BENEFITS } from "./JobWizard/constants";
+import { makeDefaultValues, sanitizeHtml, htmlToPlain } from "./JobWizard/utils/helpers";
 import { useAutosave } from "./JobWizard/hooks/useAutosave";
 import { useQualityScore } from "./JobWizard/hooks/useQualityScore";
+import { toastSuccess, toastError } from "@/lib/ui/toast";
+
 import Stepper from "./JobWizard/components/Stepper";
 import QualityIndicator from "./JobWizard/components/QualityIndicator";
 import Step1Basic from "./JobWizard/components/Step1Basic";
-import Step4Assessments from "./JobWizard/components/Step4Assessments"; // ✅ NUEVO
+import Step2Employment from "./JobWizard/components/Step2Employment";
+import Step3Benefits from "./JobWizard/components/Step3Benefits";
+import Step4Assessments from "./JobWizard/components/Step4Assessments";
+import Step5Details from "./JobWizard/components/Step5Details";
+import Step6Review from "./JobWizard/components/Step6Review";
 
-/* =============================
-   Helper Functions
-============================= */
+/* ─── Helpers ─── */
 function getTimeAgo(date: Date): string {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
   if (seconds < 60) return "hace unos segundos";
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `hace ${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `hace ${hours}h`;
+  return `hace ${Math.floor(minutes / 60)}h`;
 }
 
 function plainToBasicHtml(plain: string): string {
-  const escapeHtml = (value: string) =>
-    value
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const lines = plain.replace(/\r\n/g, "\n").split("\n");
   const paragraphs: string[][] = [];
-  let buffer: string[] = [];
-
+  let buf: string[] = [];
   lines.forEach((line) => {
-    if (!line.trim()) {
-      if (buffer.length) {
-        paragraphs.push(buffer);
-        buffer = [];
-      }
-      return;
-    }
-    buffer.push(line);
+    if (!line.trim()) { if (buf.length) { paragraphs.push(buf); buf = []; } return; }
+    buf.push(line);
   });
-
-  if (buffer.length) paragraphs.push(buffer);
-
+  if (buf.length) paragraphs.push(buf);
   const bulletPrefixes = ["- ", "* ", "• "];
-  const isBulletLine = (line: string) =>
-    bulletPrefixes.some((prefix) => line.startsWith(prefix));
-
-  return paragraphs
-    .map((paraLines) => {
-      const allBullets = paraLines.every(isBulletLine);
-      if (allBullets) {
-        const items = paraLines
-          .map((line) => {
-            const prefix = bulletPrefixes.find((p) => line.startsWith(p)) || "";
-            return escapeHtml(line.slice(prefix.length).trim());
-          })
-          .filter(Boolean);
-        if (!items.length) return "";
-        return `<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>`;
-      }
-
-      const text = paraLines.map((line) => escapeHtml(line)).join("<br/>");
-      return `<p>${text}</p>`;
-    })
-    .filter(Boolean)
-    .join("");
+  return paragraphs.map((paraLines) => {
+    const allBullets = paraLines.every((l) => bulletPrefixes.some((p) => l.startsWith(p)));
+    if (allBullets) {
+      const items = paraLines.map((l) => { const p = bulletPrefixes.find((p) => l.startsWith(p)) || ""; return escape(l.slice(p.length).trim()); }).filter(Boolean);
+      return items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "";
+    }
+    return `<p>${paraLines.map(escape).join("<br/>")}</p>`;
+  }).filter(Boolean).join("");
 }
 
-/* =============================
-   Constantes
-============================= */
-const EDUCATION_SUGGESTIONS = [
-  "Ingeniería en Sistemas",
-  "Ingeniería en tecnologías Computacionales",
-  "Ingeniería en Robótica",
-  "Licenciatura en Informática",
-  "Licenciatura en Ciencias de la Computación",
-  "Maestría en tecnologías de Información",
-  "Maestría en Ciencia de Datos",
-  "MBA con enfoque en TI",
-  "Técnico en Programación",
-  "Técnico en Redes",
-];
-
-const reviewBox =
-  "mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded border bg-zinc-50 p-2 dark:bg-zinc-900/40";
-
-/* =============================
-   Componente principal
-============================= */
+/* ─── Componente principal ─── */
 export default function JobWizard({
   onSubmit,
   presetCompany,
@@ -147,16 +68,13 @@ export default function JobWizard({
   const [step, setStep] = useState(1);
   const [maxStepVisited, setMaxStepVisited] = useState(1);
   const [stepCompletion, setStepCompletion] = useState<boolean[]>([
-    false, // Paso 1: Información Básica
-    false, // Paso 2: Tipo de Empleo
-    false, // Paso 3: Prestaciones
-    false, // Paso 4: Evaluaciones (NUEVO) ✅
-    false, // Paso 5: Detalles (antes paso 4)
-    false, // Paso 6: Revisión (antes paso 5)
+    false, // 1: Básicos
+    false, // 2: Empleo
+    false, // 3: Prestaciones
+    false, // 4: Evaluaciones
+    false, // 5: Detalles
+    false, // 6: Revisión
   ]);
-  const [tab5, setTab5] = useState<"desc" | "skills" | "langs" | "edu">(
-    "desc"
-  );
   const [busy, setBusy] = useState(false);
 
   const methods = useForm<JobForm>({
@@ -165,101 +83,45 @@ export default function JobWizard({
     mode: "onChange",
   });
 
-  const {
-    watch,
-    setValue,
-    reset,
-    handleSubmit,
-    register,
-    control,
-    formState: { errors },
-  } = methods;
-
-  // Initialize new hooks
+  const { watch, reset, handleSubmit } = methods;
   const { lastSaved, isSaving, loadDraft, clearDraft } = useAutosave(watch, initial?.id);
   const qualityScore = useQualityScore(watch);
-
   const hasRestoredRef = useRef(false);
 
+  // Restaurar borrador
   useEffect(() => {
-    if (hasRestoredRef.current) return;
-    
-    if (!initial?.id) {
-      const draft = loadDraft();
-      
-      if (draft) {
-        hasRestoredRef.current = true;
-        
-        const confirmed = window.confirm(
-          '¿Deseas continuar con el borrador guardado automáticamente?'
-        );
-        
-        if (confirmed) {
-          reset(draft);
-        } else {
-          clearDraft();
-        }
+    if (hasRestoredRef.current || initial?.id) return;
+    const draft = loadDraft();
+    if (draft) {
+      hasRestoredRef.current = true;
+      if (window.confirm("¿Deseas continuar con el borrador guardado automáticamente?")) {
+        reset(draft);
+      } else {
+        clearDraft();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const {
-    fields: languageFields,
-    append: addLanguageRow,
-    remove: removeLanguageRow,
-  } = useFieldArray({
-    control,
-    name: "languages",
-  });
+  function goNextStep(next: number) {
+    setStepCompletion((prev) => {
+      const n = [...prev];
+      n[step - 1] = true;
+      return n;
+    });
+    setStep(next);
+    setMaxStepVisited((prev) => Math.max(prev, next));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
-  // Search helpers
-  const [skillQuery, setSkillQuery] = useState("");
-  const [educationQuery, setEducationQuery] = useState("");
-  const [certQuery, setCertQuery] = useState("");
-  const [isEducationOpen, setIsEducationOpen] = useState(false);
-  const educationDropdownRef = useRef<HTMLDivElement | null>(null);
-
-  const skillsFuse = useMemo(
-    () => createStringFuse(skillsOptions || []),
-    [skillsOptions]
-  );
-  const filteredSkills = useMemo(() => {
-    const q = skillQuery.trim();
-    if (!q) return (skillsOptions || []).slice(0, 30);
-    return searchStrings(skillsFuse, q, 50);
-  }, [skillQuery, skillsOptions, skillsFuse]);
-
-  const educationFuse = useMemo(
-    () => createStringFuse(EDUCATION_SUGGESTIONS),
-    []
-  );
-  const filteredEducation = useMemo(() => {
-    const q = educationQuery.trim();
-    if (!q) return EDUCATION_SUGGESTIONS.slice(0, 30);
-    return searchStrings(educationFuse, q, 50);
-  }, [educationQuery, educationFuse]);
-
-  const certsFuse = useMemo(
-    () => createStringFuse(certOptions || []),
-    [certOptions]
-  );
-  const filteredCerts = useMemo(() => {
-    const q = certQuery.trim();
-    if (!q) return (certOptions || []).slice(0, 30);
-    return searchStrings(certsFuse, q, 50);
-  }, [certQuery, certsFuse, certOptions]);
-
-  // Derivados para paso 5 (antes paso 4)
-  const descriptionPlain = watch("descriptionPlain") || "";
-  const descLength = descriptionPlain.length;
-  const wordCount = descriptionPlain.trim()
-    ? descriptionPlain.trim().split(/\s+/).filter(Boolean).length
-    : 0;
-  const MAX_DESC_CHARS = 500;
-  const MAX_DESC_WORDS = 80;
-
-  const canNext5 = descLength >= 50;
+  function handleStepClick(target: number) {
+    if (target <= maxStepVisited) {
+      setStep(target);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      toastError("Primero completa los pasos anteriores antes de avanzar.");
+    }
+  }
 
   // Aplicar plantilla
   function applyTemplateById(id: string) {
@@ -268,54 +130,27 @@ export default function JobWizard({
     if (!tpl) return;
 
     let html = sanitizeHtml(tpl.descriptionHtml || "");
-    const plain = tpl.description
-      ? tpl.description
-      : html
-      ? htmlToPlain(html)
-      : "";
-    if (!html.trim() && plain.trim()) {
-      html = sanitizeHtml(plainToBasicHtml(plain));
-    }
+    const plain = tpl.description ? tpl.description : html ? htmlToPlain(html) : "";
+    if (!html.trim() && plain.trim()) html = sanitizeHtml(plainToBasicHtml(plain));
 
-    // beneficios base
-    const benefitsBase = BENEFITS.reduce((acc, b) => {
-      acc[b.key] = b.def;
-      return acc;
-    }, {} as Record<string, boolean>);
-
+    const benefitsBase = BENEFITS.reduce((acc, b) => { acc[b.key] = b.def; return acc; }, {} as Record<string, boolean>);
     let benefitsJson = benefitsBase;
-    let aguinaldoDias = 15;
-    let vacacionesDias = 12;
-    let primaVacPct = 25;
-    let showBenefits = true;
+    let aguinaldoDias = 15, vacacionesDias = 12, primaVacPct = 25, showBenefits = true;
 
     if (tpl.benefitsJson && typeof tpl.benefitsJson === "object") {
       const b = tpl.benefitsJson as any;
       benefitsJson = { ...benefitsBase };
-      for (const k of Object.keys(benefitsBase)) {
-        benefitsJson[k] = Boolean(b[k] ?? benefitsBase[k]);
-      }
-      if (typeof b.aguinaldoDias === "number")
-        aguinaldoDias = b.aguinaldoDias;
-      if (typeof b.vacacionesDias === "number")
-        vacacionesDias = b.vacacionesDias;
+      for (const k of Object.keys(benefitsBase)) benefitsJson[k] = Boolean(b[k] ?? benefitsBase[k]);
+      if (typeof b.aguinaldoDias === "number") aguinaldoDias = b.aguinaldoDias;
+      if (typeof b.vacacionesDias === "number") vacacionesDias = b.vacacionesDias;
       if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
       showBenefits = Boolean(b.showBenefits ?? true);
     }
 
-    const eduReq = Array.isArray(tpl.education)
-      ? tpl.education.filter((e) => e.required).map((e) => e.name)
-      : [];
-    const eduNice = Array.isArray(tpl.education)
-      ? tpl.education.filter((e) => !e.required).map((e) => e.name)
-      : [];
-    const skillsReq = Array.isArray(tpl.skills)
-      ? tpl.skills.filter((s) => s.required).map((s) => s.name)
-      : [];
-    const skillsNice = Array.isArray(tpl.skills)
-      ? tpl.skills.filter((s) => !s.required).map((s) => s.name)
-      : [];
-    const languagesTpl = Array.isArray(tpl.languages) ? tpl.languages : [];
+    const eduReq = Array.isArray(tpl.education) ? tpl.education.filter((e) => e.required).map((e) => e.name) : [];
+    const eduNice = Array.isArray(tpl.education) ? tpl.education.filter((e) => !e.required).map((e) => e.name) : [];
+    const skillsReq = Array.isArray(tpl.skills) ? tpl.skills.filter((s) => s.required).map((s) => s.name) : [];
+    const skillsNice = Array.isArray(tpl.skills) ? tpl.skills.filter((s) => !s.required).map((s) => s.name) : [];
 
     reset({
       ...makeDefaultValues({ presetCompany, initial }),
@@ -347,13 +182,13 @@ export default function JobWizard({
       requiredSkills: skillsReq,
       niceSkills: skillsNice,
       certs: Array.isArray(tpl.certs) ? tpl.certs : [],
-      languages: languagesTpl,
+      languages: Array.isArray(tpl.languages) ? tpl.languages : [],
     });
 
     toastSuccess("Plantilla aplicada");
   }
 
-  // Envío
+  // Submit
   async function onValidSubmit(v: JobForm) {
     setBusy(true);
     try {
@@ -369,15 +204,11 @@ export default function JobWizard({
       if (v.admin1) fd.set("admin1", v.admin1);
       if (v.cityNorm) fd.set("cityNorm", v.cityNorm);
       if (v.admin1Norm) fd.set("admin1Norm", v.admin1Norm);
-      if (v.locationLat != null)
-        fd.set("locationLat", String(v.locationLat));
-      if (v.locationLng != null)
-        fd.set("locationLng", String(v.locationLng));
+      if (v.locationLat != null) fd.set("locationLat", String(v.locationLat));
+      if (v.locationLng != null) fd.set("locationLng", String(v.locationLng));
       fd.set("currency", v.currency);
-      if (v.salaryMin != null)
-        fd.set("salaryMin", String(Math.max(0, v.salaryMin)));
-      if (v.salaryMax != null)
-        fd.set("salaryMax", String(Math.max(0, v.salaryMax)));
+      if (v.salaryMin != null) fd.set("salaryMin", String(Math.max(0, v.salaryMin)));
+      if (v.salaryMax != null) fd.set("salaryMax", String(Math.max(0, v.salaryMax)));
       fd.set("showSalary", String(v.showSalary));
 
       // Paso 2
@@ -395,44 +226,25 @@ export default function JobWizard({
       fd.set("showBenefits", String(v.showBenefits));
       fd.set("benefitsJson", JSON.stringify(benefitsPayload));
 
-      // ✅ Paso 4 - Evaluaciones (NUEVO)
-      if (v.assessmentTemplateId) {
-        fd.set("assessmentTemplateId", v.assessmentTemplateId);
-      }
+      // Paso 4
+      if (v.assessmentTemplateId) fd.set("assessmentTemplateId", v.assessmentTemplateId);
 
-      // Paso 5 (antes paso 4) - HTML + texto plano
+      // Paso 5
       let safeHtml = sanitizeHtml((v.descriptionHtml || "").trim());
-      if (!safeHtml.trim() && v.descriptionPlain.trim()) {
-        safeHtml = sanitizeHtml(
-          plainToBasicHtml(v.descriptionPlain.trim())
-        );
-      }
-      const safePlain =
-        v.descriptionPlain.trim() || htmlToPlain(safeHtml);
-
+      if (!safeHtml.trim() && v.descriptionPlain.trim()) safeHtml = sanitizeHtml(plainToBasicHtml(v.descriptionPlain.trim()));
       fd.set("descriptionHtml", safeHtml);
-      fd.set("description", safePlain);
-
+      fd.set("description", v.descriptionPlain.trim() || htmlToPlain(safeHtml));
       fd.set("minDegree", v.minDegree);
-      const eduPack = [
+      fd.set("educationJson", JSON.stringify([
         ...v.eduRequired.map((name) => ({ name, required: true })),
         ...v.eduNice.map((name) => ({ name, required: false })),
-      ];
-      fd.set("educationJson", JSON.stringify(eduPack));
-      const skillsPack = [
-        ...v.requiredSkills.map((name) => ({
-          name,
-          required: true,
-        })),
+      ]));
+      fd.set("skillsJson", JSON.stringify([
+        ...v.requiredSkills.map((name) => ({ name, required: true })),
         ...v.niceSkills.map((name) => ({ name, required: false })),
-      ];
-      fd.set("skillsJson", JSON.stringify(skillsPack));
+      ]));
       fd.set("certsJson", JSON.stringify(v.certs));
-
-      // Idiomas (si existen)
-      if (v.languages && v.languages.length) {
-        fd.set("languagesJson", JSON.stringify(v.languages));
-      }
+      if (v.languages?.length) fd.set("languagesJson", JSON.stringify(v.languages));
 
       const isEditing = !!initial?.id;
 
@@ -447,31 +259,19 @@ export default function JobWizard({
         return;
       }
 
-      const res = await fetch("/api/jobs", {
-        method: "POST",
-        body: fd,
-      });
+      const res = await fetch("/api/jobs", { method: "POST", body: fd });
       const data = await res.json();
 
       if (!res.ok) {
         if (res.status === 402 && data?.code === "PLAN_LIMIT_REACHED") {
-          toastError(
-            data?.error ||
-              "Has alcanzado el límite de vacantes activas para tu plan.",
-            {
-              description:
-                typeof data?.maxActiveJobs === "number"
-                  ? `Vacantes activas: ${
-                      data.currentActiveJobs ?? "•"
-                    } / ${data.maxActiveJobs}. Cierra una vacante o mejora tu plan.`
-                  : undefined,
-            }
-          );
+          toastError(data?.error || "Has alcanzado el límite de vacantes activas.", {
+            description: typeof data?.maxActiveJobs === "number"
+              ? `Vacantes activas: ${data.currentActiveJobs ?? "•"} / ${data.maxActiveJobs}. Cierra una vacante o mejora tu plan.`
+              : undefined,
+          });
           return;
         }
-        throw new Error(
-          data?.error || "Error al publicar la vacante"
-        );
+        throw new Error(data?.error || "Error al publicar la vacante");
       }
 
       clearDraft();
@@ -479,244 +279,26 @@ export default function JobWizard({
       router.push(`/dashboard/jobs/${data.id}/applications`);
     } catch (err: any) {
       console.error("Error en handlePublish:", err);
-      toastError(
-        (err && typeof err.message === "string" && err.message) ||
-          "Ocurrió un error al guardar la vacante"
-      );
+      toastError((err?.message as string) || "Ocurrió un error al guardar la vacante");
     } finally {
       setBusy(false);
     }
   }
 
-  const benefits = watch("benefits");
-  const showBenefits = watch("showBenefits");
+  const isEditing = !!initial?.id;
 
-  const requiredSkills = watch("requiredSkills");
-  const niceSkills = watch("niceSkills");
-  const eduRequired = watch("eduRequired");
-  const eduNice = watch("eduNice");
-  const certs = watch("certs");
-  const tabItems = [
-    { k: "desc", lbl: "Descripción", done: descLength > 0 },
-    {
-      k: "skills",
-      lbl: "Skills / Certs",
-      done:
-        requiredSkills.length +
-          niceSkills.length +
-          certs.length >
-        0,
-    },
-    {
-      k: "langs",
-      lbl: "Idiomas",
-      done: languageFields.length > 0,
-    },
-    {
-      k: "edu",
-      lbl: "Educación",
-      done: eduRequired.length + eduNice.length > 0,
-    },
-  ];
-
-  function addSkillByName(name: string, to: "req" | "nice" = "req") {
-    const n = name.trim();
-    if (!n) return;
-    if (requiredSkills.includes(n) || niceSkills.includes(n)) return;
-    if (to === "req") {
-      setValue("requiredSkills", [...requiredSkills, n], {
-        shouldDirty: true,
-      });
-    } else {
-      setValue("niceSkills", [...niceSkills, n], {
-        shouldDirty: true,
-      });
-    }
-    setSkillQuery("");
-  }
-
-  function addEduByName(name: string, to: "req" | "nice" = "req") {
-    const n = name.trim();
-    if (!n) return;
-    if (eduRequired.includes(n) || eduNice.includes(n)) return;
-    if (to === "req") {
-      setValue("eduRequired", [...eduRequired, n], {
-        shouldDirty: true,
-      });
-    } else {
-      setValue("eduNice", [...eduNice, n], {
-        shouldDirty: true,
-      });
-    }
-    setEducationQuery("");
-    setIsEducationOpen(false);
-  }
-
-  function addCert(c: string) {
-    const n = c.trim();
-    if (!n) return;
-    if (certs.includes(n)) return;
-    setValue("certs", [...certs, n], { shouldDirty: true });
-    setCertQuery("");
-  }
-
-  function onDragStart(
-    e: React.DragEvent<HTMLSpanElement>,
-    payload: { kind: "skill" | "edu"; name: string; from: "req" | "nice" }
-  ) {
-    e.dataTransfer.setData(
-      "application/json",
-      JSON.stringify(payload)
-    );
-    e.dataTransfer.effectAllowed = "move";
-  }
-
-  function onDropSkills(
-    e: React.DragEvent<HTMLDivElement>,
-    to: "req" | "nice"
-  ) {
-    const data = e.dataTransfer.getData("application/json");
-    if (!data) return;
-    const payload = JSON.parse(data) as {
-      kind: "skill" | "edu";
-      name: string;
-      from: "req" | "nice";
-    };
-    if (payload.kind !== "skill" || payload.from === to) return;
-
-    if (to === "req") {
-      if (!requiredSkills.includes(payload.name)) {
-        setValue("requiredSkills", [...requiredSkills, payload.name], {
-          shouldDirty: true,
-        });
-      }
-      setValue(
-        "niceSkills",
-        niceSkills.filter((n) => n !== payload.name),
-        { shouldDirty: true }
-      );
-    } else {
-      if (!niceSkills.includes(payload.name)) {
-        setValue("niceSkills", [...niceSkills, payload.name], {
-          shouldDirty: true,
-        });
-      }
-      setValue(
-        "requiredSkills",
-        requiredSkills.filter((n) => n !== payload.name),
-        { shouldDirty: true }
-      );
-    }
-  }
-
-  function onDropEdu(
-    e: React.DragEvent<HTMLDivElement>,
-    to: "req" | "nice"
-  ) {
-    const data = e.dataTransfer.getData("application/json");
-    if (!data) return;
-    const payload = JSON.parse(data) as {
-      kind: "skill" | "edu";
-      name: string;
-      from: "req" | "nice";
-    };
-    if (payload.kind !== "edu" || payload.from === to) return;
-
-    if (to === "req") {
-      if (!eduRequired.includes(payload.name)) {
-        setValue("eduRequired", [...eduRequired, payload.name], {
-          shouldDirty: true,
-        });
-      }
-      setValue(
-        "eduNice",
-        eduNice.filter((n) => n !== payload.name),
-        { shouldDirty: true }
-      );
-    } else {
-      if (!eduNice.includes(payload.name)) {
-        setValue("eduNice", [...eduNice, payload.name], {
-          shouldDirty: true,
-        });
-      }
-      setValue(
-        "eduRequired",
-        eduRequired.filter((n) => n !== payload.name),
-        { shouldDirty: true }
-      );
-    }
-  }
-
-  // Helper para avanzar controlando paso máximo visitado
-  function goNextStep(next: number) {
-    // Mark current step as complete
-    setStepCompletion((prev) => {
-      const newCompletion = [...prev];
-      newCompletion[step - 1] = true;
-      return newCompletion;
-    });
-
-    setStep(next);
-    setMaxStepVisited((prev) => Math.max(prev, next));
-
-    // Smooth scroll to top
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
-  function handleStepClick(target: number) {
-    if (target <= maxStepVisited) {
-      setStep(target);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    toastError(
-      "Primero completa los pasos anteriores antes de avanzar."
-    );
-  }
-
-  useEffect(() => {
-    function handlePointerDown(event: PointerEvent | MouseEvent) {
-      const target = event.target as Node | null;
-      if (
-        !educationDropdownRef.current ||
-        !target ||
-        educationDropdownRef.current.contains(target)
-      ) {
-        return;
-      }
-      setIsEducationOpen(false);
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsEducationOpen(false);
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, []);
-
-  /* =============================
-     Render
-  ============================= */
   return (
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onValidSubmit)}>
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
           <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
-            {/* Header with Autosave and Quality */}
+
+            {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-0">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                 <h2 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
-                  {initial?.id ? "Editar vacante" : "Nueva vacante"}
+                  {isEditing ? "Editar vacante" : "Nueva vacante"}
                 </h2>
-
-                {/* Autosave Indicator */}
                 <div className="flex items-center gap-2 text-xs sm:text-sm">
                   {isSaving ? (
                     <div className="flex items-center gap-1.5 text-zinc-500">
@@ -731,16 +313,13 @@ export default function JobWizard({
                   ) : null}
                 </div>
               </div>
-
-              {/* Quality Score - Compact (screens < lg) */}
               <div className="lg:hidden">
                 <QualityIndicator score={qualityScore} compact />
               </div>
             </div>
 
-            {/* Two Column Grid */}
+            {/* Layout de dos columnas */}
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
-              {/* Main Content Column */}
               <div className="space-y-0">
                 <div className="mb-0">
                   <Stepper
@@ -751,7 +330,6 @@ export default function JobWizard({
                   />
                 </div>
 
-                {/* Paso 1 */}
                 {step === 1 && (
                   <Step1Basic
                     presetCompany={presetCompany}
@@ -761,238 +339,20 @@ export default function JobWizard({
                   />
                 )}
 
-                {/* Paso 2 */}
                 {step === 2 && (
-                  <div className="space-y-5 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
-                    <Briefcase className="h-5 w-5 text-emerald-500" />
-                    <span>2) Tipo de empleo</span>
-                  </h3>
-                  <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-                    Elige el tipo de contrato y un horario de referencia.
-                  </p>
-                </div>
-
-                {/* Cards de tipo de empleo */}
-                <div className="grid gap-3">
-                <label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                  Tipo de contrato *
-                </label>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  {EMPLOYMENT_OPTIONS.map((opt) => {
-                    const active =
-                      watch("employmentType") === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() =>
-                          setValue("employmentType", opt.value, {
-                            shouldDirty: true,
-                          })
-                        }
-                        className={clsx(
-                          "group relative flex h-full min-h-[140px] flex-col items-start rounded-xl border p-4 text-left text-xs sm:text-sm transition",
-                          active
-                            ? "border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm ring-1 ring-emerald-500/30 dark:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-100"
-                            : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/10"
-                        )}
-                      >
-                        {active && (
-                          <Check className="absolute right-3 top-3 h-4 w-4 text-emerald-600" />
-                        )}
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={clsx(
-                              "flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold",
-                              active
-                                ? "border-emerald-500 bg-emerald-600 text-white"
-                                : "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                            )}
-                          >
-                            {opt.label[0]}
-                          </span>
-                          <span className="font-semibold whitespace-normal break-words leading-tight hyphens-none line-clamp-2 min-h-[2.5rem]">
-                            {opt.label}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400 whitespace-normal break-words hyphens-none">
-                          {opt.subtitle}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Horario */}
-              <div className="grid gap-2">
-              <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-                <Clock3 className="h-4 w-4 text-emerald-500" />
-                Horario de referencia (opcional)
-              </label>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Ej. L-V 9:00-18:00 (hora local)
-              </p>
-                <input
-                  className="h-11 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                  placeholder="Ej. L-V 9:00-18:00 (hora local)"
-                  {...register("schedule")}
-                />
-                <div className="flex flex-wrap gap-2 text-[11px]">
-                  {SCHEDULE_PRESETS.map((p) => {
-                    const active = watch("schedule") === p.value;
-                    return (
-                    <button
-                      key={p.value}
-                      type="button"
-                      className={clsx(
-                        "cursor-pointer rounded-full border px-3 py-1.5 text-xs transition-colors hover:bg-zinc-50 active:scale-[0.98] active:transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 dark:hover:bg-zinc-800",
-                        active
-                          ? "bg-emerald-50 border-emerald-500 text-emerald-900 dark:bg-emerald-950/20 dark:border-emerald-400 dark:text-emerald-100"
-                          : "bg-white border-zinc-200 text-zinc-700 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-200"
-                      )}
-                      onClick={() =>
-                        setValue("schedule", p.value, {
-                          shouldDirty: true,
-                        })
-                      }
-                    >
-                      {p.label}
-                    </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                  Este campo es informativo. No afecta filtros ni
-                  validaciones.
-                </p>
-              </div>
-
-                    <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
-                      <button
-                        type="button"
-                        className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
-                        onClick={() => setStep(1)}
-                      >
-                        Atrás
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition"
-                        onClick={() => goNextStep(3)}
-                      >
-                        Siguiente
-                      </button>
-                    </div>
-                  </div>
+                  <Step2Employment
+                    onNext={() => goNextStep(3)}
+                    onBack={() => setStep(1)}
+                  />
                 )}
 
-                {/* Paso 3 - Prestaciones */}
                 {step === 3 && (
-                  <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">3) Prestaciones</h3>
-
-                <div
-                  className={clsx(
-                    "rounded-lg border p-4 flex items-start justify-between gap-4",
-                    showBenefits
-                      ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-900/20"
-                      : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-                  )}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                      Mostrar prestaciones en la publicación
-                    </div>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Recomendado: aumenta conversiones
-                    </p>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      {...register("showBenefits")}
-                    />
-                    {showBenefits ? "Si" : "No"}
-                  </label>
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-4">
-                {BENEFITS.map((b) => {
-                  const checked = !!benefits[b.key];
-                  return (
-                    <label
-                      key={b.key}
-                      className="flex items-center gap-3 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 transition cursor-pointer hover:bg-zinc-50 hover:border-zinc-300 dark:hover:bg-zinc-800/40 dark:hover:border-zinc-600 active:scale-[0.98] has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20 dark:has-[:checked]:border-emerald-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-emerald-500/40 has-[:focus-visible]:outline-none"
-                    >
-                      <input
-                        id={`benefit-${b.key}`}
-                        type="checkbox"
-                        className="accent-emerald-600"
-                        checked={checked}
-                        onChange={(e) =>
-                          setValue(
-                            "benefits",
-                            {
-                              ...benefits,
-                              [b.key]: e.target.checked,
-                            },
-                            { shouldDirty: true }
-                          )
-                        }
-                      />
-                      <span className="min-w-0 text-sm font-medium text-zinc-800 dark:text-zinc-100 whitespace-normal break-normal hyphens-none leading-tight">
-                        {b.label}
-                      </span>
-
-                      <div className="ml-auto flex items-center gap-3">
-                        {checked && b.key === "aguinaldo" && (
-                          <NumberMini
-                            label="días"
-                            field="aguinaldoDias"
-                          />
-                        )}
-                        {checked && b.key === "vacaciones" && (
-                          <NumberMini
-                            label="días"
-                            field="vacacionesDias"
-                          />
-                        )}
-                        {checked && b.key === "primaVac" && (
-                          <NumberMini
-                            label="%"
-                            field="primaVacPct"
-                            max={100}
-                          />
-                        )}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
-
-                    <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
-                      <button
-                        type="button"
-                        className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
-                        onClick={() => setStep(2)}
-                      >
-                        Atrás
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition"
-                        onClick={() => goNextStep(4)}
-                      >
-                        Siguiente
-                      </button>
-                    </div>
-                  </div>
+                  <Step3Benefits
+                    onNext={() => goNextStep(4)}
+                    onBack={() => setStep(2)}
+                  />
                 )}
 
-                {/* ✅ Paso 4 - Evaluaciones (NUEVO) */}
                 {step === 4 && (
                   <Step4Assessments
                     onNext={() => goNextStep(5)}
@@ -1000,597 +360,28 @@ export default function JobWizard({
                   />
                 )}
 
-                {/* Paso 5 (antes paso 4) - Descripción/Skills */}
                 {step === 5 && (
-                  <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                {/* Tabs */}
-                <div
-                  role="tablist"
-                  aria-label="Detalles de la vacante"
-                  className="flex flex-wrap items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50/70 p-1 dark:border-zinc-800 dark:bg-zinc-900/60"
-                >
-                {tabItems.map((t) => (
-                  <button
-                    key={t.k}
-                    type="button"
-                    role="tab"
-                    aria-selected={tab5 === (t.k as any)}
-                    className={clsx(
-                      "flex items-center gap-2 rounded-lg h-9 px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50",
-                      tab5 === (t.k as any)
-                        ? "bg-emerald-600 text-white shadow-sm"
-                        : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                    )}
-                    onClick={() => setTab5(t.k as any)}
-                  >
-                    <span>{t.lbl}</span>
-                    {t.done ? (
-                      <span className="inline-flex h-4 w-4 items-center justify-center">
-                        <CheckCircle2
-                          className={clsx(
-                            "h-3.5 w-3.5",
-                            tab5 === (t.k as any)
-                              ? "text-white/90"
-                              : "text-emerald-500"
-                          )}
-                        />
-                      </span>
-                    ) : (
-                      <span className="inline-flex h-4 w-4 items-center justify-center">
-                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Descripción */}
-              {tab5 === "desc" && (
-                <div className="animate-fade-in-up grid gap-4 mt-4">
-                  <label className="text-sm font-medium">
-                    Descripción de la vacante *
-                  </label>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Incluye responsabilidades, requisitos y beneficios.
-                  </p>
-                  <Controller
-                    name="descriptionHtml"
-                    control={control}
-                    render={({ field: { value, onChange } }) => {
-                      const isEmpty = !value || !value.trim();
-                      return (
-                        <div className="relative [&_.job-editor]:min-h-[260px] md:[&_.job-editor]:min-h-[320px] [&_.job-editor+div]:hidden [&_.job-editor~div]:hidden">
-                          <JobRichTextEditor
-                            valueHtml={value || ""}
-                            onChangeHtml={(html, plain) => {
-                              const safe = sanitizeHtml(html || "");
-                              onChange(safe);
-                              const plainText =
-                                plain || htmlToPlain(safe);
-                              setValue("descriptionPlain", plainText, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              });
-                            }}
-                          />
-                          {isEmpty && (
-                            <div className="pointer-events-none absolute left-4 right-4 top-12 text-xs text-zinc-400 dark:text-zinc-500 whitespace-pre-line">
-                              Ejemplo:
-                              - Responsabilidades principales
-                              - Requisitos clave y tecnologías
-                              - Beneficios y cultura del equipo
-                            </div>
-                          )}
-                        </div>
-                      );
-                    }}
+                  <Step5Details
+                    skillsOptions={skillsOptions}
+                    certOptions={certOptions}
+                    onNext={() => goNextStep(6)}
+                    onBack={() => setStep(4)}
                   />
-                  <div
-                    className={clsx(
-                      "text-xs",
-                      canNext5 ? "text-emerald-600" : "text-red-500"
-                    )}
-                  >
-                    chars: {descLength}/{MAX_DESC_CHARS}&nbsp;&nbsp;palabras:{" "}
-                    {wordCount}/{MAX_DESC_WORDS}
-                  </div>
-                  {errors.descriptionPlain && (
-                    <p className="text-xs text-red-600">
-                      {errors.descriptionPlain.message}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* SKILLS / CERTS */}
-              {tab5 === "skills" && (
-                <div className="animate-fade-in-up grid gap-6">
-                  <div className="grid gap-3">
-                    <label className="text-sm font-medium">
-                      Skills / Certs
-                    </label>
-
-                    <div className="relative">
-                      <input
-                        className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                        placeholder="Busca (ej. Python, AWS, React Native...) y presiona Enter"
-                        value={skillQuery}
-                        onChange={(e) =>
-                          setSkillQuery(e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (
-                            (e.key === "Enter" ||
-                              e.key === "Tab") &&
-                            skillQuery.trim()
-                          ) {
-                            e.preventDefault();
-                            addSkillByName(
-                              filteredSkills[0] ||
-                                skillQuery.trim(),
-                              "req"
-                            );
-                          }
-                        }}
-                        aria-autocomplete="list"
-                        aria-expanded={!!skillQuery}
-                      />
-                      {skillQuery && (
-                        <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
-                          {filteredSkills.length === 0 ? (
-                            <div className="p-2 text-sm text-zinc-500">
-                              Sin resultados
-                            </div>
-                          ) : (
-                            filteredSkills.map((s) => (
-                              <button
-                                key={s}
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                                onClick={() =>
-                                  addSkillByName(s, "req")
-                                }
-                                role="option"
-                              >
-                                {s}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* bins */}
-                    <div className="grid sm:grid-cols-2 gap-6">
-                      <Bin
-                        title="Obligatoria"
-                        items={requiredSkills}
-                        placeholder="Arrastra aquí"
-                        onRemove={(name) =>
-                          setValue(
-                            "requiredSkills",
-                            requiredSkills.filter(
-                              (x) => x !== name
-                            ),
-                            { shouldDirty: true }
-                          )
-                        }
-                        onDragStart={(name, e) =>
-                          onDragStart(e, {
-                            kind: "skill",
-                            name,
-                            from: "req",
-                          })
-                        }
-                        onDrop={(e) => onDropSkills(e, "req")}
-                      />
-                      <Bin
-                        title="Deseable"
-                        items={niceSkills}
-                        placeholder="Sin elementos"
-                        onRemove={(name) =>
-                          setValue(
-                            "niceSkills",
-                            niceSkills.filter((x) => x !== name),
-                            { shouldDirty: true }
-                          )
-                        }
-                        onDragStart={(name, e) =>
-                          onDragStart(e, {
-                            kind: "skill",
-                            name,
-                            from: "nice",
-                          })
-                        }
-                        onDrop={(e) => onDropSkills(e, "nice")}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Certificaciones */}
-                  <div className="grid gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-                    <label className="text-sm font-medium">
-                      Certificaciones (opcional)
-                    </label>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Opcional: agrega certificaciones relevantes.
-                    </p>
-                    <div className="relative">
-                      <input
-                        className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                        placeholder="Busca y selecciona (ej. AWS SAA, CCNA...)"
-                        value={certQuery}
-                        onChange={(e) =>
-                          setCertQuery(e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (
-                            (e.key === "Enter" ||
-                              e.key === "Tab") &&
-                            certQuery.trim()
-                          ) {
-                            e.preventDefault();
-                            addCert(
-                              filteredCerts[0] ||
-                                certQuery.trim()
-                            );
-                          }
-                        }}
-                        aria-autocomplete="list"
-                        aria-expanded={!!certQuery}
-                      />
-                      {certQuery && (
-                        <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
-                          {filteredCerts.length === 0 ? (
-                            <div className="p-2 text-sm text-zinc-500">
-                              Sin resultados
-                            </div>
-                          ) : (
-                            filteredCerts.map((c) => (
-                              <button
-                                key={c}
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                                onClick={() => addCert(c)}
-                                role="option"
-                              >
-                                {c}
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {certs.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {certs.map((c) => (
-                          <span
-                            key={c}
-                            className="group inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 transition cursor-pointer hover:bg-emerald-100/70 active:scale-[0.98] focus-within:outline-none focus-within:ring-2 focus-within:ring-emerald-500/40 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100 dark:hover:bg-emerald-900/30"
-                          >
-                            {c}
-                            <button
-                              type="button"
-                              aria-label="Remove"
-                              className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-emerald-700/60 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                              onClick={() =>
-                                setValue(
-                                  "certs",
-                                  certs.filter((x) => x !== c),
-                                  { shouldDirty: true }
-                                )
-                              }
-                              title="Quitar"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-zinc-500">
-                        Opcional.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* IDIOMAS */}
-              {tab5 === "langs" && (
-                <div className="animate-fade-in-up grid gap-6">
-                  <div className="flex items-center justify-between">
-                    <label className="text-sm font-medium">
-                      Idiomas requeridos (opcional)
-                    </label>
-                    <button
-                      type="button"
-                      className="rounded-md border px-3 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                      onClick={() =>
-                        addLanguageRow({
-                          name: "Inglés",
-                          level: "PROFESSIONAL",
-                        })
-                      }
-                    >
-                      + Añadir idioma
-                    </button>
-                  </div>
-
-                  {languageFields.length === 0 && (
-                    <p className="text-xs text-zinc-500">
-                      Añade uno o más idiomas relevantes para la
-                      vacante (ej. Inglés profesional).
-                    </p>
-                  )}
-
-                  <div className="grid gap-2">
-                    {languageFields.map((field, idx) => (
-                      <div
-                        key={field.id}
-                        className="grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_auto] gap-2 items-center"
-                      >
-                        <select
-                          className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                          {...register(
-                            `languages.${idx}.name` as const
-                          )}
-                        >
-                          {LANGUAGES_FALLBACK.map((lang) => (
-                            <option key={lang} value={lang}>
-                              {lang}
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                          {...register(
-                            `languages.${idx}.level` as const
-                          )}
-                        >
-                          <option value="NATIVE">Nativo</option>
-                          <option value="PROFESSIONAL">
-                            Profesional (C1-C2)
-                          </option>
-                          <option value="CONVERSATIONAL">
-                            Conversacional (B1-B2)
-                          </option>
-                          <option value="BASIC">
-                            Básico (A1-A2)
-                          </option>
-                        </select>
-
-                        <button
-                          type="button"
-                          aria-label="Remove"
-                          className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-zinc-200 text-emerald-700/60 transition hover:text-emerald-700 hover:border-emerald-300 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 dark:border-zinc-700"
-                          onClick={() => removeLanguageRow(idx)}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Educación */}
-              {tab5 === "edu" && (
-                <div className="animate-fade-in-up grid gap-6">
-                  <div className="grid md:grid-cols-2 gap-6 min-w-0">
-                    <div className="grid gap-2 min-w-0">
-                      <label className="text-sm font-medium">Nivel mínimo</label>
-                      <select
-                        className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                        {...register("minDegree")}
-                      >
-                        <option value="HIGHSCHOOL">
-                          Bachillerato
-                        </option>
-                        <option value="TECH">Técnico</option>
-                        <option value="BACHELOR">
-                          Licenciatura / Ingeniería
-                        </option>
-                        <option value="MASTER">Maestría</option>
-                        <option value="PHD">Doctorado</option>
-                      </select>
-                    </div>
-
-                    <div className="grid gap-2 min-w-0">
-                      <label className="text-sm font-medium">
-                        Agregar Educación (programa / carrera)
-                      </label>
-                      <div
-                        className="relative"
-                        ref={educationDropdownRef}
-                      >
-                        <input
-                          className="w-full min-w-0 h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-                          placeholder="Ej. Ingeniería en Sistemas, Maestría en TI... (Enter agrega)"
-                          value={educationQuery}
-                          onChange={(e) => {
-                            const nextValue = e.target.value;
-                            setEducationQuery(nextValue);
-                            setIsEducationOpen(!!nextValue.trim());
-                          }}
-                          onFocus={() => {
-                            if (educationQuery.trim()) {
-                              setIsEducationOpen(true);
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (
-                              (e.key === "Enter" ||
-                                e.key === "Tab") &&
-                              educationQuery.trim()
-                            ) {
-                              e.preventDefault();
-                              addEduByName(educationQuery.trim(), "req");
-                            }
-                          }}
-                          aria-autocomplete="list"
-                          aria-expanded={isEducationOpen}
-                        />
-                        {isEducationOpen && educationQuery && (
-                          <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
-                            {educationQuery.trim() && (
-                              <button
-                                type="button"
-                                className="block w-full px-3 py-2 text-left text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
-                                onClick={() =>
-                                  addEduByName(
-                                    educationQuery.trim(),
-                                    "req"
-                                  )
-                                }
-                                role="option"
-                              >
-                                {`Agregar "${educationQuery.trim()}"`}
-                              </button>
-                            )}
-                            {filteredEducation.length === 0 ? (
-                              <div className="px-3 py-2 text-sm text-zinc-500">
-                                Sin resultados
-                              </div>
-                            ) : (
-                              filteredEducation.map((s) => (
-                                <button
-                                  key={s}
-                                  type="button"
-                                  className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                                  onClick={() =>
-                                    addEduByName(s, "req")
-                                  }
-                                  role="option"
-                                >
-                                  {s}
-                                </button>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* bins Educación */}
-                  <div className="grid sm:grid-cols-2 gap-6">
-                    <Bin
-                      title="Obligatoria"
-                      items={eduRequired}
-                      placeholder="Sin elementos"
-                      onRemove={(name) =>
-                        setValue(
-                          "eduRequired",
-                          eduRequired.filter((x) => x !== name),
-                          { shouldDirty: true }
-                        )
-                      }
-                      onDragStart={(name, e) =>
-                        onDragStart(e, {
-                          kind: "edu",
-                          name,
-                          from: "req",
-                        })
-                      }
-                      onDrop={(e) => onDropEdu(e, "req")}
-                    />
-                    <Bin
-                      title="Deseable"
-                      items={eduNice}
-                      placeholder="Sin elementos"
-                      onRemove={(name) =>
-                        setValue(
-                          "eduNice",
-                          eduNice.filter((x) => x !== name),
-                          { shouldDirty: true }
-                        )
-                      }
-                      onDragStart={(name, e) =>
-                        onDragStart(e, {
-                          kind: "edu",
-                          name,
-                          from: "nice",
-                        })
-                      }
-                      onDrop={(e) => onDropEdu(e, "nice")}
-                    />
-                  </div>
-                  {eduRequired.length === 0 && eduNice.length === 0 && (
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Agrega al menos un programa educativo recomendado para la vacante.
-                    </p>
-                  )}
-                </div>
-              )}
-
-                    {/* Navegación paso 5 (antes paso 4) ✅ */}
-                    <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
-                      <button
-                        type="button"
-                        className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
-                        onClick={() => setStep(4)}
-                      >
-                        Atrás
-                      </button>
-                      <button
-                        type="button"
-                        className={clsx(
-                          "rounded-md px-6 py-2.5 text-sm font-medium text-white transition",
-                          canNext5
-                            ? "bg-emerald-600 hover:bg-emerald-500"
-                            : "bg-emerald-300 cursor-not-allowed"
-                        )}
-                        disabled={!canNext5}
-                        onClick={() => goNextStep(6)}
-                      >
-                        Siguiente
-                      </button>
-                    </div>
-                  </div>
                 )}
 
-                {/* Paso 6 (antes paso 5) - Revisión ✅ */}
                 {step === 6 && (
-                  <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                    <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                      6) Revisión y publicación
-                    </h3>
-
-                {/* Bloque general de revisión */}
-                <ReviewBlock presetCompany={presetCompany} onEditStep={setStep} onEditTab={setTab5} />
-
-                    <div className="pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
-                      <div className="flex justify-between gap-4">
-                        <button
-                          type="button"
-                          className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
-                          onClick={() => setStep(5)}
-                        >
-                          Atrás
-                        </button>
-                        <button
-                          type="submit"
-                          className="rounded-md bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:bg-emerald-300 disabled:cursor-not-allowed transition shadow-sm hover:shadow-md"
-                          disabled={busy}
-                        >
-                          {busy
-                            ? initial?.id
-                              ? "Guardando..."
-                              : "Publicando..."
-                            : initial?.id
-                            ? "Guardar cambios"
-                            : "Publicar vacante"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <Step6Review
+                    presetCompany={presetCompany}
+                    busy={busy}
+                    isEditing={isEditing}
+                    onBack={() => setStep(5)}
+                    onEditStep={setStep}
+                    onEditTab={() => {}}
+                  />
                 )}
               </div>
 
-              {/* Sidebar Column - Quality Indicator (screens >= lg) */}
+              {/* Sidebar - Quality Indicator */}
               <aside className="hidden lg:block">
                 <div className="sticky top-8">
                   <QualityIndicator score={qualityScore} />
@@ -1601,225 +392,5 @@ export default function JobWizard({
         </div>
       </form>
     </FormProvider>
-  );
-}
-/* =============================
-   Subcomponentes auxiliares
-============================= */
-
-function NumberMini({
-  label,
-  field,
-  max,
-}: {
-  label: string;
-  field: "aguinaldoDias" | "vacacionesDias" | "primaVacPct";
-  max?: number;
-}) {
-  const { register } = useFormContext<JobForm>();
-  return (
-    <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
-      <span className="whitespace-nowrap">{label}:</span>
-      <input
-        type="number"
-        min={0}
-        max={max}
-        className="h-10 w-16 rounded border border-zinc-300 bg-white px-3 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-        {...register(field, { valueAsNumber: true })}
-      />
-    </div>
-  );
-}
-
-function Bin({
-  title,
-  items,
-  placeholder,
-  onRemove,
-  onDragStart,
-  onDrop,
-}: {
-  title: string;
-  items: string[];
-  placeholder: string;
-  onRemove: (name: string) => void;
-  onDragStart: (
-    name: string,
-    e: React.DragEvent<HTMLSpanElement>
-  ) => void;
-  onDrop: (e: React.DragEvent<HTMLDivElement>) => void;
-}) {
-  return (
-    <div
-      onDragOver={(e) => e.preventDefault()}
-      onDrop={onDrop}
-      className="rounded-md border border-zinc-200 bg-white p-5 min-h-[180px] dark:border-zinc-800 dark:bg-zinc-900"
-    >
-      <p className="mb-3 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-        {title}
-      </p>
-      <div className="flex flex-wrap items-start gap-2 min-h-[32px]">
-        {items.length === 0 ? (
-          <span className="text-xs text-zinc-400">
-            {placeholder}
-          </span>
-        ) : (
-          items.map((name) => (
-            <span
-              key={name}
-              draggable
-              onDragStart={(e) => onDragStart(name, e)}
-              className="group inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 transition cursor-pointer hover:bg-emerald-100/70 active:scale-[0.98] focus-within:outline-none focus-within:ring-2 focus-within:ring-emerald-500/40 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100 dark:hover:bg-emerald-900/30"
-            >
-              {name}
-              <button
-                type="button"
-                aria-label="Remove"
-                className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-emerald-700/60 opacity-60 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 hover:text-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
-                onClick={() => onRemove(name)}
-                title="Quitar"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ReviewBlock({
-  presetCompany,
-  onEditStep,
-  onEditTab,
-}: {
-  presetCompany: PresetCompany;
-  onEditStep: (step: number) => void;
-  onEditTab: (tab: "desc" | "skills" | "langs" | "edu") => void;
-}) {
-  const { watch } = useFormContext<JobForm>();
-  const v = watch();
-
-  const isRemote = v.locationType === "REMOTE";
-  const locationText = isRemote
-    ? "Remoto"
-    : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} • ${v.city || ""}`;
-
-  const salaryMin =
-    typeof v.salaryMin === "number" && !Number.isNaN(v.salaryMin)
-      ? v.salaryMin
-      : undefined;
-  const salaryMax =
-    typeof v.salaryMax === "number" && !Number.isNaN(v.salaryMax)
-      ? v.salaryMax
-      : undefined;
-  const hasMin = salaryMin !== undefined;
-  const hasMax = salaryMax !== undefined;
-  const hasSalary = hasMin || hasMax;
-
-  const formatAmount = (value: number) =>
-    new Intl.NumberFormat("es-MX").format(value);
-
-  const salaryText = !hasSalary
-    ? "No especificado"
-    : hasMin && hasMax
-    ? `${v.currency} ${formatAmount(salaryMin!)} - ${formatAmount(salaryMax!)}`
-    : hasMin
-    ? `Desde ${v.currency} ${formatAmount(salaryMin!)}`
-    : `Hasta ${v.currency} ${formatAmount(salaryMax!)}`;
-
-  const benefitsList = Object.entries(v.benefits || {})
-    .filter(([, val]) => val)
-    .map(([k]) => {
-      if (k === "aguinaldo") return `Aguinaldo: ${v.aguinaldoDias} días`;
-      if (k === "vacaciones")
-        return `Vacaciones: ${v.vacacionesDias} días`;
-      if (k === "primaVac")
-        return `Prima vacacional: ${v.primaVacPct}%`;
-      const lbl = BENEFITS.find((b) => b.key === k)?.label ?? k;
-      return lbl;
-    });
-
-  const hasEduItems =
-    (v.eduRequired && v.eduRequired.length > 0) ||
-    (v.eduNice && v.eduNice.length > 0);
-
-  const hasCerts = v.certs && v.certs.length > 0;
-
-  const hasLanguages = v.languages && v.languages.length > 0;
-
-  const hasRequiredSkills = v.requiredSkills && v.requiredSkills.length > 0;
-  const hasNiceSkills = v.niceSkills && v.niceSkills.length > 0;
-
-  const safeDescriptionHtml = sanitizeHtml(v.descriptionHtml || "");
-  const hasDescription = Boolean(v.descriptionPlain && v.descriptionPlain.trim());
-
-  return (
-    <div className="grid gap-8">
-      {/* ... (resto del ReviewBlock sin cambios) ... */}
-      {/* Basic Information Card */}
-      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <Briefcase className="h-5 w-5 text-emerald-500" />
-            Información básica
-          </h4>
-          <button
-            type="button"
-            className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
-            onClick={() => onEditStep(1)}
-          >
-            Editar
-          </button>
-        </div>
-        <div className="grid gap-6">
-          <div className="grid gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              Título de la vacante
-            </span>
-            <span className="text-base font-medium text-zinc-900 dark:text-zinc-100">
-              {v.title}
-            </span>
-          </div>
-
-          <div className="grid sm:grid-cols-2 gap-6">
-            <div className="grid gap-1">
-              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Empresa
-              </span>
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                {v.companyMode === "confidential"
-                  ? "Confidencial"
-                  : presetCompany?.name || "Mi empresa"}
-              </span>
-            </div>
-
-            <div className="grid gap-1">
-              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Ubicación
-              </span>
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                {locationText}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ... (resto de las cards sin cambios - Compensation, Benefits, Requirements, Description) ... */}
-      {/* El ReviewBlock es muy largo, pero no necesita cambios excepto actualizar las referencias onEditStep */}
-      {/* Solo cambiar onEditStep(4) por onEditStep(5) donde corresponda */}
-    </div>
-  );
-}
-
-/* =============================
-   Helpers
-============================= */
-function inputCls(err?: any) {
-  return clsx(
-    "min-w-0 rounded-md border bg-white p-2 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900",
-    err ? "border-red-500" : "border-zinc-300"
   );
 }
