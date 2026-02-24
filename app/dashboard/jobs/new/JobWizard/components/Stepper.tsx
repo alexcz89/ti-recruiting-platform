@@ -32,7 +32,7 @@ export default function Stepper({
 
   return (
     <div className="mb-6 p-4">
-      <ol className="flex items-center justify-between gap-4">
+      <ol className="flex items-center justify-between">
         {items.map((n, idx) => {
           const done = n < step;
           const active = n === step;
@@ -40,13 +40,13 @@ export default function Stepper({
           const isComplete = stepCompletion[idx];
 
           return (
-            <li key={n} className="flex flex-1 items-center gap-2">
+            <li key={n} className="flex flex-1 items-center min-w-0">
               <button
                 type="button"
                 onClick={() => canJump && onJump?.(n)}
                 disabled={!canJump}
                 className={clsx(
-                  "group relative flex flex-col items-center gap-2 transition-all duration-200",
+                  "group relative flex flex-col items-center gap-1.5 transition-all duration-200 w-full",
                   canJump ? "cursor-pointer" : "cursor-not-allowed opacity-50"
                 )}
                 aria-current={active ? "step" : undefined}
@@ -54,7 +54,7 @@ export default function Stepper({
                 {/* Circle */}
                 <div
                   className={clsx(
-                    "relative z-10 flex h-10 w-10 items-center justify-center rounded-full border-2 font-semibold text-sm transition-all duration-200",
+                    "relative z-10 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border-2 font-semibold text-xs sm:text-sm transition-all duration-200",
                     active &&
                       "border-emerald-600 bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 scale-110",
                     done &&
@@ -67,14 +67,14 @@ export default function Stepper({
                   )}
                 >
                   {done && !active ? (
-                    <Check className="h-5 w-5" />
+                    <Check className="h-4 w-4" />
                   ) : (
                     <span>{n}</span>
                   )}
 
                   {isComplete && !done && !active && (
-                    <div className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-white ring-2 ring-white dark:ring-zinc-900">
-                      <Check className="h-3 w-3" />
+                    <div className="absolute -right-1 -top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-green-500 text-white ring-2 ring-white dark:ring-zinc-900">
+                      <Check className="h-2.5 w-2.5" />
                     </div>
                   )}
                 </div>
@@ -82,7 +82,7 @@ export default function Stepper({
                 {/* Label */}
                 <span
                   className={clsx(
-                    "text-[11px] sm:text-xs font-medium transition-colors hidden sm:block text-center leading-snug whitespace-nowrap",
+                    "text-[10px] sm:text-[11px] font-medium transition-colors hidden sm:block text-center leading-snug whitespace-nowrap",
                     active && "text-emerald-600 dark:text-emerald-400",
                     done && !active && "text-emerald-600 dark:text-emerald-400",
                     !done && !active && "text-zinc-500 dark:text-zinc-400"
@@ -94,7 +94,7 @@ export default function Stepper({
 
               {/* Connector Line */}
               {n < total && (
-                <div className="flex-1 px-4">
+                <div className="flex-1 px-1 sm:px-2 min-w-[8px]">
                   <div
                     className={clsx(
                       "h-0.5 transition-colors duration-300",
