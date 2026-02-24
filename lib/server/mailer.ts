@@ -137,22 +137,99 @@ export async function sendEmail(opts: {
 
 /** Correo de verificación simple (wrapper) */
 export async function sendVerificationEmail(to: string, verifyUrl: string) {
-  const subject = `Verifica tu correo - ${APP_NAME}`;
+  const subject = `Confirma tu cuenta en ${APP_NAME}`;
   const safeUrl = escapeHtml(verifyUrl);
 
-  const html = htmlLayout({
-    title: subject,
-    body: `
-      <p>Hola,</p>
-      <p>Para activar tu cuenta en <strong>${escapeHtml(APP_NAME)}</strong>, verifica tu correo:</p>
-      <p><a href="${safeUrl}" target="_blank" rel="noreferrer">Verificar mi correo</a></p>
-      <p style="color:#6b7280;font-size:12px;margin-top:16px;">Si no solicitaste este registro, ignora este mensaje.</p>
-    `,
-  });
+  const html = `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4f4f5;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+            <!-- Logo / Header -->
+            <tr>
+              <td align="center" style="padding-bottom:24px;">
+                <span style="font-size:26px;font-weight:800;color:#7c3aed;letter-spacing:-0.5px;">${escapeHtml(APP_NAME)}</span>
+              </td>
+            </tr>
+
+            <!-- Card -->
+            <tr>
+              <td style="background:#ffffff;border-radius:16px;padding:40px 40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+                <!-- Icono -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding-bottom:24px;">
+                      <div style="display:inline-block;background:#f3f0ff;border-radius:50%;width:64px;height:64px;line-height:64px;text-align:center;font-size:28px;">✉️</div>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Título -->
+                <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;text-align:center;">Confirma tu correo</h1>
+                <p style="margin:0 0 24px;font-size:14px;color:#6b7280;text-align:center;line-height:1.6;">
+                  Estás a un paso de activar tu cuenta en <strong style="color:#111827;">${escapeHtml(APP_NAME)}</strong>.<br/>
+                  Haz clic en el botón para confirmar tu dirección de correo.
+                </p>
+
+                <!-- Botón CTA -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding:8px 0 28px;">
+                      <a href="${safeUrl}" target="_blank" rel="noreferrer"
+                        style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 36px;border-radius:10px;letter-spacing:0.2px;">
+                        Verificar mi correo
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Advertencia expiración -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+                      <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.5;">
+                        ⏱️ Este enlace expirará en <strong style="color:#374151;">24 horas</strong>.
+                        Si el botón no funciona, copia y pega este link en tu navegador:
+                      </p>
+                      <p style="margin:6px 0 0;font-size:11px;word-break:break-all;color:#7c3aed;">${safeUrl}</p>
+                    </td>
+                  </tr>
+                </table>
+
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td align="center" style="padding:24px 0 8px;">
+                <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+                  Si no solicitaste este registro, puedes ignorar este correo con seguridad.<br/>
+                  © ${new Date().getFullYear()} ${escapeHtml(APP_NAME)} — Todos los derechos reservados.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 
   const text =
-    `Verifica tu correo en ${APP_NAME}:\n${verifyUrl}\n\n` +
-    `Si no solicitaste este registro, puedes ignorar este mensaje.`;
+    `Confirma tu cuenta en ${APP_NAME}\n\n` +
+    `Haz clic en el siguiente enlace para verificar tu correo:\n${verifyUrl}\n\n` +
+    `Este enlace expirará en 24 horas.\n\n` +
+    `Si no solicitaste este registro, puedes ignorar este correo.`;
 
   // ✅ dedupeKey única por intento para evitar bloqueos de idempotencia en Resend
   return sendEmail({ to, subject, html, text, dedupeKey: `verify:${to}:${Date.now()}` });
