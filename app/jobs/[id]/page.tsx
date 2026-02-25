@@ -15,7 +15,6 @@ type Params = { params: { id: string } };
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
 const SITE_NAME = "TaskIO";
-const DEFAULT_OG_IMAGE = `${APP_URL}/og-default.png`; // imagen fallback 1200x630
 
 /* ─── Helpers ─── */
 function excerpt(text: string | null | undefined, max = 160) {
@@ -31,11 +30,11 @@ function stripHtml(html: string | null | undefined) {
 
 function labelEmploymentType(type: string | null | undefined) {
   switch (type) {
-    case "FULL_TIME":   return "Tiempo completo";
-    case "PART_TIME":   return "Medio tiempo";
-    case "CONTRACT":    return "Por periodo";
-    case "INTERNSHIP":  return "Prácticas profesionales";
-    default:            return null;
+    case "FULL_TIME":  return "Tiempo completo";
+    case "PART_TIME":  return "Medio tiempo";
+    case "CONTRACT":   return "Por periodo";
+    case "INTERNSHIP": return "Prácticas profesionales";
+    default:           return null;
   }
 }
 
@@ -52,20 +51,16 @@ function buildDescription(job: {
 }): string {
   const parts: string[] = [];
 
-  // Empresa
   if (job.company?.name) parts.push(job.company.name);
-
-  // Ubicación
   if (job.city) parts.push(job.city);
 
-  // Tipo de empleo
   const empLabel = labelEmploymentType(job.employmentType);
   if (empLabel) parts.push(empLabel);
 
-  // Salario
   if (job.salaryMin || job.salaryMax) {
     const currency = job.currency ?? "MXN";
-    const fmt = (n: number) => new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
+    const fmt = (n: number) =>
+      new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
     if (job.salaryMin && job.salaryMax) {
       parts.push(`${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`);
     } else if (job.salaryMin) {
@@ -76,12 +71,10 @@ function buildDescription(job: {
   }
 
   const header = parts.join(" · ");
-
-  // Descripción truncada
   const rawDesc = job.description || stripHtml(job.descriptionHtml || "");
   const desc = excerpt(rawDesc, 120);
 
-  return header && desc ? `${header}\n${desc}` : header || desc || `Vacante: ${job.title}`;
+  return header && desc ? `${header} — ${desc}` : header || desc || `Vacante: ${job.title}`;
 }
 
 /* ─── Metadata ─── */
@@ -98,48 +91,36 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       salaryMin: true,
       salaryMax: true,
       currency: true,
-      company: { select: { name: true, logoUrl: true } },
+      company: { select: { name: true } },
     },
   });
 
   if (!job) return {};
 
   const companyName = job.company?.name ?? null;
-  const title = companyName
-    ? `${job.title} — ${companyName} | ${SITE_NAME}`
-    : `${job.title} | ${SITE_NAME}`;
-
+  const title = companyName ? `${job.title} — ${companyName}` : job.title;
   const description = buildDescription(job);
   const url = `${APP_URL}/jobs/${job.id}`;
 
-  // Imagen OG: logo de empresa si existe, si no la imagen default del sitio
-  const ogImage = job.company?.logoUrl ?? DEFAULT_OG_IMAGE;
+  // ✅ Imagen OG dinámica — siempre 1200x630, sin login, siempre accesible
+  const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}`;
 
   return {
     title,
     description,
     alternates: { canonical: url },
-
     openGraph: {
-      title: companyName ? `${job.title} — ${companyName}` : job.title,
+      title,
       description,
       url,
       siteName: SITE_NAME,
       locale: "es_MX",
       type: "website",
-      images: [
-        {
-          url: ogImage,
-          width: 1200,
-          height: 630,
-          alt: companyName ? `${job.title} en ${companyName}` : job.title,
-        },
-      ],
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
     },
-
     twitter: {
       card: "summary_large_image",
-      title: companyName ? `${job.title} — ${companyName}` : job.title,
+      title,
       description,
       images: [ogImage],
     },
@@ -260,7 +241,11 @@ export default async function JobDetail({ params }: Params) {
     description: job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
     employmentType: job.employmentType,
-    identifier: { "@type": "PropertyValue", name: job.company?.name ?? "Confidencial", value: job.id },
+    identifier: {
+      "@type": "PropertyValue",
+      name: job.company?.name ?? "Confidencial",
+      value: job.id,
+    },
   };
 
   return (
