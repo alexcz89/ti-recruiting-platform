@@ -80,7 +80,7 @@ export default async function Home() {
                 </svg>
               </span>{" "}
               en{" "}
-              <span className="text-emerald-600 dark:text-emerald-400">TI</span>
+              <span className="text-violet-500 dark:text-violet-400">TI</span>
             </h1>
 
             <p className="animate-fade-in-up animation-delay-200 mt-6 max-w-3xl text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed">
