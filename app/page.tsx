@@ -1,11 +1,10 @@
-// app/page.tsx - VERSIÓN PRO
+// app/page.tsx
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
 import JobSearchBar from "@/components/JobSearchBar";
-import PricingSection from "@/components/marketing/PricingSection";
 import {
   Users,
   Briefcase,
@@ -13,21 +12,15 @@ import {
   Target,
   Kanban,
   FileText,
-  ChevronDown,
   Sparkles,
   Building2,
   UserCircle,
   CheckCircle,
   TrendingUp,
-  Clock,
   Shield,
-  Star,
   ArrowRight,
-  Code,
   Rocket,
-  Award,
 } from "lucide-react";
-import RegisterModal from "@/components/RegisterModal";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -57,7 +50,10 @@ export default async function Home() {
         {/* Animated gradient background */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 h-96 w-96 rounded-full bg-emerald-500/20 dark:bg-emerald-500/10 blur-3xl animate-pulse" />
-          <div className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-blue-500/20 dark:bg-blue-500/10 blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+          <div
+            className="absolute -bottom-40 -left-40 h-96 w-96 rounded-full bg-blue-500/20 dark:bg-blue-500/10 blur-3xl animate-pulse"
+            style={{ animationDelay: "1s" }}
+          />
         </div>
 
         <div className="relative mx-auto max-w-7xl px-6 pt-16 pb-20 lg:pt-20 lg:pb-24">
@@ -126,26 +122,6 @@ export default async function Home() {
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
             </div>
-
-            {/* Social proof */}
-            <div className="animate-fade-in-up animation-delay-500 mt-12 flex flex-wrap items-center justify-center gap-8 text-sm text-zinc-600 dark:text-zinc-400">
-              <div className="flex items-center gap-2">
-                <div className="flex -space-x-2">
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 border-2 border-white dark:border-zinc-950" />
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-400 to-cyan-500 border-2 border-white dark:border-zinc-950" />
-                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-violet-400 to-purple-500 border-2 border-white dark:border-zinc-950" />
-                </div>
-                <span className="font-medium">+500 candidatos activos</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="flex">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  ))}
-                </div>
-                <span className="font-medium">4.9/5 en satisfacción</span>
-              </div>
-            </div>
           </div>
 
           {/* Search bar mejorado con contexto */}
@@ -169,53 +145,13 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ===== STATS SECTION - Credibilidad ===== */}
-      <section className="relative border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 py-12">
-        <div className="mx-auto max-w-7xl px-6">
-          <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">
-                500+
-              </div>
-              <div className="mt-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                Candidatos Tech
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">
-                200+
-              </div>
-              <div className="mt-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                Vacantes Activas
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-violet-600 dark:text-violet-400">
-                100+
-              </div>
-              <div className="mt-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                Empresas Activas
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-bold text-teal-600 dark:text-teal-400">
-                95%
-              </div>
-              <div className="mt-2 text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                Tasa de Match
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* ===== FEATURED RESUME BUILDER - Hero secundario ===== */}
       <section className="relative mx-auto max-w-7xl px-6 py-24">
         <div className="relative overflow-hidden rounded-3xl border-2 border-emerald-200 dark:border-emerald-900/50 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-cyan-950/10 p-12 shadow-2xl md:p-16">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-emerald-400/20 dark:bg-emerald-400/10 blur-3xl" />
           <div className="pointer-events-none absolute -left-20 -bottom-20 h-80 w-80 rounded-full bg-teal-400/20 dark:bg-teal-400/10 blur-3xl" />
-          
+
           <div className="relative grid gap-12 lg:grid-cols-2 lg:gap-16 items-center">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-emerald-600 dark:bg-emerald-500 px-4 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
@@ -224,13 +160,16 @@ export default async function Home() {
               </div>
               <h2 className="mt-6 text-4xl font-bold text-zinc-900 dark:text-zinc-50 md:text-5xl">
                 Tu CV profesional en
-                <span className="text-emerald-600 dark:text-emerald-400"> 10 minutos</span>
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  {" "}
+                  10 minutos
+                </span>
               </h2>
               <p className="mt-4 text-lg text-zinc-700 dark:text-zinc-300 leading-relaxed">
                 Constructor intuitivo con diseño moderno y optimizado para ATS.
                 Sin plantillas genéricas, sin complicaciones.
               </p>
-              
+
               <ul className="mt-8 space-y-4">
                 <li className="flex items-start gap-3">
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 dark:bg-emerald-500 text-white shrink-0">
@@ -319,7 +258,7 @@ export default async function Home() {
           <div className="group relative overflow-hidden rounded-3xl border-2 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 transition-all duration-500 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-2xl hover:shadow-emerald-500/10 hover:-translate-y-2">
             {/* Gradient overlay on hover */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/0 via-emerald-500/0 to-emerald-500/0 opacity-0 transition-opacity duration-500 group-hover:from-emerald-500/5 group-hover:via-transparent group-hover:to-emerald-500/5 group-hover:opacity-100" />
-            
+
             <div className="relative p-10 md:p-12">
               {/* Icon with animated background */}
               <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-950/50 dark:to-teal-950/30 text-emerald-600 dark:text-emerald-400 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3">
@@ -373,7 +312,7 @@ export default async function Home() {
           <div className="group relative overflow-hidden rounded-3xl border-2 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 transition-all duration-500 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-2xl hover:shadow-violet-500/10 hover:-translate-y-2">
             {/* Gradient overlay on hover */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-500/0 via-violet-500/0 to-violet-500/0 opacity-0 transition-opacity duration-500 group-hover:from-violet-500/5 group-hover:via-transparent group-hover:to-violet-500/5 group-hover:opacity-100" />
-            
+
             <div className="relative p-10 md:p-12">
               {/* Icon with animated background */}
               <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-950/50 dark:to-purple-950/30 text-violet-600 dark:text-violet-400 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3">
@@ -442,37 +381,43 @@ export default async function Home() {
               {
                 icon: FileText,
                 title: "CV Profesional",
-                description: "Constructor drag & drop con plantillas ATS-friendly. Descarga PDF o comparte con link único.",
+                description:
+                  "Constructor drag & drop con plantillas ATS-friendly. Descarga PDF o comparte con link único.",
                 color: "emerald",
               },
               {
                 icon: Target,
                 title: "Búsqueda Inteligente",
-                description: "Filtros avanzados por stack, experiencia, ubicación y modalidad. Encuentra el match perfecto.",
+                description:
+                  "Filtros avanzados por stack, experiencia, ubicación y modalidad. Encuentra el match perfecto.",
                 color: "blue",
               },
               {
                 icon: Kanban,
                 title: "Pipeline Visual",
-                description: "Gestión Kanban de candidatos. Arrastra entre etapas y mantén todo organizado.",
+                description:
+                  "Gestión Kanban de candidatos. Arrastra entre etapas y mantén todo organizado.",
                 color: "violet",
               },
               {
                 icon: Zap,
                 title: "Postulación Rápida",
-                description: "Aplica a vacantes con un solo clic. Tu perfil se envía automáticamente al reclutador.",
+                description:
+                  "Aplica a vacantes con un solo clic. Tu perfil se envía automáticamente al reclutador.",
                 color: "yellow",
               },
               {
                 icon: Shield,
                 title: "Perfiles Verificados",
-                description: "Candidatos verificados con skills validados. Reduce tiempo de screening.",
+                description:
+                  "Candidatos verificados con skills validados. Reduce tiempo de screening.",
                 color: "teal",
               },
               {
                 icon: TrendingUp,
                 title: "Analytics & Insights",
-                description: "Métricas en tiempo real. Optimiza tu proceso de reclutamiento con data.",
+                description:
+                  "Métricas en tiempo real. Optimiza tu proceso de reclutamiento con data.",
                 color: "indigo",
               },
             ].map((feature, i) => (
@@ -480,7 +425,9 @@ export default async function Home() {
                 key={i}
                 className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xl hover:-translate-y-1"
               >
-                <div className={`inline-flex h-14 w-14 items-center justify-center rounded-xl bg-${feature.color}-100 dark:bg-${feature.color}-950/50 text-${feature.color}-600 dark:text-${feature.color}-400 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}>
+                {/* Nota: clases dinámicas no son seguras para Tailwind JIT.
+                    Dejamos ícono simple para evitar estilos rotos en build. */}
+                <div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-200 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
                   <feature.icon className="h-7 w-7" />
                 </div>
                 <h3 className="mt-6 text-xl font-bold text-zinc-900 dark:text-zinc-50">
@@ -495,128 +442,6 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ===== TESTIMONIALS - Nuevo ===== */}
-      <section className="mx-auto max-w-7xl px-6 py-24">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-zinc-900 dark:text-zinc-50 md:text-5xl">
-            Historias de éxito
-          </h2>
-          <p className="mt-4 text-xl text-zinc-600 dark:text-zinc-400">
-            Lo que dicen quienes ya encontraron su match
-          </p>
-        </div>
-
-        <div className="grid gap-8 md:grid-cols-3">
-          {[
-            {
-              name: "Ana García",
-              role: "Frontend Developer",
-              company: "Tech Startup",
-              quote: "Encontré mi trabajo actual en 2 semanas. El CV builder es increíble y la postulación con un clic me ahorró mucho tiempo.",
-              avatar: "AG",
-            },
-            {
-              name: "Carlos Méndez",
-              role: "Tech Recruiter",
-              company: "Fintech Corp",
-              quote: "El pipeline Kanban cambió completamente nuestro proceso. Ahora gestionamos 50+ candidatos sin perder el control.",
-              avatar: "CM",
-            },
-            {
-              name: "Laura Ruiz",
-              role: "Full Stack Developer",
-              company: "SaaS Company",
-              quote: "La calidad de las vacantes es excelente. Solo tech roles bien pagados y empresas serias. Vale la pena 100%.",
-              avatar: "LR",
-            },
-          ].map((testimonial, i) => (
-            <div
-              key={i}
-              className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-8 shadow-sm transition-all duration-300 hover:shadow-lg"
-            >
-              <div className="flex items-center gap-1 text-yellow-400">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-4 w-4 fill-current" />
-                ))}
-              </div>
-              <p className="mt-4 text-zinc-700 dark:text-zinc-300 leading-relaxed">
-                &ldquo;{testimonial.quote}&rdquo;
-              </p>
-              <div className="mt-6 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 text-sm font-bold text-white">
-                  {testimonial.avatar}
-                </div>
-                <div>
-                  <div className="font-semibold text-zinc-900 dark:text-zinc-50">
-                    {testimonial.name}
-                  </div>
-                  <div className="text-sm text-zinc-600 dark:text-zinc-400">
-                    {testimonial.role} @ {testimonial.company}
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ===== FAQ SECTION ===== */}
-      <section className="mx-auto max-w-4xl px-6 pb-24">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-zinc-900 dark:text-zinc-50">
-            Preguntas frecuentes
-          </h2>
-          <p className="mt-4 text-lg text-zinc-600 dark:text-zinc-400">
-            Todo lo que necesitas saber
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          {[
-            {
-              q: "¿Es realmente gratis crear mi CV?",
-              a: "Sí, completamente gratis. Puedes crear tu CV profesional, descargarlo en PDF y compartirlo online sin costo alguno. No hay trucos ni cargos ocultos.",
-            },
-            {
-              q: "¿Necesito pagar para postularme a vacantes?",
-              a: "No. Cualquier candidato puede registrarse gratis, crear su perfil y postularse a todas las vacantes que desee. Los planes de pago son solo para reclutadores.",
-            },
-            {
-              q: "¿Cuánto tiempo toma crear un CV?",
-              a: "Entre 5 y 15 minutos dependiendo de tu experiencia. El constructor te guía paso a paso y puedes guardar tu progreso.",
-            },
-            {
-              q: "¿Puedo editar mi CV después de crearlo?",
-              a: "Por supuesto. Tu CV se guarda en tu perfil y puedes editarlo cuando quieras. Los cambios se reflejan inmediatamente en tus postulaciones.",
-            },
-            {
-              q: "¿Cómo funciona el proceso de postulación?",
-              a: "Una vez que completes tu perfil, solo haz clic en \"Postularme\" en cualquier vacante. Tu información se envía automáticamente al reclutador.",
-            },
-            {
-              q: "¿Qué incluyen los planes para reclutadores?",
-              a: "Los planes permiten publicar vacantes, acceder a candidatos, gestionar postulaciones en el Pipeline y recibir notificaciones. Revisa los detalles en la sección de precios.",
-            },
-          ].map((faq, i) => (
-            <details
-              key={i}
-              className="group rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-200 hover:border-emerald-400 dark:hover:border-emerald-600 open:border-emerald-400 dark:open:border-emerald-600"
-            >
-              <summary className="flex cursor-pointer items-start justify-between gap-4 font-semibold text-zinc-900 dark:text-zinc-100">
-                <span>{faq.q}</span>
-                <ChevronDown className="h-5 w-5 flex-shrink-0 text-zinc-500 dark:text-zinc-400 transition-transform duration-200 group-open:rotate-180" />
-              </summary>
-              <p className="mt-4 text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                {faq.a}
-              </p>
-            </details>
-          ))}
-        </div>
-      </section>
-
-      {/* ===== PRICING SECTION ===== */}
-      <PricingSection />
-
       {/* ===== CTA FINAL - Nuevo ===== */}
       <section className="border-y border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/30 dark:via-teal-950/20 dark:to-cyan-950/10 py-24">
         <div className="mx-auto max-w-4xl px-6 text-center">
@@ -624,7 +449,7 @@ export default async function Home() {
             ¿Listo para dar el siguiente paso?
           </h2>
           <p className="mt-6 text-xl text-zinc-700 dark:text-zinc-300">
-            Únete a +500 profesionales tech que ya encontraron su próximo proyecto
+            Únete a profesionales tech y encuentra tu próximo proyecto
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
             <Link
@@ -688,7 +513,7 @@ export default async function Home() {
 
           <div className="mt-8 border-t border-zinc-200 dark:border-zinc-800 pt-6 text-center">
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              © {year} Bolsa TI. Todos los derechos reservados.
+              © {year} TaskIO. Todos los derechos reservados.
             </p>
           </div>
         </div>
