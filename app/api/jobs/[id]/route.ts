@@ -339,3 +339,49 @@ export async function PATCH(
     );
   }
 }
+
+// -------------------------------
+// DELETE
+// -------------------------------
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getSessionOrThrow();
+    const companyId = await getSessionCompanyId();
+
+    if (!companyId) {
+      return NextResponse.json({ error: "Sin empresa asociada" }, { status: 401 });
+    }
+
+    // @ts-ignore
+    const role = session.user?.role;
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Verificar que la vacante pertenece a la empresa
+    const exists = await prisma.job.findFirst({
+      where: { id: params.id, companyId },
+      select: { id: true },
+    });
+
+    if (!exists) {
+      return NextResponse.json(
+        { error: "Vacante no encontrada o sin permisos" },
+        { status: 404 }
+      );
+    }
+
+    await prisma.job.delete({ where: { id: params.id } });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /api/jobs/[id]]", err);
+    return NextResponse.json(
+      { error: "Error al eliminar la vacante" },
+      { status: 500 }
+    );
+  }
+}

@@ -129,6 +129,7 @@ export default function JobActionsMenu({ jobId, currentStatus }: Props) {
     );
     if (!confirmed) return;
 
+    setOpen(false); // cerrar menú antes de actuar
     setBusy(true);
     try {
       const res = await fetch(`/api/jobs/${jobId}`, {
@@ -136,18 +137,16 @@ export default function JobActionsMenu({ jobId, currentStatus }: Props) {
       });
 
       if (!res.ok) {
-        throw new Error("Error eliminando vacante");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Error eliminando vacante");
       }
 
       toastSuccess("Vacante eliminada correctamente");
-      
-      router.push("/dashboard/jobs");
-      router.refresh();
-    } catch (error) {
-      toastError("Error al eliminar la vacante");
+      router.push("/dashboard/jobs"); // solo push, sin refresh (evita doble toast)
+    } catch (error: any) {
+      toastError(error?.message || "Error al eliminar la vacante");
     } finally {
       setBusy(false);
-      setOpen(false);
     }
   }
 
