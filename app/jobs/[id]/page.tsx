@@ -86,6 +86,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       salaryMin: true,
       salaryMax: true,
       currency: true,
+      updatedAt: true, // 👈 necesario para romper caché
       company: { select: { name: true } },
     },
   });
@@ -93,15 +94,21 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!job) return {};
 
   const companyName = job.company?.name ?? null;
-  const title = companyName ? `${job.title} — ${companyName}` : job.title;
+  const title = companyName
+    ? `${job.title} — ${companyName}`
+    : job.title;
+
   const description = buildDescription(job);
   const url = `${APP_URL}/jobs/${job.id}`;
-  const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}`;
+
+  // 👇 Cache busting automático
+  const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}&v=${job.updatedAt.getTime()}`;
 
   return {
     title,
     description,
     alternates: { canonical: url },
+
     openGraph: {
       title,
       description,
@@ -109,10 +116,18 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       siteName: SITE_NAME,
       locale: "es_MX",
       type: "website",
-      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
+      images: [
+        {
+          url: ogImage,
+          width: 630,
+          height: 630,
+          alt: title,
+        },
+      ],
     },
+
     twitter: {
-      card: "summary_large_image",
+      card: "summary", // mejor para imagen cuadrada
       title,
       description,
       images: [ogImage],

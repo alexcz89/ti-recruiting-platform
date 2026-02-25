@@ -13,19 +13,20 @@ function fmt(n: number) {
 
 function labelEmployment(type: string | null | undefined) {
   switch (type) {
-    case "FULL_TIME":  return "Tiempo completo";
-    case "PART_TIME":  return "Medio tiempo";
-    case "CONTRACT":   return "Por periodo";
+    case "FULL_TIME": return "Tiempo completo";
+    case "PART_TIME": return "Medio tiempo";
+    case "CONTRACT": return "Por periodo";
     case "INTERNSHIP": return "Prácticas";
-    default:           return null;
+    default: return null;
   }
 }
 
-// Lee el logo una vez y lo convierte a data URL para usarlo en ImageResponse
 function getLogoDataUrl(): string {
   try {
     const logoPath = path.join(process.cwd(), "public", "TASKIO_black.png");
     const buffer = fs.readFileSync(logoPath);
+
+    // Corregido: si es PNG debe ser image/png
     return `data:image/png;base64,${buffer.toString("base64")}`;
   } catch {
     return "";
@@ -55,6 +56,7 @@ export async function GET(req: Request) {
   if (!job) return new Response("Not found", { status: 404 });
 
   const currency = job.currency ?? "MXN";
+
   const salary =
     job.salaryMin && job.salaryMax
       ? `${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`
@@ -65,12 +67,9 @@ export async function GET(req: Request) {
       : null;
 
   const locationLabel =
-    job.locationType === "REMOTE"
-      ? "Remoto"
-      : job.city ?? null;
+    job.locationType === "REMOTE" ? "Remoto" : job.city ?? null;
 
   const chips = [
-    job.company?.name,
     locationLabel,
     labelEmployment(job.employmentType),
     salary,
@@ -82,106 +81,136 @@ export async function GET(req: Request) {
     (
       <div
         style={{
-          width: "1200px",
+          width: "630px",
           height: "630px",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
-          padding: "56px 72px",
+          alignItems: "center",
+          justifyContent: "center",
           background: "#09090b",
           fontFamily: "system-ui, -apple-system, sans-serif",
           position: "relative",
         }}
       >
-        {/* Acento de color arriba a la izquierda */}
+        {/* Top border */}
         <div
           style={{
             position: "absolute",
             top: 0,
             left: 0,
-            width: "6px",
-            height: "100%",
-            background: "linear-gradient(180deg, #10b981 0%, #7c3aed 100%)",
+            right: 0,
+            height: "5px",
+            background: "linear-gradient(90deg, #10b981, #7c3aed)",
           }}
         />
 
-        {/* Top: logo */}
-        <div style={{ display: "flex", alignItems: "center" }}>
-          {logoDataUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoDataUrl}
-              alt="TaskIO"
-              style={{ height: "44px", objectFit: "contain" }}
-            />
-          ) : (
-            <span style={{ fontSize: "28px", fontWeight: 800, color: "white", letterSpacing: "-1px" }}>
-              TASK<span style={{ color: "#10b981" }}>IO</span>
-            </span>
-          )}
-        </div>
-
-        {/* Center: título vacante */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          {job.company?.name && (
-            <div style={{ fontSize: "22px", fontWeight: 500, color: "#10b981", letterSpacing: "0.5px" }}>
-              {job.company.name}
-            </div>
-          )}
+        {/* Logo */}
+        {logoDataUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoDataUrl}
+            alt="TaskIO"
+            style={{
+              width: "300px",
+              objectFit: "contain",
+              marginBottom: "36px",
+            }}
+          />
+        ) : (
           <div
             style={{
-              fontSize: job.title.length > 40 ? 52 : 64,
-              fontWeight: 800,
-              color: "#ffffff",
-              lineHeight: 1.05,
+              fontSize: "72px",
+              fontWeight: 900,
+              color: "white",
               letterSpacing: "-2px",
-              maxWidth: "1000px",
+              marginBottom: "36px",
             }}
           >
-            {job.title}
+            TASK<span style={{ color: "#10b981" }}>IO</span>
           </div>
+        )}
+
+        {/* Separator */}
+        <div
+          style={{
+            width: "40px",
+            height: "3px",
+            background: "#10b981",
+            borderRadius: "2px",
+            marginBottom: "28px",
+          }}
+        />
+
+        {/* Title */}
+        <div
+          style={{
+            fontSize: job.title.length > 35 ? 26 : 32,
+            fontWeight: 800,
+            color: "#ffffff",
+            textAlign: "center",
+            lineHeight: 1.2,
+            maxWidth: "520px",
+            marginBottom: "12px",
+            padding: "0 40px",
+          }}
+        >
+          {job.title}
         </div>
 
-        {/* Bottom: chips */}
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {chips.filter((_, i) => i > 0).map((chip, i) => (
+        {/* Company */}
+        {job.company?.name && (
+          <div
+            style={{
+              fontSize: "19px",
+              fontWeight: 600,
+              color: "#10b981",
+              marginBottom: "20px",
+            }}
+          >
+            {job.company.name}
+          </div>
+        )}
+
+        {/* Chips */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "8px",
+            justifyContent: "center",
+            padding: "0 40px",
+          }}
+        >
+          {chips.map((chip, i) => (
             <div
               key={i}
               style={{
-                display: "flex",
-                alignItems: "center",
-                padding: "8px 20px",
+                padding: "5px 14px",
                 borderRadius: "999px",
-                background: "rgba(255,255,255,0.06)",
-                border: "1.5px solid rgba(255,255,255,0.12)",
-                fontSize: "20px",
-                fontWeight: 500,
-                color: "#d4d4d8",
+                background: "rgba(255,255,255,0.07)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                fontSize: "15px",
+                color: "#a1a1aa",
               }}
             >
               {chip}
             </div>
           ))}
-          {/* taskio.com.mx badge */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginLeft: "auto",
-              padding: "8px 20px",
-              borderRadius: "999px",
-              background: "rgba(16,185,129,0.12)",
-              border: "1.5px solid rgba(16,185,129,0.3)",
-              fontSize: "18px",
-              fontWeight: 600,
-              color: "#10b981",
-            }}
-          >
-            taskio.com.mx
-          </div>
         </div>
+
+        {/* Bottom border */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: "5px",
+            background: "linear-gradient(90deg, #7c3aed, #10b981)",
+          }}
+        />
       </div>
     ),
-    { width: 1200, height: 630 }
+    { width: 630, height: 630 }
   );
 }
