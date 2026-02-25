@@ -50,13 +50,10 @@ function buildDescription(job: {
   company?: { name?: string | null } | null;
 }): string {
   const parts: string[] = [];
-
   if (job.company?.name) parts.push(job.company.name);
   if (job.city) parts.push(job.city);
-
   const empLabel = labelEmploymentType(job.employmentType);
   if (empLabel) parts.push(empLabel);
-
   if (job.salaryMin || job.salaryMax) {
     const currency = job.currency ?? "MXN";
     const fmt = (n: number) =>
@@ -69,11 +66,9 @@ function buildDescription(job: {
       parts.push(`Hasta ${currency} ${fmt(job.salaryMax)}`);
     }
   }
-
   const header = parts.join(" · ");
   const rawDesc = job.description || stripHtml(job.descriptionHtml || "");
   const desc = excerpt(rawDesc, 120);
-
   return header && desc ? `${header} — ${desc}` : header || desc || `Vacante: ${job.title}`;
 }
 
@@ -101,8 +96,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const title = companyName ? `${job.title} — ${companyName}` : job.title;
   const description = buildDescription(job);
   const url = `${APP_URL}/jobs/${job.id}`;
-
-  // ✅ Imagen OG dinámica — siempre 1200x630, sin login, siempre accesible
   const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}`;
 
   return {
@@ -129,7 +122,15 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 /* ─── Page ─── */
 export default async function JobDetail({ params }: Params) {
-  const session = await getServerSession(authOptions);
+  // ✅ Envuelto en try/catch para que scrapers (WhatsApp, FB) nunca reciban 500
+  // Si getServerSession falla (sin cookies, timeout), renderizamos como anónimo
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    // scraper o error de sesión → continúa como usuario anónimo
+  }
+
   const user = (session?.user as any) || null;
   const role = (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
   const isCandidate = role === "CANDIDATE";
@@ -180,18 +181,16 @@ export default async function JobDetail({ params }: Params) {
 
   if (!job) notFound();
 
-  console.log("[PUBLIC JOB]", {
-    jobId: job?.id,
-    requiredAssessmentsCount: job?.assessments?.length ?? 0,
-    requiredAssessmentTemplateId: job?.assessments?.[0]?.templateId ?? null,
-    requiredAssessmentTitle: job?.assessments?.[0]?.template?.title ?? null,
-  });
-
   let canEdit = false;
   if (role === "RECRUITER" || role === "ADMIN") {
+    // ✅ También en try/catch por si getSessionCompanyId falla
     const myCompanyId = await getSessionCompanyId().catch(() => null);
-    if (!myCompanyId || job.companyId !== myCompanyId) notFound();
-    canEdit = true;
+    if (!myCompanyId || job.companyId !== myCompanyId) {
+      // Scraper o recruiter de otra empresa → mostrar página pública sin edición
+      canEdit = false;
+    } else {
+      canEdit = true;
+    }
   }
 
   const requiredAssessment = job.assessments?.[0] ?? null;
@@ -254,14 +253,12 @@ export default async function JobDetail({ params }: Params) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-
       {requiredAssessment && (
         <AssessmentRequirement
           assessment={requiredAssessment as any}
           userAttempt={userAttempt as any}
         />
       )}
-
       <JobDetailPanel
         job={panelJob as any}
         canApply={isCandidate}
