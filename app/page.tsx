@@ -78,7 +78,9 @@ export default async function Home() {
                     className="text-emerald-500 dark:text-emerald-400"
                   />
                 </svg>
-              </span>
+              </span>{" "}
+              en{" "}
+              <span className="text-emerald-600 dark:text-emerald-400">TI</span>
             </h1>
 
             <p className="animate-fade-in-up animation-delay-200 mt-6 max-w-3xl text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed">
