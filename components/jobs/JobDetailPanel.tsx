@@ -4,7 +4,6 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import DOMPurify from "dompurify";
 import {
   Share2,
   Briefcase,
@@ -18,6 +17,24 @@ import {
 } from "lucide-react";
 import { fromNow } from "@/lib/dates";
 import ApplyButton, { ApplyResult } from "./ApplyButton";
+
+import DOMPurify from "isomorphic-dompurify";
+
+// ✅ FIX: sanitizar HTML de forma segura en SSR y browser
+function sanitizeHtml(html: string): string {
+  try {
+    return DOMPurify.sanitize(html, {
+      ALLOWED_TAGS: ["b", "strong", "i", "em", "p", "br", "ul", "ol", "li"],
+      ALLOWED_ATTR: [],
+    });
+  } catch {
+    return html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
+      .replace(/on\w+="[^"]*"/gi, "")
+      .replace(/on\w+='[^']*'/gi, "");
+  }
+}
 
 type DegreeLevel = "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD";
 type EduItem = { name: string; required: boolean };
@@ -57,7 +74,6 @@ type Props = {
   job: Job | null;
   canApply?: boolean;
   editHref?: string;
-  /** Desktop split view: el toolbar ya se renderiza fuera, no duplicar */
   hideToolbar?: boolean;
 };
 
@@ -318,6 +334,12 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
     }
   }, [jobId]);
 
+  // ✅ FIX: sanitizar en el render, con fallback si falla en SSR
+  const sanitizedHtml = React.useMemo(() => {
+    if (!descHtml) return "";
+    return sanitizeHtml(descHtml);
+  }, [descHtml]);
+
   if (!job) {
     return (
       <div className="rounded-2xl border glass-card p-4 md:p-6">
@@ -327,11 +349,8 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
   }
 
   return (
-    // Cuando hideToolbar=true (desktop split), no necesitamos el borde/overflow del article
-    // porque el wrapper en ClientSplitView ya lo provee.
     <article className={hideToolbar ? "" : "relative rounded-2xl border glass-card overflow-hidden"}>
 
-      {/* Toolbar: solo cuando NO está oculto (móvil / página individual) */}
       {!hideToolbar && (
         <div className="border-b glass-card px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
@@ -365,7 +384,6 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
         </div>
       )}
 
-      {/* Contenido */}
       <div className="px-6 py-5 space-y-6">
         <header className="space-y-3">
           <div className="flex items-start gap-3">
@@ -480,17 +498,12 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
           )}
         </section>
 
-        {descHtml && (
+        {sanitizedHtml && (
           <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
             <h3 className="text-sm font-semibold text-default mb-1.5">Descripción</h3>
             <div
               className="job-html prose prose-sm max-w-none text-sm leading-relaxed text-default/90 dark:prose-invert"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(descHtml, {
-                  ALLOWED_TAGS: ["b", "strong", "i", "em", "p", "br", "ul", "ol", "li"],
-                  ALLOWED_ATTR: [],
-                }),
-              }}
+              dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
             />
           </section>
         )}

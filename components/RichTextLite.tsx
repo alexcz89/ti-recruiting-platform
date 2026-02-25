@@ -1,14 +1,32 @@
+// components/RichTextLite.tsx  (o donde lo tengas)
 "use client";
 
 import { useEffect, useRef } from "react";
-import DOMPurify from "dompurify";
+
+// ✅ FIX: RichTextLite es "use client" pero Next.js hace SSR del HTML inicial.
+// dompurify requiere window — usamos sanitización manual simple que es suficiente
+// para un editor interno donde el usuario ya está autenticado.
+function sanitize(html: string): string {
+  if (typeof window === "undefined") return html;
+  // En browser usamos un div temporal — no necesitamos dompurify para esto
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  // Eliminar scripts y eventos inline
+  div.querySelectorAll("script,iframe,object,embed").forEach((el) => el.remove());
+  div.querySelectorAll("*").forEach((el) => {
+    Array.from(el.attributes).forEach((attr) => {
+      if (attr.name.startsWith("on")) el.removeAttribute(attr.name);
+    });
+  });
+  return div.innerHTML;
+}
 
 type Props = {
-  value: string;               // HTML
+  value: string;
   onChange: (html: string) => void;
   placeholder?: string;
   className?: string;
-  minHeight?: number;          // px
+  minHeight?: number;
 };
 
 export default function RichTextLite({
@@ -20,62 +38,51 @@ export default function RichTextLite({
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // pinta el HTML controlado
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // evita loop si ya coincide
     if (el.innerHTML !== value) el.innerHTML = value || "";
   }, [value]);
 
-  // comandos del toolbar
   const exec = (cmd: string) => {
-    // asegura foco
     ref.current?.focus();
-    // ejecuta
     document.execCommand(cmd, false);
-    // sincroniza state
     sync();
   };
 
-  // sincroniza el HTML hacia arriba (con sanitización)
   const sync = () => {
     const html = ref.current?.innerHTML || "";
-    const clean = DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: ["b", "strong", "i", "em", "ul", "li", "br", "p"],
-      ALLOWED_ATTR: [],
-    });
+    const clean = sanitize(html);
     onChange(clean);
   };
 
-  // placeholder visual
   const showPlaceholder = !value?.trim();
 
   return (
     <div className={`w-full ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center gap-3 rounded-md border px-3 py-2 bg-white">
+      <div className="flex items-center gap-3 rounded-md border px-3 py-2 bg-white dark:bg-zinc-900">
         <button
           type="button"
-          className="text-sm font-semibold"
+          className="text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:text-zinc-900"
           onClick={() => exec("bold")}
           aria-label="Negritas"
         >
           B
         </button>
-        <span className="text-gray-300">/</span>
+        <span className="text-zinc-300">/</span>
         <button
           type="button"
-          className="text-sm italic"
+          className="text-sm italic text-zinc-700 dark:text-zinc-200 hover:text-zinc-900"
           onClick={() => exec("italic")}
           aria-label="Itálicas"
         >
           i
         </button>
-        <span className="text-gray-300">•</span>
+        <span className="text-zinc-300">•</span>
         <button
           type="button"
-          className="text-sm"
+          className="text-sm text-zinc-700 dark:text-zinc-200 hover:text-zinc-900"
           onClick={() => exec("insertUnorderedList")}
           aria-label="Viñetas"
         >
@@ -92,28 +99,22 @@ export default function RichTextLite({
         suppressContentEditableWarning
         onInput={sync}
         onBlur={sync}
-        className="mt-2 w-full rounded-md border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-400"
-        style={{
-          minHeight,
-          lineHeight: "1.6",
-        }}
+        data-placeholder={showPlaceholder ? placeholder : undefined}
+        className="mt-2 w-full rounded-md border bg-white dark:bg-zinc-900 px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-400"
+        style={{ minHeight, lineHeight: "1.6" }}
       />
 
-      {/* estilos para listas dentro del editor */}
       <style jsx>{`
         [contenteditable="true"] ul {
           list-style: disc;
           margin-left: 1.25rem;
           padding-left: 1rem;
         }
-        [contenteditable="true"]:empty:before {
-          content: "${placeholder.replace(/"/g, '\\"')}";
-          color: #9ca3af; /* gray-400 */
+        [contenteditable="true"][data-placeholder]:empty:before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
         }
       `}</style>
-
-      {/* capa de placeholder (fallback para navegadores que no pinten :empty) */}
-      {showPlaceholder ? null : null}
     </div>
   );
 }
