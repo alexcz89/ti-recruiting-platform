@@ -3,7 +3,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Toaster } from "sonner";
 import { 
   LayoutDashboard, 
   Briefcase, 
@@ -30,21 +29,10 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  // ✅ Cambiado a coincidencia exacta para evitar rutas múltiples activas
   const isActive = (href: string) => pathname === href;
 
   return (
     <main className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 lg:px-6 py-4 lg:py-6">
-      {/* Toaster global - Fixed duplicate toasts */}
-      <Toaster 
-        richColors 
-        position="top-center" 
-        closeButton 
-        visibleToasts={3}
-        expand={false}
-        duration={3000}
-      />
-
       {/* Tabs móviles */}
       <nav className="lg:hidden mb-6 flex flex-wrap gap-2">
         {NAV_ITEMS.map((item) => {
@@ -109,8 +97,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 );
               })}
             </nav>
-
-            {/* ✅ BOTONES ELIMINADOS - Ya no se duplican con el botón de la página */}
           </div>
         </aside>
 
