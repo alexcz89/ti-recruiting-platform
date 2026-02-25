@@ -50,6 +50,7 @@
     "fuse.js": "^7.1.0",
     "google-libphonenumber": "^3.2.43",
     "html2canvas": "^1.4.1",
+    "isomorphic-dompurify": "^3.0.0",
     "jspdf": "^4.0.0",
     "libphonenumber-js": "^1.12.22",
     "lucide-react": "^0.544.0",
