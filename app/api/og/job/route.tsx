@@ -1,8 +1,9 @@
 // app/api/og/job/route.tsx
 import { ImageResponse } from "next/og";
 import { prisma } from "@/lib/server/prisma";
+import fs from "fs";
+import path from "path";
 
-// Node runtime (no edge) para compatibilidad con Prisma
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,17 @@ function labelEmployment(type: string | null | undefined) {
     case "CONTRACT":   return "Por periodo";
     case "INTERNSHIP": return "Prácticas";
     default:           return null;
+  }
+}
+
+// Lee el logo una vez y lo convierte a data URL para usarlo en ImageResponse
+function getLogoDataUrl(): string {
+  try {
+    const logoPath = path.join(process.cwd(), "public", "TASKIO_black.png");
+    const buffer = fs.readFileSync(logoPath);
+    return `data:image/png;base64,${buffer.toString("base64")}`;
+  } catch {
+    return "";
   }
 }
 
@@ -64,6 +76,8 @@ export async function GET(req: Request) {
     salary,
   ].filter(Boolean) as string[];
 
+  const logoDataUrl = getLogoDataUrl();
+
   return new ImageResponse(
     (
       <div
@@ -73,45 +87,64 @@ export async function GET(req: Request) {
           display: "flex",
           flexDirection: "column",
           justifyContent: "space-between",
-          padding: "64px 72px",
-          background: "white",
+          padding: "56px 72px",
+          background: "#09090b",
           fontFamily: "system-ui, -apple-system, sans-serif",
+          position: "relative",
         }}
       >
-        {/* Top: logo/brand */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div
-            style={{
-              width: "36px",
-              height: "36px",
-              borderRadius: "8px",
-              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-            }}
-          />
-          <span style={{ fontSize: "22px", fontWeight: 700, color: "#18181b", letterSpacing: "-0.5px" }}>
-            TaskIO
-          </span>
+        {/* Acento de color arriba a la izquierda */}
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "6px",
+            height: "100%",
+            background: "linear-gradient(180deg, #10b981 0%, #7c3aed 100%)",
+          }}
+        />
+
+        {/* Top: logo */}
+        <div style={{ display: "flex", alignItems: "center" }}>
+          {logoDataUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoDataUrl}
+              alt="TaskIO"
+              style={{ height: "44px", objectFit: "contain" }}
+            />
+          ) : (
+            <span style={{ fontSize: "28px", fontWeight: 800, color: "white", letterSpacing: "-1px" }}>
+              TASK<span style={{ color: "#10b981" }}>IO</span>
+            </span>
+          )}
         </div>
 
-        {/* Center: título */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "0px" }}>
+        {/* Center: título vacante */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          {job.company?.name && (
+            <div style={{ fontSize: "22px", fontWeight: 500, color: "#10b981", letterSpacing: "0.5px" }}>
+              {job.company.name}
+            </div>
+          )}
           <div
             style={{
-              fontSize: job.title.length > 40 ? 52 : 62,
+              fontSize: job.title.length > 40 ? 52 : 64,
               fontWeight: 800,
-              color: "#09090b",
-              lineHeight: 1.1,
-              letterSpacing: "-1.5px",
-              maxWidth: "900px",
+              color: "#ffffff",
+              lineHeight: 1.05,
+              letterSpacing: "-2px",
+              maxWidth: "1000px",
             }}
           >
             {job.title}
           </div>
         </div>
 
-        {/* Bottom: chips de info */}
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
-          {chips.map((chip, i) => (
+        {/* Bottom: chips */}
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {chips.filter((_, i) => i > 0).map((chip, i) => (
             <div
               key={i}
               style={{
@@ -119,16 +152,33 @@ export async function GET(req: Request) {
                 alignItems: "center",
                 padding: "8px 20px",
                 borderRadius: "999px",
-                background: i === 0 ? "#f0fdf4" : "#f4f4f5",
-                border: i === 0 ? "1.5px solid #bbf7d0" : "1.5px solid #e4e4e7",
-                fontSize: "22px",
-                fontWeight: i === 0 ? 700 : 500,
-                color: i === 0 ? "#15803d" : "#3f3f46",
+                background: "rgba(255,255,255,0.06)",
+                border: "1.5px solid rgba(255,255,255,0.12)",
+                fontSize: "20px",
+                fontWeight: 500,
+                color: "#d4d4d8",
               }}
             >
               {chip}
             </div>
           ))}
+          {/* taskio.com.mx badge */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              marginLeft: "auto",
+              padding: "8px 20px",
+              borderRadius: "999px",
+              background: "rgba(16,185,129,0.12)",
+              border: "1.5px solid rgba(16,185,129,0.3)",
+              fontSize: "18px",
+              fontWeight: 600,
+              color: "#10b981",
+            }}
+          >
+            taskio.com.mx
+          </div>
         </div>
       </div>
     ),
