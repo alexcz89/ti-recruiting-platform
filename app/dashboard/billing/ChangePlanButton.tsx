@@ -4,7 +4,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PlanId } from "@/config/plans";
-import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
+import { toastSuccess, toastError } from "@/lib/ui/toast";
 
 type Props = {
   planId: PlanId;
@@ -16,7 +16,6 @@ export default function ChangePlanButton({ planId, isCurrent }: Props) {
   const [isPending, startTransition] = useTransition();
   const [loading, setLoading] = useState(false);
 
-  // Si ya es el plan actual, sólo mostramos el botón deshabilitado
   if (isCurrent) {
     return (
       <button
@@ -33,7 +32,6 @@ export default function ChangePlanButton({ planId, isCurrent }: Props) {
 
   const handleClick = () => {
     if (busy) return;
-
     setLoading(true);
 
     fetch("/api/billing/change-plan", {
@@ -43,23 +41,14 @@ export default function ChangePlanButton({ planId, isCurrent }: Props) {
     })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
-
         if (!res.ok) {
-          console.error("Change plan error", data);
           toastError(data?.error || "No se pudo cambiar de plan");
           return;
         }
-
         toastSuccess("Plan actualizado correctamente");
-
-        startTransition(() => {
-          router.refresh();
-        });
+        startTransition(() => router.refresh());
       })
-      .catch((err) => {
-        console.error("Network error changing plan", err);
-        toastError("No se pudo conectar con el servidor");
-      })
+      .catch(() => toastError("No se pudo conectar con el servidor"))
       .finally(() => setLoading(false));
   };
 
