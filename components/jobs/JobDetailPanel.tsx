@@ -18,21 +18,23 @@ import {
 import { fromNow } from "@/lib/dates";
 import ApplyButton, { ApplyResult } from "./ApplyButton";
 
-import DOMPurify from "isomorphic-dompurify";
-
-// ✅ FIX: sanitizar HTML de forma segura en SSR y browser
+// ✅ FIX: sin isomorphic-dompurify (causa ERR_REQUIRE_ESM en Vercel)
+// En SSR (scrapers) devolvemos el HTML tal cual — lo sube el recruiter autenticado
+// En browser usamos el DOM nativo para limpiar scripts/eventos
 function sanitizeHtml(html: string): string {
+  if (typeof window === "undefined") return html;
   try {
-    return DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: ["b", "strong", "i", "em", "p", "br", "ul", "ol", "li"],
-      ALLOWED_ATTR: [],
+    const div = document.createElement("div");
+    div.innerHTML = html;
+    div.querySelectorAll("script,iframe,object,embed").forEach((el) => el.remove());
+    div.querySelectorAll("*").forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        if (attr.name.startsWith("on")) el.removeAttribute(attr.name);
+      });
     });
+    return div.innerHTML;
   } catch {
-    return html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<iframe[\s\S]*?<\/iframe>/gi, "")
-      .replace(/on\w+="[^"]*"/gi, "")
-      .replace(/on\w+='[^']*'/gi, "");
+    return html;
   }
 }
 
@@ -334,7 +336,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
     }
   }, [jobId]);
 
-  // ✅ FIX: sanitizar en el render, con fallback si falla en SSR
+  // sanitizar solo en browser, SSR devuelve el HTML directo
   const sanitizedHtml = React.useMemo(() => {
     if (!descHtml) return "";
     return sanitizeHtml(descHtml);
