@@ -1,10 +1,8 @@
 // app/page.tsx
-import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
-import JobSearchBar from "@/components/JobSearchBar";
 import {
   Users,
   Briefcase,
@@ -58,18 +56,6 @@ export default async function Home() {
 
         <div className="relative mx-auto max-w-7xl px-6 pt-16 pb-20 lg:pt-20 lg:pb-24">
           <div className="flex flex-col items-center text-center">
-            {/* Animated badge with pulse */}
-            <div className="animate-fade-in inline-flex items-center gap-2 rounded-full border border-emerald-500/30 dark:border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/50 px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300 backdrop-blur-sm shadow-sm ring-1 ring-emerald-500/10">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span className="hidden sm:inline">
-                +500 candidatos tech activos • 100+ empresas contratando
-              </span>
-              <span className="sm:hidden">500+ tech talents disponibles</span>
-            </div>
-
             {/* Hero headline con animación mejorada */}
             <h1 className="animate-fade-in-up mt-8 max-w-5xl text-5xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-6xl lg:text-7xl">
               Conecta con tu{" "}
@@ -92,12 +78,11 @@ export default async function Home() {
                     className="text-emerald-500 dark:text-emerald-400"
                   />
                 </svg>
-              </span>{" "}
-              en tech
+              </span>
             </h1>
 
             <p className="animate-fade-in-up animation-delay-200 mt-6 max-w-3xl text-xl text-zinc-600 dark:text-zinc-400 leading-relaxed">
-              La plataforma todo-en-uno para encontrar trabajo tech o contratar
+              La plataforma todo-en-uno para encontrar trabajo o contratar
               talento. CV profesional, postulaciones inteligentes y gestión
               completa de procesos.
             </p>
@@ -124,24 +109,11 @@ export default async function Home() {
             </div>
           </div>
 
-          {/* Search bar mejorado con contexto */}
-          <div className="animate-fade-in-up animation-delay-600 mt-16">
-            <div className="mb-4 text-center">
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                O busca directamente entre{" "}
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold">
-                  +200 vacantes activas
-                </span>
-              </p>
-            </div>
-            <Suspense
-              fallback={
-                <div className="h-20 w-full animate-pulse rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg" />
-              }
-            >
-              <JobSearchBar />
-            </Suspense>
-          </div>
+          {/* NOTA: Se eliminó lo circulado en rojo:
+              - Badge superior (+500... / 100+...)
+              - Texto "O busca directamente..."
+              - <JobSearchBar /> completo
+          */}
         </div>
       </section>
 
@@ -256,11 +228,9 @@ export default async function Home() {
         <div className="grid gap-8 lg:grid-cols-2">
           {/* Candidatos Card - Premium */}
           <div className="group relative overflow-hidden rounded-3xl border-2 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 transition-all duration-500 hover:border-emerald-400 dark:hover:border-emerald-600 hover:shadow-2xl hover:shadow-emerald-500/10 hover:-translate-y-2">
-            {/* Gradient overlay on hover */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-emerald-500/0 via-emerald-500/0 to-emerald-500/0 opacity-0 transition-opacity duration-500 group-hover:from-emerald-500/5 group-hover:via-transparent group-hover:to-emerald-500/5 group-hover:opacity-100" />
 
             <div className="relative p-10 md:p-12">
-              {/* Icon with animated background */}
               <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 dark:from-emerald-950/50 dark:to-teal-950/30 text-emerald-600 dark:text-emerald-400 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3">
                 <UserCircle className="h-10 w-10" />
                 <div className="absolute inset-0 rounded-2xl bg-emerald-500/20 blur-xl opacity-0 transition-opacity group-hover:opacity-100" />
@@ -270,11 +240,10 @@ export default async function Home() {
                 Para Candidatos
               </h3>
               <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Encuentra tu próximo trabajo tech. CV profesional, postulaciones
-                con un clic y seguimiento completo.
+                Encuentra tu próximo trabajo. CV profesional, postulaciones con
+                un clic y seguimiento completo.
               </p>
 
-              {/* Features list */}
               <div className="mt-8 space-y-4">
                 {[
                   { icon: FileText, text: "CV builder intuitivo y gratuito" },
@@ -293,7 +262,6 @@ export default async function Home() {
                 ))}
               </div>
 
-              {/* CTA */}
               <Link
                 href="/auth/signup"
                 className="group/button mt-10 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-500 dark:to-teal-500 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/30"
@@ -310,11 +278,9 @@ export default async function Home() {
 
           {/* Reclutadores Card - Premium */}
           <div className="group relative overflow-hidden rounded-3xl border-2 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 transition-all duration-500 hover:border-violet-400 dark:hover:border-violet-600 hover:shadow-2xl hover:shadow-violet-500/10 hover:-translate-y-2">
-            {/* Gradient overlay on hover */}
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-violet-500/0 via-violet-500/0 to-violet-500/0 opacity-0 transition-opacity duration-500 group-hover:from-violet-500/5 group-hover:via-transparent group-hover:to-violet-500/5 group-hover:opacity-100" />
 
             <div className="relative p-10 md:p-12">
-              {/* Icon with animated background */}
               <div className="relative inline-flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-100 to-purple-100 dark:from-violet-950/50 dark:to-purple-950/30 text-violet-600 dark:text-violet-400 transition-all duration-500 group-hover:scale-110 group-hover:rotate-3">
                 <Building2 className="h-10 w-10" />
                 <div className="absolute inset-0 rounded-2xl bg-violet-500/20 blur-xl opacity-0 transition-opacity group-hover:opacity-100" />
@@ -324,15 +290,14 @@ export default async function Home() {
                 Para Empresas
               </h3>
               <p className="mt-3 text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Contrata talento tech de calidad. Publica vacantes, gestiona
+                Contrata talento de calidad. Publica vacantes, gestiona
                 candidatos y cierra contrataciones más rápido.
               </p>
 
-              {/* Features list */}
               <div className="mt-8 space-y-4">
                 {[
                   { icon: Briefcase, text: "Vacantes ilimitadas publicadas" },
-                  { icon: Users, text: "Acceso a base de +500 candidatos" },
+                  { icon: Users, text: "Acceso a base de candidatos" },
                   { icon: Kanban, text: "Pipeline Kanban interactivo" },
                   { icon: TrendingUp, text: "Analytics y reportes" },
                 ].map((item, i) => (
@@ -347,7 +312,6 @@ export default async function Home() {
                 ))}
               </div>
 
-              {/* CTA */}
               <Link
                 href="/auth/signup"
                 className="group/button mt-10 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-purple-600 dark:from-violet-500 dark:to-purple-500 px-8 py-4 text-lg font-semibold text-white shadow-lg transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/30"
@@ -372,7 +336,7 @@ export default async function Home() {
               Todo lo que necesitas
             </h2>
             <p className="mt-4 text-xl text-zinc-600 dark:text-zinc-400">
-              Una plataforma completa para tech recruiting
+              Una plataforma completa para reclutamiento
             </p>
           </div>
 
@@ -383,50 +347,42 @@ export default async function Home() {
                 title: "CV Profesional",
                 description:
                   "Constructor drag & drop con plantillas ATS-friendly. Descarga PDF o comparte con link único.",
-                color: "emerald",
               },
               {
                 icon: Target,
                 title: "Búsqueda Inteligente",
                 description:
-                  "Filtros avanzados por stack, experiencia, ubicación y modalidad. Encuentra el match perfecto.",
-                color: "blue",
+                  "Filtros avanzados por experiencia, ubicación y modalidad. Encuentra el match perfecto.",
               },
               {
                 icon: Kanban,
                 title: "Pipeline Visual",
                 description:
                   "Gestión Kanban de candidatos. Arrastra entre etapas y mantén todo organizado.",
-                color: "violet",
               },
               {
                 icon: Zap,
                 title: "Postulación Rápida",
                 description:
                   "Aplica a vacantes con un solo clic. Tu perfil se envía automáticamente al reclutador.",
-                color: "yellow",
               },
               {
                 icon: Shield,
                 title: "Perfiles Verificados",
                 description:
                   "Candidatos verificados con skills validados. Reduce tiempo de screening.",
-                color: "teal",
               },
               {
                 icon: TrendingUp,
                 title: "Analytics & Insights",
                 description:
                   "Métricas en tiempo real. Optimiza tu proceso de reclutamiento con data.",
-                color: "indigo",
               },
             ].map((feature, i) => (
               <div
                 key={i}
                 className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 p-8 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-xl hover:-translate-y-1"
               >
-                {/* Nota: clases dinámicas no son seguras para Tailwind JIT.
-                    Dejamos ícono simple para evitar estilos rotos en build. */}
                 <div className="inline-flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-200/60 dark:bg-zinc-800/60 text-zinc-700 dark:text-zinc-200 transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
                   <feature.icon className="h-7 w-7" />
                 </div>
@@ -449,7 +405,7 @@ export default async function Home() {
             ¿Listo para dar el siguiente paso?
           </h2>
           <p className="mt-6 text-xl text-zinc-700 dark:text-zinc-300">
-            Únete a profesionales tech y encuentra tu próximo proyecto
+            Únete y encuentra tu próximo proyecto
           </p>
           <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
             <Link
@@ -479,7 +435,7 @@ export default async function Home() {
                 TaskIO
               </p>
               <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                Conectando talento tech con oportunidades
+                Conectando talento con oportunidades
               </p>
             </div>
 
