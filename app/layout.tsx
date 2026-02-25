@@ -31,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es" suppressHydrationWarning className={`${inter.className} h-full`}>
       <head>
         <ThemeScript />
+        <meta name="apple-mobile-web-app-title" content="TaskIO" />
       </head>
 
       <body className="min-h-screen antialiased bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
