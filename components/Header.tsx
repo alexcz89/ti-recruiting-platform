@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import ThemeToggle from "@/components/ThemeToggle";
 import SignOutButton from "@/components/SignOutButton";
-import LogoTaskit from "@/components/LogoTaskit";
+import LogoTaskio from "@/components/LogoTaskio";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ClipboardList, Menu, X } from "lucide-react";
 
@@ -29,15 +29,15 @@ export default function Header() {
       "
     >
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-12 md:h-14 items-center justify-between gap-3">
+        <div className="flex h-14 md:h-16 items-center justify-between gap-3">
           {/* Logo */}
-          <Link 
-            href="/" 
+          <Link
+            href="/"
             className="flex items-center gap-2 shrink-0"
             onClick={() => setMobileMenuOpen(false)}
           >
-            <LogoTaskit className="h-7 md:h-8 w-auto" />
-            <span className="sr-only">TaskIT / Bolsa TI</span>
+            <LogoTaskio className="h-9 md:h-10 w-auto" />
+            <span className="sr-only">TaskIO</span>
           </Link>
 
           {/* Desktop Nav + Actions */}
@@ -60,19 +60,13 @@ export default function Header() {
               "
               aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
             >
-              {mobileMenuOpen ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
           </div>
         </div>
 
         {/* Mobile Menu */}
-        {mobileMenuOpen && (
-          <MobileMenu onClose={() => setMobileMenuOpen(false)} />
-        )}
+        {mobileMenuOpen && <MobileMenu onClose={() => setMobileMenuOpen(false)} />}
       </div>
     </header>
   );
@@ -91,7 +85,8 @@ function DesktopNav() {
 function MobileMenu({ onClose }: { onClose: () => void }) {
   const { data: session, status } = useSession();
   const user = session?.user as any | undefined;
-  const role = (user?.role as "ADMIN" | "RECRUITER" | "CANDIDATE" | undefined) ?? undefined;
+  const role =
+    (user?.role as "ADMIN" | "RECRUITER" | "CANDIDATE" | undefined) ?? undefined;
 
   const isRecruiter = role === "RECRUITER" || role === "ADMIN";
   const isCandidate = role === "CANDIDATE";
@@ -101,7 +96,8 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
     <div className="md:hidden border-t border-zinc-200/60 dark:border-zinc-800/60 py-4">
       <nav className="flex flex-col gap-2">
         <MobileNavLink href="/jobs" onClick={onClose}>
-          Vacantes</MobileNavLink>
+          Vacantes
+        </MobileNavLink>
 
         {isAuthenticated ? (
           <>
@@ -199,18 +195,19 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 /* -------- Auth Area -------- */
 function AuthArea() {
   const { data: session, status } = useSession();
-  
+
   // Memoizar para evitar re-renders innecesarios
   const authData = useMemo(() => {
     if (status !== "authenticated" || !session) {
-      return { isAuthenticated: false };
+      return { isAuthenticated: false as const };
     }
 
     const user = session.user as any | undefined;
-    const role = (user?.role as "ADMIN" | "RECRUITER" | "CANDIDATE" | undefined) ?? undefined;
+    const role =
+      (user?.role as "ADMIN" | "RECRUITER" | "CANDIDATE" | undefined) ?? undefined;
 
     return {
-      isAuthenticated: true,
+      isAuthenticated: true as const,
       user,
       role,
       isRecruiter: role === "RECRUITER" || role === "ADMIN",
@@ -307,7 +304,6 @@ function CandidateAssessmentsNav() {
         setBadgeCount(Number.isFinite(count) ? count : 0);
       }
     } catch (err) {
-      // Silenciar errores de abort
       if (err instanceof Error && err.name !== "AbortError") {
         console.warn("Error fetching assessment badge:", err);
       }
@@ -318,7 +314,7 @@ function CandidateAssessmentsNav() {
     if (!shouldFetch) return;
 
     const controller = new AbortController();
-    
+
     fetchBadge(controller.signal);
     const interval = setInterval(() => fetchBadge(controller.signal), 60_000);
 
@@ -369,23 +365,19 @@ function AuthButtons() {
 
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as HTMLElement;
-      if (!target.closest('[data-auth-menu]')) {
-        setIsOpen(false);
-      }
+      if (!target.closest("[data-auth-menu]")) setIsOpen(false);
     };
 
     const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(false);
-      }
+      if (event.key === "Escape") setIsOpen(false);
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, [isOpen]);
 
@@ -420,17 +412,9 @@ function AuthButtons() {
             "
           >
             <div className="p-2 space-y-1">
-              <MenuItem
-                href="/auth/signin"
-                label="Iniciar sesión"
-                onClick={() => setIsOpen(false)}
-              />
+              <MenuItem href="/auth/signin" label="Iniciar sesión" onClick={() => setIsOpen(false)} />
               <div className="h-px bg-zinc-200 dark:bg-zinc-800 my-2" />
-              <MenuItem
-                href="/auth/signup"
-                label="Crear cuenta"
-                onClick={() => setIsOpen(false)}
-              />
+              <MenuItem href="/auth/signup" label="Crear cuenta" onClick={() => setIsOpen(false)} />
             </div>
           </div>
         </div>
