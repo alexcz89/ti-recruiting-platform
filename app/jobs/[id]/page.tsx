@@ -1,9 +1,9 @@
 // app/jobs/[id]/page.tsx
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { getSessionCompanyId } from '@/lib/server/session';
+import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
 import AssessmentRequirement from "./AssessmentRequirement";
 import type { Metadata } from "next";
@@ -30,11 +30,16 @@ function stripHtml(html: string | null | undefined) {
 
 function labelEmploymentType(type: string | null | undefined) {
   switch (type) {
-    case "FULL_TIME":  return "Tiempo completo";
-    case "PART_TIME":  return "Medio tiempo";
-    case "CONTRACT":   return "Por periodo";
-    case "INTERNSHIP": return "Prácticas profesionales";
-    default:           return null;
+    case "FULL_TIME":
+      return "Tiempo completo";
+    case "PART_TIME":
+      return "Medio tiempo";
+    case "CONTRACT":
+      return "Por periodo";
+    case "INTERNSHIP":
+      return "Prácticas profesionales";
+    default:
+      return null;
   }
 }
 
@@ -69,7 +74,9 @@ function buildDescription(job: {
   const header = parts.join(" · ");
   const rawDesc = job.description || stripHtml(job.descriptionHtml || "");
   const desc = excerpt(rawDesc, 120);
-  return header && desc ? `${header} — ${desc}` : header || desc || `Vacante: ${job.title}`;
+  return header && desc
+    ? `${header} — ${desc}`
+    : header || desc || `Vacante: ${job.title}`;
 }
 
 /* ─── Metadata ─── */
@@ -86,7 +93,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       salaryMin: true,
       salaryMax: true,
       currency: true,
-      updatedAt: true, // 👈 necesario para romper caché
+      updatedAt: true,
       company: { select: { name: true } },
     },
   });
@@ -94,21 +101,16 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!job) return {};
 
   const companyName = job.company?.name ?? null;
-  const title = companyName
-    ? `${job.title} — ${companyName}`
-    : job.title;
+  const title = companyName ? `${job.title} — ${companyName}` : job.title;
 
   const description = buildDescription(job);
   const url = `${APP_URL}/jobs/${job.id}`;
-
-  // 👇 Cache busting automático
   const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}&v=${job.updatedAt.getTime()}`;
 
   return {
     title,
     description,
     alternates: { canonical: url },
-
     openGraph: {
       title,
       description,
@@ -116,18 +118,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       siteName: SITE_NAME,
       locale: "es_MX",
       type: "website",
-      images: [
-        {
-          url: ogImage,
-          width: 630,
-          height: 630,
-          alt: title,
-        },
-      ],
+      images: [{ url: ogImage, width: 630, height: 630, alt: title }],
     },
-
     twitter: {
-      card: "summary", // mejor para imagen cuadrada
+      card: "summary",
       title,
       description,
       images: [ogImage],
@@ -137,8 +131,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 /* ─── Page ─── */
 export default async function JobDetail({ params }: Params) {
-  // ✅ Envuelto en try/catch para que scrapers (WhatsApp, FB) nunca reciban 500
-  // Si getServerSession falla (sin cookies, timeout), renderizamos como anónimo
   let session = null;
   try {
     session = await getServerSession(authOptions);
@@ -147,8 +139,11 @@ export default async function JobDetail({ params }: Params) {
   }
 
   const user = (session?.user as any) || null;
-  const role = (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
+  const role =
+    (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
+
   const isCandidate = role === "CANDIDATE";
+  const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
   const job = await prisma.job.findUnique({
     where: { id: params.id },
@@ -197,15 +192,9 @@ export default async function JobDetail({ params }: Params) {
   if (!job) notFound();
 
   let canEdit = false;
-  if (role === "RECRUITER" || role === "ADMIN") {
-    // ✅ También en try/catch por si getSessionCompanyId falla
+  if (isRecruiterOrAdmin) {
     const myCompanyId = await getSessionCompanyId().catch(() => null);
-    if (!myCompanyId || job.companyId !== myCompanyId) {
-      // Scraper o recruiter de otra empresa → mostrar página pública sin edición
-      canEdit = false;
-    } else {
-      canEdit = true;
-    }
+    canEdit = !!myCompanyId && job.companyId === myCompanyId;
   }
 
   const requiredAssessment = job.assessments?.[0] ?? null;
@@ -251,8 +240,18 @@ export default async function JobDetail({ params }: Params) {
     jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
     jobLocation: job.remote
       ? undefined
-      : [{ "@type": "Place", address: { "@type": "PostalAddress", addressLocality: job.location || "México", addressCountry: "MX" } }],
-    description: job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
+      : [
+          {
+            "@type": "Place",
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: job.location || "México",
+              addressCountry: "MX",
+            },
+          },
+        ],
+    description:
+      job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
     employmentType: job.employmentType,
     identifier: {
@@ -262,21 +261,29 @@ export default async function JobDetail({ params }: Params) {
     },
   };
 
+  // ✅ CLAVE:
+  // - Candidato: puede postular
+  // - Anónimo: puede ver botón (al click lo mandará a login por 401)
+  // - Recruiter/Admin: NO (verán Editar si aplica)
+  const canApply = !isRecruiterOrAdmin;
+
   return (
     <main className="max-w-[1100px] xl:max-w-[1200px] mx-auto px-6 lg:px-10 py-8 space-y-6">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+
       {requiredAssessment && (
         <AssessmentRequirement
           assessment={requiredAssessment as any}
           userAttempt={userAttempt as any}
         />
       )}
+
       <JobDetailPanel
         job={panelJob as any}
-        canApply={isCandidate}
+        canApply={canApply}
         editHref={canEdit ? `/dashboard/jobs/${job.id}/edit` : undefined}
       />
     </main>

@@ -14,6 +14,9 @@ import {
   Wrench,
   Sparkles,
   MapPin,
+  ArrowRight,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
 import { fromNow } from "@/lib/dates";
 import ApplyButton, { ApplyResult } from "./ApplyButton";
@@ -72,9 +75,13 @@ type Job = {
   educationJson?: EduItem[] | null;
 };
 
+type Role = "CANDIDATE" | "RECRUITER" | "ADMIN";
+
 type Props = {
   job: Job | null;
-  canApply?: boolean;
+  canApply?: boolean; // normalmente solo true para CANDIDATE
+  isAuthed?: boolean; // 👈 NUEVO
+  role?: Role; // 👈 NUEVO
   editHref?: string;
   hideToolbar?: boolean;
 };
@@ -95,23 +102,47 @@ function parseMeta(description: string | null | undefined): { meta: MetaParsed |
   const match = raw.match(/---\s*\[Meta\]([\s\S]*)$/i);
   if (!match) return { meta: null, mainDesc: raw.trim() };
   const metaBlock = match[1].trim();
-  const tokens = metaBlock.split(/\r?\n/).flatMap((l) => l.split(";")).map((t) => t.trim()).filter(Boolean);
+  const tokens = metaBlock
+    .split(/\r?\n/)
+    .flatMap((l) => l.split(";"))
+    .map((t) => t.trim())
+    .filter(Boolean);
+
   const parsed: MetaParsed = {};
   for (const tok of tokens) {
     const i = tok.indexOf("=");
     if (i < 0) continue;
     const key = tok.slice(0, i).trim();
     const valRaw = tok.slice(i + 1).trim();
-    if (valRaw === "true" || valRaw === "false") { (parsed as any)[key] = valRaw === "true"; continue; }
-    if (/^-?\d+(\.\d+)?$/.test(valRaw)) { (parsed as any)[key] = Number(valRaw); continue; }
-    if (valRaw === "" || valRaw.toLowerCase() === "null") { (parsed as any)[key] = null; continue; }
-    if (valRaw.startsWith("{") || valRaw.startsWith("[")) { try { (parsed as any)[key] = JSON.parse(valRaw); continue; } catch {} }
+    if (valRaw === "true" || valRaw === "false") {
+      (parsed as any)[key] = valRaw === "true";
+      continue;
+    }
+    if (/^-?\d+(\.\d+)?$/.test(valRaw)) {
+      (parsed as any)[key] = Number(valRaw);
+      continue;
+    }
+    if (valRaw === "" || valRaw.toLowerCase() === "null") {
+      (parsed as any)[key] = null;
+      continue;
+    }
+    if (valRaw.startsWith("{") || valRaw.startsWith("[")) {
+      try {
+        (parsed as any)[key] = JSON.parse(valRaw);
+        continue;
+      } catch {}
+    }
     (parsed as any)[key] = valRaw;
   }
   return { meta: parsed, mainDesc: raw.slice(0, match.index).trim() };
 }
 
-function Chip({ children, tone = "zinc", outline = false, className = "" }: {
+function Chip({
+  children,
+  tone = "zinc",
+  outline = false,
+  className = "",
+}: {
   children: React.ReactNode;
   tone?: "zinc" | "blue" | "emerald" | "amber" | "violet";
   outline?: boolean;
@@ -136,7 +167,8 @@ function Chip({ children, tone = "zinc", outline = false, className = "" }: {
 }
 
 function splitSkills(skills?: string[] | null) {
-  const req: string[] = []; const nice: string[] = [];
+  const req: string[] = [];
+  const nice: string[] = [];
   if (!Array.isArray(skills)) return { req, nice };
   for (const raw of skills) {
     const s = String(raw || "").trim();
@@ -151,25 +183,44 @@ function splitSkills(skills?: string[] | null) {
 
 function labelDegree(d?: DegreeLevel | null) {
   switch (d) {
-    case "HIGHSCHOOL": return "Bachillerato";
-    case "TECH": return "Técnico";
-    case "BACHELOR": return "Licenciatura / Ingeniería";
-    case "MASTER": return "Maestría";
-    case "PHD": return "Doctorado";
-    default: return "—";
+    case "HIGHSCHOOL":
+      return "Bachillerato";
+    case "TECH":
+      return "Técnico";
+    case "BACHELOR":
+      return "Licenciatura / Ingeniería";
+    case "MASTER":
+      return "Maestría";
+    case "PHD":
+      return "Doctorado";
+    default:
+      return "—";
   }
 }
 
 const BENEFIT_LABELS: Record<string, string> = {
-  auto: "Auto", sgmm: "SGMM", vida: "Seguro de vida", bonos: "Bonos",
-  otros: "Otras prestaciones", vales: "Vales", celular: "Celular", comedor: "Comedor",
-  primaVac: "Prima vacacional", aguinaldo: "Aguinaldo", utilidades: "Utilidades",
-  vacaciones: "Vacaciones", combustible: "Combustible", fondoAhorro: "Fondo de ahorro",
-  primaVacPct: "Prima vacacional", vacacionesDias: "Vacaciones", aguinaldoDias: "Aguinaldo",
+  auto: "Auto",
+  sgmm: "SGMM",
+  vida: "Seguro de vida",
+  bonos: "Bonos",
+  otros: "Otras prestaciones",
+  vales: "Vales",
+  celular: "Celular",
+  comedor: "Comedor",
+  primaVac: "Prima vacacional",
+  aguinaldo: "Aguinaldo",
+  utilidades: "Utilidades",
+  vacaciones: "Vacaciones",
+  combustible: "Combustible",
+  fondoAhorro: "Fondo de ahorro",
+  primaVacPct: "Prima vacacional",
+  vacacionesDias: "Vacaciones",
+  aguinaldoDias: "Aguinaldo",
 };
 
 function formatBenefitLabel(key: string, value: any): string | null {
-  const k = key.toString(); const lower = k.toLowerCase();
+  const k = key.toString();
+  const lower = k.toLowerCase();
   if (lower === "showbenefits") return null;
   const base = BENEFIT_LABELS[k] ?? BENEFIT_LABELS[lower] ?? k.replace(/([A-Z])/g, " $1");
   if (typeof value === "boolean") return value ? base : null;
@@ -184,22 +235,56 @@ function formatBenefitLabel(key: string, value: any): string | null {
   return `${base}: ${vStr}`;
 }
 
-export default function JobDetailPanel({ job, canApply = true, editHref, hideToolbar = false }: Props) {
+export default function JobDetailPanel({
+  job,
+  canApply = true,
+  isAuthed = true,
+  role,
+  editHref,
+  hideToolbar = false,
+}: Props) {
   const jobId = job?.id ?? "";
   const rawDesc = job?.description ?? "";
   const { meta, mainDesc } = React.useMemo(() => parseMeta(rawDesc), [rawDesc]);
 
   const when = React.useMemo(() => {
-    const d = (job?.updatedAt && new Date(job.updatedAt)) || (job?.createdAt && new Date(job.createdAt)) || null;
+    const d =
+      (job?.updatedAt && new Date(job.updatedAt)) ||
+      (job?.createdAt && new Date(job.createdAt)) ||
+      null;
     if (!d) return null;
     return Number.isNaN(d.getTime()) ? null : d;
   }, [job?.updatedAt, job?.createdAt]);
 
-  const fallbackText = React.useMemo(() => (mainDesc || rawDesc).replace(/\n/g, "<br/>"), [mainDesc, rawDesc]);
-  const descHtml = React.useMemo(() => (job as any)?.descriptionHtml || fallbackText || "", [job, fallbackText]);
-  const companyNameRaw = React.useMemo(() => (job as any)?.company?.name ?? job?.company ?? "—", [job]);
-  const companyLogoRaw = React.useMemo(() => (job as any)?.company?.logoUrl ?? job?.companyLogoUrl ?? (job as any)?.logoUrl ?? null, [job]);
-  const confidential = React.useMemo(() => (job as any)?.companyConfidential ?? (job as any)?.confidential ?? (job as any)?.isConfidential ?? (job as any)?.meta?.confidential ?? false, [job]);
+  const fallbackText = React.useMemo(
+    () => (mainDesc || rawDesc).replace(/\n/g, "<br/>"),
+    [mainDesc, rawDesc]
+  );
+  const descHtml = React.useMemo(
+    () => (job as any)?.descriptionHtml || fallbackText || "",
+    [job, fallbackText]
+  );
+  const companyNameRaw = React.useMemo(
+    () => (job as any)?.company?.name ?? job?.company ?? "—",
+    [job]
+  );
+  const companyLogoRaw = React.useMemo(
+    () =>
+      (job as any)?.company?.logoUrl ??
+      job?.companyLogoUrl ??
+      (job as any)?.logoUrl ??
+      null,
+    [job]
+  );
+  const confidential = React.useMemo(
+    () =>
+      (job as any)?.companyConfidential ??
+      (job as any)?.confidential ??
+      (job as any)?.isConfidential ??
+      (job as any)?.meta?.confidential ??
+      false,
+    [job]
+  );
 
   const showCompanyName = !confidential && companyNameRaw && companyNameRaw !== "—";
   const companyName = showCompanyName ? companyNameRaw : "";
@@ -213,30 +298,48 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
   }, [job?.location, job?.remote]);
 
   const [detail, setDetail] = React.useState<{
-    showSalary?: boolean | null; salaryMin?: number | null; salaryMax?: number | null;
-    currency?: string | null; schedule?: string | null;
-    showBenefits?: boolean | null; benefitsJson?: Record<string, boolean | number | string> | null;
+    showSalary?: boolean | null;
+    salaryMin?: number | null;
+    salaryMax?: number | null;
+    currency?: string | null;
+    schedule?: string | null;
+    showBenefits?: boolean | null;
+    benefitsJson?: Record<string, boolean | number | string> | null;
   }>(() => ({
-    showSalary: job?.showSalary, salaryMin: job?.salaryMin, salaryMax: job?.salaryMax,
-    currency: job?.currency, schedule: job?.schedule,
-    showBenefits: job?.showBenefits, benefitsJson: job?.benefitsJson,
+    showSalary: job?.showSalary,
+    salaryMin: job?.salaryMin,
+    salaryMax: job?.salaryMax,
+    currency: job?.currency,
+    schedule: job?.schedule,
+    showBenefits: job?.showBenefits,
+    benefitsJson: job?.benefitsJson,
   }));
 
   React.useEffect(() => {
     setDetail({
-      showSalary: job?.showSalary, salaryMin: job?.salaryMin, salaryMax: job?.salaryMax,
-      currency: job?.currency, schedule: job?.schedule,
-      showBenefits: job?.showBenefits, benefitsJson: job?.benefitsJson,
+      showSalary: job?.showSalary,
+      salaryMin: job?.salaryMin,
+      salaryMax: job?.salaryMax,
+      currency: job?.currency,
+      schedule: job?.schedule,
+      showBenefits: job?.showBenefits,
+      benefitsJson: job?.benefitsJson,
     });
   }, [jobId, job]);
 
   React.useEffect(() => {
     let cancelled = false;
     if (!jobId) return;
-    const missing = detail.showSalary === undefined || detail.salaryMin === undefined ||
-      detail.salaryMax === undefined || detail.currency === undefined ||
-      detail.schedule === undefined || detail.showBenefits === undefined || detail.benefitsJson === undefined;
+    const missing =
+      detail.showSalary === undefined ||
+      detail.salaryMin === undefined ||
+      detail.salaryMax === undefined ||
+      detail.currency === undefined ||
+      detail.schedule === undefined ||
+      detail.showBenefits === undefined ||
+      detail.benefitsJson === undefined;
     if (!missing) return;
+
     (async () => {
       try {
         const res = await fetch(`/api/jobs?id=${jobId}`, { cache: "no-store" });
@@ -245,33 +348,69 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
         if (cancelled) return;
         const j = data?.job;
         if (!j) return;
-        setDetail({ showSalary: j.showSalary, salaryMin: j.salaryMin, salaryMax: j.salaryMax, currency: j.currency, schedule: j.schedule, showBenefits: j.showBenefits, benefitsJson: j.benefitsJson });
+        setDetail({
+          showSalary: j.showSalary,
+          salaryMin: j.salaryMin,
+          salaryMax: j.salaryMax,
+          currency: j.currency,
+          schedule: j.schedule,
+          showBenefits: j.showBenefits,
+          benefitsJson: j.benefitsJson,
+        });
       } catch {}
     })();
-    return () => { cancelled = true; };
-  }, [jobId, detail.showSalary, detail.salaryMin, detail.salaryMax, detail.currency, detail.schedule, detail.showBenefits, detail.benefitsJson]);
 
-  const showSalaryExplicit = (detail.showSalary ?? meta?.showSalary) ?? (detail.salaryMin != null || detail.salaryMax != null);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    jobId,
+    detail.showSalary,
+    detail.salaryMin,
+    detail.salaryMax,
+    detail.currency,
+    detail.schedule,
+    detail.showBenefits,
+    detail.benefitsJson,
+  ]);
+
+  const showSalaryExplicit =
+    (detail.showSalary ?? meta?.showSalary) ??
+    (detail.salaryMin != null || detail.salaryMax != null);
   const salaryMin = (detail.salaryMin ?? meta?.salaryMin) ?? null;
   const salaryMax = (detail.salaryMax ?? meta?.salaryMax) ?? null;
   const currency = (detail.currency ?? meta?.currency) ?? "MXN";
   const schedule = detail.schedule ?? meta?.schedule ?? null;
 
   const benefitsObj: Record<string, boolean | number | string> | null =
-    ((detail.showBenefits && detail.benefitsJson && Object.keys(detail.benefitsJson).length > 0 && detail.benefitsJson) as any) ||
+    ((detail.showBenefits &&
+      detail.benefitsJson &&
+      Object.keys(detail.benefitsJson).length > 0 &&
+      detail.benefitsJson) as any) ||
     (meta?.benefits && Object.keys(meta.benefits).length > 0 ? meta.benefits : null);
 
   const benefitItems = React.useMemo(() => {
     if (!benefitsObj) return null;
-    const items = Object.entries(benefitsObj).map(([k, v]) => { const label = formatBenefitLabel(k, v); if (!label) return null; return { key: k, label }; }).filter(Boolean) as { key: string; label: string }[];
+    const items = Object.entries(benefitsObj)
+      .map(([k, v]) => {
+        const label = formatBenefitLabel(k, v);
+        if (!label) return null;
+        return { key: k, label };
+      })
+      .filter(Boolean) as { key: string; label: string }[];
     return items.length ? items : null;
   }, [benefitsObj]);
 
-  const { req: reqSkills, nice: niceSkills } = React.useMemo(() => splitSkills(job?.skills), [job?.skills]);
+  const { req: reqSkills, nice: niceSkills } = React.useMemo(
+    () => splitSkills(job?.skills),
+    [job?.skills]
+  );
   const haveAnySkills = reqSkills.length + niceSkills.length > 0;
 
   const [minDegree, setMinDegree] = React.useState<DegreeLevel | null>(() => job?.minDegree ?? null);
-  const [educationJson, setEducationJson] = React.useState<EduItem[]>(() => Array.isArray(job?.educationJson) ? (job!.educationJson as EduItem[]) : []);
+  const [educationJson, setEducationJson] = React.useState<EduItem[]>(() =>
+    Array.isArray(job?.educationJson) ? (job!.educationJson as EduItem[]) : []
+  );
 
   React.useEffect(() => {
     setMinDegree(job?.minDegree ?? null);
@@ -283,6 +422,7 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
     if (!jobId) return;
     const needFetch = !minDegree && educationJson.length === 0;
     if (!needFetch) return;
+
     (async () => {
       try {
         const res = await fetch(`/api/jobs?id=${jobId}`, { cache: "no-store" });
@@ -291,10 +431,14 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
         const j = data?.job;
         if (!j || cancelled) return;
         if (!minDegree && j.minDegree) setMinDegree(j.minDegree as DegreeLevel);
-        if (educationJson.length === 0 && Array.isArray(j.educationJson)) setEducationJson(j.educationJson as EduItem[]);
+        if (educationJson.length === 0 && Array.isArray(j.educationJson))
+          setEducationJson(j.educationJson as EduItem[]);
       } catch {}
     })();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, [jobId, minDegree, educationJson.length]);
 
   const hasEducation = Boolean(minDegree || educationJson.length);
@@ -303,7 +447,11 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
   const handleShare = React.useCallback(async () => {
     if (!jobId) return;
     const url = typeof window !== "undefined" ? `${window.location.origin}/jobs/${jobId}` : "";
-    const shareData = { title: job?.title || "Vacante", text: `${job?.title || "Vacante"}${showCompanyName ? ` — ${companyName}` : ""}`, url };
+    const shareData = {
+      title: job?.title || "Vacante",
+      text: `${job?.title || "Vacante"}${showCompanyName ? ` — ${companyName}` : ""}`,
+      url,
+    };
     try {
       if (typeof navigator !== "undefined" && (navigator as any).share) {
         await (navigator as any).share(shareData);
@@ -319,15 +467,35 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
     if (!jobId) return { error: "UNKNOWN", message: "Vacante inválida" };
     try {
       const res = await fetch("/api/applications", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jobId }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
       });
+
       if (res.status === 401) {
-        const callback = typeof window !== "undefined" ? encodeURIComponent(window.location.pathname + window.location.search) : encodeURIComponent(`/jobs/${jobId}`);
-        return { error: "AUTH", signinUrl: `/auth/signin?callbackUrl=${callback}` };
+        const callback =
+          typeof window !== "undefined"
+            ? encodeURIComponent(window.location.pathname + window.location.search)
+            : encodeURIComponent(`/jobs/${jobId}`);
+        return { error: "AUTH", signinUrl: `/auth/signin?role=CANDIDATE&callbackUrl=${callback}` };
       }
-      if (res.status === 403) { const data = await res.json().catch(() => null); return { error: "ROLE", message: data?.error || "Solo candidatos pueden postular" }; }
-      if (res.status === 409) { const data = await res.json().catch(() => null); return { error: "ALREADY_APPLIED", message: data?.error || "Ya postulaste a esta vacante" }; }
-      if (res.ok) return { ok: true, redirect: typeof window !== "undefined" ? `${window.location.pathname}?applied=1` : `/jobs/${jobId}` };
+      if (res.status === 403) {
+        const data = await res.json().catch(() => null);
+        return { error: "ROLE", message: data?.error || "Solo candidatos pueden postular" };
+      }
+      if (res.status === 409) {
+        const data = await res.json().catch(() => null);
+        return { error: "ALREADY_APPLIED", message: data?.error || "Ya postulaste a esta vacante" };
+      }
+      if (res.ok)
+        return {
+          ok: true,
+          redirect:
+            typeof window !== "undefined"
+              ? `${window.location.pathname}?applied=1`
+              : `/jobs/${jobId}`,
+        };
+
       const data = await res.json().catch(() => null);
       return { error: "UNKNOWN", message: data?.error || "Error al postular" };
     } catch (e) {
@@ -342,6 +510,27 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
     return sanitizeHtml(descHtml);
   }, [descHtml]);
 
+  // ✅ CTA URLs (login/registro) con regreso a esta vacante
+  const callbackUrl = React.useMemo(() => {
+    if (typeof window !== "undefined") {
+      return encodeURIComponent(window.location.pathname + window.location.search);
+    }
+    return encodeURIComponent(jobId ? `/jobs/${jobId}` : "/jobs");
+  }, [jobId]);
+
+  const signinHref = React.useMemo(
+    () => `/auth/signin?role=CANDIDATE&callbackUrl=${callbackUrl}`,
+    [callbackUrl]
+  );
+
+  const signupHref = React.useMemo(
+    () => `/auth/signup/candidate?callbackUrl=${callbackUrl}`,
+    [callbackUrl]
+  );
+
+  // ✅ regla final: solo CANDIDATE logueado puede postular
+  const canApplyEffective = Boolean(isAuthed && (role ? role === "CANDIDATE" : canApply) && canApply);
+
   if (!job) {
     return (
       <div className="rounded-2xl border glass-card p-4 md:p-6">
@@ -352,14 +541,14 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
 
   return (
     <article className={hideToolbar ? "" : "relative rounded-2xl border glass-card overflow-hidden"}>
-
       {!hideToolbar && (
         <div className="border-b glass-card px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
             <h2 className="text-sm font-semibold text-default leading-snug line-clamp-2 sm:truncate sm:flex-1 sm:pr-2">
               {job.title}
             </h2>
-            <div className="flex shrink-0 items-center gap-2">
+
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleShare}
@@ -369,15 +558,39 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
                 <Share2 className="h-4 w-4 text-muted shrink-0" />
                 <span className="hidden sm:inline text-xs">Compartir</span>
               </button>
+
               {copied && (
                 <span className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-300/50 rounded px-2 py-1 whitespace-nowrap">
                   Link copiado
                 </span>
               )}
-              {canApply ? (
+
+              {/* ✅ CTA según tipo de usuario */}
+              {!isAuthed ? (
+                <>
+                  <Link
+                    href={signinHref}
+                    className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    Inicia sesión para postularte
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <Link
+                    href={signupHref}
+                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500 whitespace-nowrap"
+                  >
+                    <UserPlus className="h-4 w-4" />
+                    Crear cuenta
+                  </Link>
+                </>
+              ) : canApplyEffective ? (
                 <ApplyButton applyAction={applyAction} jobKey={job.id} />
               ) : editHref ? (
-                <Link href={editHref} className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap">
+                <Link
+                  href={editHref}
+                  className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+                >
                   Editar vacante
                 </Link>
               ) : null}
@@ -391,11 +604,19 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
           <div className="flex items-start gap-3">
             {companyLogo && (
               <div className="h-12 w-12 shrink-0 rounded-xl border bg-zinc-200/60 dark:bg-zinc-700/50 overflow-hidden">
-                <Image src={companyLogo} alt={companyName || "Logo"} width={48} height={48} className="h-12 w-12 object-contain" />
+                <Image
+                  src={companyLogo}
+                  alt={companyName || "Logo"}
+                  width={48}
+                  height={48}
+                  className="h-12 w-12 object-contain"
+                />
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl font-semibold leading-tight text-default break-words">{job.title}</h1>
+              <h1 className="text-xl md:text-2xl font-semibold leading-tight text-default break-words">
+                {job.title}
+              </h1>
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
                 {showCompanyName && <span className="font-medium text-default">{companyName}</span>}
                 {locationDisplay && (
@@ -407,24 +628,36 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
               </div>
             </div>
           </div>
+
           <div className="flex flex-wrap gap-2">
-            {(meta?.employmentType || job.employmentType) && <Chip tone="blue">{meta?.employmentType || job.employmentType}</Chip>}
+            {(meta?.employmentType || job.employmentType) && (
+              <Chip tone="blue">{meta?.employmentType || job.employmentType}</Chip>
+            )}
             {job.seniority && <Chip tone="violet">{job.seniority}</Chip>}
             <Chip tone="emerald">{job.remote ? "Remoto" : "Presencial / Híbrido"}</Chip>
             {schedule && <Chip tone="amber">{schedule}</Chip>}
-            {when && <Chip outline tone="zinc" className="text-[11px]">Actualizada {fromNow(when)}</Chip>}
+            {when && (
+              <Chip outline tone="zinc" className="text-[11px]">
+                Actualizada {fromNow(when)}
+              </Chip>
+            )}
           </div>
         </header>
 
         {hasEducation && (
           <section className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
             <p className="text-sm font-medium text-default mb-1">Educación</p>
-            {minDegree && <p className="text-sm text-muted mb-1"><span className="font-medium text-default">Nivel mínimo:</span> {labelDegree(minDegree)}</p>}
+            {minDegree && (
+              <p className="text-sm text-muted mb-1">
+                <span className="font-medium text-default">Nivel mínimo:</span> {labelDegree(minDegree)}
+              </p>
+            )}
             {educationJson.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {educationJson.map((e) => (
                   <Chip key={e.name} tone={e.required ? "emerald" : "zinc"} outline={!e.required}>
-                    {e.name}<span className="ml-1 opacity-80">({e.required ? "Obligatoria" : "Deseable"})</span>
+                    {e.name}
+                    <span className="ml-1 opacity-80">({e.required ? "Obligatoria" : "Deseable"})</span>
                   </Chip>
                 ))}
               </div>
@@ -440,7 +673,13 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
                   <Wrench className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
                   <p className="text-sm font-medium text-default">Skills requeridos</p>
                 </div>
-                <div className="flex flex-wrap gap-1.5">{reqSkills.map((s) => <Chip key={`req-${s}`} tone="emerald">{s}</Chip>)}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {reqSkills.map((s) => (
+                    <Chip key={`req-${s}`} tone="emerald">
+                      {s}
+                    </Chip>
+                  ))}
+                </div>
               </div>
             )}
             {niceSkills.length > 0 && (
@@ -449,7 +688,13 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
                   <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-300" />
                   <p className="text-sm font-medium text-default">Skills deseables</p>
                 </div>
-                <div className="flex flex-wrap gap-1.5">{niceSkills.map((s) => <Chip key={`nice-${s}`} tone="violet" outline>{s}</Chip>)}</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {niceSkills.map((s) => (
+                    <Chip key={`nice-${s}`} tone="violet" outline>
+                      {s}
+                    </Chip>
+                  ))}
+                </div>
               </div>
             )}
           </section>
@@ -462,18 +707,24 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
               <Briefcase className="h-4 w-4 text-muted shrink-0" />
               <div className="min-w-0">
                 <p className="text-[11px] text-muted">Tipo</p>
-                <p className="font-medium text-default text-sm truncate">{meta?.employmentType || job.employmentType || "—"}</p>
+                <p className="font-medium text-default text-sm truncate">
+                  {meta?.employmentType || job.employmentType || "—"}
+                </p>
               </div>
             </div>
+
             <div className="flex items-center gap-2 min-w-0">
               <Wallet className="h-4 w-4 text-muted shrink-0" />
               <div className="min-w-0">
                 <p className="text-[11px] text-muted">Sueldo</p>
                 <p className="font-medium text-default text-sm truncate">
-                  {showSalaryExplicit ? `${salaryMin?.toLocaleString() ?? "—"} – ${salaryMax?.toLocaleString() ?? "—"} ${currency}` : "Oculto"}
+                  {showSalaryExplicit
+                    ? `${salaryMin?.toLocaleString() ?? "—"} – ${salaryMax?.toLocaleString() ?? "—"} ${currency}`
+                    : "Oculto"}
                 </p>
               </div>
             </div>
+
             {schedule && (
               <div className="flex items-center gap-2 min-w-0">
                 <Clock3 className="h-4 w-4 text-muted shrink-0" />
@@ -487,14 +738,26 @@ export default function JobDetailPanel({ job, canApply = true, editHref, hideToo
 
           {benefitItems && benefitItems.length > 0 && (
             <div className="mt-4 rounded-xl border glass-card p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2"><Gift className="h-4 w-4 text-muted" /><p className="text-[12px] font-medium text-muted">Prestaciones</p></div>
-              <div className="flex flex-wrap gap-1.5">{benefitItems.map((b) => <Chip key={b.key} outline tone="emerald">{b.label}</Chip>)}</div>
+              <div className="flex items-center gap-2 mb-2">
+                <Gift className="h-4 w-4 text-muted" />
+                <p className="text-[12px] font-medium text-muted">Prestaciones</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {benefitItems.map((b) => (
+                  <Chip key={b.key} outline tone="emerald">
+                    {b.label}
+                  </Chip>
+                ))}
+              </div>
             </div>
           )}
 
           {Array.isArray(meta?.certifications) && meta.certifications.length > 0 && (
             <div className="mt-3 rounded-xl border glass-card p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2"><BadgeCheck className="h-4 w-4 text-muted" /><p className="text-[12px] font-medium text-muted">Certificaciones</p></div>
+              <div className="flex items-center gap-2 mb-2">
+                <BadgeCheck className="h-4 w-4 text-muted" />
+                <p className="text-[12px] font-medium text-muted">Certificaciones</p>
+              </div>
               <p className="text-sm text-default">{meta.certifications.join(", ")}</p>
             </div>
           )}

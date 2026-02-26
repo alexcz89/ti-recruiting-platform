@@ -1,10 +1,13 @@
+// app/auth/signin/SignInUnified.tsx
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { Mail, Lock, Eye, EyeOff, Sparkles, Users, Briefcase } from "lucide-react";
 import { SignInSchema } from "@/lib/validation";
 import ForgotPasswordModal from "./ForgotPasswordModal";
@@ -24,11 +27,28 @@ export default function SignInUnified({
   isSignup?: boolean;
   callbackUrl?: string;
 }) {
-  const [activeRole, setActiveRole] = useState<Role>(initialRole);
+  const searchParams = useSearchParams();
+
+  // ✅ Si viene ?role=CANDIDATE desde /jobs (recomendado), arranca en ese tab
+  const roleFromUrl = (searchParams?.get("role") || "").toUpperCase();
+  const initial =
+    roleFromUrl === "RECRUITER" || roleFromUrl === "CANDIDATE"
+      ? (roleFromUrl as Role)
+      : initialRole;
+
+  const [activeRole, setActiveRole] = useState<Role>(initial);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // ✅ Solo necesitas signup de candidato para este flujo (aplicar a vacantes)
+  const signupHref = useMemo(() => {
+    const cb = encodeURIComponent(
+      callbackUrl || (activeRole === "RECRUITER" ? "/dashboard/overview" : "/jobs")
+    );
+    return `/auth/signup/candidate?callbackUrl=${cb}`;
+  }, [activeRole, callbackUrl]);
 
   const {
     register,
@@ -53,7 +73,8 @@ export default function SignInUnified({
       email: data.email,
       password: data.password,
       role: activeRole,
-      callbackUrl: callbackUrl || (activeRole === "RECRUITER" ? "/dashboard/overview" : "/jobs"),
+      callbackUrl:
+        callbackUrl || (activeRole === "RECRUITER" ? "/dashboard/overview" : "/jobs"),
       ...(rememberMe ? { remember: "true" } : {}),
     });
 
@@ -64,11 +85,11 @@ export default function SignInUnified({
         return;
       }
 
-      // Manejo especial para error de cuenta no encontrada en Google
       if (res.error === "google_no_account") {
         setError("root", {
           type: "auth",
-          message: "No encontramos una cuenta con ese correo de Google. Regístrate primero.",
+          message:
+            "No encontramos una cuenta con ese correo de Google. Regístrate primero.",
         });
         return;
       }
@@ -102,7 +123,9 @@ export default function SignInUnified({
     }
 
     const redirectTo =
-      res?.url || callbackUrl || (activeRole === "RECRUITER" ? "/dashboard/overview" : "/jobs");
+      res?.url ||
+      callbackUrl ||
+      (activeRole === "RECRUITER" ? "/dashboard/overview" : "/jobs");
     window.location.href = redirectTo;
   };
 
@@ -146,7 +169,9 @@ export default function SignInUnified({
                     <Users className="h-7 w-7 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-50">Para Candidatos</h3>
+                    <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-50">
+                      Para Candidatos
+                    </h3>
                     <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                       Encuentra tu próximo reto profesional en las mejores empresas tech
                     </p>
@@ -158,13 +183,16 @@ export default function SignInUnified({
                     <Briefcase className="h-7 w-7 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-50">Para Reclutadores</h3>
+                    <h3 className="text-lg font-black text-zinc-900 dark:text-zinc-50">
+                      Para Reclutadores
+                    </h3>
                     <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
                       Gestiona tus vacantes y candidatos de forma eficiente
                     </p>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
@@ -338,6 +366,19 @@ export default function SignInUnified({
                 </span>
                 <div className="absolute inset-0 -z-0 bg-gradient-to-r from-violet-500 to-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
+
+              {/* ✅ CTA REGISTRO (solo candidatos) */}
+              {!isSignup && activeRole === "CANDIDATE" && (
+                <p className="pt-2 text-center text-sm text-zinc-600 dark:text-zinc-400">
+                  ¿No tienes cuenta?{" "}
+                  <Link
+                    href={signupHref}
+                    className="font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+                  >
+                    Regístrate
+                  </Link>
+                </p>
+              )}
             </form>
           </div>
         </div>
