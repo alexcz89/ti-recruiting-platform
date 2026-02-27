@@ -3,12 +3,13 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { MapPin, Loader2, SearchX } from "lucide-react";
 
 export type PlaceResult = {
   label: string;
   city?: string;
   admin1?: string;
-  country?: string; // ISO-2 si viene del proveedor
+  country?: string;
   cityNorm?: string;
   admin1Norm?: string;
   lat?: number;
@@ -18,7 +19,6 @@ export type PlaceResult = {
 type City = {
   id: string;
   label: string;
-  // 👇 extras estructurados (opcionales, no rompen nada)
   city?: string;
   admin1?: string;
   country?: string;
@@ -32,7 +32,7 @@ type Props = {
   onPlace?: (p: PlaceResult) => void;
   countries?: string[];
   className?: string;
-  placeholder?: string; // ✅ NUEVO
+  placeholder?: string;
   fetchOnMount?: boolean;
   minChars?: number;
   debounceMs?: number;
@@ -46,7 +46,7 @@ export default function LocationAutocomplete({
   onPlace,
   countries = ["mx"],
   className,
-  placeholder, // ✅ NUEVO
+  placeholder,
   fetchOnMount = false,
   minChars = 3,
   debounceMs = 250,
@@ -66,11 +66,9 @@ export default function LocationAutocomplete({
   const reqSeq = useRef(0);
   const lastHandled = useRef(0);
 
-  // Portal / posicionamiento
   const [anchor, setAnchor] = useState<{ x: number; y: number; w: number } | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  // IME / abort / cache
   const composingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const cacheRef = useRef<Map<string, City[]>>(new Map());
@@ -80,7 +78,6 @@ export default function LocationAutocomplete({
     committed.current = value || "";
   }, [value]);
 
-  // Helpers
   function normalize(s: string) {
     return (s || "")
       .toLowerCase()
@@ -104,7 +101,7 @@ export default function LocationAutocomplete({
     const r = el.getBoundingClientRect();
     setAnchor({
       x: r.left + window.scrollX,
-      y: r.bottom + window.scrollY,
+      y: r.bottom + window.scrollY + 4,
       w: r.width,
     });
   }
@@ -126,7 +123,7 @@ export default function LocationAutocomplete({
     updateAnchor();
   }, [focused, query, items.length]);
 
-  // ──────────── Parser robusto ────────────
+  // ── Parser ──
   function parseCitiesPayload(data: any): City[] {
     const rootArr = pickArray(data);
     if (!rootArr) return [];
@@ -137,14 +134,7 @@ export default function LocationAutocomplete({
 
   function pickArray(x: any): any[] | null {
     if (Array.isArray(x)) return x;
-    const cand =
-      x?.items ??
-      x?.results ??
-      x?.cities ??
-      x?.data ??
-      x?.features ??
-      x?.places ??
-      x?.payload;
+    const cand = x?.items ?? x?.results ?? x?.cities ?? x?.data ?? x?.features ?? x?.places ?? x?.payload;
     if (Array.isArray(cand)) return cand;
     if (x && typeof x === "object") {
       for (const k of Object.keys(x)) {
@@ -157,46 +147,16 @@ export default function LocationAutocomplete({
 
   function firstNonEmptyString(obj: any): string | undefined {
     if (!obj || typeof obj !== "object") return undefined;
-
     const candidates = [
-      obj.label,
-      obj.name,
-      obj.text,
-      obj.title,
-      obj.full_name,
-      obj.display_name,
-      obj.place_name,
-      obj.city,
-      obj.municipio,
-      obj.locality,
-      obj.town,
-      obj.village,
-      obj.state,
-      obj.state_name,
-      obj.admin1,
-      obj.admin_name,
-      obj.region,
-      obj.country,
-      obj.country_name,
-      obj.countryCode,
-      obj.description,
-      obj.formatted,
+      obj.label, obj.name, obj.text, obj.title, obj.full_name, obj.display_name,
+      obj.place_name, obj.city, obj.municipio, obj.locality, obj.town, obj.village,
+      obj.state, obj.state_name, obj.admin1, obj.admin_name, obj.region,
+      obj.country, obj.country_name, obj.countryCode, obj.description, obj.formatted,
     ];
     for (const c of candidates) {
       if (typeof c === "string" && c.trim()) return c.trim();
     }
-
-    const SKIP_KEYS = new Set([
-      "id",
-      "_id",
-      "woeid",
-      "osm_id",
-      "wikidata",
-      "place_type",
-      "short_code",
-      "type",
-      "feature_type",
-    ]);
+    const SKIP_KEYS = new Set(["id", "_id", "woeid", "osm_id", "wikidata", "place_type", "short_code", "type", "feature_type"]);
     for (const k of Object.keys(obj)) {
       if (SKIP_KEYS.has(k)) continue;
       const v = (obj as any)[k];
@@ -212,193 +172,98 @@ export default function LocationAutocomplete({
   function mapOne(r: any, i: number): City | null {
     if (typeof r === "string") return { id: String(i), label: r };
 
-    // id estable (nunca lo usamos como label)
-    let idCandidate: string | number | undefined =
-      r?.id ?? r?.value ?? r?.place_id ?? r?.woeid ?? r?.properties?.id;
-
+    let idCandidate: string | number | undefined = r?.id ?? r?.value ?? r?.place_id ?? r?.woeid ?? r?.properties?.id;
     if (idCandidate === undefined) {
-      const lat =
-        r?.lat ?? r?.latitude ?? r?.properties?.lat ?? r?.properties?.latitude ?? "";
-      const lon =
-        r?.lon ??
-        r?.lng ??
-        r?.longitude ??
-        r?.properties?.lon ??
-        r?.properties?.lng ??
-        r?.properties?.longitude ??
-        "";
+      const lat = r?.lat ?? r?.latitude ?? r?.properties?.lat ?? r?.properties?.latitude ?? "";
+      const lon = r?.lon ?? r?.lng ?? r?.longitude ?? r?.properties?.lon ?? r?.properties?.lng ?? r?.properties?.longitude ?? "";
       if (String(lat) !== "" || String(lon) !== "") idCandidate = `${lat},${lon}`;
     }
     const id = String(idCandidate !== undefined ? idCandidate : i);
 
-    // 1) Preferir place/display name
     let label: string | undefined =
-      r?.label ??
-      r?.full_name ??
-      r?.display_name ??
-      r?.place_name ??
-      r?.formatted ??
-      r?.properties?.full_name ??
-      r?.properties?.display_name;
+      r?.label ?? r?.full_name ?? r?.display_name ?? r?.place_name ?? r?.formatted ??
+      r?.properties?.full_name ?? r?.properties?.display_name;
 
-    // 2) Mapbox-like: text + context
     if (!label && (r?.text || r?.properties?.name)) {
       const head = r?.text || r?.properties?.name;
       const ctx = Array.isArray(r?.context)
-        ? r.context
-            .map((c: any) => c?.text || c?.properties?.name || c?.short_code)
-            .filter(Boolean)
+        ? r.context.map((c: any) => c?.text || c?.properties?.name || c?.short_code).filter(Boolean)
         : [];
       const parts = [head, ...ctx].filter((p) => typeof p === "string" && p.trim());
       if (parts.length) label = parts.slice(0, 3).join(", ");
     }
 
-    // 3) Campos básicos
-    const city =
-      r?.city ??
-      r?.name ??
-      r?.text ??
-      r?.title ??
-      r?.properties?.name ??
-      r?.municipio ??
-      r?.locality ??
-      r?.town ??
-      r?.village;
-
-    const admin1 =
-      r?.state ??
-      r?.state_name ??
-      r?.admin1 ??
-      r?.admin_name ??
-      r?.region ??
-      r?.properties?.state ??
-      r?.properties?.admin1;
-
+    const city = r?.city ?? r?.name ?? r?.text ?? r?.title ?? r?.properties?.name ?? r?.municipio ?? r?.locality ?? r?.town ?? r?.village;
+    const admin1 = r?.state ?? r?.state_name ?? r?.admin1 ?? r?.admin_name ?? r?.region ?? r?.properties?.state ?? r?.properties?.admin1;
     const country =
-      (r?.country_code ||
-        r?.properties?.country_code ||
-        r?.countryCode ||
-        r?.country)
-        ?.toString()
-        ?.toUpperCase() ||
-      r?.properties?.country_name ||
-      r?.country_name;
+      (r?.country_code || r?.properties?.country_code || r?.countryCode || r?.country)?.toString()?.toUpperCase() ||
+      r?.properties?.country_name || r?.country_name;
 
-    // 4) Fallback label con city/admin/country
     if (!label) {
       const parts = [city, admin1, country].filter((p) => typeof p === "string" && p.trim());
       if (parts.length) label = parts.join(", ");
     }
-
-    // 5) Última red
     if (!label) label = firstNonEmptyString(r);
-
-    // 6) Reparar labels tipo region.50335
     if (label && /^[a-z]+\.\d+$/i.test(label)) {
       const head = r?.text || r?.properties?.name || city;
       const ctx = Array.isArray(r?.context)
-        ? r.context
-            .map((c: any) => c?.text || c?.properties?.name || c?.short_code)
-            .filter(Boolean)
+        ? r.context.map((c: any) => c?.text || c?.properties?.name || c?.short_code).filter(Boolean)
         : [];
       const parts = [head, ...ctx].filter((p) => typeof p === "string" && p.trim());
       if (parts.length) label = parts.slice(0, 3).join(", ");
     }
-
     if (!label) return null;
 
-    // Lat/Lng si vienen
-    const latRaw =
-      r?.lat ?? r?.latitude ?? r?.properties?.lat ?? r?.properties?.latitude ?? null;
-    const lngRaw =
-      r?.lon ??
-      r?.lng ??
-      r?.longitude ??
-      r?.properties?.lon ??
-      r?.properties?.lng ??
-      r?.properties?.longitude ??
-      null;
-
+    const latRaw = r?.lat ?? r?.latitude ?? r?.properties?.lat ?? r?.properties?.latitude ?? null;
+    const lngRaw = r?.lon ?? r?.lng ?? r?.longitude ?? r?.properties?.lon ?? r?.properties?.lng ?? r?.properties?.longitude ?? null;
     const lat = latRaw != null ? Number(latRaw) : undefined;
     const lng = lngRaw != null ? Number(lngRaw) : undefined;
 
-    return {
-      id,
-      label: String(label),
-      city: city || undefined,
-      admin1: admin1 || undefined,
-      country: (typeof country === "string" ? country : undefined) || undefined,
-      lat,
-      lng,
-    };
+    return { id, label: String(label), city: city || undefined, admin1: admin1 || undefined, country: (typeof country === "string" ? country : undefined) || undefined, lat, lng };
   }
 
-  // ──────────── Búsqueda con debounce + abort + cache ────────────
+  // ── Fetch ──
   const doSearch = async (term: string) => {
     const q = normalize(term).trim();
-    if (q.length < minChars) {
-      setItems([]);
-      return;
-    }
+    if (q.length < minChars) { setItems([]); return; }
 
     const cached = cacheRef.current.get(q);
-    if (cached) {
-      if (debug) console.log("[LA] cache hit:", q, cached);
-      setItems(cached);
-      setHoverIdx(cached.length ? 0 : -1);
-      return;
-    }
+    if (cached) { setItems(cached); setHoverIdx(cached.length ? 0 : -1); return; }
 
     if (abortRef.current) abortRef.current.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-
     const thisReq = ++reqSeq.current;
     setLoading(true);
     try {
       const params = new URLSearchParams({ q });
       countries.forEach((c) => params.append("country", c));
-      const url = `/api/geo/cities?${params.toString()}`;
-      if (debug) console.log("[LA] fetch:", url);
-
-      const res = await fetch(url, { signal: ctrl.signal });
+      const res = await fetch(`/api/geo/cities?${params.toString()}`, { signal: ctrl.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      if (debug) console.log("[LA] raw:", data);
-
       if (thisReq > lastHandled.current) {
         lastHandled.current = thisReq;
         const parsed = parseCitiesPayload(data);
-        if (debug) console.log("[LA] parsed:", parsed);
         cacheRef.current.set(q, parsed);
         setItems(parsed);
         setHoverIdx(parsed.length ? 0 : -1);
       }
     } catch (err: any) {
-      if (err?.name === "AbortError") {
-        if (debug) console.log("[LA] fetch aborted");
-      } else {
-        if (debug) console.warn("[LA] fetch error:", err);
-        if (thisReq >= lastHandled.current) setItems([]);
-      }
+      if (err?.name !== "AbortError" && thisReq >= lastHandled.current) setItems([]);
     } finally {
       if (thisReq >= lastHandled.current) setLoading(false);
     }
   };
 
-  // Debounce
   useEffect(() => {
     if (composingRef.current) return;
     if (!fetchOnMount && query === (value || "")) return;
     if (timerRef.current) window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => doSearch(query), debounceMs);
-    return () => {
-      if (timerRef.current) window.clearTimeout(timerRef.current);
-    };
+    return () => { if (timerRef.current) window.clearTimeout(timerRef.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, countries.join(","), debounceMs, fetchOnMount]);
 
-  // Cerrar al click fuera
   useEffect(() => {
     function onDocMouseDown(e: MouseEvent) {
       const t = e.target as Node;
@@ -411,15 +276,7 @@ export default function LocationAutocomplete({
   }, []);
 
   const pick = (item: City) => {
-    // 1) Mantener comportamiento actual
-    onChange(item.label);
-    committed.current = item.label;
-    setQuery(item.label);
-    setItems([]);
-    setFocused(false);
-
-    // 2) Emitir estructurado (si el padre lo quiere usar)
-    onPlace?.({
+    const place: PlaceResult = {
       label: item.label,
       city: item.city,
       admin1: item.admin1,
@@ -428,7 +285,14 @@ export default function LocationAutocomplete({
       admin1Norm: slugify(item.admin1),
       lat: item.lat,
       lng: item.lng,
-    });
+    };
+    // onChange siempre recibe string (label) para compatibilidad
+    onChange(item.label);
+    onPlace?.(place);
+    committed.current = item.label;
+    setQuery(item.label);
+    setItems([]);
+    setFocused(false);
   };
 
   const showList =
@@ -439,23 +303,19 @@ export default function LocationAutocomplete({
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showList) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHoverIdx((i) => Math.min(i + 1, items.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHoverIdx((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      const sel = items[hoverIdx];
-      if (sel) pick(sel);
-    }
+    if (e.key === "ArrowDown") { e.preventDefault(); setHoverIdx((i) => Math.min(i + 1, items.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setHoverIdx((i) => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") { e.preventDefault(); const sel = items[hoverIdx]; if (sel) pick(sel); }
+    else if (e.key === "Escape") { setFocused(false); setItems([]); }
   };
 
+  // ── Dropdown ──
   const dropdown = (
     <ul
+      id="location-listbox"
       data-la-portal={usePortal ? "" : undefined}
       role="listbox"
+      aria-label="Sugerencias de ubicación"
       style={
         usePortal
           ? {
@@ -467,36 +327,65 @@ export default function LocationAutocomplete({
             }
           : undefined
       }
-      className="mt-1 glass-card p-4 md:p-6"
+      className={[
+        // Base
+        "overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl",
+        "dark:border-zinc-700 dark:bg-zinc-900",
+        // Animación sutil
+        "animate-in fade-in-0 zoom-in-95 duration-100",
+        // Mobile: ancho completo y más padding táctil
+        "w-full",
+      ].join(" ")}
     >
       {loading ? (
-        <li className="px-3 py-2 text-sm text-zinc-500">Buscando…</li>
+        <li className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+          <span>Buscando...</span>
+        </li>
       ) : items.length === 0 ? (
-        <li className="px-3 py-2 text-sm text-zinc-500">Sin coincidencias</li>
+        <li className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-500 dark:text-zinc-400">
+          <SearchX className="h-4 w-4" />
+          <span>Sin coincidencias</span>
+        </li>
       ) : (
         items.map((it, i) => (
           <li
             key={it.id ?? i}
             role="option"
             aria-selected={i === hoverIdx}
-            className={`px-3 py-2 text-sm cursor-pointer ${
+            className={[
+              // Base — tamaño táctil mínimo 44px para mobile
+              "flex items-center gap-3 px-4 cursor-pointer transition-colors",
+              "min-h-[44px] py-2",
+              // Separador entre items (excepto último)
+              i < items.length - 1 ? "border-b border-zinc-100 dark:border-zinc-800" : "",
+              // Estado hover/activo
               i === hoverIdx
-                ? "bg-gray-100 dark:glass-card p-4 md:p-6"
-                : "hover:bg-gray-50 dark:hover:glass-card p-4 md:p-6"
-            }`}
+                ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-100"
+                : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60",
+            ].join(" ")}
             onMouseEnter={() => setHoverIdx(i)}
             onMouseDown={(e) => e.preventDefault()}
             onClick={() => pick(it)}
-            title={[
-              it.label,
-              it.city && it.city !== it.label ? `(${it.city})` : "",
-              it.admin1 ? ` · ${it.admin1}` : "",
-              it.country ? ` · ${it.country}` : "",
-            ]
-              .filter(Boolean)
-              .join("")}
           >
-            {it.label}
+            <MapPin
+              className={[
+                "h-4 w-4 shrink-0",
+                i === hoverIdx ? "text-emerald-500" : "text-zinc-400 dark:text-zinc-500",
+              ].join(" ")}
+            />
+            <div className="min-w-0 flex-1">
+              {/* Ciudad principal */}
+              <p className="truncate text-sm font-medium leading-tight">
+                {it.city && it.city !== it.label ? it.city : it.label.split(",")[0]}
+              </p>
+              {/* Estado / País como subtítulo */}
+              {(it.admin1 || it.country) && (
+                <p className="truncate text-xs text-zinc-500 dark:text-zinc-400 leading-tight mt-0.5">
+                  {[it.admin1, it.country].filter(Boolean).join(" · ")}
+                </p>
+              )}
+            </div>
           </li>
         ))
       )}
@@ -506,41 +395,70 @@ export default function LocationAutocomplete({
   return (
     <>
       <div ref={wrapperRef} className="relative">
+        {/* Ícono de pin dentro del input */}
+        <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+          <MapPin className="h-4 w-4 text-zinc-400 dark:text-zinc-500" />
+        </div>
+
         <input
           ref={inputRef}
           id="location"
           name="location"
-          className={className}
+          // Heredar className del padre + padding-left para el ícono
+          className={[
+            className ?? "",
+            "pl-9", // espacio para el ícono
+          ]
+            .filter(Boolean)
+            .join(" ")}
           value={query}
-          placeholder={placeholder ?? "Ciudad, Estado, País"} // ✅ AHORA es configurable
+          placeholder={placeholder ?? "Ciudad o estado"}
           autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="words"
           spellCheck={false}
+          // mobile: abre el teclado en modo texto, no numérico
+          inputMode="text"
+          enterKeyHint="search"
           onChange={(e) => {
             setQuery(e.target.value);
-            if (debug) console.log("[LA] input:", e.target.value);
+            // Si el usuario borra, notificar al padre
+            if (!e.target.value.trim()) onChange("");
           }}
           onFocus={() => {
             setFocused(true);
+            updateAnchor();
             const v = (inputRef.current?.value || "").trim();
-            if (debug) console.log("[LA] focus, v:", v);
             if (v.length >= minChars) doSearch(v);
           }}
           onBlur={() => {
-            setTimeout(() => setFocused(false), 120);
+            setTimeout(() => setFocused(false), 150);
           }}
           onKeyDown={onKeyDown}
-          onCompositionStart={() => {
-            composingRef.current = true;
-          }}
+          onCompositionStart={() => { composingRef.current = true; }}
           onCompositionEnd={(e) => {
             composingRef.current = false;
             setQuery((e.target as HTMLInputElement).value);
           }}
+          aria-autocomplete="list"
+          aria-expanded={showList}
+          aria-controls="location-listbox"
         />
 
-        {!usePortal && showList && <div className="absolute left-0 right-0">{dropdown}</div>}
+        {/* Spinner inline cuando carga */}
+        {loading && (
+          <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+            <Loader2 className="h-4 w-4 animate-spin text-emerald-500" />
+          </div>
+        )}
+
+        {/* Dropdown sin portal (fallback) */}
+        {!usePortal && showList && (
+          <div className="absolute left-0 right-0 top-full z-50 mt-1">{dropdown}</div>
+        )}
       </div>
 
+      {/* Dropdown con portal */}
       {usePortal && showList && mounted && anchor && createPortal(dropdown, document.body)}
     </>
   );
