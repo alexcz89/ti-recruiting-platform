@@ -16,6 +16,9 @@ import {
   LANGUAGES_FALLBACK,
 } from "../lib/shared/skills-data";
 
+// ✅ NUEVO: Assessment templates
+import { seedAssessmentTemplates } from "./seeds/assessments";
+
 const prisma = new PrismaClient();
 
 /** Cambia a `true` si quieres borrar términos que no estén en el catálogo de lib/skills.ts */
@@ -119,7 +122,6 @@ async function seedDemoData() {
         linkedin: "https://linkedin.com/in/carolinatorres",
         github: "https://github.com/carolinatorres",
         resumeUrl: "/resumes/carolina.pdf",
-        // Estos arrays legacy siguen siendo strings en tu schema
         certifications: ["CompTIA"],
       },
     });
@@ -179,6 +181,10 @@ async function main() {
   await seedDemoData();
 
   console.log("✅ Seed completado: catálogos (LANGUAGE/SKILL/CERTIFICATION) y demo listos.");
+
+  // ✅ NUEVO: Assessment templates (JS, SQL, Lógica, TypeScript/React)
+  console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  await seedAssessmentTemplates();
 }
 
 main()
