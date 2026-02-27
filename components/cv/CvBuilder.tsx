@@ -1667,8 +1667,8 @@ export default function CvBuilder({
                     : [];
 
                   return (
-                    <div key={`${skill.termId}-${i}`} className="relative flex items-end gap-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-3 border border-zinc-200 dark:border-zinc-700">
-                      <div className="flex-1 relative">
+                    <div key={`${skill.termId}-${i}`} className="relative flex flex-col gap-3 sm:flex-row sm:items-end bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-3 border border-zinc-200 dark:border-zinc-700">
+                      <div className="flex-1 relative w-full">
                         <label className={labelCls}>Skill</label>
                         <input
                           type="text"
@@ -1694,7 +1694,7 @@ export default function CvBuilder({
                         {isOpen && filtered.length > 0 && (
                           <ul
                             onClick={(e) => e.stopPropagation()}
-                            className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white dark:bg-zinc-800 py-1 text-sm shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-700"
+                            className="absolute left-0 right-0 z-50 mt-1 max-h-60 w-full min-w-[12rem] overflow-auto rounded-md bg-white dark:bg-zinc-800 py-1 text-sm shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-700"
                           >
                             {filtered.map((opt) => (
                               <li
@@ -1719,7 +1719,7 @@ export default function CvBuilder({
                         )}
                       </div>
 
-                      <div className="w-32">
+                      <div className="w-full sm:w-32">
                         <label className={labelCls}>Nivel</label>
                         <select
                           value={skill.level}
@@ -1799,8 +1799,8 @@ export default function CvBuilder({
                     : [];
 
                   return (
-                    <div key={`${lang.termId}-${i}`} className="relative flex items-end gap-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-3 border border-zinc-200 dark:border-zinc-700">
-                      <div className="flex-1 relative">
+                    <div key={`${lang.termId}-${i}`} className="relative flex flex-col gap-3 sm:flex-row sm:items-end bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-3 border border-zinc-200 dark:border-zinc-700">
+                      <div className="flex-1 relative w-full">
                         <label className={labelCls}>Idioma</label>
                         <input
                           type="text"
@@ -1826,7 +1826,7 @@ export default function CvBuilder({
                         {isOpen && filtered.length > 0 && (
                           <ul
                             onClick={(e) => e.stopPropagation()}
-                            className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white dark:bg-zinc-800 py-1 text-sm shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-700"
+                            className="absolute left-0 right-0 z-50 mt-1 max-h-60 w-full min-w-[12rem] overflow-auto rounded-md bg-white dark:bg-zinc-800 py-1 text-sm shadow-lg ring-1 ring-zinc-200 dark:ring-zinc-700"
                           >
                             {filtered.map((opt) => (
                               <li
@@ -1851,7 +1851,7 @@ export default function CvBuilder({
                         )}
                       </div>
 
-                      <div className="w-36">
+                      <div className="w-full sm:w-36">
                         <label className={labelCls}>Nivel</label>
                         <select
                           value={lang.level}
