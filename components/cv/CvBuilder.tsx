@@ -980,14 +980,14 @@ export default function CvBuilder({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 py-8 px-4">
+    <div className="cv-builder-root min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 py-8 px-4">
       <div className="max-w-4xl mx-auto">
         {/* ====== Header con título y botones de acción ====== */}
         <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6 mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-zinc-900 dark:text-white">
+                <h1 className="text-3xl font-bold text-zinc-900 dark:text-white break-words hyphens-none">
                   CV Builder
                 </h1>
                 {/* 💾 Indicador de guardado automático */}
@@ -1227,7 +1227,7 @@ export default function CvBuilder({
 
             {/* Experiencia (más reciente arriba) */}
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white shadow-lg shadow-emerald-500/30">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1246,7 +1246,7 @@ export default function CvBuilder({
                 <button
                   type="button"
                   onClick={handleAddExperience}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
+                  className="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
                 >
                   <span className="text-lg">+</span> Añadir
                 </button>
@@ -1457,7 +1457,7 @@ export default function CvBuilder({
                               return newArr;
                             });
                           }}
-                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium"
+                          className="text-sm text-blue-600 hover:text-blue-700 dark:text-blue-400 font-medium whitespace-nowrap"
                         >
                           + Añadir otro puesto aquí
                         </button>
@@ -1476,7 +1476,7 @@ export default function CvBuilder({
 
             {/* Educación */}
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 text-white shadow-lg shadow-purple-500/30">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1497,7 +1497,7 @@ export default function CvBuilder({
                 <button
                   type="button"
                   onClick={handleAddEducation}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
+                  className="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
                 >
                   <span className="text-lg">+</span> Añadir
                 </button>
@@ -1633,7 +1633,7 @@ export default function CvBuilder({
 
             {/* Skills */}
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1652,7 +1652,7 @@ export default function CvBuilder({
                 <button
                   type="button"
                   onClick={handleAddSkill}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
+                  className="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
                 >
                   <span className="text-lg">+</span> Añadir
                 </button>
@@ -1765,7 +1765,7 @@ export default function CvBuilder({
 
             {/* Idiomas */}
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-cyan-600 text-white shadow-lg shadow-cyan-500/30">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1784,7 +1784,7 @@ export default function CvBuilder({
                 <button
                   type="button"
                   onClick={handleAddLanguage}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
+                  className="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
                 >
                   <span className="text-lg">+</span> Añadir
                 </button>
@@ -1894,7 +1894,7 @@ export default function CvBuilder({
 
             {/* Certificaciones */}
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/30">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1913,7 +1913,7 @@ export default function CvBuilder({
                 <button
                   type="button"
                   onClick={handleAddCertification}
-                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
+                  className="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
                 >
                   <span className="text-lg">+</span> Añadir
                 </button>
@@ -2124,19 +2124,40 @@ export default function CvBuilder({
 
       {/* Estilos específicos para el phone input */}
       <style jsx global>{`
-        .cv-phone-input label {
+        .cv-builder-root .cv-phone-input label {
           font-size: 0.75rem;
           font-weight: 500;
           color: rgb(39 39 42);
           margin-bottom: 0.25rem;
         }
 
-        .cv-phone-input input {
+        .cv-builder-root .cv-phone-input input {
           font-size: 0.8125rem;
         }
 
-        .dark .cv-phone-input label {
+        .dark .cv-builder-root .cv-phone-input label {
           color: rgb(244 244 245);
+        }
+
+        /* Evita cortes con guiones en headers SOLO dentro del CV Builder */
+        .cv-builder-root h1,
+        .cv-builder-root h2,
+        .cv-builder-root h3,
+        .cv-builder-root .cv-section-title {
+          hyphens: none;
+          -webkit-hyphens: none;
+          -ms-hyphens: none;
+          word-break: normal;
+          overflow-wrap: break-word;
+        }
+
+        .cv-builder-root button,
+        .cv-builder-root .btn {
+          hyphens: none;
+          -webkit-hyphens: none;
+          -ms-hyphens: none;
+          word-break: normal;
+          overflow-wrap: normal;
         }
       `}</style>
 
