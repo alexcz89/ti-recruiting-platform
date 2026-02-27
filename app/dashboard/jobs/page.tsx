@@ -4,6 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
+import AssignTemplateModalTrigger from "@/components/dashboard/AssignTemplateModalTrigger"; // ← NUEVO
 
 // ───────────────────── Config ─────────────────────
 export const metadata = { title: "Vacantes | Panel" };
@@ -16,12 +17,13 @@ const STATUS_LABEL: Record<string, string> = {
 
 type SearchParams = {
   title?: string;
-  location?: string; // "" | "REMOTE" | "<city/location>"
+  location?: string;
   date?: "any" | "7" | "30" | "90";
   sort?: "title" | "total" | "pending" | "createdAt" | "status";
   dir?: "asc" | "desc";
   status?: "ALL" | "OPEN" | "PAUSED" | "CLOSED";
-  filter?: "pending" | "no-applications"; // 🆕 Filtros especiales
+  filter?: "pending" | "no-applications";
+  assignTemplate?: string; // ← NUEVO
 };
 
 const DATE_WINDOWS: Array<{ value: NonNullable<SearchParams["date"]>; label: string; days?: number }> =
@@ -77,9 +79,8 @@ export default async function JobsPage({
     );
   }
 
-  // Normaliza filtros
   const sp: Required<Pick<SearchParams, "title" | "location" | "date" | "sort" | "dir" | "status">> &
-    Pick<SearchParams, "filter"> = {
+    Pick<SearchParams, "filter" | "assignTemplate"> = {
     title: (searchParams.title || "").trim(),
     location: (searchParams.location || "").trim(),
     date: (searchParams.date as any) || "any",
@@ -87,9 +88,9 @@ export default async function JobsPage({
     dir: (searchParams.dir as any) || "desc",
     status: (searchParams.status as any) || "OPEN",
     filter: searchParams.filter,
+    assignTemplate: searchParams.assignTemplate, // ← NUEVO
   };
 
-  // Fecha desde (si aplica)
   let createdAtGte: Date | undefined = undefined;
   const win = DATE_WINDOWS.find((w) => w.value === sp.date);
   if (win?.days) {
@@ -119,7 +120,6 @@ export default async function JobsPage({
   const where: any = { companyId };
   if (sp.status && sp.status !== "ALL") where.status = sp.status;
   if (sp.title) where.title = { contains: sp.title, mode: "insensitive" };
-
   if (sp.location) {
     if (sp.location === "REMOTE") {
       where.remote = true;
@@ -130,7 +130,6 @@ export default async function JobsPage({
   }
   if (createdAtGte) where.createdAt = { gte: createdAtGte };
 
-  // Cargamos jobs del reclutador/empresa
   let jobs = await prisma.job.findMany({
     where,
     orderBy: { updatedAt: "desc" },
@@ -142,10 +141,10 @@ export default async function JobsPage({
       createdAt: true,
       status: true,
       _count: { select: { applications: true } },
+      assessments: { select: { templateId: true } }, // ← NUEVO
     },
   });
 
-  // Por revisar por job
   const byJobPending = await prisma.application.groupBy({
     by: ["jobId"],
     where: { jobId: { in: jobs.map((j) => j.id) }, status: "SUBMITTED" },
@@ -154,12 +153,9 @@ export default async function JobsPage({
   const pendingMap = new Map<string, number>();
   for (const row of byJobPending) pendingMap.set(row.jobId, row._count._all);
 
-  // 🆕 Aplicar filtros especiales
   if (sp.filter === "pending") {
-    // Solo vacantes con candidatos pendientes
     jobs = jobs.filter((j) => (pendingMap.get(j.id) || 0) > 0);
   } else if (sp.filter === "no-applications") {
-    // Solo vacantes sin postulaciones creadas hace más de 15 días
     const d15 = 15 * 24 * 60 * 60 * 1000;
     const cutoffDate = new Date(Date.now() - d15);
     jobs = jobs.filter(
@@ -167,7 +163,6 @@ export default async function JobsPage({
     );
   }
 
-  // Opciones para selects (todas las vacantes)
   const titleOptions = Array.from(new Set(allJobs.map((j) => j.title))).sort((a, b) =>
     a.localeCompare(b, "es")
   );
@@ -175,7 +170,6 @@ export default async function JobsPage({
     new Set(allJobs.filter((j) => !j.remote && j.location).map((j) => j.location as string))
   ).sort((a, b) => a.localeCompare(b, "es"));
 
-  // Ordenamiento en memoria
   const sorted = [...jobs].sort((a, b) => {
     const dirMul = sp.dir === "asc" ? 1 : -1;
     switch (sp.sort) {
@@ -195,7 +189,6 @@ export default async function JobsPage({
     }
   });
 
-  // 🆕 Badge de filtro activo
   const activeFilterLabel =
     sp.filter === "pending"
       ? "Con candidatos por revisar"
@@ -203,9 +196,74 @@ export default async function JobsPage({
       ? "Sin postulaciones (>15 días)"
       : null;
 
+  // ── NUEVO: Datos para el modal (solo si viene ?assignTemplate=) ──────────
+  const allTemplates = sp.assignTemplate
+    ? await prisma.assessmentTemplate.findMany({
+        where: { isActive: true },
+        select: {
+          id: true, title: true, description: true,
+          difficulty: true, type: true,
+          totalQuestions: true, timeLimit: true, passingScore: true,
+        },
+        orderBy: { title: "asc" },
+      })
+    : [];
+
+  // Vacantes para el modal con sus templateIds (todas, no solo las filtradas)
+  const jobsWithAssessmentsMap = new Map(
+    jobs.map((j) => [j.id, j.assessments.map((a) => a.templateId)])
+  );
+
+  // Para los que quedaron fuera del filtro, traer sus assessments solo si hay modal
+  const missingIds = sp.assignTemplate
+    ? allJobIds.filter((id) => !jobsWithAssessmentsMap.has(id))
+    : [];
+  const missingAssessments =
+    missingIds.length > 0
+      ? await prisma.jobAssessment.findMany({
+          where: { jobId: { in: missingIds } },
+          select: { jobId: true, templateId: true },
+        })
+      : [];
+  const missingMap = new Map<string, string[]>();
+  for (const a of missingAssessments) {
+    if (!missingMap.has(a.jobId)) missingMap.set(a.jobId, []);
+    missingMap.get(a.jobId)!.push(a.templateId);
+  }
+
+  const allJobsForModal = allJobs.map((j) => ({
+    id: j.id,
+    title: j.title,
+    location: j.location ?? null,
+    remote: j.remote,
+    status: j.status,
+    assignedTemplateIds: jobsWithAssessmentsMap.get(j.id) ?? missingMap.get(j.id) ?? [],
+  }));
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
     <main className="max-w-none p-0">
+      {/* NUEVO: modal (no renderiza nada si no hay ?assignTemplate=) */}
+      <AssignTemplateModalTrigger jobs={allJobsForModal} templates={allTemplates as any} />
+
       <div className="mx-auto max-w-[1600px] px-6 lg:px-10 py-8 space-y-8">
+
+        {/* NUEVO: banner cuando viene de Templates */}
+        {sp.assignTemplate && (
+          <div className="flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800/50 dark:bg-violet-950/20">
+            <div className="h-2 w-2 rounded-full bg-violet-500 animate-pulse" />
+            <p className="text-sm font-semibold text-violet-800 dark:text-violet-300">
+              Elige una vacante en el modal para asignar el template de evaluación.
+            </p>
+            <Link
+              href="/dashboard/jobs"
+              className="ml-auto text-xs font-bold text-violet-600 hover:underline dark:text-violet-400"
+            >
+              Cancelar
+            </Link>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
@@ -219,13 +277,7 @@ export default async function JobsPage({
               {activeFilterLabel && (
                 <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-500/40 px-3 py-1 text-xs font-medium text-amber-700 dark:text-amber-300">
                   🔍 {activeFilterLabel}
-                  <Link
-                    href="/dashboard/jobs"
-                    className="hover:underline"
-                    title="Quitar filtro"
-                  >
-                    ✕
-                  </Link>
+                  <Link href="/dashboard/jobs" className="hover:underline" title="Quitar filtro">✕</Link>
                 </span>
               )}
             </div>
@@ -249,7 +301,7 @@ export default async function JobsPage({
           <MetricCard label="Por revisar" value={totalPending} accent />
         </section>
 
-        {/* Filtros (Client Component con auto-submit) */}
+        {/* Filtros */}
         <section className="rounded-2xl border glass-card p-4 md:p-6">
           <JobsFilterBar
             titleOptions={titleOptions}
@@ -270,9 +322,7 @@ export default async function JobsPage({
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
               {activeFilterLabel ? (
                 <>
-                  <Link href="/dashboard/jobs" className="text-blue-600 hover:underline">
-                    Quitar filtro
-                  </Link>{" "}
+                  <Link href="/dashboard/jobs" className="text-blue-600 hover:underline">Quitar filtro</Link>{" "}
                   o ajusta los criterios.
                 </>
               ) : (
@@ -281,10 +331,7 @@ export default async function JobsPage({
             </p>
             {!activeFilterLabel && (
               <div className="mt-4">
-                <Link
-                  href="/dashboard/jobs/new"
-                  className="text-sm border rounded-full px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-900"
-                >
+                <Link href="/dashboard/jobs/new" className="text-sm border rounded-full px-3 py-1.5 hover:bg-gray-50 dark:hover:bg-zinc-900">
                   Publicar vacante
                 </Link>
               </div>
@@ -296,11 +343,12 @@ export default async function JobsPage({
               <table className="w-full text-sm min-w-[960px]">
                 <thead className="bg-gray-50/90 dark:bg-zinc-900/70 text-left text-zinc-600 dark:text-zinc-300 sticky top-0 z-10 backdrop-blur">
                   <tr>
-                    <th className="py-3.5 px-4 w-[40%]">
+                    <th className="py-3.5 px-4 w-[35%]">
                       <a href={toggleSortLink(sp, "title")} className="inline-flex items-center">
                         Vacante {sortIndicator(sp, "title")}
                       </a>
                     </th>
+                    <th className="py-3.5 px-4">Evaluación</th> {/* NUEVO */}
                     <th className="py-3.5 px-4 text-center">
                       <a href={toggleSortLink(sp, "total")} className="inline-flex items-center">
                         Postulaciones {sortIndicator(sp, "total")}
@@ -312,10 +360,7 @@ export default async function JobsPage({
                       </a>
                     </th>
                     <th className="py-3.5 px-4">
-                      <a
-                        href={toggleSortLink(sp, "createdAt")}
-                        className="inline-flex items-center"
-                      >
+                      <a href={toggleSortLink(sp, "createdAt")} className="inline-flex items-center">
                         Fecha {sortIndicator(sp, "createdAt")}
                       </a>
                     </th>
@@ -331,12 +376,10 @@ export default async function JobsPage({
                   {sorted.map((j) => {
                     const total = j._count.applications || 0;
                     const pending = pendingMap.get(j.id) || 0;
+                    const assignedCount = j.assessments?.length ?? 0; // ← NUEVO
 
                     return (
-                      <tr
-                        key={j.id}
-                        className="transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/70"
-                      >
+                      <tr key={j.id} className="transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-900/70">
                         <td className="py-3.5 px-4 align-top">
                           <Link
                             href={`/dashboard/jobs/${j.id}/applications`}
@@ -348,6 +391,22 @@ export default async function JobsPage({
                           <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                             {j.remote ? "Remoto" : j.location || "—"}
                           </div>
+                        </td>
+
+                        {/* NUEVO: badge evaluación */}
+                        <td className="py-3.5 px-4 align-top">
+                          {assignedCount > 0 ? (
+                            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:text-emerald-300">
+                              ✓ {assignedCount} template{assignedCount > 1 ? "s" : ""}
+                            </span>
+                          ) : (
+                            <Link
+                              href="/dashboard/assessments/templates"
+                              className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 px-2 py-0.5 text-[11px] text-zinc-400 transition-colors hover:border-violet-300 hover:text-violet-600 dark:border-zinc-700 dark:hover:border-violet-700 dark:hover:text-violet-400"
+                            >
+                              + Asignar
+                            </Link>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4 text-center align-top">
@@ -371,15 +430,13 @@ export default async function JobsPage({
                         </td>
 
                         <td className="py-3.5 px-4 align-top">
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium ${
-                              j.status === "OPEN"
-                                ? "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700"
-                                : j.status === "PAUSED"
-                                ? "bg-yellow-50 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700"
-                                : "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600"
-                            }`}
-                          >
+                          <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-medium ${
+                            j.status === "OPEN"
+                              ? "bg-green-50 text-green-700 border-green-300 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700"
+                              : j.status === "PAUSED"
+                              ? "bg-yellow-50 text-yellow-700 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700"
+                              : "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-600"
+                          }`}>
                             {STATUS_LABEL[j.status] || j.status}
                           </span>
                         </td>
@@ -398,8 +455,7 @@ export default async function JobsPage({
 
             <div className="flex items-center justify-between px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400 border-t border-zinc-100 dark:border-zinc-800">
               <span>
-                Mostrando <strong>{sorted.length}</strong> vacante
-                {sorted.length === 1 ? "" : "s"}
+                Mostrando <strong>{sorted.length}</strong> vacante{sorted.length === 1 ? "" : "s"}
                 {activeFilterLabel && ` (${activeFilterLabel.toLowerCase()})`}
               </span>
               <span>Página 1 / 1</span>
@@ -411,29 +467,13 @@ export default async function JobsPage({
   );
 }
 
-/* ─────────────────── Subcomponentes métricas ─────────────────── */
-
-function MetricCard({
-  label,
-  value,
-  accent,
-}: {
-  label: string;
-  value: number;
-  accent?: boolean;
-}) {
+function MetricCard({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
   return (
     <article className="rounded-2xl border glass-card p-4 md:p-6 flex flex-col justify-between">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">
-            {label}
-          </p>
-          <p
-            className={`mt-1 text-2xl font-semibold ${
-              accent ? "text-emerald-600 dark:text-emerald-300" : "text-zinc-900 dark:text-zinc-50"
-            }`}
-          >
+          <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">{label}</p>
+          <p className={`mt-1 text-2xl font-semibold ${accent ? "text-emerald-600 dark:text-emerald-300" : "text-zinc-900 dark:text-zinc-50"}`}>
             {value}
           </p>
         </div>
@@ -444,14 +484,10 @@ function MetricCard({
         )}
       </div>
       <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-        {label === "Abiertas" &&
-          "Vacantes activas recibiendo postulaciones."}
-        {label === "Pausadas/Cerradas" &&
-          "Vacantes que ya no reciben nuevas postulaciones."}
-        {label === "Postulaciones" &&
-          "Total de CVs recibidos en todas tus vacantes."}
-        {label === "Por revisar" &&
-          "Candidatos marcados como pendientes por revisar."}
+        {label === "Abiertas" && "Vacantes activas recibiendo postulaciones."}
+        {label === "Pausadas/Cerradas" && "Vacantes que ya no reciben nuevas postulaciones."}
+        {label === "Postulaciones" && "Total de CVs recibidos en todas tus vacantes."}
+        {label === "Por revisar" && "Candidatos marcados como pendientes por revisar."}
       </p>
     </article>
   );
