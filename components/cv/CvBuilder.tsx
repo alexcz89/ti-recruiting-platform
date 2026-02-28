@@ -980,10 +980,10 @@ export default function CvBuilder({
   }
 
   return (
-    <div className="cv-builder-root min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="cv-builder-root min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 py-6 md:py-8 px-0 sm:px-4">
+      <div className="w-full md:max-w-4xl md:mx-auto">
         {/* ====== Header con título y botones de acción ====== */}
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6 mb-6">
+        <div className="bg-white dark:bg-zinc-900 md:rounded-2xl md:shadow-lg md:border md:border-zinc-200 md:dark:border-zinc-800 p-4 md:p-6 mb-4 md:mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-3">

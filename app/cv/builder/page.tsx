@@ -1,7 +1,7 @@
 // app/cv/builder/page.tsx
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { prisma } from '@/lib/server/prisma';
+import { authOptions } from "@/lib/server/auth";
+import { prisma } from "@/lib/server/prisma";
 import Link from "next/link";
 import CvBuilder from "@/components/cv/CvBuilder";
 
@@ -10,8 +10,10 @@ export const metadata = { title: "CV Builder | Bolsa TI" };
 function splitName(full?: string | null) {
   const parts = (full ?? "").trim().split(/\s+/);
   if (parts.length === 0) return { firstName: "", lastName1: "", lastName2: "" };
-  if (parts.length === 1) return { firstName: parts[0], lastName1: "", lastName2: "" };
-  if (parts.length === 2) return { firstName: parts[0], lastName1: parts[1], lastName2: "" };
+  if (parts.length === 1)
+    return { firstName: parts[0], lastName1: "", lastName2: "" };
+  if (parts.length === 2)
+    return { firstName: parts[0], lastName1: parts[1], lastName2: "" };
   const lastName2 = parts.pop() as string;
   const lastName1 = parts.pop() as string;
   const firstName = parts.join(" ");
@@ -37,7 +39,10 @@ export default async function CvBuilderPage() {
   ]);
 
   const skillOptions = skillTerms.map((t) => ({ termId: t.id, label: t.label }));
-  const languageOptions = languageTerms.map((t) => ({ termId: t.id, label: t.label }));
+  const languageOptions = languageTerms.map((t) => ({
+    termId: t.id,
+    label: t.label,
+  }));
 
   // ---------- initial base para invitados ----------
   let initial: any = {
@@ -182,8 +187,8 @@ export default async function CvBuilderPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-screen-2xl px-4 md:px-6 py-10 space-y-6">
-      <header className="flex items-center justify-between">
+    <main className="mx-auto w-full max-w-screen-2xl px-0 sm:px-4 md:px-6 py-6 md:py-10 space-y-6">
+      <header className="px-4 sm:px-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">CV Builder</h1>
           {isLoggedIn ? (
@@ -202,14 +207,14 @@ export default async function CvBuilderPage() {
         {isLoggedIn && (
           <Link
             href="/profile/summary"
-            className="inline-flex items-center text-sm text-zinc-600 hover:text-zinc-900 border rounded-lg px-3 py-2 hover:bg-gray-50"
+            className="inline-flex items-center text-sm text-zinc-600 hover:text-zinc-900 border rounded-lg px-3 py-2 hover:bg-zinc-50"
           >
             ← Volver a mi perfil
           </Link>
         )}
       </header>
 
-      <section className="border rounded-xl glass-card p-4 md:p-6">
+      <section className="px-4 sm:px-0 md:border md:rounded-xl md:glass-card md:p-6">
         <CvBuilder
           initial={initial as any}
           skillOptions={skillOptions}
