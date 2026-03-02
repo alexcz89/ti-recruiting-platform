@@ -36,7 +36,6 @@ export default async function ProfileEditPage() {
   const me = session.user as any;
   if (me.role === "RECRUITER" || me.role === "ADMIN") redirect("/dashboard");
 
-  // Asegura que exista el usuario
   const dbUser = await prisma.user.upsert({
     where:  { email: me.email! },
     update: {},
@@ -48,17 +47,14 @@ export default async function ProfileEditPage() {
     },
   });
 
-  // ✅ FIX: Leer campos separados del schema nuevo
   const fullUser = await prisma.user.findUnique({
     where:  { id: dbUser.id },
     select: {
       id:             true,
       email:          true,
-      // ✅ Campos separados del schema nuevo
       firstName:      true,
       lastName:       true,
       maternalSurname: true,
-      // Legacy (por si hay usuarios viejos sin campos separados)
       name:           true,
       phone:          true,
       location:       true,
@@ -67,7 +63,6 @@ export default async function ProfileEditPage() {
       github:         true,
       resumeUrl:      true,
       certifications: true,
-      // Ubicación desglosada
       city:           true,
       admin1:         true,
       country:        true,
@@ -75,32 +70,27 @@ export default async function ProfileEditPage() {
   });
   if (!fullUser) redirect("/profile");
 
-  // ✅ FIX: Usar campos separados, con fallback al name legacy
   let firstName: string;
   let lastName1:  string;
   let lastName2:  string;
 
   if (fullUser.firstName) {
-    // Schema nuevo — tiene campos separados
     firstName = fullUser.firstName ?? "";
     lastName1 = fullUser.lastName  ?? "";
     lastName2 = fullUser.maternalSurname ?? "";
   } else {
-    // Fallback legacy — partir el name completo
     const parts   = (fullUser.name ?? "").trim().split(/\s+/);
     lastName2     = parts.length >= 3 ? parts.pop()! : "";
     lastName1     = parts.length >= 2 ? parts.pop()! : "";
     firstName     = parts.join(" ");
   }
 
-  // Experiencias
   const experiences = await prisma.workExperience.findMany({
     where:   { userId: dbUser.id },
     orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
     select:  { id: true, role: true, company: true, startDate: true, endDate: true, isCurrent: true },
   });
 
-  // Educación
   const education = await prisma.education.findMany({
     where:   { userId: dbUser.id },
     orderBy: [{ sortIndex: "asc" }, { startDate: "desc" }, { createdAt: "desc" }],
@@ -110,7 +100,6 @@ export default async function ProfileEditPage() {
     },
   });
 
-  // Idiomas
   const allLangTerms = await prisma.taxonomyTerm.findMany({
     where:   { kind: "LANGUAGE" },
     select:  { id: true, label: true },
@@ -130,7 +119,6 @@ export default async function ProfileEditPage() {
     .filter((l) => allowedSet.has(l.term.label.toLowerCase()))
     .map((l) => ({ termId: l.termId, label: l.term.label, level: l.level }));
 
-  // Skills catálogos
   const [skillsOptions, certOptions] = await Promise.all([
     getSkillsFromDB(),
     getCertificationsFromDB(),
@@ -161,7 +149,6 @@ export default async function ProfileEditPage() {
       }),
   ].sort((a, b) => a.label.localeCompare(b.label));
 
-  // ✅ Skills reales desde CandidateSkill (no del array User.skills)
   const candidateSkillsRaw = await prisma.candidateSkill.findMany({
     where:   { userId: dbUser.id },
     include: { term: { select: { id: true, label: true } } },
@@ -176,20 +163,22 @@ export default async function ProfileEditPage() {
   const phoneParts = parseE164ToParts(fullUser.phone);
 
   return (
-    <main className="max-w-none p-0">
-      <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Mi perfil</h1>
-          <div className="flex gap-2">
-            <Link href="/profile/summary" className="text-sm border rounded-lg px-3 py-2 hover:bg-gray-50">
-              Ver resumen
-            </Link>
-          </div>
+    <main className="w-full">
+      <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-0 sm:px-4 lg:px-8 py-0 sm:py-6">
+
+        {/* Header — con padding propio en mobile */}
+        <div className="flex items-center justify-between px-4 sm:px-0 pt-4 sm:pt-0 mb-4 sm:mb-6">
+          <h1 className="text-xl sm:text-2xl font-bold">Mi perfil</h1>
+          <Link
+            href="/profile/summary"
+            className="text-sm border rounded-lg px-3 py-2 hover:bg-gray-50"
+          >
+            Ver resumen
+          </Link>
         </div>
 
         {/* Aviso */}
-        <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="mx-4 sm:mx-0 mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <div className="font-medium">Importante</div>
           <ul className="list-disc pl-5 space-y-1 mt-1">
             <li>Al guardar aquí se actualiza tu perfil completo (reemplaza educación, experiencia, skills e idiomas).</li>
@@ -197,11 +186,12 @@ export default async function ProfileEditPage() {
           </ul>
         </div>
 
-        {/* Grid con sidebar */}
+        {/* Grid: formulario ocupa todo en mobile, sidebar solo en lg+ */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Formulario */}
+
+          {/* Formulario — sin padding lateral en mobile */}
           <div className="lg:col-span-8 space-y-6">
-            <section className="border rounded-2xl glass-card p-4 md:p-6">
+            <section className="sm:border sm:rounded-2xl sm:glass-card sm:p-6">
               <ProfileForm
                 initial={{
                   firstName,
@@ -214,7 +204,6 @@ export default async function ProfileEditPage() {
                       ? (phoneParts.phoneLocal || "").replace(/\D+/g, "").slice(-10)
                       : (phoneParts.phoneLocal || "").replace(/\D+/g, "").slice(0, 15),
                   location:  fullUser.location ?? "",
-                  // ✅ BUG FIX #1: Birthdate con mediodía UTC al leer para evitar desfase
                   birthdate: fullUser.birthdate
                     ? fullUser.birthdate.toISOString().slice(0, 10)
                     : "",
@@ -241,7 +230,6 @@ export default async function ProfileEditPage() {
                     endDate:     ed.endDate     ? ed.endDate.toISOString().slice(0, 7)   : "",
                     sortIndex:   typeof ed.sortIndex === "number" ? ed.sortIndex : i,
                   })),
-                  // ✅ BUG FIX #2: Skills desde CandidateSkill, no desde User.skills[]
                   skillsDetailed: candidateSkills,
                 }}
                 certOptions={certOptions}
@@ -252,8 +240,8 @@ export default async function ProfileEditPage() {
             </section>
           </div>
 
-          {/* Sidebar */}
-          <aside className="lg:col-span-4">
+          {/* Sidebar — solo visible en lg+ */}
+          <aside className="hidden lg:block lg:col-span-4">
             <div className="sticky top-20 space-y-6">
               <nav className="border rounded-2xl glass-card p-4 md:p-6">
                 <h2 className="font-semibold mb-2">Navegación rápida</h2>
@@ -291,6 +279,7 @@ export default async function ProfileEditPage() {
               </div>
             </div>
           </aside>
+
         </div>
       </div>
     </main>
