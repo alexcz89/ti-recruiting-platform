@@ -36,7 +36,7 @@ export default function Header() {
             className="flex items-center gap-2 shrink-0"
             onClick={() => setMobileMenuOpen(false)}
           >
-            <LogoTaskio className="h-9 md:h-10 w-auto" />
+            <LogoTaskio />
             <span className="sr-only">TaskIO</span>
           </Link>
 
