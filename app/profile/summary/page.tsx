@@ -313,7 +313,7 @@ export default async function ProfileSummaryPage({
               {education.length === 0 ? (
                 <div className="soft-panel p-4 flex items-center justify-between">
                   <p className="text-sm text-muted">Aún no has agregado educación.</p>
-                  <Link href="/profile/edit#education" className="btn-ghost text-xs">Agregar</Link>
+                  <Link href="/profile/edit#education" className="btn-ghost text-xs whitespace-nowrap shrink-0">Agregar</Link>
                 </div>
               ) : (
                 <ul className="space-y-3">
@@ -349,7 +349,7 @@ export default async function ProfileSummaryPage({
               {experiences.length === 0 ? (
                 <div className="soft-panel p-4 flex items-center justify-between">
                   <p className="text-sm text-muted">Aún no has agregado experiencias.</p>
-                  <Link href="/profile/edit#experience" className="btn-ghost text-xs">Agregar</Link>
+                  <Link href="/profile/edit#experience" className="btn-ghost text-xs whitespace-nowrap shrink-0">Agregar</Link>
                 </div>
               ) : (
                 <ul className="timeline space-y-3">
@@ -373,7 +373,7 @@ export default async function ProfileSummaryPage({
               {myApps.length === 0 ? (
                 <div className="soft-panel p-4 flex items-center justify-between">
                   <p className="text-sm text-muted">Aún no has postulado.</p>
-                  <Link href="/jobs" className="btn-ghost text-xs">Buscar vacantes</Link>
+                  <Link href="/jobs" className="btn-ghost text-xs whitespace-nowrap shrink-0">Buscar vacantes</Link>
                 </div>
               ) : (
                 <ul className="space-y-2">
@@ -384,7 +384,7 @@ export default async function ProfileSummaryPage({
                         <time title={new Date(a.createdAt).toLocaleString()}>{fromNow(a.createdAt)}</time>
                       </p>
                       <div className="mt-2">
-                        <a href={`/jobs/${a.job?.id}`} className="btn-ghost text-xs">Ver vacante</a>
+                        <a href={`/jobs/${a.job?.id}`} className="btn-ghost text-xs whitespace-nowrap shrink-0">Ver vacante</a>
                       </div>
                     </li>
                   ))}
@@ -460,7 +460,7 @@ export default async function ProfileSummaryPage({
               ) : (
                 <div className="soft-panel p-4 flex items-center justify-between mt-3">
                   <p className="text-sm text-muted">—</p>
-                  <Link href="/profile/edit#certifications" className="btn-ghost text-xs">Agregar</Link>
+                  <Link href="/profile/edit#certifications" className="btn-ghost text-xs whitespace-nowrap shrink-0">Agregar</Link>
                 </div>
               )}
             </section>
@@ -490,7 +490,7 @@ export default async function ProfileSummaryPage({
               ) : (
                 <div className="soft-panel p-4 flex items-center justify-between mt-3">
                   <p className="text-sm text-muted">—</p>
-                  <Link href="/profile/edit#skills" className="btn-ghost text-xs">Agregar</Link>
+                  <Link href="/profile/edit#skills" className="btn-ghost text-xs whitespace-nowrap shrink-0">Agregar</Link>
                 </div>
               )}
             </section>
@@ -501,7 +501,7 @@ export default async function ProfileSummaryPage({
               {languages.length === 0 ? (
                 <div className="soft-panel p-4 flex items-center justify-between mt-3">
                   <p className="text-sm text-muted">—</p>
-                  <Link href="/profile/edit#languages" className="btn-ghost text-xs">Agregar</Link>
+                  <Link href="/profile/edit#languages" className="btn-ghost text-xs whitespace-nowrap shrink-0">Agregar</Link>
                 </div>
               ) : (
                 <ul className="mt-2 space-y-2 text-sm">
@@ -521,7 +521,7 @@ export default async function ProfileSummaryPage({
               {myApps.length === 0 ? (
                 <div className="soft-panel p-4 flex items-center justify-between mt-3">
                   <p className="text-sm text-muted">Aún no has postulado.</p>
-                  <Link href="/jobs" className="btn-ghost text-xs">Buscar vacantes</Link>
+                  <Link href="/jobs" className="btn-ghost text-xs whitespace-nowrap shrink-0">Buscar vacantes</Link>
                 </div>
               ) : (
                 <ul className="space-y-2 mt-2">
@@ -532,7 +532,7 @@ export default async function ProfileSummaryPage({
                         <time title={new Date(a.createdAt).toLocaleString()}>{fromNow(a.createdAt)}</time>
                       </p>
                       <div className="mt-2">
-                        <a href={`/jobs/${a.job?.id}`} className="btn-ghost text-xs">Ver vacante</a>
+                        <a href={`/jobs/${a.job?.id}`} className="btn-ghost text-xs whitespace-nowrap shrink-0">Ver vacante</a>
                       </div>
                     </li>
                   ))}
