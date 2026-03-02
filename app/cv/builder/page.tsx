@@ -24,7 +24,6 @@ export default async function CvBuilderPage() {
   const session = await getServerSession(authOptions);
   const isLoggedIn = !!session?.user;
 
-  // Catálogo global de skills / idiomas para autocomplete
   const [skillTerms, languageTerms] = await Promise.all([
     prisma.taxonomyTerm.findMany({
       where: { kind: "SKILL" },
@@ -44,7 +43,6 @@ export default async function CvBuilderPage() {
     label: t.label,
   }));
 
-  // ---------- initial base para invitados ----------
   let initial: any = {
     identity: {
       firstName: "",
@@ -66,7 +64,6 @@ export default async function CvBuilderPage() {
 
   let user: any = null;
 
-  // ---------- Si hay sesión, usamos datos reales ----------
   if (isLoggedIn) {
     const dbUser = await prisma.user.upsert({
       where: { email: session!.user!.email! },
@@ -187,8 +184,9 @@ export default async function CvBuilderPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-screen-2xl px-0 sm:px-4 md:px-6 py-6 md:py-10 space-y-6">
-      <header className="px-4 sm:px-0 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <main className="w-full">
+      {/* Header — solo visible en md+, el CvBuilder tiene su propio header en mobile */}
+      <header className="hidden md:flex px-4 sm:px-6 py-6 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between max-w-screen-2xl mx-auto">
         <div>
           <h1 className="text-2xl font-bold">CV Builder</h1>
           {isLoggedIn ? (
@@ -197,13 +195,10 @@ export default async function CvBuilderPage() {
             </p>
           ) : (
             <p className="text-sm text-zinc-600">
-              Sin registro: completa tu CV y descárgalo. Si quieres guardarlo en
-              tu cuenta y postularte en un clic, al final podrás crear tu cuenta
-              gratis.
+              Sin registro: completa tu CV y descárgalo.
             </p>
           )}
         </div>
-
         {isLoggedIn && (
           <Link
             href="/profile/summary"
@@ -214,13 +209,14 @@ export default async function CvBuilderPage() {
         )}
       </header>
 
-      <section className="px-4 sm:px-0 md:border md:rounded-xl md:glass-card md:p-6">
+      {/* CvBuilder: sin wrapper extra en mobile, con contenedor en md+ */}
+      <div className="md:max-w-screen-2xl md:mx-auto md:px-4 lg:px-6 md:pb-10">
         <CvBuilder
           initial={initial as any}
           skillOptions={skillOptions}
           languageOptions={languageOptions}
         />
-      </section>
+      </div>
     </main>
   );
 }
