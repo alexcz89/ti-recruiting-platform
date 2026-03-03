@@ -304,6 +304,7 @@ model Company {
   assessmentPlan                String? // "BASIC" | "PRO" | "ENTERPRISE"
   assessmentPlanCreditsPerMonth Int       @default(0)
   assessmentPlanStartedAt       DateTime?
+  customTemplates AssessmentTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -907,6 +908,11 @@ model AssessmentTemplate {
   pricingConfig Json? // { reserve: 0.5, onComplete: 0.5, refundIfNotCompleted: true }
 
   isActive  Boolean  @default(true)
+  language    String?   // "javascript" | "python" | "cpp" | null (para MCQ genéricos)
+  companyId   String?   // null = template global de Taskio, string = template privado del reclutador
+  isGlobal    Boolean   @default(true) // false = creado por reclutador
+// Relación con Company (agregar junto a las otras relaciones):
+  company     Company?  @relation(fields: [companyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

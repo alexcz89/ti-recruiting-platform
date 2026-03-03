@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
 
     const templates = await prisma.assessmentTemplate.findMany({
       where,
-      orderBy: [{ isGlobal: "desc" }, { difficulty: "asc" }, { title: "asc" }],
+      orderBy: [{ difficulty: "asc" }, { title: "asc" }],
       select: {
         id: true, title: true, slug: true, description: true,
         type: true, difficulty: true, language: true,
