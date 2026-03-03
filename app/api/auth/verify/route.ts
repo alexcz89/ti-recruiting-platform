@@ -32,6 +32,14 @@ export async function GET(req: Request) {
         where: { email },
         data: { emailVerified: new Date() },
       });
+
+      // Auto-aprobar perfil de reclutador al verificar email
+      if (user.role === "RECRUITER") {
+        await prisma.recruiterProfile.updateMany({
+          where: { userId: user.id, status: "PENDING" },
+          data: { status: "APPROVED" },
+        });
+      }
     }
 
     // ✅ Generar token de auto-login de un solo uso (válido 5 minutos)
