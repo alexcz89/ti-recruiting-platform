@@ -17,56 +17,58 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  badge?: string;
+  sub?: boolean;
 };
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard/overview",                      label: "Panel",               icon: LayoutDashboard },
-  { href: "/dashboard/jobs",                          label: "Vacantes",             icon: Briefcase },
-  { href: "/dashboard/assessments",                   label: "Evaluaciones",         icon: ClipboardCheck },
-  { href: "/dashboard/assessments/templates",         label: "Templates",            icon: BookOpen },
-  { href: "/dashboard/billing",                       label: "Facturación y plan",   icon: CreditCard },
-  { href: "/dashboard/billing/taxdata",               label: "Datos fiscales",       icon: FileText },
-  { href: "/dashboard/invoices",                      label: "Facturas",             icon: Receipt },
+  { href: "/dashboard/overview",              label: "Panel",              icon: LayoutDashboard },
+  { href: "/dashboard/jobs",                  label: "Vacantes",           icon: Briefcase },
+  { href: "/dashboard/assessments",           label: "Evaluaciones",       icon: ClipboardCheck },
+  { href: "/dashboard/assessments/templates", label: "Templates",          icon: BookOpen, sub: true },
+  { href: "/dashboard/billing",               label: "Facturación y plan", icon: CreditCard },
+  { href: "/dashboard/billing/taxdata",       label: "Datos fiscales",     icon: FileText },
+  { href: "/dashboard/invoices",              label: "Facturas",           icon: Receipt },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // "Evaluaciones" es activo solo si es exactamente /dashboard/assessments
-  // "Templates" es activo en /dashboard/assessments/templates (y sub-rutas)
   function isActive(href: string) {
     if (href === "/dashboard/assessments") return pathname === href;
     return pathname === href || pathname.startsWith(href + "/");
   }
 
   return (
-    <main className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-4 lg:px-6 py-4 lg:py-6">
-      {/* Tabs móviles */}
-      <nav className="lg:hidden mb-6 flex flex-wrap gap-2">
-        {NAV_ITEMS.map((item) => {
-          const active = isActive(item.href);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm border transition
-                ${
-                  active
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "border-transparent text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70"
-                }`}
-            >
-              <Icon className="h-4 w-4" />
-              {item.label}
-            </Link>
-          );
-        })}
+    <main className="max-w-[1720px] 2xl:max-w-[1840px] mx-auto px-0 sm:px-4 lg:px-6 py-0 sm:py-4 lg:py-6">
+
+      {/* ── Nav mobile: scroll horizontal en una sola línea ── */}
+      <nav className="lg:hidden mb-4 overflow-x-auto scrollbar-none -mx-0 px-3 sm:px-0">
+        <div className="flex items-center gap-1.5 py-3 w-max">
+          {NAV_ITEMS.map((item) => {
+            const active = isActive(item.href);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition shrink-0
+                  ${item.sub ? "text-xs" : ""}
+                  ${active
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "border border-zinc-200/80 dark:border-zinc-700/80 text-zinc-700 dark:text-zinc-300 bg-white/80 dark:bg-zinc-900/60 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  }`}
+              >
+                <Icon className={`shrink-0 ${item.sub ? "h-3.5 w-3.5" : "h-4 w-4"}`} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
       </nav>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 lg:gap-8">
+      {/* ── Grid desktop ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[240px_minmax(0,1fr)] gap-6 lg:gap-8 px-3 sm:px-0">
         <aside className="hidden lg:block">
           <div className="sticky top-12 space-y-4">
             {/* Header Card */}
@@ -79,11 +81,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             {/* Navigation */}
             <nav aria-label="Secciones del panel" className="rounded-2xl border glass-card p-2">
-              {NAV_ITEMS.map((item, idx) => {
+              {NAV_ITEMS.map((item) => {
                 const active = isActive(item.href);
                 const Icon = item.icon;
-
-                // Separador visual antes de Facturación
                 const isFirstBilling = item.href === "/dashboard/billing";
 
                 return (
@@ -91,25 +91,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     {isFirstBilling && (
                       <div className="my-1.5 mx-2 h-px bg-zinc-200 dark:bg-zinc-700/70" />
                     )}
-                    {/* Indentación para Templates (sub-item de Evaluaciones) */}
                     <Link
                       href={item.href}
                       aria-current={active ? "page" : undefined}
                       className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition
-                        ${item.href === "/dashboard/assessments/templates" ? "ml-4" : ""}
-                        ${
-                          active
-                            ? "bg-emerald-600 text-white"
-                            : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70"
+                        ${item.sub ? "ml-4" : ""}
+                        ${active
+                          ? "bg-emerald-600 text-white"
+                          : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100/70 dark:hover:bg-zinc-800/70"
                         }`}
                     >
-                      <Icon className={`flex-shrink-0 ${item.href === "/dashboard/assessments/templates" ? "h-3.5 w-3.5" : "h-4 w-4"}`} />
+                      <Icon className={`flex-shrink-0 ${item.sub ? "h-3.5 w-3.5" : "h-4 w-4"}`} />
                       <span className="flex-1">{item.label}</span>
                       {active && (
-                        <span
-                          aria-hidden
-                          className="inline-block h-2 w-2 rounded-full bg-white/90"
-                        />
+                        <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-white/90" />
                       )}
                     </Link>
                   </div>
