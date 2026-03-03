@@ -299,6 +299,7 @@ model Company {
   assessmentCreditsUsed     Decimal   @default(0) @db.Decimal(10, 2)
   assessmentCreditsReserved Decimal   @default(0) @db.Decimal(10, 2)
   lastCreditRefill          DateTime?
+  stripeCustomerId String? @unique
 
   // Plan de evaluaciones
   assessmentPlan                String? // "BASIC" | "PRO" | "ENTERPRISE"
