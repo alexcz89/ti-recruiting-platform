@@ -165,7 +165,7 @@ export default async function AssessmentTemplatesPage() {
             <BookOpen className="mx-auto h-12 w-12 text-zinc-400" />
             <p className="mt-4 text-xl font-bold text-zinc-900 dark:text-zinc-100">No hay templates disponibles</p>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-              Ejecuta <code className="rounded bg-zinc-100 px-1 py-0.5 text-xs dark:bg-zinc-800">npx prisma db seed</code> para cargar los templates.
+              Estamos preparando evaluaciones técnicas curadas por nivel y área. Pronto podrás asignarlas a tus vacantes.
             </p>
           </div>
         ) : (
