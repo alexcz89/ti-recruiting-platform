@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { createEmailVerifyToken } from "@/lib/server/tokens";
-import { sendVerificationEmail } from "@/lib/server/email";
+import { sendVerificationEmail } from "@/lib/server/mailer";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,59 +10,34 @@ export async function POST(request: NextRequest) {
     const { email } = body;
 
     if (!email) {
-      return NextResponse.json(
-        { error: "Email es requerido" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Email es requerido" }, { status: 400 });
     }
 
-    // Normalizar email
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Buscar usuario
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
-      select: {
-        id: true,
-        email: true,
-        emailVerified: true,
-        firstName: true,
-        name: true,
-      },
+      select: { id: true, email: true, emailVerified: true, firstName: true, name: true },
     });
 
-    if (!user) {
-      // Por seguridad, no revelamos si el usuario existe
-      // Pero devolvemos ok para no dar pistas a atacantes
-      return NextResponse.json({ ok: true });
-    }
+    // Por seguridad no revelamos si existe o no
+    if (!user) return NextResponse.json({ ok: true });
 
     if (user.emailVerified) {
-      return NextResponse.json(
-        { error: "El email ya está verificado" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "El email ya está verificado" }, { status: 400 });
     }
 
-    // ✅ Crear token JWT (expira en 60 minutos)
-    const token = await createEmailVerifyToken(
-      { email: user.email },
-      60 // minutos
-    );
+    const token = await createEmailVerifyToken({ email: user.email }, 60);
 
-    // ✅ Enviar email con el token
-    await sendVerificationEmail({
-      email: user.email,
-      name: user.firstName || user.name || "Usuario",
-      token,
-    });
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+    const verifyUrl = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(token)}`;
+
+    // ✅ Firma correcta: (to: string, verifyUrl: string)
+    await sendVerificationEmail(user.email, verifyUrl);
 
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Error resending verification:", error);
-    return NextResponse.json(
-      { error: "Error al reenviar email" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error al reenviar email" }, { status: 500 });
   }
 }

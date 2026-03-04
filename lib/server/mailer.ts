@@ -4,15 +4,6 @@ import 'server-only';
 import type { Resend } from "resend";
 import crypto from "crypto";
 
-/**
- * Requisitos de entorno (.env):
- * - RESEND_API_KEY="re_xxx"                  // Solo si EMAIL_ENABLED=true
- * - RESEND_FROM="Bolsa TI <noreply@tu-dominio.com>"
- * - EMAIL_ENABLED="false" | "true"           // false => dry-run (no usa Resend)
- * - NEXT_PUBLIC_BASE_URL="http://localhost:3000"  // opcional (fallbacks abajo)
- * - NEXT_PUBLIC_APP_NAME="Bolsa TI"
- */
-
 const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "TaskIO";
 
 function resolveBaseUrl() {
@@ -39,15 +30,13 @@ const RESEND_FROM =
   process.env.EMAIL_FROM ||
   "Taskio <noreply@taskio.com.mx>";
 
-// ⚠️ No instancies Resend globalmente si no vas a enviar emails reales.
 let resend: Resend | null = null;
 
 async function getResend(): Promise<Resend | null> {
-  if (!EMAIL_ENABLED) return null; // dry-run: no uses Resend
-  if (!RESEND_API_KEY) return null; // sin API key -> no instanciar
+  if (!EMAIL_ENABLED) return null;
+  if (!RESEND_API_KEY) return null;
   if (resend) return resend;
 
-  // Lazy import para evitar require() y warnings de ESLint
   const mod = await import("resend");
   const ResendCtor = (mod as any).Resend as new (key: string) => Resend;
   resend = new ResendCtor(RESEND_API_KEY);
@@ -63,24 +52,19 @@ function normalizeIdempotencyKey(key?: string) {
   if (!key) return undefined;
   const k = String(key).trim();
   if (!k) return undefined;
-
-  // límite 256; si es largo, lo hasheamos estable
   if (k.length <= 256) return k;
-
   const hashed = `hash:${crypto.createHash("sha256").update(k).digest("hex")}`;
   return hashed.slice(0, 256);
 }
 
-/** Envío base con soporte DRY-RUN si EMAIL_ENABLED !== "true". */
 export async function sendEmail(opts: {
   to: string | string[];
   subject: string;
   html: string;
   text?: string;
   from?: string;
-  dedupeKey?: string; // idempotency key
+  dedupeKey?: string;
 }): Promise<SendResult> {
-  // Modo dry-run: imprime y no usa Resend
   if (!EMAIL_ENABLED) {
     if (process.env.NODE_ENV !== "production") {
       console.log("📨 [MAIL:DRYRUN]", {
@@ -93,7 +77,6 @@ export async function sendEmail(opts: {
     return { skipped: true };
   }
 
-  // Modo real: requiere API key y from
   if (!RESEND_API_KEY) return { error: "Missing RESEND_API_KEY" };
   if (!RESEND_FROM && !opts.from) return { error: "Missing RESEND_FROM" };
 
@@ -111,22 +94,18 @@ export async function sendEmail(opts: {
   };
 
   try {
-    // Preferido: SDK option (2do arg) { idempotencyKey }
     const { data, error } = await (client.emails.send as any)(
       payload,
       idempotencyKey ? { idempotencyKey } : undefined
     );
-
     if (error) return { error: error.message || "send failed" };
     return { ok: true, id: (data as any)?.id };
   } catch (e1: any) {
-    // Fallback: si tu SDK no soporta el 2do arg, reintenta con header
     try {
       const { data, error } = await (client.emails.send as any)({
         ...payload,
         headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       });
-
       if (error) return { error: error.message || "send failed" };
       return { ok: true, id: (data as any)?.id };
     } catch (e2: any) {
@@ -135,9 +114,9 @@ export async function sendEmail(opts: {
   }
 }
 
-/** Correo de verificación simple (wrapper) */
+// ✅ CORREGIDO: asunto y copy menos spam-trigger
 export async function sendVerificationEmail(to: string, verifyUrl: string) {
-  const subject = `Confirma tu cuenta en ${APP_NAME}`;
+  const subject = `Tu acceso a ${APP_NAME} está listo`;
   const safeUrl = escapeHtml(verifyUrl);
 
   const html = `<!doctype html>
@@ -153,18 +132,15 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
         <td align="center">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
 
-            <!-- Logo / Header -->
             <tr>
               <td align="center" style="padding-bottom:24px;">
                 <span style="font-size:26px;font-weight:800;color:#7c3aed;letter-spacing:-0.5px;">${escapeHtml(APP_NAME)}</span>
               </td>
             </tr>
 
-            <!-- Card -->
             <tr>
               <td style="background:#ffffff;border-radius:16px;padding:40px 40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
 
-                <!-- Icono -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td align="center" style="padding-bottom:24px;">
@@ -173,31 +149,30 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
                   </tr>
                 </table>
 
-                <!-- Título -->
-                <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;text-align:center;">Confirma tu correo</h1>
+                <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;text-align:center;">
+                  Un paso más para entrar
+                </h1>
                 <p style="margin:0 0 24px;font-size:14px;color:#6b7280;text-align:center;line-height:1.6;">
-                  Estás a un paso de activar tu cuenta en <strong style="color:#111827;">${escapeHtml(APP_NAME)}</strong>.<br/>
-                  Haz clic en el botón para confirmar tu dirección de correo.
+                  Haz clic en el botón para completar tu registro en
+                  <strong style="color:#111827;">${escapeHtml(APP_NAME)}</strong>.
                 </p>
 
-                <!-- Botón CTA -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td align="center" style="padding:8px 0 28px;">
                       <a href="${safeUrl}" target="_blank" rel="noreferrer"
                         style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 36px;border-radius:10px;letter-spacing:0.2px;">
-                        Verificar mi correo
+                        Completar registro
                       </a>
                     </td>
                   </tr>
                 </table>
 
-                <!-- Advertencia expiración -->
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
-                    <td style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin-bottom:20px;">
+                    <td style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;">
                       <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.5;">
-                        ⏱️ Este enlace expirará en <strong style="color:#374151;">24 horas</strong>.
+                        ⏱️ Este enlace es válido por <strong style="color:#374151;">60 minutos</strong>.
                         Si el botón no funciona, copia y pega este link en tu navegador:
                       </p>
                       <p style="margin:6px 0 0;font-size:11px;word-break:break-all;color:#7c3aed;">${safeUrl}</p>
@@ -208,11 +183,10 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
               </td>
             </tr>
 
-            <!-- Footer -->
             <tr>
               <td align="center" style="padding:24px 0 8px;">
                 <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
-                  Si no solicitaste este registro, puedes ignorar este correo con seguridad.<br/>
+                  Si no creaste esta cuenta, puedes ignorar este correo.<br/>
                   © ${new Date().getFullYear()} ${escapeHtml(APP_NAME)} — Todos los derechos reservados.
                 </p>
               </td>
@@ -226,13 +200,18 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
 </html>`;
 
   const text =
-    `Confirma tu cuenta en ${APP_NAME}\n\n` +
-    `Haz clic en el siguiente enlace para verificar tu correo:\n${verifyUrl}\n\n` +
-    `Este enlace expirará en 24 horas.\n\n` +
-    `Si no solicitaste este registro, puedes ignorar este correo.`;
+    `Tu acceso a ${APP_NAME} está listo\n\n` +
+    `Haz clic en el siguiente enlace para completar tu registro:\n${verifyUrl}\n\n` +
+    `Este enlace es válido por 60 minutos.\n\n` +
+    `Si no creaste esta cuenta, puedes ignorar este correo.`;
 
-  // ✅ dedupeKey única por intento para evitar bloqueos de idempotencia en Resend
-  return sendEmail({ to, subject, html, text, dedupeKey: `verify:${to}:${Date.now()}` });
+  return sendEmail({
+    to,
+    subject,
+    html,
+    text,
+    dedupeKey: `verify:${to}:${Date.now()}`,
+  });
 }
 
 /* ====================== Assessments ======================= */
@@ -285,7 +264,6 @@ export function buildAssessmentInviteEmailHtml(params: {
     title: `Nueva evaluación técnica — ${params.templateTitle}`,
     body: `
       <p style="margin-top:0;">${greeting}</p>
-
       <p>
         Te asignaron la evaluación: <strong>${escapeHtml(params.templateTitle)}</strong>
         ${
@@ -294,17 +272,10 @@ export function buildAssessmentInviteEmailHtml(params: {
             : ""
         }
       </p>
-
-      ${
-        meta
-          ? `<p style="color:#6b7280;font-size:12px;margin-top:8px;">${escapeHtml(meta)}</p>`
-          : ""
-      }
-
+      ${meta ? `<p style="color:#6b7280;font-size:12px;margin-top:8px;">${escapeHtml(meta)}</p>` : ""}
       <p style="margin-top:18px;">
         <a href="${safeUrl}" target="_blank" rel="noreferrer">Abrir evaluación</a>
       </p>
-
       <p style="color:#6b7280;font-size:12px;margin-top:16px;">
         Si el botón no funciona, copia y pega este link en tu navegador:<br/>
         <span style="word-break:break-all;color:#111827;">${safeUrl}</span>
@@ -338,7 +309,6 @@ export async function sendAssessmentInviteEmail(params: {
     (params.expiresAt ? `Expira: ${formatDateTime(params.expiresAt)}\n` : "") +
     `\nAbrir evaluación:\n${params.inviteUrl}\n`;
 
-  // Consejo: que dedupeKey sea estable por invite
   const dedupeKey = params.dedupeKey ? `assessment-invite:${params.dedupeKey}` : undefined;
 
   return sendEmail({ to: params.to, subject, html, text, dedupeKey });
@@ -487,9 +457,6 @@ export async function sendRejectionEmail(params: {
 
 /* ====================== PASSWORD RESET ======================= */
 
-/**
- * Envía correo de restablecimiento de contraseña
- */
 export async function sendPasswordResetEmail(params: {
   to: string;
   name: string;
@@ -503,34 +470,22 @@ export async function sendPasswordResetEmail(params: {
     title: subject,
     body: `
       <p>Hola <strong>${safeName}</strong>,</p>
-      
       <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en <strong>${escapeHtml(APP_NAME)}</strong>.</p>
-      
       <p>Haz clic en el siguiente enlace para crear una nueva contraseña:</p>
-      
       <p style="margin: 24px 0;">
-        <a 
-          href="${safeUrl}" 
-          target="_blank" 
-          rel="noreferrer"
-          style="display:inline-block;background:#10b981;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;"
-        >
+        <a href="${safeUrl}" target="_blank" rel="noreferrer"
+          style="display:inline-block;background:#10b981;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;font-weight:600;">
           Restablecer contraseña
         </a>
       </p>
-      
       <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px;margin:20px 0;font-size:13px;">
         ⚠️ Este enlace expirará en <strong>1 hora</strong> por seguridad.
       </div>
-      
       <p style="color:#6b7280;font-size:12px;margin-top:16px;">
-        Si no puedes hacer clic en el botón, copia y pega este enlace en tu navegador:
-        <br/>
+        Si no puedes hacer clic en el botón, copia y pega este enlace en tu navegador:<br/>
         <span style="word-break:break-all;color:#111827;">${safeUrl}</span>
       </p>
-      
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;" />
-      
       <p style="color:#6b7280;font-size:12px;">
         Si no solicitaste restablecer tu contraseña, puedes ignorar este correo de forma segura.
         Tu contraseña actual no será modificada.
