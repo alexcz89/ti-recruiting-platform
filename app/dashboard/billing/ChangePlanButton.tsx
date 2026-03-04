@@ -6,12 +6,12 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import type { PlanId } from "@/config/plans";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
-import { STRIPE_PRICES } from "@/lib/stripe";
 
-// Planes que van por Stripe Checkout
+// Price IDs directamente — NO importar lib/stripe en componentes cliente
+// (lib/stripe inicializa el SDK con STRIPE_SECRET_KEY que solo existe en el servidor)
 const STRIPE_PLAN_MAP: Partial<Record<PlanId, string>> = {
-  STARTER: STRIPE_PRICES.STARTER,
-  PRO:     STRIPE_PRICES.PRO,
+  STARTER: "price_1T70fj1xbuY0ledyXNl3x7Nc",
+  PRO:     "price_1T70gQ1xbuY0ledyv9Tv3h2G",
 };
 
 type Props = {
@@ -20,10 +20,10 @@ type Props = {
 };
 
 export default function ChangePlanButton({ planId, isCurrent }: Props) {
-  const router                    = useRouter();
+  const router                       = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [loading, setLoading]     = useState(false);
-  const busy                      = loading || isPending;
+  const [loading, setLoading]        = useState(false);
+  const busy                         = loading || isPending;
 
   if (isCurrent) {
     return (
@@ -54,7 +54,7 @@ export default function ChangePlanButton({ planId, isCurrent }: Props) {
         const data = await res.json();
 
         if (data.url) {
-          window.location.href = data.url; // redirige a Stripe
+          window.location.href = data.url;
           return;
         }
         throw new Error(data.error || "No se pudo iniciar el checkout");
