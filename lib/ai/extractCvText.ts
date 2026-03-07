@@ -1,7 +1,5 @@
 // lib/ai/extractCvText.ts
 
-import * as pdfParseModule from "pdf-parse";
-const pdfParse = (pdfParseModule as any).default ?? pdfParseModule;
 import mammoth from "mammoth";
 
 const MAX_FILE_SIZE_MB = 8;
@@ -29,8 +27,10 @@ export async function extractCvTextFromBuffer(
 
   try {
     if (lowerName.endsWith(".pdf")) {
-      const result = await pdfParse(buffer);
-      return cleanCvText(result.text);
+      const { extractText } = await import("unpdf");
+      const uint8 = new Uint8Array(buffer);
+      const { text } = await extractText(uint8, { mergePages: true });
+      return cleanCvText(text);
     }
 
     if (lowerName.endsWith(".docx")) {

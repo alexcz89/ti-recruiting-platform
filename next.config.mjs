@@ -4,7 +4,7 @@
 const nextConfig = {
   experimental: {
     serverActions: { allowedOrigins: ["*"] },
-    serverComponentsExternalPackages: ["pdf-parse", "pdfjs-dist"],
+    serverComponentsExternalPackages: ["unpdf", "pdfjs-dist"],
   },
   images: {
     remotePatterns: [
