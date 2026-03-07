@@ -62,17 +62,19 @@ ${trimmedCvText}
 `;
 
   try {
-    const response = await openai.responses.create({
+    const response = await openai.chat.completions.create({
       model: AI_MODEL,
-      input: prompt,
-      text: {
-        format: {
-          type: "json_object",
+      messages: [
+        {
+          role: "user",
+          content: prompt,
         },
-      },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.2,
     });
 
-    return response.output_text ?? "{}";
+    return response.choices[0]?.message?.content ?? "{}";
   } catch (error) {
     console.error("Error analyzing CV:", error);
     throw new Error("AI CV analysis failed");
