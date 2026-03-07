@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { UTApi } from "uploadthing/server";
 import { extractCvText } from "@/lib/ai/extractCvText";
 import { analyzeCv } from "@/lib/ai/analyzeCv";
+import { normalizeSkillsFromAI } from "@/lib/ai/normalizeSkills";
 
 const utapi = new UTApi();
 
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
       );
     }
 
+    // 1. Extraer texto del CV
     const cvText = await extractCvText(file);
 
     if (!cvText || cvText.trim().length < 50) {
@@ -44,9 +46,10 @@ export async function POST(req: Request) {
       );
     }
 
+    // 2. Analizar con IA
     const analysisText = await analyzeCv(cvText);
 
-    let analysis: unknown;
+    let analysis: Record<string, unknown>;
     try {
       analysis = JSON.parse(analysisText);
     } catch {
@@ -56,6 +59,24 @@ export async function POST(req: Request) {
       );
     }
 
+    // 3. Normalizar skills contra catálogo BD
+    const rawSkills = Array.isArray(analysis.skills)
+      ? (analysis.skills as string[])
+      : [];
+
+    const normalizedSkills = await normalizeSkillsFromAI(rawSkills);
+
+    // Reemplazar skills crudos por los normalizados en el análisis
+    analysis.skills         = normalizedSkills.map((s) => s.label);  // labels canónicos
+    analysis.skillsMatched  = normalizedSkills;                        // { termId, label }[] para el form
+    analysis.skillsRaw      = rawSkills;                               // originales para debug
+    analysis.skillsUnmatched = rawSkills.filter(
+      (r) => !normalizedSkills.some(
+        (n) => n.label.toLowerCase() === r.toLowerCase()
+      )
+    );
+
+    // 4. Subir archivo a UploadThing
     const uploadResult = await utapi.uploadFiles(file);
 
     if (!uploadResult || uploadResult.error || !uploadResult.data) {
@@ -76,15 +97,15 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      success: true,
-      url: uploadedUrl,
-      fileName: file.name,
+      success:    true,
+      url:        uploadedUrl,
+      fileName:   file.name,
       analysis,
       textLength: cvText.length,
     });
+
   } catch (error) {
     console.error("CV upload-and-parse error:", error);
-
     return NextResponse.json(
       { error: "Error procesando CV" },
       { status: 500 }
