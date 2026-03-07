@@ -416,8 +416,9 @@ export default function ProfileForm({
   const makeCurrent = useCallback((idx: number, checked: boolean) => {
     const total = getValues("experiences")?.length || 0;
     for (let i = 0; i < total; i++) {
-      setValue(`experiences.${i}.isCurrent` as const, i === idx ? checked : false, { shouldDirty: true, shouldValidate: true });
-      if (i === idx && checked) {
+      if (i !== idx) continue;
+      setValue(`experiences.${i}.isCurrent` as const, checked, { shouldDirty: true, shouldValidate: true });
+      if (checked) {
         setValue(`experiences.${i}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
       }
     }
@@ -640,14 +641,16 @@ export default function ProfileForm({
     }
 
     const exps = vals.experiences || [];
-    if (exps.filter((e) => e.isCurrent).length > 1) {
-      setError("root", { type: "manual", message: "Solo puedes marcar una experiencia como 'Actual'." });
-      return;
-    }
+    const currentCount = exps.filter((e) => e.isCurrent).length;
 
     if (MONTH_OVERLAPS(exps.map((e) => ({ startDate: e.startDate, endDate: e.isCurrent ? null : e.endDate || null })))) {
       setError("root", { type: "manual", message: "Tus experiencias no pueden traslaparse." });
       return;
+    }
+
+    if (currentCount > 1) {
+      const confirmed = window.confirm(`Tienes ${currentCount} trabajos marcados como actuales. ¿Deseas guardar así?`);
+      if (!confirmed) return;
     }
 
     const { city, admin1, countryCode } = deriveLocationParts(vals.location || "");
