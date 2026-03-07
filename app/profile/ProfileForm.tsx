@@ -414,14 +414,12 @@ export default function ProfileForm({
 
   /* ===== Experiencias ===== */
   const makeCurrent = useCallback((idx: number, checked: boolean) => {
-    const total = getValues("experiences")?.length || 0;
-    for (let i = 0; i < total; i++) {
-      setValue(`experiences.${i}.isCurrent` as const, i === idx ? checked : false, { shouldDirty: true, shouldValidate: true });
-      if (i === idx && checked) {
-        setValue(`experiences.${i}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
-      }
+    // Cada checkbox es independiente — se permite más de un trabajo actual
+    setValue(`experiences.${idx}.isCurrent` as const, checked, { shouldDirty: true, shouldValidate: true });
+    if (checked) {
+      setValue(`experiences.${idx}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
     }
-  }, [getValues, setValue]);
+  }, [setValue]);
 
   /* ===== Skills ===== */
   const [skillQuery, setSkillQuery] = useState("");
@@ -483,42 +481,28 @@ export default function ProfileForm({
       appliedSomething = true;
     }
 
-    // skillsMatched viene del endpoint con termIds ya normalizados contra BD
-    // fallback a búsqueda por label si no viene skillsMatched
-    const skillsSource: Array<{ termId?: string; label?: string }> =
-      Array.isArray((analysis as any).skillsMatched) && (analysis as any).skillsMatched.length > 0
-        ? (analysis as any).skillsMatched
-        : [];
-
-    const skillsFallback = Array.isArray(analysis.skills) ? analysis.skills : [];
-
-    if (skillsSource.length > 0 || skillsFallback.length > 0) {
+    if (Array.isArray(analysis.skills) && analysis.skills.length > 0) {
       const currentSkills = getValues("skillsDetailed") || [];
       const existingIds = new Set(currentSkills.map((s) => s.termId));
 
-      let toAdd: Array<{ termId: string; label: string; level: 1 | 2 | 3 | 4 | 5 }> = [];
+      const normalizedSkills = analysis.skills
+        .map((skillLabel) => {
+          const normalized = normalizeText(String(skillLabel || ""));
+          const match = skillTermOptions.find(
+            (opt) => normalizeText(opt.label) === normalized
+          );
+          if (!match || existingIds.has(match.id)) return null;
 
-      if (skillsSource.length > 0) {
-        // Usar termIds normalizados del endpoint
-        toAdd = skillsSource
-          .filter((s) => s.termId && s.label && !existingIds.has(s.termId!))
-          .map((s) => ({ termId: s.termId!, label: s.label!, level: 3 as const }));
-      } else {
-        // Fallback: buscar por label en skillTermOptions del form
-        toAdd = skillsFallback
-          .map((skillLabel: string) => {
-            const normalized = normalizeText(String(skillLabel || ""));
-            const match = skillTermOptions.find(
-              (opt) => normalizeText(opt.label) === normalized
-            );
-            if (!match || existingIds.has(match.id)) return null;
-            return { termId: match.id, label: match.label, level: 3 as const };
-          })
-          .filter(Boolean) as Array<{ termId: string; label: string; level: 1 | 2 | 3 | 4 | 5 }>;
-      }
+          return {
+            termId: match.id,
+            label: match.label,
+            level: 3 as const,
+          };
+        })
+        .filter(Boolean) as Array<{ termId: string; label: string; level: 1 | 2 | 3 | 4 | 5 }>;
 
-      if (toAdd.length > 0) {
-        setValue("skillsDetailed", [...currentSkills, ...toAdd], {
+      if (normalizedSkills.length > 0) {
+        setValue("skillsDetailed", [...currentSkills, ...normalizedSkills], {
           shouldDirty: true,
           shouldValidate: true,
         });
@@ -654,9 +638,12 @@ export default function ProfileForm({
     }
 
     const exps = vals.experiences || [];
-    if (exps.filter((e) => e.isCurrent).length > 1) {
-      setError("root", { type: "manual", message: "Solo puedes marcar una experiencia como 'Actual'." });
-      return;
+    const currentCount = exps.filter((e) => e.isCurrent).length;
+    if (currentCount > 1) {
+      const ok = window.confirm(
+        `Tienes ${currentCount} trabajos marcados como actuales. ¿Deseas guardar así?`
+      );
+      if (!ok) return;
     }
 
     if (MONTH_OVERLAPS(exps.map((e) => ({ startDate: e.startDate, endDate: e.isCurrent ? null : e.endDate || null })))) {
