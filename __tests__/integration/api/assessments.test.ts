@@ -258,7 +258,7 @@ describe('Assessments API Integration Tests', () => {
         submittedAt: new Date(),
       };
 
-      const canAnswer = submittedAttempt.status === 'IN_PROGRESS';
+      const canAnswer = (submittedAttempt.status as string) === 'IN_PROGRESS';
       expect(canAnswer).toBe(false);
     });
 
@@ -324,7 +324,7 @@ describe('Assessments API Integration Tests', () => {
         submittedAt: new Date(),
       };
 
-      const canSubmit = completedAttempt.status === 'IN_PROGRESS';
+      const canSubmit = (completedAttempt.status as string) === 'IN_PROGRESS';
       expect(canSubmit).toBe(false);
     });
 
@@ -357,7 +357,7 @@ describe('Assessments API Integration Tests', () => {
     it('should not show results for in-progress attempt', async () => {
       const attempt = testData.assessment.attempt;
       
-      const canViewResults = attempt.status === 'COMPLETED';
+      const canViewResults = (attempt.status as string) === 'COMPLETED';
       expect(canViewResults).toBe(false);
     });
 

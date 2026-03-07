@@ -12,9 +12,8 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { PhoneNumberUtil } from "google-libphonenumber";
-import { toastPromise } from "@/lib/ui/toast";
+import { toastPromise, toastSuccess } from "@/lib/ui/toast";
 import UploadCvButton from "@/components/upload/UploadCvButton";
-import { LANGUAGE_LEVELS } from "@/lib/shared/skills-data";
 import PhoneInputField from "@/components/PhoneInputField";
 
 import {
@@ -70,7 +69,33 @@ type Initial = {
 };
 
 type LanguageOption = { id: string; label: string };
-type SkillOption    = { id: string; label: string };
+type SkillOption = { id: string; label: string };
+
+type ParsedCvAnalysis = {
+  summary?: string;
+  seniority?: "junior" | "mid" | "senior";
+  skills?: string[];
+  yearsExperience?: number;
+  recommendedRoles?: string[];
+  redFlags?: string[];
+  linkedin?: string;
+  github?: string;
+  languages?: Array<{ label: string; level?: string }>;
+  experiences?: Array<{
+    role: string;
+    company: string;
+    startDate?: string;
+    endDate?: string | null;
+    isCurrent?: boolean;
+  }>;
+  education?: Array<{
+    institution: string;
+    program?: string;
+    startDate?: string;
+    endDate?: string | null;
+    level?: string | null;
+  }>;
+};
 
 type EducationLevel =
   | "NONE" | "PRIMARY" | "SECONDARY" | "HIGH_SCHOOL"
@@ -79,11 +104,11 @@ type EducationStatus = "ONGOING" | "COMPLETED" | "INCOMPLETE";
 
 const EDUCATION_LEVEL_OPTIONS = [
   { value: "HIGH_SCHOOL" as const, label: "Preparatoria / Bachillerato" },
-  { value: "TECHNICAL"  as const, label: "Técnico / TSU" },
-  { value: "BACHELOR"   as const, label: "Licenciatura / Ingeniería" },
-  { value: "MASTER"     as const, label: "Maestría" },
-  { value: "DOCTORATE"  as const, label: "Doctorado" },
-  { value: "OTHER"      as const, label: "Diplomado / Curso" },
+  { value: "TECHNICAL" as const, label: "Técnico / TSU" },
+  { value: "BACHELOR" as const, label: "Licenciatura / Ingeniería" },
+  { value: "MASTER" as const, label: "Maestría" },
+  { value: "DOCTORATE" as const, label: "Doctorado" },
+  { value: "OTHER" as const, label: "Diplomado / Curso" },
 ];
 
 type EducationEntry = {
@@ -130,8 +155,51 @@ const SKILL_PILL_ACTIVE: Record<number, string> = {
   5: "bg-emerald-600 text-white shadow-sm",
 };
 
+const LANGUAGE_ALIASES: Record<string, string[]> = {
+  español: ["español", "spanish", "espanol"],
+  inglés: ["inglés", "ingles", "english"],
+  francés: ["francés", "frances", "french"],
+  alemán: ["alemán", "aleman", "german"],
+  portugués: ["portugués", "portugues", "portuguese"],
+  italiano: ["italiano", "italian"],
+};
+
+function normalizeText(value: string) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function findLanguageOption(
+  options: LanguageOption[],
+  rawLabel: string
+): LanguageOption | undefined {
+  const normalized = normalizeText(rawLabel);
+  return options.find((opt) => {
+    const optNormalized = normalizeText(opt.label);
+    if (optNormalized === normalized) return true;
+
+    const aliases = LANGUAGE_ALIASES[optNormalized];
+    return aliases ? aliases.map(normalizeText).includes(normalized) : false;
+  });
+}
+
+function mapLanguageLevel(
+  rawLevel?: string
+): "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC" {
+  const normalized = normalizeText(rawLevel || "");
+  if (["native", "nativo"].includes(normalized)) return "NATIVE";
+  if (["professional", "profesional", "fluent", "advanced"].includes(normalized)) {
+    return "PROFESSIONAL";
+  }
+  if (["basic", "basico"].includes(normalized)) return "BASIC";
+  return "CONVERSATIONAL";
+}
+
 /* ===== Phone helpers ===== */
-const phoneUtil  = PhoneNumberUtil.getInstance();
+const phoneUtil = PhoneNumberUtil.getInstance();
 const onlyDigits = (s: string) => s.replace(/\D+/g, "");
 function buildE164(countryDial: string, localRaw: string): string | null {
   const localDigits = onlyDigits(localRaw);
@@ -141,14 +209,16 @@ function buildE164(countryDial: string, localRaw: string): string | null {
     const parsed = phoneUtil.parse(full);
     if (!phoneUtil.isValidNumber(parsed)) return null;
     const region = phoneUtil.getRegionCodeForNumber(parsed);
-    const cc     = phoneUtil.getCountryCodeForRegion(region);
-    const nsn    = phoneUtil.getNationalSignificantNumber(parsed);
+    const cc = phoneUtil.getCountryCodeForRegion(region);
+    const nsn = phoneUtil.getNationalSignificantNumber(parsed);
     return `+${cc}${nsn}`;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /* ===== Fecha helpers ===== */
-const MONTH_RE       = /^\d{4}-(0[1-9]|1[0-2])$/;
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 const toMonthStartDate = (ym: string): Date | null => {
   if (!MONTH_RE.test(ym)) return null;
   return new Date(`${ym}-01T00:00:00.000Z`);
@@ -177,10 +247,10 @@ const COUNTRY_NAME_TO_ISO2: Record<string, string> = {
 };
 function deriveLocationParts(label: string) {
   const parts = (label || "").split(",").map((p) => p.trim()).filter(Boolean);
-  const city        = parts[0];
-  const admin1      = parts.length >= 3 ? parts[parts.length - 2] : parts.length >= 2 ? parts[1] : undefined;
+  const city = parts[0];
+  const admin1 = parts.length >= 3 ? parts[parts.length - 2] : parts.length >= 2 ? parts[1] : undefined;
   const countryLabel = parts.length ? parts[parts.length - 1] : undefined;
-  const countryCode  = countryLabel ? COUNTRY_NAME_TO_ISO2[stripDiacritics(countryLabel)] : undefined;
+  const countryCode = countryLabel ? COUNTRY_NAME_TO_ISO2[stripDiacritics(countryLabel)] : undefined;
   return { city, admin1, countryLabel, countryCode };
 }
 
@@ -210,20 +280,20 @@ export default function ProfileForm({
   const methods = useForm<ProfileFormData>({
     resolver: zodResolver(ProfileFormSchema),
     defaultValues: {
-      firstName:    initial.firstName ?? "",
-      lastName1:    initial.lastName1 ?? "",
-      lastName2:    initial.lastName2 ?? "",
-      location:     initial.location  ?? "",
-      birthdate:    initial.birthdate ?? "",
-      linkedin:     initial.linkedin  ?? "",
-      github:       initial.github    ?? "",
+      firstName: initial.firstName ?? "",
+      lastName1: initial.lastName1 ?? "",
+      lastName2: initial.lastName2 ?? "",
+      location: initial.location ?? "",
+      birthdate: initial.birthdate ?? "",
+      linkedin: initial.linkedin ?? "",
+      github: initial.github ?? "",
       phoneCountry: initial.phoneCountry || "52",
-      phoneLocal:   initialPhoneValue,
+      phoneLocal: initialPhoneValue,
       certifications: initial.certifications ?? [],
       experiences: (initial.experiences ?? []).map((e) => ({
         ...e,
         startDate: (e.startDate || "").slice(0, 7),
-        endDate:   e.endDate ? e.endDate.slice(0, 7) : null,
+        endDate: e.endDate ? e.endDate.slice(0, 7) : null,
         isCurrent: !!e.isCurrent,
       })),
       languages: (initial.languages ?? []).map((l) => ({
@@ -236,7 +306,7 @@ export default function ProfileForm({
         id: ed.id, level: ed.level ?? null, status: "COMPLETED",
         institution: ed.institution ?? "", program: ed.program ?? "",
         startDate: (ed.startDate || "")?.slice(0, 7) || "",
-        endDate:   (ed.endDate   || "")?.slice(0, 7) || "",
+        endDate: (ed.endDate || "")?.slice(0, 7) || "",
         sortIndex: ed.sortIndex ?? i,
       })),
     },
@@ -250,7 +320,10 @@ export default function ProfileForm({
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (isDirty && !isSubmitting) { e.preventDefault(); e.returnValue = ""; }
+      if (isDirty && !isSubmitting) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
@@ -259,13 +332,13 @@ export default function ProfileForm({
   useEffect(() => {
     setCurrentResumeUrl(initial.resumeUrl ?? "");
     reset({
-      firstName:    initial.firstName ?? "",
-      lastName1:    initial.lastName1 ?? "",
-      lastName2:    initial.lastName2 ?? "",
-      location:     initial.location  ?? "",
-      birthdate:    initial.birthdate ?? "",
-      linkedin:     initial.linkedin  ?? "",
-      github:       initial.github    ?? "",
+      firstName: initial.firstName ?? "",
+      lastName1: initial.lastName1 ?? "",
+      lastName2: initial.lastName2 ?? "",
+      location: initial.location ?? "",
+      birthdate: initial.birthdate ?? "",
+      linkedin: initial.linkedin ?? "",
+      github: initial.github ?? "",
       phoneCountry: initial.phoneCountry || "52",
       phoneLocal:
         initial.phoneCountry && initial.phoneLocal
@@ -275,7 +348,7 @@ export default function ProfileForm({
       experiences: (initial.experiences ?? []).map((e) => ({
         ...e,
         startDate: (e.startDate || "").slice(0, 7),
-        endDate:   e.endDate ? e.endDate.slice(0, 7) : null,
+        endDate: e.endDate ? e.endDate.slice(0, 7) : null,
         isCurrent: !!e.isCurrent,
       })),
       languages: (initial.languages ?? []).map((l) => ({
@@ -288,31 +361,37 @@ export default function ProfileForm({
         id: ed.id, level: ed.level ?? null, status: "COMPLETED",
         institution: ed.institution ?? "", program: ed.program ?? "",
         startDate: (ed.startDate || "")?.slice(0, 7) || "",
-        endDate:   (ed.endDate   || "")?.slice(0, 7) || "",
+        endDate: (ed.endDate || "")?.slice(0, 7) || "",
         sortIndex: ed.sortIndex ?? i,
       })),
     });
   }, [initial, reset]);
 
-  const expFA   = useFieldArray({ control, name: "experiences" });
-  const langFA  = useFieldArray({ control, name: "languages" });
+  const expFA = useFieldArray({ control, name: "experiences" });
+  const langFA = useFieldArray({ control, name: "languages" });
   const skillFA = useFieldArray({ control, name: "skillsDetailed" });
-  const eduFA   = useFieldArray({ control, name: "education" });
+  const eduFA = useFieldArray({ control, name: "education" });
 
-  const experiences    = useWatch({ control, name: "experiences"    }) || [];
-  const languages      = useWatch({ control, name: "languages"      }) || [];
-  const skillsDetailed = useWatch({ control, name: "skillsDetailed" }) || [];
-  const certifications = useWatch({ control, name: "certifications" }) || [];
-  const educationRows  = useWatch({ control, name: "education"      }) || [];
+  const watchedExperiences = useWatch({ control, name: "experiences" });
+  const watchedLanguages = useWatch({ control, name: "languages" });
+  const watchedSkillsDetailed = useWatch({ control, name: "skillsDetailed" });
+  const watchedCertifications = useWatch({ control, name: "certifications" });
+  const watchedEducationRows = useWatch({ control, name: "education" });
+
+  const experiences = useMemo(() => watchedExperiences ?? [], [watchedExperiences]);
+  const languages = useMemo(() => watchedLanguages ?? [], [watchedLanguages]);
+  const skillsDetailed = useMemo(() => watchedSkillsDetailed ?? [], [watchedSkillsDetailed]);
+  const certifications = useMemo(() => watchedCertifications ?? [], [watchedCertifications]);
+  const educationRows = useMemo(() => watchedEducationRows ?? [], [watchedEducationRows]);
 
   /* ===== Certificaciones ===== */
   const [certQuery, setCertQuery] = useState("");
   const [isCertDropdownOpen, setIsCertDropdownOpen] = useState(false);
 
   const filteredCerts = useMemo(() => {
-    const q      = certQuery.trim().toLowerCase();
+    const q = certQuery.trim().toLowerCase();
     const chosen = new Set((certifications as string[]).map((c) => c.toLowerCase()));
-    const base   = q ? certOptions.filter((c) => c.toLowerCase().includes(q)) : certOptions;
+    const base = q ? certOptions.filter((c) => c.toLowerCase().includes(q)) : certOptions;
     return base.filter((c) => !chosen.has(c.toLowerCase())).slice(0, 30);
   }, [certQuery, certOptions, certifications]);
 
@@ -326,7 +405,8 @@ export default function ProfileForm({
   };
 
   const removeCert = (label: string) => {
-    setValue("certifications",
+    setValue(
+      "certifications",
       (certifications as string[]).filter((x) => x.toLowerCase() !== label.toLowerCase()),
       { shouldValidate: true, shouldDirty: true }
     );
@@ -337,38 +417,49 @@ export default function ProfileForm({
     const total = getValues("experiences")?.length || 0;
     for (let i = 0; i < total; i++) {
       setValue(`experiences.${i}.isCurrent` as const, i === idx ? checked : false, { shouldDirty: true, shouldValidate: true });
-      if (i === idx && checked) setValue(`experiences.${i}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
+      if (i === idx && checked) {
+        setValue(`experiences.${i}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
+      }
     }
   }, [getValues, setValue]);
 
   /* ===== Skills ===== */
-  const [skillQuery, setSkillQuery]     = useState("");
+  const [skillQuery, setSkillQuery] = useState("");
   const [isSkillDropdownOpen, setIsSkillDropdownOpen] = useState(false);
 
   const filteredSkillOptions = useMemo(() => {
-    const q        = skillQuery.trim().toLowerCase();
-    const addedIds = new Set((skillsDetailed as any[]).map((s) => s.termId));
+    const q = skillQuery.trim().toLowerCase();
+    const addedIds = new Set((skillsDetailed as Array<{ termId: string }>).map((s) => s.termId));
     return (q ? skillTermOptions.filter((o) => o.label.toLowerCase().includes(q)) : skillTermOptions)
       .filter((o) => !addedIds.has(o.id))
       .slice(0, 20);
   }, [skillQuery, skillTermOptions, skillsDetailed]);
 
   function addSkillWithLevel(opt: SkillOption) {
-    if ((skillsDetailed as any[]).some((s) => s.termId === opt.id)) return;
+    if ((skillsDetailed as Array<{ termId: string }>).some((s) => s.termId === opt.id)) return;
     skillFA.append({ termId: opt.id, label: opt.label, level: 3 });
     setSkillQuery("");
     setIsSkillDropdownOpen(false);
   }
 
   function removeSkillWithLevel(termId: string) {
-    const idx = (skillsDetailed as any[]).findIndex((s) => s.termId === termId);
+    const idx = (skillsDetailed as Array<{ termId: string }>).findIndex((s) => s.termId === termId);
     if (idx >= 0) skillFA.remove(idx);
   }
 
   /* ===== Educación ===== */
   const addEducation = () => {
-    eduFA.append({ level: null, status: "COMPLETED", institution: "", program: "", startDate: "", endDate: "", sortIndex: educationRows.length });
+    eduFA.append({
+      level: null,
+      status: "COMPLETED",
+      institution: "",
+      program: "",
+      startDate: "",
+      endDate: "",
+      sortIndex: educationRows.length,
+    });
   };
+
   const moveEducation = (from: number, to: number) => {
     if (to < 0 || to >= educationRows.length) return;
     eduFA.move(from, to);
@@ -376,12 +467,136 @@ export default function ProfileForm({
     next.forEach((row, i) => eduFA.update(i, row));
   };
 
+  /* ===== AI CV apply ===== */
+  const applyAiCvData = useCallback((analysis: ParsedCvAnalysis) => {
+    if (!analysis) return;
+
+    let appliedSomething = false;
+
+    if (analysis.linkedin && !getValues("linkedin")) {
+      setValue("linkedin", analysis.linkedin, { shouldDirty: true, shouldValidate: true });
+      appliedSomething = true;
+    }
+
+    if (analysis.github && !getValues("github")) {
+      setValue("github", analysis.github, { shouldDirty: true, shouldValidate: true });
+      appliedSomething = true;
+    }
+
+    if (Array.isArray(analysis.skills) && analysis.skills.length > 0) {
+      const currentSkills = getValues("skillsDetailed") || [];
+      const existingIds = new Set(currentSkills.map((s) => s.termId));
+
+      const normalizedSkills = analysis.skills
+        .map((skillLabel) => {
+          const normalized = normalizeText(String(skillLabel || ""));
+          const match = skillTermOptions.find(
+            (opt) => normalizeText(opt.label) === normalized
+          );
+          if (!match || existingIds.has(match.id)) return null;
+
+          return {
+            termId: match.id,
+            label: match.label,
+            level: 3 as const,
+          };
+        })
+        .filter(Boolean) as Array<{ termId: string; label: string; level: 1 | 2 | 3 | 4 | 5 }>;
+
+      if (normalizedSkills.length > 0) {
+        setValue("skillsDetailed", [...currentSkills, ...normalizedSkills], {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        appliedSomething = true;
+      }
+    }
+
+    if (Array.isArray(analysis.languages) && analysis.languages.length > 0) {
+      const currentLanguages = getValues("languages") || [];
+      const existingIds = new Set(currentLanguages.map((l) => l.termId));
+
+      const normalizedLanguages = analysis.languages
+        .map((lang) => {
+          const match = findLanguageOption(languageOptions, lang?.label || "");
+          if (!match || existingIds.has(match.id)) return null;
+
+          return {
+            termId: match.id,
+            label: match.label,
+            level: mapLanguageLevel(lang?.level),
+          };
+        })
+        .filter(Boolean) as Array<{
+          termId: string;
+          label: string;
+          level: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+        }>;
+
+      if (normalizedLanguages.length > 0) {
+        setValue("languages", [...currentLanguages, ...normalizedLanguages], {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        appliedSomething = true;
+      }
+    }
+
+    if (Array.isArray(analysis.experiences) && analysis.experiences.length > 0 && experiences.length === 0) {
+      setValue(
+        "experiences",
+        analysis.experiences.map((exp) => ({
+          role: exp.role || "",
+          company: exp.company || "",
+          startDate: (exp.startDate || "").slice(0, 7),
+          endDate: exp.endDate ? String(exp.endDate).slice(0, 7) : null,
+          isCurrent: !!exp.isCurrent,
+        })),
+        { shouldDirty: true, shouldValidate: true }
+      );
+      appliedSomething = true;
+    }
+
+    if (Array.isArray(analysis.education) && analysis.education.length > 0 && educationRows.length === 0) {
+      setValue(
+        "education",
+        analysis.education.map((ed, i) => {
+          const status: EducationStatus = ed.endDate ? "COMPLETED" : "ONGOING";
+
+          return {
+            level: (ed.level as EducationLevel | null) ?? null,
+            status,
+            institution: ed.institution || "",
+            program: ed.program || "",
+            startDate: (ed.startDate || "").slice(0, 7),
+            endDate: ed.endDate ? String(ed.endDate).slice(0, 7) : "",
+            sortIndex: i,
+          };
+        }),
+        { shouldDirty: true, shouldValidate: true }
+      );
+      appliedSomething = true;
+    }
+
+    if (appliedSomething) {
+      toastSuccess("Perfil autocompletado con datos detectados en tu CV");
+    }
+  }, [
+    educationRows.length,
+    experiences.length,
+    getValues,
+    languageOptions,
+    setValue,
+    skillTermOptions,
+  ]);
+
   /* ===== Submit ===== */
   const MONTH_OVERLAPS = (rows: Array<{ startDate: string; endDate?: string | null }>) => {
     const ranges = rows
       .map((r) => ({ s: toMonthStartDate(r.startDate), e: r.endDate ? toMonthStartDate(r.endDate) : null }))
       .filter(({ s }) => !!s)
       .sort((a, b) => a.s!.getTime() - b.s!.getTime());
+
     for (let i = 0; i < ranges.length - 1; i++) {
       const aEnd = ranges[i].e ? ranges[i].e!.getTime() : Infinity;
       if (aEnd > ranges[i + 1].s!.getTime()) return true;
@@ -392,25 +607,31 @@ export default function ProfileForm({
   const onSubmitRHF = async (vals: ProfileFormData) => {
     clearErrors("root");
 
-    let phoneE164: string | null      = null;
-    let phoneCountryToSave            = vals.phoneCountry || "52";
-    let phoneLocalToSave              = (vals.phoneLocal || "").replace(/\D+/g, "");
-    const rawPhone                    = (vals.phoneLocal || "").trim();
+    let phoneE164: string | null = null;
+    let phoneCountryToSave = vals.phoneCountry || "52";
+    let phoneLocalToSave = (vals.phoneLocal || "").replace(/\D+/g, "");
+    const rawPhone = (vals.phoneLocal || "").trim();
 
     if (rawPhone) {
       try {
         if (rawPhone.startsWith("+")) {
           const parsed = phoneUtil.parse(rawPhone);
-          if (!phoneUtil.isValidNumber(parsed)) { setError("root", { type: "manual", message: "Número de teléfono inválido." }); return; }
+          if (!phoneUtil.isValidNumber(parsed)) {
+            setError("root", { type: "manual", message: "Número de teléfono inválido." });
+            return;
+          }
           const region = phoneUtil.getRegionCodeForNumber(parsed);
-          const cc     = phoneUtil.getCountryCodeForRegion(region);
-          const nsn    = phoneUtil.getNationalSignificantNumber(parsed);
-          phoneE164           = `+${cc}${nsn}`;
-          phoneCountryToSave  = String(cc);
-          phoneLocalToSave    = nsn;
+          const cc = phoneUtil.getCountryCodeForRegion(region);
+          const nsn = phoneUtil.getNationalSignificantNumber(parsed);
+          phoneE164 = `+${cc}${nsn}`;
+          phoneCountryToSave = String(cc);
+          phoneLocalToSave = nsn;
         } else {
           phoneE164 = buildE164(vals.phoneCountry || "52", rawPhone);
-          if (!phoneE164) { setError("root", { type: "manual", message: "Número de teléfono inválido." }); return; }
+          if (!phoneE164) {
+            setError("root", { type: "manual", message: "Número de teléfono inválido." });
+            return;
+          }
         }
       } catch {
         setError("root", { type: "manual", message: "Número de teléfono inválido." });
@@ -419,49 +640,63 @@ export default function ProfileForm({
     }
 
     const exps = vals.experiences || [];
-    if (exps.filter((e) => e.isCurrent).length > 1) { setError("root", { type: "manual", message: "Solo puedes marcar una experiencia como 'Actual'." }); return; }
+    if (exps.filter((e) => e.isCurrent).length > 1) {
+      setError("root", { type: "manual", message: "Solo puedes marcar una experiencia como 'Actual'." });
+      return;
+    }
+
     if (MONTH_OVERLAPS(exps.map((e) => ({ startDate: e.startDate, endDate: e.isCurrent ? null : e.endDate || null })))) {
-      setError("root", { type: "manual", message: "Tus experiencias no pueden traslaparse." }); return;
+      setError("root", { type: "manual", message: "Tus experiencias no pueden traslaparse." });
+      return;
     }
 
     const { city, admin1, countryCode } = deriveLocationParts(vals.location || "");
-    const cityNorm   = stripDiacritics(city   || "");
+    const cityNorm = stripDiacritics(city || "");
     const admin1Norm = stripDiacritics(admin1 || "");
 
     const edu = (vals.education || []).map((row, i) => {
       const startISO = ymToISO(row.startDate);
-      const endISO   = ymToISO(row.endDate);
+      const endISO = ymToISO(row.endDate);
       const status: EducationStatus = endISO ? "COMPLETED" : "ONGOING";
-      return { id: row.id, level: row.level, status, institution: row.institution, program: row.program || null, startDate: startISO || "", endDate: status === "ONGOING" ? null : endISO, sortIndex: i };
+      return {
+        id: row.id,
+        level: row.level,
+        status,
+        institution: row.institution,
+        program: row.program || null,
+        startDate: startISO || "",
+        endDate: status === "ONGOING" ? null : endISO,
+        sortIndex: i,
+      };
     });
 
     const fd = new FormData();
-    fd.set("firstName",    vals.firstName ?? "");
-    fd.set("lastName1",    vals.lastName1 ?? "");
-    fd.set("lastName2",    vals.lastName2 ?? "");
-    fd.set("location",     vals.location  ?? "");
-    fd.set("birthdate",    vals.birthdate ?? "");
-    fd.set("linkedin",     vals.linkedin  ?? "");
-    fd.set("github",       vals.github    ?? "");
-    fd.set("phone",        phoneE164 || "");
+    fd.set("firstName", vals.firstName ?? "");
+    fd.set("lastName1", vals.lastName1 ?? "");
+    fd.set("lastName2", vals.lastName2 ?? "");
+    fd.set("location", vals.location ?? "");
+    fd.set("birthdate", vals.birthdate ?? "");
+    fd.set("linkedin", vals.linkedin ?? "");
+    fd.set("github", vals.github ?? "");
+    fd.set("phone", phoneE164 || "");
     fd.set("phoneCountry", phoneCountryToSave);
-    fd.set("phoneLocal",   phoneLocalToSave);
+    fd.set("phoneLocal", phoneLocalToSave);
     fd.set("certifications", (vals.certifications || []).join(", "));
-    fd.set("experiences",    JSON.stringify(exps));
-    fd.set("languages",      JSON.stringify(vals.languages     || []));
+    fd.set("experiences", JSON.stringify(exps));
+    fd.set("languages", JSON.stringify(vals.languages || []));
     fd.set("skillsDetailed", JSON.stringify(vals.skillsDetailed || []));
     fd.set("resumeUrl", currentResumeUrl);
 
     const eduPayload = JSON.stringify(edu);
-    fd.set("education",     eduPayload);
-    fd.set("educations",    eduPayload);
+    fd.set("education", eduPayload);
+    fd.set("educations", eduPayload);
     fd.set("educationJson", eduPayload);
 
     if (countryCode) fd.set("countryCode", countryCode);
-    if (admin1)      fd.set("admin1",      admin1);
-    if (city)        fd.set("city",        city);
-    if (cityNorm)    fd.set("cityNorm",    cityNorm);
-    if (admin1Norm)  fd.set("admin1Norm",  admin1Norm);
+    if (admin1) fd.set("admin1", admin1);
+    if (city) fd.set("city", city);
+    if (cityNorm) fd.set("cityNorm", cityNorm);
+    if (admin1Norm) fd.set("admin1Norm", admin1Norm);
 
     try {
       await toastPromise(onSubmit(fd), {
@@ -488,11 +723,15 @@ export default function ProfileForm({
         <SectionCV
           resumeUrl={currentResumeUrl}
           onUploaded={(url) => setCurrentResumeUrl(url)}
+          onAiParsed={applyAiCvData}
         />
 
         <SectionExperience
-          expFA={expFA} register={register} setValue={setValue}
-          experiences={experiences as WorkExperience[]} makeCurrent={makeCurrent}
+          expFA={expFA}
+          register={register}
+          setValue={setValue}
+          experiences={experiences as WorkExperience[]}
+          makeCurrent={makeCurrent}
         />
 
         <SectionCerts
@@ -519,14 +758,20 @@ export default function ProfileForm({
         />
 
         <SectionLanguages
-          langFA={langFA} languages={languages} languageOptions={languageOptions}
+          langFA={langFA}
+          languages={languages}
+          languageOptions={languageOptions}
           handlePatchLang={(idx, patch) => {
             const curr = languages[idx] || { termId: "", label: "", level: "CONVERSATIONAL" };
             langFA.update(idx, { ...curr, ...patch });
           }}
         />
 
-        <SectionEducation eduFA={eduFA} addEducation={addEducation} moveEducation={moveEducation} />
+        <SectionEducation
+          eduFA={eduFA}
+          addEducation={addEducation}
+          moveEducation={moveEducation}
+        />
 
         {errors.root?.message && (
           <div className="flex items-start gap-2 border border-red-300 bg-red-50 text-red-700 text-sm rounded-xl px-4 py-3 dark:border-red-800/70 dark:bg-red-950/60 dark:text-red-100">
@@ -602,7 +847,7 @@ function SectionPersonal() {
 
 function SectionContact() {
   const { control, setValue } = useFormContext<ProfileFormData>();
-  const locationValue  = useWatch({ control, name: "location"   }) || "";
+  const locationValue = useWatch({ control, name: "location" }) || "";
   const phoneLocalValue = useWatch({ control, name: "phoneLocal" }) || "";
 
   return (
@@ -667,9 +912,11 @@ function SectionNetworks() {
 function SectionCV({
   resumeUrl,
   onUploaded,
+  onAiParsed,
 }: {
   resumeUrl: string;
   onUploaded: (url: string) => void;
+  onAiParsed: (analysis: ParsedCvAnalysis) => void;
 }) {
   return (
     <section id="cv" className={`${SECTION_CARD} scroll-mt-24`}>
@@ -724,7 +971,11 @@ function SectionCV({
                 </svg>
                 Descargar
               </a>
-              <UploadCvButton onUploaded={onUploaded} variant="secondary" />
+              <UploadCvButton
+                onUploaded={onUploaded}
+                onAiParsed={onAiParsed}
+                variant="secondary"
+              />
             </div>
           </div>
         </div>
@@ -743,7 +994,10 @@ function SectionCV({
               Sube tu currículum para que los reclutadores puedan conocer tu experiencia
             </p>
             <div className="mt-4">
-              <UploadCvButton onUploaded={onUploaded} />
+              <UploadCvButton
+                onUploaded={onUploaded}
+                onAiParsed={onAiParsed}
+              />
             </div>
           </div>
           <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/20">
@@ -780,8 +1034,11 @@ function SectionExperience({
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Experiencia laboral</h2>
           <p className={SUBTEXT_BASE}>Agrega tus experiencias en orden cronológico.</p>
         </div>
-        <button type="button" className={BTN_OUTLINE}
-          onClick={() => expFA.append({ role: "", company: "", startDate: "", endDate: "", isCurrent: false })}>
+        <button
+          type="button"
+          className={BTN_OUTLINE}
+          onClick={() => expFA.append({ role: "", company: "", startDate: "", endDate: "", isCurrent: false })}
+        >
           + Añadir
         </button>
       </div>
@@ -789,19 +1046,24 @@ function SectionExperience({
       {expFA.fields.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 py-6 text-center">
           <p className="text-sm text-zinc-400">Sin experiencia registrada</p>
-          <button type="button" className="mt-2 text-sm text-emerald-600 hover:underline dark:text-emerald-400"
-            onClick={() => expFA.append({ role: "", company: "", startDate: "", endDate: "", isCurrent: false })}>
+          <button
+            type="button"
+            className="mt-2 text-sm text-emerald-600 hover:underline dark:text-emerald-400"
+            onClick={() => expFA.append({ role: "", company: "", startDate: "", endDate: "", isCurrent: false })}
+          >
             + Agregar primera experiencia
           </button>
         </div>
       ) : (
         <div className="space-y-3">
           {expFA.fields.map((fItem, idx) => {
-            const item     = (experiences[idx] || { role: "", company: "", startDate: "", endDate: "", isCurrent: false }) as WorkExperience;
+            const item = (experiences[idx] || { role: "", company: "", startDate: "", endDate: "", isCurrent: false }) as WorkExperience;
             const isCurrent = !!item.isCurrent;
             return (
-              <div key={fItem.id ?? `${idx}`}
-                className="glass-card border border-zinc-200/70 dark:border-zinc-700/60 rounded-2xl p-4 space-y-3">
+              <div
+                key={fItem.id ?? `${idx}`}
+                className="glass-card border border-zinc-200/70 dark:border-zinc-700/60 rounded-2xl p-4 space-y-3"
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
                     Experiencia {idx + 1}
@@ -824,18 +1086,25 @@ function SectionExperience({
                   <div>
                     <label className={LABEL_BASE}>Fin</label>
                     <div className="flex gap-2 items-center">
-                      <input type="month" className={`${INPUT_BASE} flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
+                      <input
+                        type="month"
+                        className={`${INPUT_BASE} flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
                         disabled={isCurrent}
                         {...register(`experiences.${idx}.endDate` as const, {
                           onChange: (e) => {
-                            if (String(e.target.value || "") === "")
+                            if (String(e.target.value || "") === "") {
                               setValue(`experiences.${idx}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
+                            }
                           },
                         })}
                       />
                       <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300 cursor-pointer whitespace-nowrap">
-                        <input type="checkbox" className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 dark:border-zinc-600 dark:bg-zinc-900"
-                          {...register(`experiences.${idx}.isCurrent` as const, { onChange: (e) => makeCurrent(idx, e.target.checked) })}
+                        <input
+                          type="checkbox"
+                          className="rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500 dark:border-zinc-600 dark:bg-zinc-900"
+                          {...register(`experiences.${idx}.isCurrent` as const, {
+                            onChange: (e) => makeCurrent(idx, e.target.checked),
+                          })}
                         />
                         Trabajo actual
                       </label>
@@ -855,10 +1124,14 @@ function SectionCerts({
   certifications, certQuery, setCertQuery, filteredCerts, addCert, removeCert,
   isCertDropdownOpen, setIsCertDropdownOpen,
 }: {
-  certifications: string[]; certQuery: string;
-  setCertQuery: (s: string) => void; filteredCerts: string[];
-  addCert: (label: string) => void; removeCert: (label: string) => void;
-  isCertDropdownOpen: boolean; setIsCertDropdownOpen: (v: boolean) => void;
+  certifications: string[];
+  certQuery: string;
+  setCertQuery: (s: string) => void;
+  filteredCerts: string[];
+  addCert: (label: string) => void;
+  removeCert: (label: string) => void;
+  isCertDropdownOpen: boolean;
+  setIsCertDropdownOpen: (v: boolean) => void;
 }) {
   return (
     <section id="certs" className={`${SECTION_CARD} scroll-mt-24`}>
@@ -872,8 +1145,13 @@ function SectionCerts({
           {certifications.map((c) => (
             <span key={c} className={TAG_BASE}>
               {c}
-              <button type="button" onClick={() => removeCert(c)}
-                className="ml-1 text-zinc-400 hover:text-red-500 transition-colors text-sm leading-none">×</button>
+              <button
+                type="button"
+                onClick={() => removeCert(c)}
+                className="ml-1 text-zinc-400 hover:text-red-500 transition-colors text-sm leading-none"
+              >
+                ×
+              </button>
             </span>
           ))}
         </div>
@@ -896,21 +1174,28 @@ function SectionCerts({
             {filteredCerts.length === 0 ? (
               <>
                 <li className="px-3 py-2 text-xs text-zinc-500">Sin coincidencias en el catálogo</li>
-                <li className="cursor-pointer rounded-xl px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30 font-medium"
-                  onMouseDown={(e) => { e.preventDefault(); addCert(certQuery.trim()); }}>
+                <li
+                  className="cursor-pointer rounded-xl px-3 py-2 text-sm text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30 font-medium"
+                  onMouseDown={(e) => { e.preventDefault(); addCert(certQuery.trim()); }}
+                >
                   + Agregar &quot;{certQuery.trim()}&quot;
                 </li>
               </>
             ) : (
               <>
                 {filteredCerts.map((opt) => (
-                  <li key={opt} className="cursor-pointer rounded-xl px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/70"
-                    onMouseDown={(e) => { e.preventDefault(); addCert(opt); }}>
+                  <li
+                    key={opt}
+                    className="cursor-pointer rounded-xl px-3 py-2 text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-800/70"
+                    onMouseDown={(e) => { e.preventDefault(); addCert(opt); }}
+                  >
                     {opt}
                   </li>
                 ))}
-                <li className="cursor-pointer rounded-xl px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30 border-t border-zinc-100 dark:border-zinc-700/50 mt-1"
-                  onMouseDown={(e) => { e.preventDefault(); addCert(certQuery.trim()); }}>
+                <li
+                  className="cursor-pointer rounded-xl px-3 py-2 text-xs text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/30 border-t border-zinc-100 dark:border-zinc-700/50 mt-1"
+                  onMouseDown={(e) => { e.preventDefault(); addCert(certQuery.trim()); }}
+                >
                   + Agregar &quot;{certQuery.trim()}&quot; como personalizada
                 </li>
               </>
@@ -1045,10 +1330,10 @@ function SectionLanguages({
   handlePatchLang: (idx: number, patch: Partial<{ termId: string; label: string; level: any }>) => void;
 }) {
   const LANG_LEVELS = [
-    { value: "NATIVE",         label: "Nativo",                 color: "bg-emerald-600 text-white shadow-sm" },
-    { value: "PROFESSIONAL",   label: "Profesional (C1–C2)",    color: "bg-emerald-400 text-white shadow-sm" },
-    { value: "CONVERSATIONAL", label: "Conversacional (B1–B2)", color: "bg-yellow-400 text-white shadow-sm"  },
-    { value: "BASIC",          label: "Básico (A1–A2)",          color: "bg-blue-400 text-white shadow-sm"   },
+    { value: "NATIVE", label: "Nativo", color: "bg-emerald-600 text-white shadow-sm" },
+    { value: "PROFESSIONAL", label: "Profesional (C1–C2)", color: "bg-emerald-400 text-white shadow-sm" },
+    { value: "CONVERSATIONAL", label: "Conversacional (B1–B2)", color: "bg-yellow-400 text-white shadow-sm" },
+    { value: "BASIC", label: "Básico (A1–A2)", color: "bg-blue-400 text-white shadow-sm" },
   ];
 
   const addedIds = new Set(languages.map((l: any) => l.termId));
@@ -1162,30 +1447,49 @@ function SectionEducation({
       {eduFA.fields.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 dark:border-zinc-700 py-6 text-center">
           <p className="text-sm text-zinc-400">Sin educación registrada</p>
-          <button type="button" onClick={addEducation}
-            className="mt-2 text-sm text-emerald-600 hover:underline dark:text-emerald-400">
+          <button
+            type="button"
+            onClick={addEducation}
+            className="mt-2 text-sm text-emerald-600 hover:underline dark:text-emerald-400"
+          >
             + Agregar educación
           </button>
         </div>
       ) : (
         <div className="space-y-3">
           {eduFA.fields.map((f, idx) => (
-            <div key={f.id}
-              className="glass-card border border-zinc-200/70 dark:border-zinc-700/60 rounded-2xl p-4 space-y-3">
+            <div
+              key={f.id}
+              className="glass-card border border-zinc-200/70 dark:border-zinc-700/60 rounded-2xl p-4 space-y-3"
+            >
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
                   Entrada #{idx + 1}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <button type="button" disabled={idx === 0}
+                  <button
+                    type="button"
+                    disabled={idx === 0}
                     className="text-[11px] rounded-lg border border-zinc-300 px-2 py-1 text-zinc-700 hover:bg-zinc-50 disabled:opacity-30 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-                    onClick={() => moveEducation(idx, idx - 1)}>↑</button>
-                  <button type="button" disabled={idx === eduFA.fields.length - 1}
+                    onClick={() => moveEducation(idx, idx - 1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === eduFA.fields.length - 1}
                     className="text-[11px] rounded-lg border border-zinc-300 px-2 py-1 text-zinc-700 hover:bg-zinc-50 disabled:opacity-30 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
-                    onClick={() => moveEducation(idx, idx + 1)}>↓</button>
-                  <button type="button"
+                    onClick={() => moveEducation(idx, idx + 1)}
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
                     className="text-[11px] rounded-lg border border-red-200 px-2 py-1 text-red-500 hover:bg-red-50 dark:border-red-800/70 dark:text-red-300 dark:hover:bg-red-950/50 transition-colors"
-                    onClick={() => eduFA.remove(idx)}>Eliminar</button>
+                    onClick={() => eduFA.remove(idx)}
+                  >
+                    Eliminar
+                  </button>
                 </div>
               </div>
               <div className="grid md:grid-cols-2 gap-3">
@@ -1200,13 +1504,19 @@ function SectionEducation({
                 </div>
                 <div>
                   <label className={LABEL_BASE}>Institución *</label>
-                  <input className={INPUT_BASE} placeholder="Ej. UANL, Tec de Monterrey…"
-                    {...register(`education.${idx}.institution` as const)} />
+                  <input
+                    className={INPUT_BASE}
+                    placeholder="Ej. UANL, Tec de Monterrey…"
+                    {...register(`education.${idx}.institution` as const)}
+                  />
                 </div>
                 <div>
                   <label className={LABEL_BASE}>Programa / Carrera</label>
-                  <input className={INPUT_BASE} placeholder="Ej. Ingeniería en Sistemas"
-                    {...register(`education.${idx}.program` as const)} />
+                  <input
+                    className={INPUT_BASE}
+                    placeholder="Ej. Ingeniería en Sistemas"
+                    {...register(`education.${idx}.program` as const)}
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>

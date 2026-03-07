@@ -1,5 +1,5 @@
 // __tests__/utils/test-helpers.ts
-import { vi } from 'vitest';
+import { vi, expect } from 'vitest';
 
 /**
  * Mock data generators
@@ -92,7 +92,7 @@ export const waitForCondition = async (
  * Mock function helpers
  */
 export const createMockFn = <T extends (...args: any[]) => any>() => {
-  return vi.fn<Parameters<T>, ReturnType<T>>();
+  return vi.fn<T>();
 };
 
 export const mockNextAuthSession = (session: any = null) => {

@@ -37,55 +37,55 @@ describe('Guards System', () => {
 
   describe('isDevelopmentAllowed', () => {
     it('should allow in development with flag enabled', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       expect(isDevelopmentAllowed()).toBe(true);
     });
 
     it('should block in production', () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV = 'production';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       expect(isDevelopmentAllowed()).toBe(false);
     });
 
     it('should block in test environment', () => {
-      process.env.NODE_ENV = 'test';
+      (process.env as any).NODE_ENV = 'test';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       expect(isDevelopmentAllowed()).toBe(false);
     });
 
     it('should block when flag is disabled', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = 'false';
       expect(isDevelopmentAllowed()).toBe(false);
     });
 
     it('should block when flag is not set', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       delete process.env.DEBUG_ROUTES_ENABLED;
       expect(isDevelopmentAllowed()).toBe(false);
     });
 
     it('should handle undefined NODE_ENV', () => {
-      delete process.env.NODE_ENV;
+      delete (process.env as any).NODE_ENV;
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       expect(isDevelopmentAllowed()).toBe(false);
     });
 
     it('should handle empty string NODE_ENV', () => {
-      process.env.NODE_ENV = '';
+      (process.env as any).NODE_ENV = '';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       expect(isDevelopmentAllowed()).toBe(false);
     });
 
     it('should be case-sensitive for flag value', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = 'TRUE'; // uppercase
       expect(isDevelopmentAllowed()).toBe(false);
     });
 
     it('should handle "1" as truthy flag value', () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = '1';
       expect(isDevelopmentAllowed()).toBe(false);
     });
@@ -181,7 +181,7 @@ describe('Guards System', () => {
 
   describe('requireDebugAccess', () => {
     it('should block when not in development', async () => {
-      process.env.NODE_ENV = 'production';
+      (process.env as any).NODE_ENV = 'production';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
 
       const response = await requireDebugAccess();
@@ -193,7 +193,7 @@ describe('Guards System', () => {
     });
 
     it('should block when debug key does not match', async () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       process.env.DEBUG_ROUTES_KEY = 'secret';
 
@@ -207,7 +207,7 @@ describe('Guards System', () => {
     });
 
     it('should block when user is not admin', async () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       
       vi.mocked(getServerSession).mockResolvedValue({
@@ -221,7 +221,7 @@ describe('Guards System', () => {
     });
 
     it('should allow when all conditions met', async () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       
       vi.mocked(getServerSession).mockResolvedValue({
@@ -234,7 +234,7 @@ describe('Guards System', () => {
     });
 
     it('should allow with valid debug key', async () => {
-      process.env.NODE_ENV = 'development';
+      (process.env as any).NODE_ENV = 'development';
       process.env.DEBUG_ROUTES_ENABLED = 'true';
       process.env.DEBUG_ROUTES_KEY = 'secret-key';
       

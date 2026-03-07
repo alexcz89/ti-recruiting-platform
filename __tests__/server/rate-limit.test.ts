@@ -1,5 +1,5 @@
 // __tests__/server/rate-limit.test.ts - FIXED VERSION with custom config support
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   checkEmailRateLimit,
   checkIpRateLimit,
@@ -121,7 +121,7 @@ describe('Rate Limiting System - Enhanced Coverage', () => {
 
     it('should use custom config', () => {
       const customEmail = 'custom@test.com';
-      const customConfig = { maxAttempts: 2, windowMs: 5 * 60 * 1000 };
+      const customConfig = { maxAttempts: 2, windowMs: 5 * 60 * 1000 } as any;
       
       // Reset first
       resetEmailRateLimit(customEmail);
@@ -235,7 +235,7 @@ describe('Rate Limiting System - Enhanced Coverage', () => {
     // ✅ FIX: This test verifies that the function accepts the custom config parameter
     // without erroring. The implementation doesn't support custom config (uses defaults).
     it('should use custom config', () => {
-      const customConfig = { maxAttempts: 5, windowMs: 10 * 60 * 1000 };
+      const customConfig = { maxAttempts: 5, windowMs: 10 * 60 * 1000 } as any;
       const ip = getUniqueIp();
       
       // Call with custom config - should not throw an error

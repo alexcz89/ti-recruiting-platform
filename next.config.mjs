@@ -1,10 +1,12 @@
+// next.config.mjs
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
     serverActions: { allowedOrigins: ["*"] },
+    serverComponentsExternalPackages: ["pdf-parse", "pdfjs-dist"],
   },
   images: {
-    // Puedes usar domains: ['utfs.io'], pero remotePatterns es más explícito
     remotePatterns: [
       {
         protocol: "https",

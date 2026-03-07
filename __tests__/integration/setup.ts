@@ -1,5 +1,5 @@
 // __tests__/integration/setup.ts
-import { beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
+import { beforeAll, afterAll, beforeEach, afterEach, vi, expect } from 'vitest';
 
 // Test data factories
 export const testData = {

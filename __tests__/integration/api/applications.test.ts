@@ -332,7 +332,7 @@ describe('Applications API Integration Tests', () => {
     it('should not allow withdrawal of accepted applications', async () => {
       const application = testData.application.accepted;
       
-      const canWithdraw = application.status === 'PENDING';
+      const canWithdraw = (application.status as string) === 'PENDING';
       expect(canWithdraw).toBe(false);
     });
 

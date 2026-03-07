@@ -1,5 +1,5 @@
 // __tests__/server/api-response.test.ts - ENHANCED VERSION (90%+ coverage)
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   jsonSuccess,
   jsonError,
@@ -53,7 +53,7 @@ describe('API Response Helpers - Enhanced Coverage', () => {
     });
 
     it('should accept custom status', async () => {
-      const response = jsonSuccess({ id: '123' }, { status: HTTP_STATUS.CREATED });
+      const response = jsonSuccess({ id: '123' }, { status: HTTP_STATUS.CREATED as any });
       expect(response.status).toBe(HTTP_STATUS.CREATED);
     });
 
@@ -108,7 +108,7 @@ describe('API Response Helpers - Enhanced Coverage', () => {
     });
 
     it('should accept custom status', async () => {
-      const response = jsonNoStore({ test: true }, HTTP_STATUS.CREATED);
+      const response = jsonNoStore({ test: true }, HTTP_STATUS.CREATED as any);
       expect(response.status).toBe(HTTP_STATUS.CREATED);
     });
   });
@@ -577,7 +577,7 @@ describe('API Response Helpers - Enhanced Coverage', () => {
 
       if (isApiSuccess(body)) {
         // TypeScript should know body.data exists
-        expect(body.data.value).toBe(42);
+        expect((body.data as any).value).toBe(42);
       }
     });
   });

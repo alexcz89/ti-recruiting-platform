@@ -360,7 +360,7 @@ describe('Jobs API Integration Tests', () => {
         status: 'CLOSED' as const,
       };
 
-      const canApply = closedJob.status === 'ACTIVE';
+      const canApply = (closedJob.status as string) === 'ACTIVE';
       expect(canApply).toBe(false);
     });
   });
