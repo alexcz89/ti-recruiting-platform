@@ -646,7 +646,7 @@ export default function ProfileForm({
       if (!ok) return;
     }
 
-    if (MONTH_OVERLAPS(exps.map((e) => ({ startDate: e.startDate, endDate: e.isCurrent ? null : e.endDate || null })))) {
+    if (MONTH_OVERLAPS(exps.filter((e) => !e.isCurrent).map((e) => ({ startDate: e.startDate, endDate: e.endDate || null })))) {
       setError("root", { type: "manual", message: "Tus experiencias no pueden traslaparse." });
       return;
     }
