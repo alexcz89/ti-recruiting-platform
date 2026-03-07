@@ -60,17 +60,17 @@ function parseAndValidateExperiences(json?: string | null):
   });
 
   const currents = parsed.filter((e) => e.isCurrent);
-  if (currents.length > 1) return { ok: false, error: "Solo una experiencia puede estar marcada como 'Actual'." };
-  if (currents.length === 1) {
-    const current = currents[0];
-    const mostRecent = [...parsed].sort((a, b) => b.startDate.getTime() - a.startDate.getTime())[0];
-    if (mostRecent !== current) return { ok: false, error: "La experiencia 'Actual' debe ser la más reciente." };
-    if (current.endDate) return { ok: false, error: "La experiencia 'Actual' no debe tener fecha fin." };
+  // Se permiten múltiples trabajos actuales (ej. freelance + empleo)
+  for (const current of currents) {
+    if (current.endDate) return { ok: false, error: "Un trabajo marcado como 'Actual' no debe tener fecha fin." };
   }
 
-  const intervals = parsed.map((e) => ({ start: e.startDate.getTime(), end: e.endDate ? e.endDate.getTime() : Number.POSITIVE_INFINITY }));
+  // Solo verificar traslape en experiencias terminadas (no actuales)
+  const finishedExps = parsed.filter((e) => !e.isCurrent);
+  const intervals = finishedExps.map((e) => ({ start: e.startDate.getTime(), end: e.endDate!.getTime() }));
   intervals.sort((a, b) => a.start - b.start);
   for (let i = 1; i < intervals.length; i++) if (intervals[i - 1].end > intervals[i].start) return { ok: false, error: "Las fechas de experiencias no pueden traslaparse." };
+
   const ordered = parsed.sort((a, b) => b.startDate.getTime() - a.startDate.getTime());
   return { ok: true, data: ordered };
 }
@@ -156,7 +156,6 @@ function ymToDate(s?: string | null): Date | null {
   if (!m) return null;
   const yyyy = Number(m[1]);
   const mm = Number(m[2]);
-  // ✅ Ancla al MEDIODÍA UTC para evitar desfase de zona horaria
   const d = new Date(Date.UTC(yyyy, mm - 1, 1, 12, 0, 0));
   return isNaN(d.getTime()) ? null : d;
 }
@@ -227,14 +226,12 @@ export async function updateProfileAction(fd: FormData) {
     if (!me) return { error: "Usuario no encontrado" };
     if (me.role !== "CANDIDATE") return { error: "Solo candidatos pueden editar perfil" };
 
-    // ✅ BUG FIX #2: Guardar firstName, lastName, maternalSurname por separado
     const firstName = String(val(fd, "firstName") ?? "").trim();
     const lastName1 = String(val(fd, "lastName1") ?? "").trim();
     const lastName2 = String(val(fd, "lastName2") ?? "").trim();
     if (!firstName || !lastName1) return { error: "Nombre y Apellido paterno son obligatorios." };
     const fullName = [firstName, lastName1, lastName2].filter(Boolean).join(" ");
 
-    // Teléfono
     const phone = (() => {
       const p = val(fd, "phone");
       if (typeof p === "undefined") return undefined;
@@ -244,14 +241,12 @@ export async function updateProfileAction(fd: FormData) {
     })();
     if (phone === ("INVALID" as any)) return { error: "El teléfono no tiene formato internacional válido (E.164)." };
 
-    // ✅ BUG FIX #1: Birthdate con mediodía UTC para evitar desfase de zona horaria
     let safeBirthdate: Date | null | undefined = undefined;
     if (fd.has("birthdate")) {
       const raw = String(fd.get("birthdate") ?? "").trim();
       if (!raw) {
         safeBirthdate = null;
       } else {
-        // "2000-12-16" → Date.UTC(2000, 11, 16, 12, 0, 0) para evitar UTC-6 desfase
         const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
         if (m) {
           const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0));
@@ -262,73 +257,56 @@ export async function updateProfileAction(fd: FormData) {
       }
     }
 
-    // Ubicación + geocoding
     const location = val(fd, "location");
     let locationLat: number | null | undefined = undefined;
     let locationLng: number | null | undefined = undefined;
 
-    // Campos de ubicación desglosada desde el form
-    const cityFromForm   = val(fd, "city")      ?? undefined;
-    const admin1FromForm = val(fd, "admin1")     ?? undefined;
+    const cityFromForm   = val(fd, "city")       ?? undefined;
+    const admin1FromForm = val(fd, "admin1")      ?? undefined;
     const countryCode    = val(fd, "countryCode") ?? undefined;
-    const cityNorm       = val(fd, "cityNorm")   ?? undefined;
-    const admin1Norm     = val(fd, "admin1Norm") ?? undefined;
+    const cityNorm       = val(fd, "cityNorm")    ?? undefined;
+    const admin1Norm     = val(fd, "admin1Norm")  ?? undefined;
 
     if (typeof location !== "undefined") {
       if (location) {
-        // Si no vienen del form (usuario escribió manual), intentar geocodificar
-        if (!cityFromForm) {
-          const pt = await geocodeCityToPoint(location);
-          locationLat = pt?.lat ?? null;
-          locationLng = pt?.lng ?? null;
-        } else {
-          // Vienen del autocomplete, usar coords si están disponibles
-          const pt = await geocodeCityToPoint(location);
-          locationLat = pt?.lat ?? null;
-          locationLng = pt?.lng ?? null;
-        }
+        const pt = await geocodeCityToPoint(location);
+        locationLat = pt?.lat ?? null;
+        locationLng = pt?.lng ?? null;
       } else {
         locationLat = null;
         locationLng = null;
       }
     }
 
-    // Links / CV
     const linkedin = val(fd, "linkedin");
     const github   = val(fd, "github");
 
-    // ✅ BUG FIX #3: resumeUrl - preferir el nuevo upload, caer al existente
     let resumeUrl: string | null | undefined = undefined;
     if (fd.has("resumeUrl")) {
       const newUrl = String(fd.get("resumeUrl") ?? "").trim();
       resumeUrl = newUrl || me.resumeUrl || null;
     }
 
-    // Certs
     const certsCsv = val(fd, "certifications");
     const certifications =
       typeof certsCsv === "string" && certsCsv.length
         ? certsCsv.split(",").map((s) => s.trim()).filter(Boolean)
         : undefined;
 
-    // Experiencias
-    const expsRaw  = val(fd, "experiences");
-    const parsed   = parseAndValidateExperiences(expsRaw ?? "");
+    const expsRaw = val(fd, "experiences");
+    const parsed  = parseAndValidateExperiences(expsRaw ?? "");
     if (!parsed.ok) return { error: parsed.error };
 
-    // Idiomas
-    const langsRaw   = val(fd, "languages");
+    const langsRaw    = val(fd, "languages");
     const parsedLangs = parseLanguages(langsRaw ?? "");
     if (!parsedLangs.ok) return { error: parsedLangs.error };
     const languageItems = parsedLangs.data;
 
-    // Skills con nivel
     const skillsRaw    = val(fd, "skillsDetailed");
     const parsedSkills = parseSkillsDetailed(skillsRaw ?? "");
     if (!parsedSkills.ok) return { error: parsedSkills.error };
     const skillItems = parsedSkills.data;
 
-    // Educación
     const eduRaw =
       val(fd, "educationJson") ??
       val(fd, "educations") ??
@@ -337,7 +315,6 @@ export async function updateProfileAction(fd: FormData) {
     if (!parsedEdu.ok) return { error: parsedEdu.error };
     const educationItems = parsedEdu.data;
 
-    // Resolver idiomas
     type ResolvedLang = { termId: string; level: LanguageInput["level"] };
     let resolvedLangs: ResolvedLang[] = [];
     if (languageItems.length) {
@@ -363,7 +340,6 @@ export async function updateProfileAction(fd: FormData) {
       resolvedLangs = Array.from(lastByTerm.entries()).map(([termId, level]) => ({ termId, level }));
     }
 
-    // Resolver skills
     type ResolvedSkill = { termId: string; level: number };
     let resolvedSkills: ResolvedSkill[] = [];
     if (skillItems.length) {
@@ -395,38 +371,33 @@ export async function updateProfileAction(fd: FormData) {
       resolvedSkills = Array.from(lastByTerm.entries()).map(([termId, level]) => ({ termId, level }));
     }
 
-    // ✅ Build update con campos separados del schema nuevo
     const data: any = {
-      name:                fullName,
-      firstName:           firstName,
-      lastName:            lastName1,
-      maternalSurname:     lastName2 || null,
-      // ✅ Timestamp de última actualización de perfil
-      profileLastUpdated:  new Date(),
+      name:               fullName,
+      firstName:          firstName,
+      lastName:           lastName1,
+      maternalSurname:    lastName2 || null,
+      profileLastUpdated: new Date(),
     };
 
-    if (typeof phone             !== "undefined") data.phone         = phone;
-    if (typeof safeBirthdate     !== "undefined") data.birthdate     = safeBirthdate;
-    if (typeof location          !== "undefined") data.location      = location;
-    if (typeof locationLat       !== "undefined") data.locationLat   = locationLat;
-    if (typeof locationLng       !== "undefined") data.locationLng   = locationLng;
-    if (typeof linkedin          !== "undefined") data.linkedin      = linkedin;
-    if (typeof github            !== "undefined") data.github        = github;
-    if (typeof resumeUrl         !== "undefined") data.resumeUrl     = resumeUrl;
-    if (typeof certifications    !== "undefined") data.certifications = certifications;
+    if (typeof phone          !== "undefined") data.phone         = phone;
+    if (typeof safeBirthdate  !== "undefined") data.birthdate     = safeBirthdate;
+    if (typeof location       !== "undefined") data.location      = location;
+    if (typeof locationLat    !== "undefined") data.locationLat   = locationLat;
+    if (typeof locationLng    !== "undefined") data.locationLng   = locationLng;
+    if (typeof linkedin       !== "undefined") data.linkedin      = linkedin;
+    if (typeof github         !== "undefined") data.github        = github;
+    if (typeof resumeUrl      !== "undefined") data.resumeUrl     = resumeUrl;
+    if (typeof certifications !== "undefined") data.certifications = certifications;
 
-    // Ubicación desglosada
-    if (cityFromForm   !== undefined) { data.city      = cityFromForm;   data.cityNorm  = stripDiacritics(cityFromForm); }
-    if (admin1FromForm !== undefined) { data.admin1     = admin1FromForm; data.admin1Norm = stripDiacritics(admin1FromForm); }
-    if (countryCode    !== undefined) { data.country   = countryCode; }
-    if (cityNorm       !== undefined)   data.cityNorm  = cityNorm;
+    if (cityFromForm   !== undefined) { data.city       = cityFromForm;   data.cityNorm   = stripDiacritics(cityFromForm); }
+    if (admin1FromForm !== undefined) { data.admin1      = admin1FromForm; data.admin1Norm = stripDiacritics(admin1FromForm); }
+    if (countryCode    !== undefined)   data.country    = countryCode;
+    if (cityNorm       !== undefined)   data.cityNorm   = cityNorm;
     if (admin1Norm     !== undefined)   data.admin1Norm = admin1Norm;
 
-    // Persistir
     await prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: me.id }, data });
 
-      // Experiencias
       await tx.workExperience.deleteMany({ where: { userId: me.id } });
       if (parsed.data.length) {
         await tx.workExperience.createMany({
@@ -437,7 +408,6 @@ export async function updateProfileAction(fd: FormData) {
         });
       }
 
-      // Idiomas
       await tx.candidateLanguage.deleteMany({ where: { userId: me.id } });
       if (resolvedLangs.length) {
         await tx.candidateLanguage.createMany({
@@ -445,7 +415,6 @@ export async function updateProfileAction(fd: FormData) {
         });
       }
 
-      // ✅ Skills con nivel — se guardan en CandidateSkill, no en User.skills[]
       await tx.candidateSkill.deleteMany({ where: { userId: me.id } });
       if (resolvedSkills.length) {
         await tx.candidateSkill.createMany({
@@ -453,7 +422,6 @@ export async function updateProfileAction(fd: FormData) {
         });
       }
 
-      // Educación
       await tx.education.deleteMany({ where: { userId: me.id } });
       if (educationItems.length) {
         await tx.education.createMany({
