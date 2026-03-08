@@ -1,6 +1,7 @@
 // app/api/ai/parse-cv/route.ts
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { extractCvText } from "@/lib/ai/extractCvText";
@@ -36,27 +37,14 @@ export async function POST(req: Request) {
 
     const cvText = await extractCvText(file);
 
-    if (!cvText) {
+    if (!cvText || cvText.trim().length < 50) {
       return NextResponse.json(
         { error: "No se pudo extraer texto del CV" },
         { status: 400 }
       );
     }
 
-    const analysisText = await analyzeCv(cvText);
-
-    let analysis: unknown;
-    try {
-      analysis = JSON.parse(analysisText);
-    } catch {
-      return NextResponse.json(
-        {
-          error: "La IA devolvió un formato inválido",
-          raw: analysisText,
-        },
-        { status: 500 }
-      );
-    }
+    const analysis = await analyzeCv(cvText);
 
     return NextResponse.json({
       fileName: file.name,
@@ -65,7 +53,6 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("CV Parse Error:", error);
-
     return NextResponse.json(
       { error: "Error procesando CV" },
       { status: 500 }

@@ -36,7 +36,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1. Extraer texto del CV
     const cvText = await extractCvText(file);
 
     if (!cvText || cvText.trim().length < 50) {
@@ -46,37 +45,24 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2. Analizar con IA
-    const analysisText = await analyzeCv(cvText);
+    const analysis = await analyzeCv(cvText);
 
-    let analysis: Record<string, unknown>;
-    try {
-      analysis = JSON.parse(analysisText);
-    } catch {
-      return NextResponse.json(
-        { error: "La IA devolvió un JSON inválido", raw: analysisText },
-        { status: 500 }
-      );
-    }
-
-    // 3. Normalizar skills contra catálogo BD
-    const rawSkills = Array.isArray(analysis.skills)
-      ? (analysis.skills as string[])
-      : [];
-
+    const rawSkills = Array.isArray(analysis.skills) ? analysis.skills : [];
     const normalizedSkills = await normalizeSkillsFromAI(rawSkills);
 
-    // Reemplazar skills crudos por los normalizados en el análisis
-    analysis.skills         = normalizedSkills.map((s) => s.label);  // labels canónicos
-    analysis.skillsMatched  = normalizedSkills;                        // { termId, label }[] para el form
-    analysis.skillsRaw      = rawSkills;                               // originales para debug
-    analysis.skillsUnmatched = rawSkills.filter(
-      (r) => !normalizedSkills.some(
-        (n) => n.label.toLowerCase() === r.toLowerCase()
-      )
-    );
+    const enrichedAnalysis = {
+      ...analysis,
+      skills: normalizedSkills.map((s) => s.label),
+      skillsMatched: normalizedSkills,
+      skillsRaw: rawSkills,
+      skillsUnmatched: rawSkills.filter(
+        (r) =>
+          !normalizedSkills.some(
+            (n) => n.label.toLowerCase() === r.toLowerCase()
+          )
+      ),
+    };
 
-    // 4. Subir archivo a UploadThing
     const uploadResult = await utapi.uploadFiles(file);
 
     if (!uploadResult || uploadResult.error || !uploadResult.data) {
@@ -97,13 +83,12 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      success:    true,
-      url:        uploadedUrl,
-      fileName:   file.name,
-      analysis,
+      success: true,
+      url: uploadedUrl,
+      fileName: file.name,
+      analysis: enrichedAnalysis,
       textLength: cvText.length,
     });
-
   } catch (error) {
     console.error("CV upload-and-parse error:", error);
     return NextResponse.json(
