@@ -6,6 +6,12 @@ import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
 import AssessmentRequirement from "./AssessmentRequirement";
+import CandidateMatchCard from "@/components/jobs/CandidateMatchCard";
+import {
+  computeMatchScore,
+  type JobSkillInput,
+  type CandidateSkillInput,
+} from "@/lib/ai/matchScore";
 import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
@@ -30,16 +36,11 @@ function stripHtml(html: string | null | undefined) {
 
 function labelEmploymentType(type: string | null | undefined) {
   switch (type) {
-    case "FULL_TIME":
-      return "Tiempo completo";
-    case "PART_TIME":
-      return "Medio tiempo";
-    case "CONTRACT":
-      return "Por periodo";
-    case "INTERNSHIP":
-      return "Prácticas profesionales";
-    default:
-      return null;
+    case "FULL_TIME":   return "Tiempo completo";
+    case "PART_TIME":   return "Medio tiempo";
+    case "CONTRACT":    return "Por periodo";
+    case "INTERNSHIP":  return "Prácticas profesionales";
+    default:            return null;
   }
 }
 
@@ -61,22 +62,15 @@ function buildDescription(job: {
   if (empLabel) parts.push(empLabel);
   if (job.salaryMin || job.salaryMax) {
     const currency = job.currency ?? "MXN";
-    const fmt = (n: number) =>
-      new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
-    if (job.salaryMin && job.salaryMax) {
-      parts.push(`${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`);
-    } else if (job.salaryMin) {
-      parts.push(`Desde ${currency} ${fmt(job.salaryMin)}`);
-    } else if (job.salaryMax) {
-      parts.push(`Hasta ${currency} ${fmt(job.salaryMax)}`);
-    }
+    const fmt = (n: number) => new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
+    if (job.salaryMin && job.salaryMax) parts.push(`${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`);
+    else if (job.salaryMin) parts.push(`Desde ${currency} ${fmt(job.salaryMin)}`);
+    else if (job.salaryMax) parts.push(`Hasta ${currency} ${fmt(job.salaryMax)}`);
   }
   const header = parts.join(" · ");
   const rawDesc = job.description || stripHtml(job.descriptionHtml || "");
   const desc = excerpt(rawDesc, 120);
-  return header && desc
-    ? `${header} — ${desc}`
-    : header || desc || `Vacante: ${job.title}`;
+  return header && desc ? `${header} — ${desc}` : header || desc || `Vacante: ${job.title}`;
 }
 
 /* ─── Metadata ─── */
@@ -84,25 +78,16 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const job = await prisma.job.findUnique({
     where: { id: params.id },
     select: {
-      id: true,
-      title: true,
-      description: true,
-      descriptionHtml: true,
-      city: true,
-      employmentType: true,
-      salaryMin: true,
-      salaryMax: true,
-      currency: true,
-      updatedAt: true,
+      id: true, title: true, description: true, descriptionHtml: true,
+      city: true, employmentType: true, salaryMin: true, salaryMax: true,
+      currency: true, updatedAt: true,
       company: { select: { name: true } },
     },
   });
-
   if (!job) return {};
 
   const companyName = job.company?.name ?? null;
   const title = companyName ? `${job.title} — ${companyName}` : job.title;
-
   const description = buildDescription(job);
   const url = `${APP_URL}/jobs/${job.id}`;
   const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}&v=${job.updatedAt.getTime()}`;
@@ -112,20 +97,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     description,
     alternates: { canonical: url },
     openGraph: {
-      title,
-      description,
-      url,
-      siteName: SITE_NAME,
-      locale: "es_MX",
-      type: "website",
+      title, description, url, siteName: SITE_NAME, locale: "es_MX", type: "website",
       images: [{ url: ogImage, width: 630, height: 630, alt: title }],
     },
-    twitter: {
-      card: "summary",
-      title,
-      description,
-      images: [ogImage],
-    },
+    twitter: { card: "summary", title, description, images: [ogImage] },
   };
 }
 
@@ -139,9 +114,7 @@ export default async function JobDetail({ params }: Params) {
   }
 
   const user = (session?.user as any) || null;
-  const role =
-    (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
-
+  const role = (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
   const isCandidate = role === "CANDIDATE";
   const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
@@ -157,6 +130,13 @@ export default async function JobDetail({ params }: Params) {
       description: true,
       descriptionHtml: true,
       skills: true,
+      requiredSkills: {                              // ✅ NUEVO: skills del catálogo
+        select: {
+          must: true,
+          weight: true,
+          term: { select: { id: true, label: true } },
+        },
+      },
       salaryMin: true,
       salaryMax: true,
       currency: true,
@@ -176,12 +156,8 @@ export default async function JobDetail({ params }: Params) {
           templateId: true,
           template: {
             select: {
-              id: true,
-              title: true,
-              difficulty: true,
-              totalQuestions: true,
-              timeLimit: true,
-              passingScore: true,
+              id: true, title: true, difficulty: true,
+              totalQuestions: true, timeLimit: true, passingScore: true,
             },
           },
         },
@@ -212,6 +188,33 @@ export default async function JobDetail({ params }: Params) {
         })
       : null;
 
+  // ✅ NUEVO: calcular AI Match para el candidato logueado
+  let candidateMatchResult = null;
+  const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
+    termId: rs.term.id,
+    label: rs.term.label,
+    must: rs.must,
+    weight: rs.weight,
+  }));
+
+  if (isCandidate && user?.id && jobSkillsForEngine.length > 0) {
+    const candidateSkillsRaw = await prisma.candidateSkill.findMany({
+      where: { userId: user.id },
+      select: {
+        level: true,
+        term: { select: { id: true, label: true } },
+      },
+    });
+
+    const candidateSkillsForEngine: CandidateSkillInput[] = candidateSkillsRaw.map((cs) => ({
+      termId: cs.term.id,
+      label: cs.term.label,
+      level: cs.level,
+    }));
+
+    candidateMatchResult = computeMatchScore(jobSkillsForEngine, candidateSkillsForEngine);
+  }
+
   const panelJob = {
     id: job.id,
     title: job.title,
@@ -240,18 +243,8 @@ export default async function JobDetail({ params }: Params) {
     jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
     jobLocation: job.remote
       ? undefined
-      : [
-          {
-            "@type": "Place",
-            address: {
-              "@type": "PostalAddress",
-              addressLocality: job.location || "México",
-              addressCountry: "MX",
-            },
-          },
-        ],
-    description:
-      job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
+      : [{ "@type": "Place", address: { "@type": "PostalAddress", addressLocality: job.location || "México", addressCountry: "MX" } }],
+    description: job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
     employmentType: job.employmentType,
     identifier: {
@@ -261,10 +254,6 @@ export default async function JobDetail({ params }: Params) {
     },
   };
 
-  // ✅ CLAVE:
-  // - Candidato: puede postular
-  // - Anónimo: puede ver botón (al click lo mandará a login por 401)
-  // - Recruiter/Admin: NO (verán Editar si aplica)
   const canApply = !isRecruiterOrAdmin;
 
   return (
@@ -280,6 +269,43 @@ export default async function JobDetail({ params }: Params) {
           userAttempt={userAttempt as any}
         />
       )}
+
+      {/* ✅ NUEVO: AI Match para el candidato — solo si está logueado y hay skills en la vacante */}
+      {isCandidate && candidateMatchResult && (
+        <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
+      )}
+
+      {/* ✅ NUEVO: CTA para candidatos anónimos si la vacante tiene skills definidas */}
+      {!session && jobSkillsForEngine.length > 0 && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-700/40 dark:bg-emerald-950/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                ¿Cuánto encajas con esta vacante?
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                Crea tu perfil o inicia sesión para ver tu score de compatibilidad con esta vacante.
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <a
+                href={`/auth/signin?role=CANDIDATE&callbackUrl=${encodeURIComponent(`/jobs/${job.id}`)}`}
+                className="inline-flex items-center rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600/50 dark:bg-transparent dark:text-emerald-300"
+              >
+                Iniciar sesión
+              </a>
+              <a
+                href={`/auth/signup/candidate?callbackUrl=${encodeURIComponent(`/jobs/${job.id}`)}`}
+                className="inline-flex items-center rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+              >
+                Crear cuenta gratis →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NUEVO: si candidato logueado pero vacante sin skills en catálogo (solo tiene skills[]) — no mostrar nada */}
 
       <JobDetailPanel
         job={panelJob as any}
