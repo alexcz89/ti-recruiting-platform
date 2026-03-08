@@ -15,12 +15,12 @@ export type PlanConfig = {
   features: string[];
   ctaLabel: string;
   limits: {
-    maxActiveJobs: number | null;        // null = ilimitadas
+    maxActiveJobs: number | null;
     maxCandidatesPerMonth: number | null;
     maxRecruiters: number | null;
     maxClients: number | null;
-    maxMultipleChoiceAssessments: number | null; // null = ilimitadas
-    maxCodeAssessmentsPerMonth: number;         // siempre número
+    maxMultipleChoiceAssessments: number | null;
+    maxCodeAssessmentsPerMonth: number;
   };
 };
 
@@ -40,6 +40,7 @@ export const PLANS: PlanConfig[] = [
       "3 evaluaciones de opción múltiple por vacante",
       "Publicación en la bolsa TI",
       "Sin evaluaciones de código",
+      "AI Match: no disponible",
     ],
     ctaLabel: "Crear cuenta gratis",
     limits: {
@@ -67,6 +68,7 @@ export const PLANS: PlanConfig[] = [
       "Evaluaciones de opción múltiple ilimitadas",
       "10 evaluaciones de código por mes",
       "ATS con pipeline de candidatos",
+      "AI Match: top 5 candidatos por vacante",
       "Soporte por email",
     ],
     ctaLabel: "Empezar con Starter",
@@ -94,6 +96,7 @@ export const PLANS: PlanConfig[] = [
       "Evaluaciones de opción múltiple ilimitadas",
       "50 evaluaciones de código por mes",
       "Branding de empresa (logo)",
+      "AI Match: todos los candidatos ilimitado",
       "Soporte prioritario por WhatsApp",
     ],
     ctaLabel: "Empezar con Pro",
