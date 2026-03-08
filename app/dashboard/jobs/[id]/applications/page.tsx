@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
 import ActionsMenu from "./ActionsMenu";
-import { Phone, FileText as FileTextIcon, Search, Lock } from "lucide-react";
+import { Phone, FileText as FileTextIcon, Search, Lock, SlidersHorizontal } from "lucide-react";
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import {
   computeMatchScore,
@@ -20,7 +20,6 @@ import {
   type CandidateSkillInput,
 } from "@/lib/ai/matchScore";
 
-/** Niveles de idioma */
 const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
   NATIVE: "Nativo",
   PROFESSIONAL: "Profesional",
@@ -48,6 +47,14 @@ const PLAN_LABELS: Record<BillingPlan, string> = {
 };
 
 type SortKey = "match" | "recent" | "name";
+type MatchFilter = "ALL" | "HIGH" | "MED" | "LOW";
+type CvFilter = "ALL" | "YES" | "NO";
+
+function scoreToRange(score: number): "HIGH" | "MED" | "LOW" {
+  if (score >= 70) return "HIGH";
+  if (score >= 40) return "MED";
+  return "LOW";
+}
 
 export default async function JobApplicationsPage({
   params,
@@ -58,6 +65,8 @@ export default async function JobApplicationsPage({
     interest?: InterestKey | "ALL";
     q?: string;
     sort?: SortKey | string;
+    match?: MatchFilter | string;
+    cv?: CvFilter | string;
   };
 }) {
   const companyId = await getSessionCompanyId().catch(() => null);
@@ -66,19 +75,14 @@ export default async function JobApplicationsPage({
       <main className="max-w-none p-0">
         <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-10">
           <div className="glass-card rounded-2xl border border-dashed p-4 md:p-6 text-center">
-            <p className="mb-1 text-base font-medium text-zinc-800">
-              No hay empresa asociada a tu sesión.
-            </p>
-            <p className="text-sm text-zinc-600">
-              Pide al administrador que asigne tu usuario a una empresa.
-            </p>
+            <p className="mb-1 text-base font-medium text-zinc-800">No hay empresa asociada a tu sesión.</p>
+            <p className="text-sm text-zinc-600">Pide al administrador que asigne tu usuario a una empresa.</p>
           </div>
         </div>
       </main>
     );
   }
 
-  // ✅ NUEVO: plan de la empresa para gate de AI Match
   const company = await prisma.company.findUnique({
     where: { id: companyId },
     select: { billingPlan: true },
@@ -96,8 +100,8 @@ export default async function JobApplicationsPage({
       requiredSkills: {
         select: {
           must: true,
-          weight: true,                               // ✅ NUEVO
-          term: { select: { id: true, label: true } }, // ✅ id para engine
+          weight: true,
+          term: { select: { id: true, label: true } },
         },
       },
       assessments: {
@@ -114,7 +118,6 @@ export default async function JobApplicationsPage({
   const chosenTemplateId = job.assessments?.[0]?.templateId ?? null;
   const assessmentEnabled = Boolean(chosenTemplateId);
 
-  // ✅ NUEVO: skills de la vacante para el engine
   const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
     termId: rs.term.id,
     label: rs.term.label,
@@ -123,7 +126,6 @@ export default async function JobApplicationsPage({
   }));
   const hasJobSkills = jobSkillsForEngine.length > 0;
 
-  // Traer todas las apps — ahora con termId + level en candidateSkills
   const allApps = await prisma.application.findMany({
     where: { jobId: job.id, job: { companyId } },
     orderBy: { createdAt: "desc" },
@@ -141,8 +143,8 @@ export default async function JobApplicationsPage({
           certifications: true,
           candidateSkills: {
             select: {
-              level: true,                              // ✅ NUEVO
-              term: { select: { id: true, label: true } }, // ✅ id para engine
+              level: true,
+              term: { select: { id: true, label: true } },
             },
           },
           candidateLanguages: {
@@ -156,7 +158,7 @@ export default async function JobApplicationsPage({
     },
   });
 
-  // ── Assessment meta (sin cambios) ─────────────────────────────────────────
+  // ── Assessment meta ───────────────────────────────────────────────────────
   type AssessmentRowMeta = {
     enabled: boolean;
     templateId: string;
@@ -201,9 +203,8 @@ export default async function JobApplicationsPage({
     for (const a of attempts) {
       if (!a.applicationId) continue;
       const prev = attemptMap.get(a.applicationId);
-      if (!prev || statusRank(a.status) >= statusRank(prev.status)) {
+      if (!prev || statusRank(a.status) >= statusRank(prev.status))
         attemptMap.set(a.applicationId, a);
-      }
     }
 
     const inviteMap = new Map<string, (typeof invites)[number]>();
@@ -246,12 +247,12 @@ export default async function JobApplicationsPage({
       assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: "NONE", token: null, attemptId: null, score: null });
     }
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
   const counters: Record<InterestKey, number> = { REVIEW: 0, MAYBE: 0, ACCEPTED: 0, REJECTED: 0 };
   for (const a of allApps) counters[getAppInterest(a)]++;
   const total = allApps.length;
 
+  // ── Params ────────────────────────────────────────────────────────────────
   const interestParam = searchParams?.interest as string | undefined;
   const chosenInterest: InterestKey | undefined = !interestParam
     ? ("REVIEW" as InterestKey)
@@ -263,35 +264,34 @@ export default async function JobApplicationsPage({
   const q = qParam.trim().toLowerCase();
   const sortParamRaw = (searchParams?.sort as string | undefined) ?? "match";
   const sortKey: SortKey = sortParamRaw === "recent" || sortParamRaw === "name" ? sortParamRaw : "match";
+  const matchParam = (searchParams?.match as string | undefined) ?? "ALL";
+  const matchFilter: MatchFilter = ["HIGH", "MED", "LOW"].includes(matchParam) ? (matchParam as MatchFilter) : "ALL";
+  const cvParam = (searchParams?.cv as string | undefined) ?? "ALL";
+  const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
 
-  // ✅ NUEVO: enriquecer con engine de match por termId
+  // ── Enriquecer ────────────────────────────────────────────────────────────
   let enriched = allApps.map((a) => {
     const candidateSkillsForEngine: CandidateSkillInput[] = (a.candidate?.candidateSkills ?? []).map((cs: any) => ({
       termId: cs.term.id,
       label: cs.term.label,
       level: cs.level,
     }));
-
-    const matchResult = hasJobSkills
-      ? computeMatchScore(jobSkillsForEngine, candidateSkillsForEngine)
-      : null;
-
+    const matchResult = hasJobSkills ? computeMatchScore(jobSkillsForEngine, candidateSkillsForEngine) : null;
     const fullName =
       a.candidate?.name ||
       [(a.candidate as any)?.firstName, (a.candidate as any)?.lastName].filter(Boolean).join(" ") ||
       "—";
-
     return {
       ...a,
       _matchResult: matchResult,
       _score: matchResult?.score ?? 0,
       _fullName: fullName,
       _lastActivity: a.createdAt,
+      _hasCV: Boolean(a.candidate?.resumeUrl),
     };
   });
 
   if (chosenInterest) enriched = enriched.filter((a) => getAppInterest(a) === chosenInterest);
-
   if (q) {
     enriched = enriched.filter((a) => {
       const skills = (a.candidate?.candidateSkills ?? []).map((cs: any) => cs.term.label).join(" ");
@@ -300,342 +300,436 @@ export default async function JobApplicationsPage({
     });
   }
 
-  const apps = [...enriched].sort((a, b) => {
+  // Ordenar antes del gate
+  const sorted = [...enriched].sort((a, b) => {
     if (sortKey === "recent") return new Date(b._lastActivity).getTime() - new Date(a._lastActivity).getTime();
     if (sortKey === "name")   return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
     return (b._score ?? 0) - (a._score ?? 0);
   });
 
-  // ✅ NUEVO: gate de plan (rank = posición 0-based en lista ordenada por score desc)
-  const appsWithGate = apps.map((a, idx) => {
+  const withGate = sorted.map((a, idx) => {
     const gatedScore = applyPlanGate(a._score, idx, plan);
     return { ...a, _gatedScore: gatedScore, _locked: gatedScore === null };
   });
 
-  const lockedCount = appsWithGate.filter((a) => a._locked).length;
+  // Filtros post-gate
+  const apps = withGate.filter((a) => {
+    if (matchFilter !== "ALL" && hasJobSkills && !a._locked) {
+      if (scoreToRange(a._gatedScore ?? 0) !== matchFilter) return false;
+    }
+    if (cvFilter === "YES" && !a._hasCV) return false;
+    if (cvFilter === "NO" && a._hasCV) return false;
+    return true;
+  });
 
-  const buildInterestHref = (i?: InterestKey | "ALL") => {
-    const usp = new URLSearchParams();
-    if (i) usp.set("interest", i);
-    if (qParam) usp.set("q", qParam);
-    if (sortKey) usp.set("sort", sortKey);
-    return `/dashboard/jobs/${job.id}/applications${usp.toString() ? `?${usp.toString()}` : ""}`;
-  };
+  const lockedCount = withGate.filter((a) => a._locked).length;
 
-  const buildSortHref = (sort: SortKey) => {
+  // Conteos para chips
+  const matchCounts: Record<MatchFilter, number> = { ALL: 0, HIGH: 0, MED: 0, LOW: 0 };
+  for (const a of withGate) {
+    matchCounts.ALL++;
+    if (!a._locked && hasJobSkills) matchCounts[scoreToRange(a._gatedScore ?? 0)]++;
+  }
+
+  // URL builder
+  function buildHref(overrides: { interest?: string; q?: string; sort?: string; match?: string; cv?: string }) {
     const usp = new URLSearchParams();
-    if (interestParam) usp.set("interest", interestParam);
-    if (qParam) usp.set("q", qParam);
-    usp.set("sort", sort);
-    return `/dashboard/jobs/${job.id}/applications${usp.toString() ? `?${usp.toString()}` : ""}`;
-  };
+    const i  = "interest" in overrides ? overrides.interest : interestParam;
+    const qv = "q"        in overrides ? overrides.q        : qParam;
+    const sv = "sort"     in overrides ? overrides.sort     : sortKey;
+    const mv = "match"    in overrides ? overrides.match    : matchFilter !== "ALL" ? matchFilter : undefined;
+    const cv = "cv"       in overrides ? overrides.cv       : cvFilter !== "ALL" ? cvFilter : undefined;
+    if (i)  usp.set("interest", i);
+    if (qv) usp.set("q", qv);
+    if (sv) usp.set("sort", sv);
+    if (mv) usp.set("match", mv);
+    if (cv) usp.set("cv", cv);
+    return `/dashboard/jobs/${params.id}/applications${usp.toString() ? `?${usp.toString()}` : ""}`;
+  }
 
   const headerBtnClasses =
-    "inline-flex items-center whitespace-nowrap rounded-full border border-zinc-200 bg-white/80 px-5 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900";
+    "inline-flex items-center whitespace-nowrap rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900";
+
+  const activeFiltersCount = (matchFilter !== "ALL" ? 1 : 0) + (cvFilter !== "ALL" ? 1 : 0);
 
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-8 px-6 py-8 lg:px-10">
+      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-8 lg:px-10">
+
         {/* Header */}
-        <header className="space-y-4">
+        <header className="space-y-3">
           <div>
-            <h1 className="text-2xl font-bold leading-tight">{job.title}</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              {job.company?.name ?? "—"}
-              {job.location ? ` · ${job.location}` : ""} · Publicada {fromNow(job.createdAt)} · Actualizada {fromNow(job.updatedAt)}
+            <h1 className="text-xl font-bold leading-tight sm:text-2xl">{job.title}</h1>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              {job.company?.name ?? "—"}{job.location ? ` · ${job.location}` : ""} · {fromNow(job.createdAt)}
             </p>
           </div>
           <div className="flex flex-row flex-wrap items-center gap-2">
-            <Link href={`/dashboard/jobs/${job.id}`} className={headerBtnClasses}>Ver Pipeline</Link>
+            <Link href={`/dashboard/jobs/${job.id}`} className={headerBtnClasses}>Pipeline</Link>
             <Link href={`/jobs/${job.id}`} target="_blank" className={headerBtnClasses}>Ver vacante</Link>
-            <Link href="/dashboard/jobs" className={headerBtnClasses}>Volver a Vacantes</Link>
+            <Link href="/dashboard/jobs" className={headerBtnClasses}>← Vacantes</Link>
             <JobActionsMenu jobId={job.id} currentStatus={job.status} />
           </div>
         </header>
 
-        {/* ✅ NUEVO: Banner de upgrade si hay candidatos bloqueados */}
+        {/* Banner upgrade */}
         {lockedCount > 0 && (
-          <div className="flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 dark:border-amber-700/40 dark:bg-amber-950/30">
-            <div className="flex items-center gap-3">
-              <Lock className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-700/40 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex items-start gap-3">
+              <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
               <div>
                 <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">
                   {lockedCount} candidato{lockedCount > 1 ? "s" : ""} con AI Match bloqueado
                 </p>
                 <p className="text-xs text-amber-700 dark:text-amber-300">
-                  Plan {PLAN_LABELS[plan]}:{" "}
-                  {plan === "FREE"
-                    ? "Actualiza a Starter para ver el AI Match de tus candidatos"
-                    : "Actualiza a Pro para ver el AI Match de todos los candidatos"}
+                  {plan === "FREE" ? "Actualiza a Starter para ver el AI Match" : "Actualiza a Pro para ver todos los candidatos"}
                 </p>
               </div>
             </div>
-            <Link
-              href="/dashboard/billing"
-              className="shrink-0 rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors"
-            >
+            <Link href="/dashboard/billing" className="self-start rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors sm:self-auto sm:shrink-0">
               Mejorar plan →
             </Link>
           </div>
         )}
 
-        {/* Tabs por interés */}
-        <section className="glass-card rounded-2xl border p-4 md:p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <FilterPill active={interestParam === "ALL"} href={buildInterestHref("ALL")} label={`Todos (${total})`} />
-            <FilterPill active={chosenInterest === "REVIEW"} href={buildInterestHref("REVIEW")} label={`En revisión (${counters.REVIEW})`} />
-            <FilterPill active={chosenInterest === "MAYBE"} href={buildInterestHref("MAYBE")} label={`En duda (${counters.MAYBE})`} />
-            <FilterPill active={chosenInterest === "ACCEPTED"} href={buildInterestHref("ACCEPTED")} label={`Aceptados (${counters.ACCEPTED})`} />
-            <FilterPill active={chosenInterest === "REJECTED"} href={buildInterestHref("REJECTED")} label={`Rechazados (${counters.REJECTED})`} />
+        {/* Tabs interés */}
+        <section className="glass-card rounded-2xl border p-3 sm:p-4">
+          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} />
+            <FilterPill active={chosenInterest === "REVIEW"} href={buildHref({ interest: "REVIEW" })} label={`Revisión (${counters.REVIEW})`} />
+            <FilterPill active={chosenInterest === "MAYBE"} href={buildHref({ interest: "MAYBE" })} label={`En duda (${counters.MAYBE})`} />
+            <FilterPill active={chosenInterest === "ACCEPTED"} href={buildHref({ interest: "ACCEPTED" })} label={`Aceptados (${counters.ACCEPTED})`} />
+            <FilterPill active={chosenInterest === "REJECTED"} href={buildHref({ interest: "REJECTED" })} label={`Rechazados (${counters.REJECTED})`} />
           </div>
         </section>
 
-        {/* Tabla */}
-        {appsWithGate.length === 0 ? (
-          <div className="glass-card rounded-2xl border border-dashed p-4 text-center md:p-6">
+        {/* ✅ Filtros rápidos */}
+        <section className="glass-card rounded-2xl border p-3 sm:p-4">
+          <div className="flex flex-col gap-3">
+            {/* Label de filtros */}
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="h-3.5 w-3.5 text-zinc-400" />
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Filtrar por</span>
+              {activeFiltersCount > 0 && (
+                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                  {activeFiltersCount}
+                </span>
+              )}
+              {activeFiltersCount > 0 && (
+                <Link href={buildHref({ match: undefined, cv: undefined })} className="ml-auto text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600">
+                  Limpiar
+                </Link>
+              )}
+            </div>
+
+            {/* Chips en dos filas en mobile, una en desktop */}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+
+              {/* Match score */}
+              {hasJobSkills && (
+                <div className="flex items-center gap-2">
+                  <span className="w-10 shrink-0 text-[11px] text-zinc-400">Match</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(["ALL", "HIGH", "MED", "LOW"] as MatchFilter[]).map((f) => (
+                      <Link key={f} href={buildHref({ match: f === "ALL" ? undefined : f })}
+                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                          matchFilter === f
+                            ? f === "HIGH" ? "border-emerald-500 bg-emerald-600 text-white"
+                              : f === "MED" ? "border-amber-500 bg-amber-500 text-white"
+                              : f === "LOW" ? "border-red-400 bg-red-500 text-white"
+                              : "border-zinc-500 bg-zinc-700 text-white dark:border-zinc-400 dark:bg-zinc-600"
+                            : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
+                        }`}>
+                        {f === "ALL" ? `Todos (${matchCounts.ALL})` : f === "HIGH" ? `Alto (${matchCounts.HIGH})` : f === "MED" ? `Medio (${matchCounts.MED})` : `Bajo (${matchCounts.LOW})`}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* CV */}
+              <div className="flex items-center gap-2">
+                <span className="w-10 shrink-0 text-[11px] text-zinc-400">CV</span>
+                <div className="flex gap-1.5">
+                  {(["ALL", "YES", "NO"] as CvFilter[]).map((f) => (
+                    <Link key={f} href={buildHref({ cv: f === "ALL" ? undefined : f })}
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                        cvFilter === f
+                          ? "border-emerald-500 bg-emerald-600 text-white"
+                          : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
+                      }`}>
+                      {f === "ALL" ? "Todos" : f === "YES" ? "Con CV" : "Sin CV"}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Lista */}
+        {apps.length === 0 ? (
+          <div className="glass-card rounded-2xl border border-dashed p-6 text-center">
             <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              {chosenInterest ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.` : "Aún no hay postulaciones para esta vacante."}
+              {activeFiltersCount > 0 ? "Ningún candidato coincide con los filtros." : chosenInterest ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.` : "Aún no hay postulaciones."}
             </p>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Usa el botón &ldquo;Ver vacante&rdquo; para compartirla y recibir postulaciones.
-            </p>
+            {activeFiltersCount > 0 && (
+              <Link href={buildHref({ match: undefined, cv: undefined })} className="mt-2 inline-block text-sm text-emerald-600 underline hover:no-underline">
+                Limpiar filtros
+              </Link>
+            )}
           </div>
         ) : (
-          <div className="rounded-2xl border border-zinc-100 bg-white/90 p-4 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/70">
-            {/* Barra herramientas */}
-            <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <form method="get" className="relative w-full max-w-xs text-sm">
+          <div className="rounded-2xl border border-zinc-100 bg-white/90 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/70">
+
+            {/* Toolbar: búsqueda + sort */}
+            <div className="flex flex-col gap-2 border-b border-zinc-100 p-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+              <form method="get" className="relative w-full sm:max-w-xs">
                 {interestParam && <input type="hidden" name="interest" value={interestParam} />}
                 {sortKey && <input type="hidden" name="sort" value={sortKey} />}
-                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                {matchFilter !== "ALL" && <input type="hidden" name="match" value={matchFilter} />}
+                {cvFilter !== "ALL" && <input type="hidden" name="cv" value={cvFilter} />}
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
                 <input
                   name="q"
                   defaultValue={qParam}
-                  className="w-full rounded-full border border-zinc-200 bg-white/70 py-1.5 pl-7 pr-3 text-xs text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/60 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-                  placeholder="Buscar candidato, email, ciudad o skill…"
+                  className="w-full rounded-full border border-zinc-200 bg-white/70 py-1.5 pl-8 pr-3 text-xs text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/60 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                  placeholder="Nombre, email, ciudad o skill…"
                 />
               </form>
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-zinc-500 dark:text-zinc-400">Ordenar por:</span>
-                <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 text-xs dark:bg-zinc-900/70">
-                  <SortPill href={buildSortHref("match")} active={sortKey === "match"}>Match</SortPill>
-                  <SortPill href={buildSortHref("recent")} active={sortKey === "recent"}>Actividad</SortPill>
-                  <SortPill href={buildSortHref("name")} active={sortKey === "name"}>Nombre</SortPill>
+                <span className="shrink-0 text-zinc-500">Ordenar:</span>
+                <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
+                  <SortPill href={buildHref({ sort: "match" })} active={sortKey === "match"}>Match</SortPill>
+                  <SortPill href={buildHref({ sort: "recent" })} active={sortKey === "recent"}>Reciente</SortPill>
+                  <SortPill href={buildHref({ sort: "name" })} active={sortKey === "name"}>Nombre</SortPill>
                 </div>
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 text-left text-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-300">
-                  <tr>
-                    <th className="py-2 px-3">Candidato</th>
-                    <th className="py-2 px-3">
-                      <span className="flex items-center gap-1">
-                        AI Match
-                        {!hasJobSkills && (
-                          <span className="text-[10px] font-normal text-zinc-400">(define skills en la vacante)</span>
+            <div className="px-4 py-2 text-[11px] text-zinc-400">
+              {apps.length} candidato{apps.length !== 1 ? "s" : ""}{activeFiltersCount > 0 ? " (filtrado)" : ""}
+            </div>
+
+            {/* ── Mobile: cards ── */}
+            <div className="block divide-y divide-zinc-100 dark:divide-zinc-800 sm:hidden">
+              {apps.map((a: any) => {
+                const matchResult = a._matchResult;
+                const gatedScore: number | null = a._gatedScore;
+                const locked: boolean = a._locked;
+                const candidateHref = a.candidate?.id ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}` : undefined;
+                const phone = a.candidate?.phone as string | undefined;
+                const resumeUrl = a.candidate?.resumeUrl as string | undefined;
+                const assessMeta = assessmentEnabled && chosenTemplateId ? assessmentByAppId.get(a.id) ?? null : null;
+
+                return (
+                  <div key={a.id} className="space-y-2.5 p-4">
+                    {/* Nombre + score */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        {candidateHref ? (
+                          <Link href={candidateHref} className="block truncate font-semibold text-sm hover:underline">{a._fullName}</Link>
+                        ) : (
+                          <span className="font-semibold text-sm">{a._fullName}</span>
                         )}
+                        <p className="truncate text-xs text-zinc-500">{a.candidate?.location ?? "—"}</p>
+                      </div>
+                      {hasJobSkills && (
+                        locked ? (
+                          <div className="flex shrink-0 items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900/40">
+                            <Lock className="h-3 w-3 text-zinc-400" />
+                            <span className="text-[11px] text-zinc-400">{plan === "FREE" ? "Starter" : "Pro"}</span>
+                          </div>
+                        ) : (
+                          <div className="shrink-0 text-right">
+                            <span className={`text-lg font-black leading-none ${scoreToTextColor(gatedScore!)}`}>{gatedScore}%</span>
+                            <p className="text-[10px] text-zinc-400">{scoreToLabel(gatedScore!)}</p>
+                          </div>
+                        )
+                      )}
+                    </div>
+
+                    {/* Barra match */}
+                    {hasJobSkills && !locked && gatedScore !== null && (
+                      <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
+                        <div className={`h-1.5 rounded-full ${scoreToColor(gatedScore)}`} style={{ width: `${gatedScore}%` }} />
+                      </div>
+                    )}
+
+                    {/* Skills */}
+                    {!locked && matchResult && matchResult.details.filter((d: any) => d.matched).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {matchResult.details.filter((d: any) => d.matched).slice(0, 3).map((d: any) => (
+                          <span key={d.termId} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${d.must ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200" : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"}`}>
+                            {d.label}
+                          </span>
+                        ))}
+                        {matchResult.matchedCount > 3 && <span className="text-[10px] text-zinc-400">+{matchResult.matchedCount - 3}</span>}
+                      </div>
+                    )}
+
+                    {/* Estado + acciones */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0 max-w-[160px]">
+                        <InterestSelect applicationId={a.id} initial={getAppInterest(a)} />
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {phone && (
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={phone}>
+                            <Phone className="h-3 w-3" />
+                          </span>
+                        )}
+                        {resumeUrl && (
+                          <a href={resumeUrl} target="_blank" rel="noreferrer" className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70" title="Ver CV">
+                            <FileTextIcon className="h-3 w-3" />
+                          </a>
+                        )}
+                        <ActionsMenu applicationId={a.id} jobId={job.id} candidateHref={candidateHref} resumeUrl={resumeUrl ?? null} candidateEmail={a.candidate?.email ?? ""} candidatePhone={phone ?? null}
+                          assessment={assessmentEnabled && chosenTemplateId ? ({ enabled: true, templateId: chosenTemplateId, state: (assessMeta?.state ?? "NONE") as any, token: assessMeta?.token ?? null, attemptId: assessMeta?.attemptId ?? null } as any) : ({ enabled: false } as any)} />
+                      </div>
+                    </div>
+
+                    {assessMeta?.enabled && assessMeta.state !== "NONE" && (
+                      <span className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                        assessMeta.state === "COMPLETED" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
+                        : assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
+                        : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
+                        : "border-violet-200 bg-violet-50 text-violet-700",
+                      ].join(" ")}>
+                        {assessMeta.state === "COMPLETED" ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}` : assessMeta.state === "STARTED" ? "Assessment: iniciado" : assessMeta.state === "EXPIRED" ? "Assessment: expirado" : "Assessment: enviado"}
                       </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Desktop: tabla ── */}
+            <div className="hidden overflow-x-auto sm:block">
+              <table className="w-full text-sm">
+                <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-900/40 dark:text-zinc-400">
+                  <tr>
+                    <th className="px-3 py-2.5 font-medium">Candidato</th>
+                    <th className="px-3 py-2.5 font-medium">
+                      {hasJobSkills ? "AI Match" : <span className="text-zinc-400">AI Match <span className="font-normal">(sin skills)</span></span>}
                     </th>
-                    <th className="py-2 px-3">Skills coincidentes</th>
-                    <th className="py-2 px-3">Estado</th>
-                    <th className="py-2 px-3">Actividad</th>
-                    <th className="py-2 px-3">Acciones</th>
+                    <th className="px-3 py-2.5 font-medium">Skills</th>
+                    <th className="px-3 py-2.5 font-medium">Estado</th>
+                    <th className="px-3 py-2.5 font-medium">Actividad</th>
+                    <th className="px-3 py-2.5 font-medium">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {appsWithGate.map((a: any) => {
+                  {apps.map((a: any) => {
                     const matchResult = a._matchResult;
                     const gatedScore: number | null = a._gatedScore;
                     const locked: boolean = a._locked;
-
                     const matchedDetails = (matchResult?.details ?? []).filter((d: any) => d.matched).slice(0, 4);
                     const hiddenCount = Math.max(0, (matchResult?.matchedCount ?? 0) - matchedDetails.length);
-
-                    const candidateHref = a.candidate?.id
-                      ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
-                      : undefined;
-
-                    const fullName: string = a._fullName ?? "—";
-                    const languages = a.candidate?.candidateLanguages ?? [];
+                    const candidateHref = a.candidate?.id ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}` : undefined;
                     const phone = a.candidate?.phone as string | undefined;
                     const resumeUrl = a.candidate?.resumeUrl as string | undefined;
                     const hasWhatsApp = phone?.trim().startsWith("+52");
-                    const assessMeta = assessmentEnabled && chosenTemplateId
-                      ? assessmentByAppId.get(a.id) ?? null
-                      : null;
+                    const assessMeta = assessmentEnabled && chosenTemplateId ? assessmentByAppId.get(a.id) ?? null : null;
+                    const languages = a.candidate?.candidateLanguages ?? [];
 
                     return (
-                      <tr key={a.id} className="align-top border-t border-zinc-100 dark:border-zinc-800">
-
-                        {/* Candidato — igual que antes */}
-                        <td className="py-2 px-3">
-                          <div className="flex flex-col">
+                      <tr key={a.id} className="align-top border-t border-zinc-100 transition-colors hover:bg-zinc-50/40 dark:border-zinc-800 dark:hover:bg-zinc-900/20">
+                        <td className="px-3 py-2.5">
+                          <div className="flex flex-col gap-0.5">
                             {candidateHref ? (
-                              <Link href={candidateHref} className="font-medium hover:underline" title="Ver detalle del candidato">
-                                {fullName}
-                              </Link>
+                              <Link href={candidateHref} className="font-medium hover:underline">{a._fullName}</Link>
                             ) : (
-                              <span className="font-medium">{fullName}</span>
+                              <span className="font-medium">{a._fullName}</span>
                             )}
-                            <span className="text-xs text-zinc-500 dark:text-zinc-400">{a.candidate?.location ?? "—"}</span>
+                            <span className="text-xs text-zinc-500">{a.candidate?.location ?? "—"}</span>
                             {languages.length > 0 && (
-                              <div className="mt-1 flex flex-wrap gap-1">
+                              <div className="mt-0.5 flex flex-wrap gap-1">
                                 {languages.slice(0, 2).map((l: any) => (
-                                  <span key={`${l.term.label}-${l.level}`} className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200">
+                                  <span key={`${l.term.label}-${l.level}`} className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">
                                     {l.term.label} {LANGUAGE_LEVEL_LABEL[l.level] ?? l.level}
                                   </span>
                                 ))}
-                                {languages.length > 2 && (
-                                  <span className="text-[10px] text-zinc-500">+{languages.length - 2}</span>
-                                )}
+                                {languages.length > 2 && <span className="text-[10px] text-zinc-400">+{languages.length - 2}</span>}
                               </div>
                             )}
-                            <div className="mt-1 flex flex-wrap items-center gap-1">
-                              {phone && (
-                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70 dark:text-zinc-200" title={`Tel: ${phone}`}>
-                                  <Phone className="h-3 w-3" />
-                                </span>
-                              )}
-                              {resumeUrl && (
-                                <a href={resumeUrl} target="_blank" rel="noreferrer"
-                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
-                                  title="Ver CV">
-                                  <FileTextIcon className="h-3 w-3" />
-                                </a>
-                              )}
-                              {hasWhatsApp && (
-                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
-                                  WhatsApp
-                                </span>
-                              )}
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              {phone && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={`Tel: ${phone}`}><Phone className="h-3 w-3" /></span>}
+                              {resumeUrl && <a href={resumeUrl} target="_blank" rel="noreferrer" className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70" title="Ver CV"><FileTextIcon className="h-3 w-3" /></a>}
+                              {hasWhatsApp && <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">WA</span>}
                             </div>
                             {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                              <div className="mt-1">
-                                <span className={["inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium border",
-                                  assessMeta.state === "COMPLETED" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                  : assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-200"
-                                  : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-200"
-                                  : "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-200",
-                                ].join(" ")}>
-                                  {assessMeta.state === "COMPLETED"
-                                    ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}`
-                                    : assessMeta.state === "STARTED" ? "Assessment: iniciado"
-                                    : assessMeta.state === "EXPIRED" ? "Assessment: expirado"
-                                    : "Assessment: enviado"}
-                                </span>
-                              </div>
+                              <span className={["mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                assessMeta.state === "COMPLETED" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
+                                : assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
+                                : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
+                                : "border-violet-200 bg-violet-50 text-violet-700",
+                              ].join(" ")}>
+                                {assessMeta.state === "COMPLETED" ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}` : assessMeta.state === "STARTED" ? "Iniciado" : assessMeta.state === "EXPIRED" ? "Expirado" : "Enviado"}
+                              </span>
                             )}
                           </div>
                         </td>
 
-                        {/* ✅ NUEVO: AI Match con gate de plan */}
-                        <td className="py-2 px-3">
+                        <td className="px-3 py-2.5">
                           {!hasJobSkills ? (
                             <span className="text-xs text-zinc-400">—</span>
                           ) : locked ? (
                             <div className="group relative inline-flex cursor-pointer items-center gap-1.5">
                               <div className="flex h-8 w-20 items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40">
                                 <Lock className="h-3.5 w-3.5 text-zinc-400" />
-                                <span className="text-xs font-medium text-zinc-400">
-                                  {plan === "FREE" ? "Starter" : "Pro"}
-                                </span>
+                                <span className="text-xs font-medium text-zinc-400">{plan === "FREE" ? "Starter" : "Pro"}</span>
                               </div>
-                              {/* Tooltip hover */}
                               <div className="pointer-events-none absolute left-0 top-full z-10 mt-1 hidden w-52 rounded-xl border border-zinc-200 bg-white p-3 text-xs shadow-xl group-hover:block dark:border-zinc-700 dark:bg-zinc-900">
                                 <p className="font-semibold text-zinc-800 dark:text-zinc-100">AI Match bloqueado</p>
-                                <p className="mt-1 text-zinc-500 dark:text-zinc-400">
-                                  Mejora a {plan === "FREE" ? "Starter" : "Pro"} para ver el score de este candidato.
-                                </p>
-                                <Link
-                                  href="/dashboard/billing"
-                                  className="pointer-events-auto mt-2 block rounded-lg bg-emerald-600 px-2 py-1.5 text-center font-semibold text-white hover:bg-emerald-700"
-                                >
-                                  Ver planes →
-                                </Link>
+                                <p className="mt-1 text-zinc-500 dark:text-zinc-400">Mejora a {plan === "FREE" ? "Starter" : "Pro"} para ver este score.</p>
+                                <Link href="/dashboard/billing" className="pointer-events-auto mt-2 block rounded-lg bg-emerald-600 px-2 py-1.5 text-center font-semibold text-white hover:bg-emerald-700">Ver planes →</Link>
                               </div>
                             </div>
                           ) : (
-                            <div className="min-w-[110px]">
+                            <div className="min-w-[100px]">
                               <div className="flex items-center gap-2">
-                                <span className={`text-sm font-semibold ${scoreToTextColor(gatedScore!)}`}>
-                                  {gatedScore}%
-                                </span>
-                                <div className="h-1.5 w-20 rounded bg-zinc-200/60 dark:bg-zinc-700/50">
-                                  <div
-                                    className={`h-1.5 rounded transition-all ${scoreToColor(gatedScore!)}`}
-                                    style={{ width: `${Math.max(0, Math.min(gatedScore!, 100))}%` }}
-                                    aria-label={`Match ${gatedScore}%`}
-                                  />
+                                <span className={`text-sm font-semibold ${scoreToTextColor(gatedScore!)}`}>{gatedScore}%</span>
+                                <div className="h-1.5 w-16 rounded bg-zinc-200/60 dark:bg-zinc-700/50">
+                                  <div className={`h-1.5 rounded ${scoreToColor(gatedScore!)}`} style={{ width: `${Math.max(0, Math.min(gatedScore!, 100))}%` }} />
                                 </div>
                               </div>
-                              <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                                {scoreToLabel(gatedScore!)}
-                                {matchResult && ` · ${matchResult.matchedCount}/${jobSkillsForEngine.length}`}
-                              </p>
+                              <p className="mt-0.5 text-[10px] text-zinc-500">{scoreToLabel(gatedScore!)} · {matchResult?.matchedCount ?? 0}/{jobSkillsForEngine.length}</p>
                             </div>
                           )}
                         </td>
 
-                        {/* ✅ NUEVO: Skills coincidentes del engine */}
-                        <td className="py-2 px-3">
+                        <td className="px-3 py-2.5">
                           {locked ? (
                             <span className="text-xs text-zinc-400">—</span>
                           ) : matchedDetails.length ? (
                             <div className="flex flex-wrap items-center gap-1">
                               {matchedDetails.map((d: any, i: number) => (
-                                <span
-                                  key={`${d.termId}-${i}`}
-                                  title={d.must ? "Skill requerida" : "Skill deseable"}
-                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${
-                                    d.must
-                                      ? "bg-emerald-100 text-emerald-800 border-emerald-300 dark:border-emerald-600/60 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                      : "bg-zinc-100 text-zinc-700 border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-200"
-                                  }`}
-                                >
-                                  {d.must && <span className="mr-1 text-[9px] font-semibold uppercase tracking-wide">Req</span>}
+                                <span key={`${d.termId}-${i}`} title={d.must ? "Requerida" : "Deseable"}
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${d.must ? "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-600/60 dark:bg-emerald-900/20 dark:text-emerald-200" : "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"}`}>
+                                  {d.must && <span className="mr-1 text-[9px] font-bold uppercase">Req</span>}
                                   {d.label}
-                                  {d.candidateLevel && (
-                                    <span className="ml-1 text-[9px] opacity-60">L{d.candidateLevel}</span>
-                                  )}
+                                  {d.candidateLevel && <span className="ml-1 text-[9px] opacity-50">L{d.candidateLevel}</span>}
                                 </span>
                               ))}
-                              {hiddenCount > 0 && (
-                                <span className="text-[11px] text-zinc-500">+{hiddenCount}</span>
-                              )}
+                              {hiddenCount > 0 && <span className="text-[10px] text-zinc-400">+{hiddenCount}</span>}
                             </div>
-                          ) : (
-                            <span className="text-zinc-400 dark:text-zinc-500">—</span>
-                          )}
+                          ) : <span className="text-zinc-400">—</span>}
                         </td>
 
-                        {/* Estado — sin cambios */}
-                        <td className="py-2 px-3">
-                          <div className="inline-flex min-w-[130px] max-w-[150px] text-sm">
+                        <td className="px-3 py-2.5">
+                          <div className="inline-flex min-w-[130px] max-w-[150px]">
                             <InterestSelect applicationId={a.id} initial={getAppInterest(a)} />
                           </div>
                         </td>
 
-                        <td className="py-2 px-3 text-sm text-zinc-600 dark:text-zinc-400"
-                          title={new Date(a._lastActivity).toLocaleString()}>
+                        <td className="px-3 py-2.5 text-xs text-zinc-500" title={new Date(a._lastActivity).toLocaleString()}>
                           {fromNow(a._lastActivity)}
                         </td>
 
-                        <td className="py-2 px-3 align-top">
-                          <ActionsMenu
-                            applicationId={a.id}
-                            jobId={job.id}
-                            candidateHref={candidateHref}
-                            resumeUrl={resumeUrl ?? null}
-                            candidateEmail={a.candidate?.email ?? ""}
-                            candidatePhone={phone ?? null}
-                            assessment={
-                              assessmentEnabled && chosenTemplateId
-                                ? ({ enabled: true, templateId: chosenTemplateId, state: (assessMeta?.state ?? "NONE") as any, token: assessMeta?.token ?? null, attemptId: assessMeta?.attemptId ?? null } as any)
-                                : ({ enabled: false } as any)
-                            }
-                          />
+                        <td className="px-3 py-2.5 align-top">
+                          <ActionsMenu applicationId={a.id} jobId={job.id} candidateHref={candidateHref} resumeUrl={resumeUrl ?? null} candidateEmail={a.candidate?.email ?? ""} candidatePhone={phone ?? null}
+                            assessment={assessmentEnabled && chosenTemplateId ? ({ enabled: true, templateId: chosenTemplateId, state: (assessMeta?.state ?? "NONE") as any, token: assessMeta?.token ?? null, attemptId: assessMeta?.attemptId ?? null } as any) : ({ enabled: false } as any)} />
                         </td>
                       </tr>
                     );
@@ -650,18 +744,14 @@ export default async function JobApplicationsPage({
   );
 }
 
-/* ===== UI subcomponentes ===== */
-
 function FilterPill({ active, href, label }: { active?: boolean; href: string; label: string }) {
   return (
-    <Link
-      href={href}
-      className={`inline-flex min-w-[130px] items-center justify-center rounded-full px-4 py-1.5 text-sm border transition
-        ${active
+    <Link href={href}
+      className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-medium transition sm:px-4 ${
+        active
           ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
-          : "border-zinc-200 bg-transparent text-zinc-700 hover:bg-zinc-100/70 dark:border-zinc-700 dark:bg-transparent dark:text-zinc-300 dark:hover:bg-zinc-900/60"
-        }`}
-    >
+          : "border-zinc-200 bg-transparent text-zinc-600 hover:bg-zinc-100/70 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/60"
+      }`}>
       {label}
     </Link>
   );
@@ -669,14 +759,12 @@ function FilterPill({ active, href, label }: { active?: boolean; href: string; l
 
 function SortPill({ href, active, children }: { href: string; active?: boolean; children: React.ReactNode }) {
   return (
-    <Link
-      href={href}
-      className={`px-3 py-1 text-xs rounded-full transition ${
+    <Link href={href}
+      className={`rounded-full px-2.5 py-1 text-xs transition sm:px-3 ${
         active
           ? "bg-white text-emerald-700 shadow-sm dark:bg-emerald-500/20 dark:text-emerald-200"
-          : "text-zinc-600 hover:bg-white/70 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-      }`}
-    >
+          : "text-zinc-500 hover:bg-white/70 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
+      }`}>
       {children}
     </Link>
   );
