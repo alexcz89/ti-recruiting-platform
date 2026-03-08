@@ -1395,3 +1395,15 @@ model NotificationPreference {
   @@index([userId])
   @@map("notification_preferences")
 }
+
+model CvParseCache {
+  id            String   @id @default(cuid())
+  cvHash        String   @unique
+  model         String
+  parserVersion String
+  parsedJson    Json
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([createdAt])
+}
