@@ -1,7 +1,7 @@
 // lib/ai/analyzeCv.ts
 
 import { openai } from "./openai";
-import { AI_MODEL } from "./config";
+import { AI_MODEL_FAST } from "./config";
 
 export async function analyzeCv(cvText: string) {
   const MAX_CHARS = 12000;
@@ -63,7 +63,7 @@ ${trimmedCvText}
 
   try {
     const response = await openai.chat.completions.create({
-      model: AI_MODEL,
+      model: AI_MODEL_FAST,
       messages: [
         {
           role: "user",
