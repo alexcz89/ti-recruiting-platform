@@ -254,7 +254,12 @@ p, span, div {
 
 /* contenedor principal que pasamos como containerClass */
 .bt-phone-input {
-  width: 100%;
+  position: relative;
+  z-index: 50;
+}
+
+.bt-phone-input .country-list {
+  z-index: 9999 !important;
 }
 
 /* Input: solo colores, bordes y tipografía.
@@ -471,12 +476,4 @@ p, span, div {
 .animation-delay-600 {
   animation-delay: 0.6s;
   opacity: 0;
-}
-/* ==============================
-   PhoneInput dropdown — z-index fix
-   El backdrop-blur de glass-card crea un stacking context que corta el dropdown.
-   ============================== */
-.bt-phone-input .country-list {
-  z-index: 9999 !important;
-  position: fixed !important;
 }

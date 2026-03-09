@@ -19,14 +19,13 @@ export default function PhoneInputField({
   helperText,
   error,
 }: Props) {
-  // La librería maneja el valor SIN '+', pero en tu modelo lo guardas con '+'
   const internalValue = useMemo(
     () => (value || "").replace(/^\+/, ""),
     [value]
   );
 
   return (
-    <div className="w-full">
+    <div className="w-full relative z-50">
       {label && (
         <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-1">
           {label}
@@ -44,7 +43,7 @@ export default function PhoneInputField({
         inputClass="bt-phone-input-input"
         buttonClass="bt-phone-input-flag"
         dropdownClass="!z-[9999]"
-        dropdownStyle={{ zIndex: 9999, position: "fixed" }}
+        dropdownStyle={{ zIndex: 9999 }}
         inputProps={{
           name: "phone",
           autoComplete: "tel",
