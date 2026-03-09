@@ -9,7 +9,7 @@ import crypto from "crypto";
 
 const MAX_CHARS = 12000;
 const MAX_RETRIES = 2;
-const MAX_TOKENS = 900;
+const MAX_TOKENS = 1200;
 
 // Incrementar cuando cambie el prompt, schema o lógica de normalización
 const CACHE_VERSION = "cv-v4";
