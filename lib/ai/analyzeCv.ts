@@ -12,7 +12,7 @@ const MAX_RETRIES = 2;
 const MAX_TOKENS = 900;
 
 // Incrementar cuando cambie el prompt, schema o lógica de normalización
-const CACHE_VERSION = "cv-v3";
+const CACHE_VERSION = "cv-v4";
 
 function hashText(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
@@ -58,12 +58,60 @@ function cleanupStringArray(values: string[]): string[] {
   return Array.from(new Set(values.map((v) => v.trim()).filter(Boolean)));
 }
 
+function normalizePhone(raw: string): string | null {
+  if (!raw) return null;
+
+  const cleanedLabel = raw
+    .replace(
+      /\b(cel(?:ular)?|tel(?:efo?no)?|telefono|phone|mobile|whatsapp|wa|contacto|contact)\b[:\s-]*/gi,
+      ""
+    )
+    .trim();
+
+  if (!cleanedLabel) return null;
+
+  // Caso internacional explícito
+  if (cleanedLabel.startsWith("+")) {
+    const intl = `+${cleanedLabel.slice(1).replace(/\D+/g, "")}`;
+
+    // WhatsApp viejo de MX: +521XXXXXXXXXX -> +52XXXXXXXXXX
+    if (/^\+521\d{10}$/.test(intl)) {
+      return `+52${intl.slice(4)}`;
+    }
+
+    return /^\+\d{8,15}$/.test(intl) ? intl : null;
+  }
+
+  const digits = cleanedLabel.replace(/\D+/g, "");
+  if (!digits) return null;
+
+  // MX local 10 dígitos
+  if (/^\d{10}$/.test(digits)) {
+    return `+52${digits}`;
+  }
+
+  // MX con 52 sin +
+  if (/^52\d{10}$/.test(digits)) {
+    return `+${digits}`;
+  }
+
+  // WhatsApp viejo 521 sin +
+  if (/^521\d{10}$/.test(digits)) {
+    return `+52${digits.slice(3)}`;
+  }
+
+  // Internacional sin + (válido pero incompleto para E.164): mejor descartarlo
+  return null;
+}
+
 function normalizeCvResult(data: AiCvResult): AiCvResult {
-  // Pick best phone: prefer mobile (shorter MX numbers), fallback to first
-  const phones: string[] = (data.phoneRaw || [])
-    .map((p) => p.replace(/[\s\-().]/g, "").trim())
-    .filter(Boolean);
-  const primary = phones.find((p) => /^(\+52)?[6-9]\d{9}$/.test(p)) ?? phones[0] ?? null;
+  const phones = cleanupStringArray(
+    (data.phoneRaw || [])
+      .map(normalizePhone)
+      .filter((p): p is string => !!p)
+  );
+
+  const primary = phones[0] ?? null;
 
   return {
     ...data,
@@ -77,7 +125,10 @@ function normalizeCvResult(data: AiCvResult): AiCvResult {
     recommendedRoles: cleanupStringArray(data.recommendedRoles),
     redFlags: cleanupStringArray(data.redFlags),
     languages: data.languages
-      .map((l) => ({ label: l.label.trim(), level: l.level }))
+      .map((l) => ({
+        label: l.label.trim(),
+        level: l.level,
+      }))
       .filter((l) => l.label),
     experiences: data.experiences
       .map((e) => ({
@@ -116,7 +167,7 @@ Analiza este CV y devuelve ÚNICAMENTE JSON válido con esta estructura exacta:
   "linkedin": "url o cadena vacía",
   "github": "url o cadena vacía",
   "location": "Ciudad, Estado, País — ej: Monterrey, Nuevo León, México",
-  "phoneRaw": ["todos los teléfonos encontrados en formato local o internacional"],
+  "phoneRaw": ["todos los teléfonos encontrados tal como aparecen o en formato local/internacional"],
   "languages": [{ "label": "idioma en español — ej: Inglés, Español", "level": "NATIVE | PROFESSIONAL | CONVERSATIONAL | BASIC" }],
   "experiences": [{ "role": "puesto", "company": "empresa", "startDate": "YYYY-MM o vacío", "endDate": "YYYY-MM o vacío", "isCurrent": true }],
   "education": [{ "institution": "institución", "program": "carrera", "startDate": "YYYY-MM o vacío", "endDate": "YYYY-MM o vacío", "level": "BACHELOR | MASTER | ... | null" }]
@@ -131,6 +182,7 @@ Reglas:
 - Si no encuentras linkedin/github devuelve cadena vacía.
 - Si no encuentras location devuelve cadena vacía.
 - phoneRaw: incluye todos los teléfonos encontrados. Si no hay, devuelve [].
+- No inventes códigos de país. Si el teléfono viene local, devuélvelo como aparece en el CV.
 - languages: devuelve el nombre del idioma en español (ej: Inglés, Español, Francés).
 - Si no encuentras languages/experiences/education devuelve [].
 - Fechas en formato YYYY-MM cuando sea posible; si no es claro, devuelve cadena vacía.
@@ -215,8 +267,7 @@ export async function analyzeCv(cvText: string): Promise<AiCvResponse> {
       }
 
       const normalized = normalizeCvResult(safe.data);
-      const parsedJson =
-        normalized as unknown as Prisma.InputJsonValue;
+      const parsedJson = normalized as unknown as Prisma.InputJsonValue;
 
       void prisma.cvParseCache
         .upsert({

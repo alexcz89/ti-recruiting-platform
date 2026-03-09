@@ -43,6 +43,7 @@ export default function PhoneInputField({
         containerClass="bt-phone-input"
         inputClass="bt-phone-input-input"
         buttonClass="bt-phone-input-flag"
+        dropdownClass="!z-[9999]"
         inputProps={{
           name: "phone",
           autoComplete: "tel",
