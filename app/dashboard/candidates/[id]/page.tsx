@@ -22,6 +22,7 @@ import {
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import { Lock, CheckCircle2, XCircle } from "lucide-react";
+import CandidateSummaryCard from "@/components/dashboard/CandidateSummaryCard";
 
 export const metadata = { title: "Candidato | Panel" };
 
@@ -334,7 +335,7 @@ export default async function CandidateDetailPage({
           </div>
         </div>
 
-        <div className="flex flex-wrap lg:flex-nowrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end">
           {fromJobId && (
             <>
               <Link href={`/dashboard/jobs/${fromJobId}/applications`} className={headerBtnClasses}>← Volver a la vacante</Link>
@@ -409,7 +410,7 @@ export default async function CandidateDetailPage({
               ) : (
                 <div className="mt-4 space-y-5">
                   {/* Score principal */}
-                  <div className="flex items-center gap-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
                     <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-6 py-4 dark:border-zinc-700 dark:bg-zinc-900/40">
                       <span className={`text-4xl font-black ${scoreToTextColor(gatedScore!)}`}>
                         {gatedScore}%
@@ -520,6 +521,12 @@ export default async function CandidateDetailPage({
               )}
             </div>
           )}
+
+          {/* AI Summary */}
+          <CandidateSummaryCard
+            candidateId={candidate.id}
+            jobId={jobForMatch?.id ?? null}
+          />
 
           {/* Información */}
           <div className="glass-card border rounded-2xl p-4 md:p-6">
