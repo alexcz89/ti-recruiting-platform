@@ -12,7 +12,7 @@ const MAX_RETRIES = 2;
 const MAX_TOKENS = 900;
 
 // Incrementar cuando cambie el prompt, schema o lógica de normalización
-const CACHE_VERSION = "cv-v1";
+const CACHE_VERSION = "cv-v3";
 
 function hashText(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");

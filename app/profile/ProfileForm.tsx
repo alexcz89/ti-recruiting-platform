@@ -675,14 +675,15 @@ export default function ProfileForm({
 
   /* ===== Submit ===== */
   const MONTH_OVERLAPS = (rows: Array<{ startDate: string; endDate?: string | null }>) => {
-    const ranges = rows
-      .map((r) => ({ s: toMonthStartDate(r.startDate), e: r.endDate ? toMonthStartDate(r.endDate) : null }))
-      .filter(({ s }) => !!s)
+    // Solo comparar experiencias cerradas (con startDate y endDate definidos)
+    const closed = rows
+      .filter((r) => r.startDate && r.endDate)
+      .map((r) => ({ s: toMonthStartDate(r.startDate), e: toMonthStartDate(r.endDate!) }))
+      .filter((r) => r.s && r.e)
       .sort((a, b) => a.s!.getTime() - b.s!.getTime());
 
-    for (let i = 0; i < ranges.length - 1; i++) {
-      const aEnd = ranges[i].e ? ranges[i].e!.getTime() : Infinity;
-      if (aEnd > ranges[i + 1].s!.getTime()) return true;
+    for (let i = 0; i < closed.length - 1; i++) {
+      if (closed[i].e!.getTime() > closed[i + 1].s!.getTime()) return true;
     }
     return false;
   };

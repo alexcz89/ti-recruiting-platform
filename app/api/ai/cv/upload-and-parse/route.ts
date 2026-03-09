@@ -53,6 +53,13 @@ export async function POST(req: Request) {
     // ✅ Separar _meta del payload de datos — no exponer trazabilidad al cliente
     const { _meta, ...analysis } = aiResponse;
 
+    // 🔍 DIAGNÓSTICO TEMPORAL — remover después de verificar
+    console.log("[CV parse] text length:", cvText.length);
+    console.log("[CV parse] location:", analysis.location);
+    console.log("[CV parse] phoneRaw:", analysis.phoneRaw);
+    console.log("[CV parse] phonePrimary:", analysis.phonePrimary);
+    console.log("[CV parse] languages:", JSON.stringify(analysis.languages));
+
     const rawSkills = Array.isArray(analysis.skills) ? analysis.skills : [];
     const normalizedSkills = await normalizeSkillsFromAI(rawSkills);
 
