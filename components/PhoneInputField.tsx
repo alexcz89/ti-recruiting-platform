@@ -25,7 +25,7 @@ export default function PhoneInputField({
   );
 
   return (
-    <div className="w-full relative z-50">
+    <div className="w-full relative z-[210] overflow-visible">
       {label && (
         <label className="block text-sm font-medium text-zinc-800 dark:text-zinc-100 mb-1">
           {label}
@@ -42,7 +42,7 @@ export default function PhoneInputField({
         containerClass="bt-phone-input"
         inputClass="bt-phone-input-input"
         buttonClass="bt-phone-input-flag"
-        dropdownClass="!z-[9999]"
+        dropdownClass="bt-phone-dropdown"
         dropdownStyle={{ zIndex: 9999 }}
         inputProps={{
           name: "phone",

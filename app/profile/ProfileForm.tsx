@@ -950,23 +950,36 @@ function SectionContact() {
   const phoneLocalValue = useWatch({ control, name: "phoneLocal" }) || "";
 
   return (
-    <section id="contacto" className={`${SECTION_CARD} scroll-mt-24 overflow-visible`}>
+    <section
+      id="contacto"
+      className={`${SECTION_CARD} scroll-mt-24 relative z-[200] overflow-visible`}
+    >
       <header className="space-y-1">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Teléfono y ubicación</h2>
-        <p className={SUBTEXT_BASE}>Ayuda a que los reclutadores puedan contactarte fácilmente.</p>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Teléfono y ubicación
+        </h2>
+        <p className={SUBTEXT_BASE}>
+          Ayuda a que los reclutadores puedan contactarte fácilmente.
+        </p>
       </header>
-      <div className="grid md:grid-cols-2 gap-4 overflow-visible">
+
+      <div className="grid md:grid-cols-2 gap-4 relative z-[200] overflow-visible">
         <PhoneInputField
           value={phoneLocalValue}
-          onChange={(val) => setValue("phoneLocal", val, { shouldDirty: true, shouldValidate: true })}
+          onChange={(val) =>
+            setValue("phoneLocal", val, { shouldDirty: true, shouldValidate: true })
+          }
           label="Teléfono"
           helperText="Se guarda en formato internacional para WhatsApp o llamada."
         />
+
         <div>
           <label className={LABEL_BASE}>Ubicación</label>
           <LocationAutocomplete
             value={locationValue}
-            onChange={(v) => setValue("location", v, { shouldValidate: true, shouldDirty: true })}
+            onChange={(v) =>
+              setValue("location", v, { shouldValidate: true, shouldDirty: true })
+            }
             countries={["mx"]}
             className={INPUT_BASE}
           />
@@ -975,7 +988,7 @@ function SectionContact() {
       </div>
 
       {!phoneLocalValue && (
-        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300">
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300">
           <span className="mt-0.5 text-base">📞</span>
           <p>
             <span className="font-semibold">Agrega tu teléfono</span> — las empresas lo usan para contactarte

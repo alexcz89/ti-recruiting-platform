@@ -255,11 +255,19 @@ p, span, div {
 /* contenedor principal que pasamos como containerClass */
 .bt-phone-input {
   position: relative;
-  z-index: 50;
+  width: 100%;
+  overflow: visible !important;
 }
 
-.bt-phone-input .country-list {
-  z-index: 9999 !important;
+.bt-phone-input .form-control {
+  width: 100% !important;
+}
+
+.bt-phone-input .country-list,
+.bt-phone-dropdown {
+  position: absolute !important;
+  z-index: 99999 !important;
+  max-height: 280px;
 }
 
 /* Input: solo colores, bordes y tipografía.
