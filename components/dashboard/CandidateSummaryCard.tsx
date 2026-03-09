@@ -1,7 +1,7 @@
 // components/dashboard/CandidateSummaryCard.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 type Props = {
   candidateId: string;
@@ -24,6 +24,10 @@ export default function CandidateSummaryCard({ candidateId, jobId }: Props) {
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<SummaryPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+  void load(false);
+}, []);
 
   async function load(force = false) {
     try {
