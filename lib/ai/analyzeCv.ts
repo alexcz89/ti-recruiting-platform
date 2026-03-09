@@ -38,6 +38,9 @@ function emptyCvResult(): AiCvResult {
     redFlags: [],
     linkedin: "",
     github: "",
+    location: "",
+    phoneRaw: [],
+    phonePrimary: null,
     languages: [],
     experiences: [],
     education: [],
@@ -56,11 +59,20 @@ function cleanupStringArray(values: string[]): string[] {
 }
 
 function normalizeCvResult(data: AiCvResult): AiCvResult {
+  // Pick best phone: prefer mobile (shorter MX numbers), fallback to first
+  const phones: string[] = (data.phoneRaw || [])
+    .map((p) => p.replace(/[\s\-().]/g, "").trim())
+    .filter(Boolean);
+  const primary = phones.find((p) => /^(\+52)?[6-9]\d{9}$/.test(p)) ?? phones[0] ?? null;
+
   return {
     ...data,
     summary: data.summary.trim(),
     linkedin: data.linkedin.trim(),
     github: data.github.trim(),
+    location: (data.location || "").trim(),
+    phoneRaw: phones,
+    phonePrimary: primary,
     skills: cleanupStringArray(data.skills),
     recommendedRoles: cleanupStringArray(data.recommendedRoles),
     redFlags: cleanupStringArray(data.redFlags),
@@ -103,7 +115,9 @@ Analiza este CV y devuelve ÚNICAMENTE JSON válido con esta estructura exacta:
   "redFlags": ["posibles alertas"],
   "linkedin": "url o cadena vacía",
   "github": "url o cadena vacía",
-  "languages": [{ "label": "idioma", "level": "NATIVE | PROFESSIONAL | CONVERSATIONAL | BASIC" }],
+  "location": "Ciudad, Estado, País — ej: Monterrey, Nuevo León, México",
+  "phoneRaw": ["todos los teléfonos encontrados en formato local o internacional"],
+  "languages": [{ "label": "idioma en español — ej: Inglés, Español", "level": "NATIVE | PROFESSIONAL | CONVERSATIONAL | BASIC" }],
   "experiences": [{ "role": "puesto", "company": "empresa", "startDate": "YYYY-MM o vacío", "endDate": "YYYY-MM o vacío", "isCurrent": true }],
   "education": [{ "institution": "institución", "program": "carrera", "startDate": "YYYY-MM o vacío", "endDate": "YYYY-MM o vacío", "level": "BACHELOR | MASTER | ... | null" }]
 }
@@ -115,6 +129,9 @@ Reglas:
 - Si no hay red flags devuelve [].
 - El resumen debe ser máximo 3 líneas.
 - Si no encuentras linkedin/github devuelve cadena vacía.
+- Si no encuentras location devuelve cadena vacía.
+- phoneRaw: incluye todos los teléfonos encontrados. Si no hay, devuelve [].
+- languages: devuelve el nombre del idioma en español (ej: Inglés, Español, Francés).
 - Si no encuentras languages/experiences/education devuelve [].
 - Fechas en formato YYYY-MM cuando sea posible; si no es claro, devuelve cadena vacía.
 

@@ -67,6 +67,14 @@ export async function POST(req: Request) {
             (n) => n.label.toLowerCase() === r.toLowerCase()
           )
       ),
+      // Phone enrichment
+      phoneRaw: analysis.phoneRaw ?? [],
+      phonePrimary: analysis.phonePrimary ?? null,
+      phoneWarning: (analysis.phoneRaw?.length ?? 0) > 1
+        ? "Detectamos más de un teléfono en tu CV. Verifica cuál deseas guardar."
+        : null,
+      // Location
+      location: analysis.location ?? "",
     };
 
     const uploadResult = await utapi.uploadFiles(file);

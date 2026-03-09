@@ -82,6 +82,10 @@ type ParsedCvAnalysis = {
   redFlags?: string[];
   linkedin?: string;
   github?: string;
+  location?: string;
+  phoneRaw?: string[];
+  phonePrimary?: string | null;
+  phoneWarning?: string | null;
   languages?: Array<{ label: string; level?: string }>;
   experiences?: Array<{
     role: string;
@@ -158,12 +162,15 @@ const SKILL_PILL_ACTIVE: Record<number, string> = {
 };
 
 const LANGUAGE_ALIASES: Record<string, string[]> = {
-  español: ["español", "spanish", "espanol"],
-  inglés: ["inglés", "ingles", "english"],
+  español: ["español", "spanish", "espanol", "native spanish", "spanish native"],
+  inglés: ["inglés", "ingles", "english", "native english", "english native"],
   francés: ["francés", "frances", "french"],
   alemán: ["alemán", "aleman", "german"],
   portugués: ["portugués", "portugues", "portuguese"],
   italiano: ["italiano", "italian"],
+  chino: ["chino", "chinese", "mandarin", "mandarín"],
+  japonés: ["japonés", "japones", "japanese"],
+  coreano: ["coreano", "korean"],
 };
 
 function normalizeText(value: string) {
@@ -174,17 +181,33 @@ function normalizeText(value: string) {
     .trim();
 }
 
+function normalizeLanguageLabel(raw: string): string {
+  return normalizeText(raw)
+    .replace(/\(.*?\)/g, " ")
+    .replace(
+      /(native|nativo|mother tongue|lengua materna|advanced|avanzado|professional|profesional|conversational|conversacional|basic|basico|fluent|intermediate|intermedio|beginner|principiante|a1|a2|b1|b2|c1|c2)/g,
+      " "
+    )
+    .replace(/[-/|,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function findLanguageOption(
   options: LanguageOption[],
   rawLabel: string
 ): LanguageOption | undefined {
-  const normalized = normalizeText(rawLabel);
+  const normalized = normalizeLanguageLabel(rawLabel);
+
   return options.find((opt) => {
     const optNormalized = normalizeText(opt.label);
     if (optNormalized === normalized) return true;
+    if (normalized.includes(optNormalized) || optNormalized.includes(normalized)) return true;
 
     const aliases = LANGUAGE_ALIASES[optNormalized];
-    return aliases ? aliases.map(normalizeText).includes(normalized) : false;
+    return aliases
+      ? aliases.map(normalizeLanguageLabel).includes(normalized)
+      : false;
   });
 }
 
@@ -192,11 +215,18 @@ function mapLanguageLevel(
   rawLevel?: string
 ): "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC" {
   const normalized = normalizeText(rawLevel || "");
-  if (["native", "nativo"].includes(normalized)) return "NATIVE";
-  if (["professional", "profesional", "fluent", "advanced"].includes(normalized)) {
-    return "PROFESSIONAL";
+  if (["native", "nativo", "mother tongue", "lengua materna"].includes(normalized)) return "NATIVE";
+  if ([
+    "professional", "profesional", "fluent", "advanced", "avanzado",
+    "full professional proficiency", "c1", "c2", "professional working proficiency",
+  ].includes(normalized)) return "PROFESSIONAL";
+  if ([
+    "conversational", "conversacional", "intermediate", "intermedio",
+    "upper intermediate", "b1", "b2",
+  ].includes(normalized)) return "CONVERSATIONAL";
+  if (["basic", "basico", "beginner", "principiante", "a1", "a2", "elementary"].includes(normalized)) {
+    return "BASIC";
   }
-  if (["basic", "basico"].includes(normalized)) return "BASIC";
   return "CONVERSATIONAL";
 }
 
@@ -420,14 +450,17 @@ export default function ProfileForm({
 
   /* ===== Experiencias ===== */
   const makeCurrent = useCallback((idx: number, checked: boolean) => {
-    const total = getValues("experiences")?.length || 0;
-    for (let i = 0; i < total; i++) {
-      setValue(`experiences.${i}.isCurrent` as const, i === idx ? checked : false, { shouldDirty: true, shouldValidate: true });
-      if (i === idx && checked) {
-        setValue(`experiences.${i}.endDate` as const, null as string | null, { shouldDirty: true, shouldValidate: true });
-      }
+    setValue(`experiences.${idx}.isCurrent` as const, checked, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+    if (checked) {
+      setValue(`experiences.${idx}.endDate` as const, null as string | null, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
     }
-  }, [getValues, setValue]);
+  }, [setValue]);
 
   /* ===== Skills ===== */
   const [skillQuery, setSkillQuery] = useState("");
@@ -478,6 +511,21 @@ export default function ProfileForm({
     if (!analysis) return;
 
     let appliedSomething = false;
+
+    // Location — solo si el campo está vacío
+    if (analysis.location && !getValues("location")) {
+      setValue("location", analysis.location, { shouldDirty: true, shouldValidate: true });
+      appliedSomething = true;
+    }
+
+    // Teléfono — solo si el campo está vacío
+    if (analysis.phonePrimary && !getValues("phoneLocal")) {
+      setValue("phoneLocal", analysis.phonePrimary, { shouldDirty: true, shouldValidate: true });
+      appliedSomething = true;
+      if (analysis.phoneWarning) {
+        toastSuccess(analysis.phoneWarning);
+      }
+    }
 
     if (analysis.linkedin && !getValues("linkedin")) {
       setValue("linkedin", analysis.linkedin, { shouldDirty: true, shouldValidate: true });
@@ -675,10 +723,8 @@ export default function ProfileForm({
     }
 
     const exps = vals.experiences || [];
-    if (exps.filter((e) => e.isCurrent).length > 1) {
-      setError("root", { type: "manual", message: "Solo puedes marcar una experiencia como 'Actual'." });
-      return;
-    }
+    const multipleCurrentJobs = exps.filter((e) => e.isCurrent).length > 1;
+    // multipleCurrentJobs se muestra como warning visual — no bloquea el submit
 
     if (MONTH_OVERLAPS(exps.map((e) => ({ startDate: e.startDate, endDate: e.isCurrent ? null : e.endDate || null })))) {
       setError("root", { type: "manual", message: "Tus experiencias no pueden traslaparse." });
@@ -825,6 +871,13 @@ export default function ProfileForm({
           </div>
         )}
 
+        {(watchedExperiences || []).filter((e) => e.isCurrent).length > 1 && (
+          <div className="flex items-start gap-2 border border-amber-300 bg-amber-50 text-amber-700 text-sm rounded-xl px-4 py-3 dark:border-amber-700/60 dark:bg-amber-950/60 dark:text-amber-300">
+            <span className="mt-0.5 text-base">⚠️</span>
+            <span>Detectamos más de un trabajo actual. Verifica que sea correcto.</span>
+          </div>
+        )}
+
         <div className="sticky bottom-0 z-10 flex items-center justify-between gap-3 rounded-2xl border border-zinc-200/80 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm dark:border-zinc-700/60 dark:bg-zinc-900/95">
           {isDirty ? (
             <p className="text-xs text-amber-600 dark:text-amber-400 font-medium">
@@ -919,6 +972,16 @@ function SectionContact() {
           <p className={SUBTEXT_BASE}>Ciudad o municipio donde resides</p>
         </div>
       </div>
+
+      {!phoneLocalValue && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/50 dark:text-amber-300">
+          <span className="mt-0.5 text-base">📞</span>
+          <p>
+            <span className="font-semibold">Agrega tu teléfono</span> — las empresas lo usan para contactarte
+            rápidamente por WhatsApp o llamada cuando tu perfil les interesa.
+          </p>
+        </div>
+      )}
     </section>
   );
 }

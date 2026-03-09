@@ -42,6 +42,9 @@ export const AiCvSchema = z.object({
   redFlags: z.array(z.string().trim()).default([]),
   linkedin: z.string().trim().default(""),
   github: z.string().trim().default(""),
+  location: z.string().trim().default(""),
+  phoneRaw: z.array(z.string().trim()).default([]),
+  phonePrimary: z.string().trim().nullable().default(null),
   languages: z
     .array(
       z.object({
