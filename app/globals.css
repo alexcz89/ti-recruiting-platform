@@ -472,3 +472,11 @@ p, span, div {
   animation-delay: 0.6s;
   opacity: 0;
 }
+/* ==============================
+   PhoneInput dropdown — z-index fix
+   El backdrop-blur de glass-card crea un stacking context que corta el dropdown.
+   ============================== */
+.bt-phone-input .country-list {
+  z-index: 9999 !important;
+  position: fixed !important;
+}
