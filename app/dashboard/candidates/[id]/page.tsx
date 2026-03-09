@@ -1,4 +1,10 @@
 // app/dashboard/candidates/[id]/page.tsx
+// CAMBIOS vs versión anterior:
+// 1. candidate query agrega: seniority, yearsExperience
+// 2. job query agrega: seniority, minYearsExperience
+// 3. computeMatchScore recibe objeto completo con todos los campos
+// 4. Breakdown muestra seniority fit + experience fit
+
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { redirect, notFound } from "next/navigation";
@@ -13,6 +19,7 @@ import {
   type BillingPlan,
   type JobSkillInput,
   type CandidateSkillInput,
+  type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import { Lock, CheckCircle2, XCircle } from "lucide-react";
 
@@ -39,6 +46,20 @@ const PLAN_LABELS: Record<BillingPlan, string> = {
   PRO: "Pro",
 };
 
+const SENIORITY_LABEL: Record<string, string> = {
+  JUNIOR: "Junior",
+  MID: "Mid",
+  SENIOR: "Senior",
+  LEAD: "Lead",
+};
+
+function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
+  return null;
+}
+
 export default async function CandidateDetailPage({
   params,
   searchParams,
@@ -56,7 +77,6 @@ export default async function CandidateDetailPage({
   if (!me || (me.role !== "RECRUITER" && me.role !== "ADMIN")) redirect("/");
   const companyId = me.companyId ?? null;
 
-  // ✅ Plan de la empresa para gate
   const company = companyId
     ? await prisma.company.findUnique({
         where: { id: companyId },
@@ -65,7 +85,7 @@ export default async function CandidateDetailPage({
     : null;
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
 
-  // Candidato
+  // ── Candidato ─────────────────────────────────────────────────────────────
   const candidate = await prisma.user.findUnique({
     where: { id: params.id },
     select: {
@@ -80,11 +100,13 @@ export default async function CandidateDetailPage({
       resumeUrl: true,
       role: true,
       certifications: true,
+      seniority: true,        // ✅ NUEVO
+      yearsExperience: true,  // ✅ NUEVO
       candidateSkills: {
         select: {
           id: true,
           level: true,
-          term: { select: { id: true, label: true } }, // ✅ id para engine
+          term: { select: { id: true, label: true } },
         },
         orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
       },
@@ -99,11 +121,13 @@ export default async function CandidateDetailPage({
   if (!candidate) notFound();
   if (candidate.role !== "CANDIDATE") redirect("/dashboard");
 
-  // ✅ Si viene jobId, traer skills de la vacante para el breakdown
+  // ── Job para match ────────────────────────────────────────────────────────
   const fromJobId = searchParams?.jobId;
   let jobForMatch: {
     id: string;
     title: string;
+    seniority: string | null;        // ✅ NUEVO
+    minYearsExperience: number | null; // ✅ NUEVO
     requiredSkills: JobSkillInput[];
   } | null = null;
 
@@ -113,6 +137,8 @@ export default async function CandidateDetailPage({
       select: {
         id: true,
         title: true,
+        seniority: true,             // ✅ NUEVO
+        minYearsExperience: true,    // ✅ NUEVO
         requiredSkills: {
           select: {
             must: true,
@@ -126,6 +152,8 @@ export default async function CandidateDetailPage({
       jobForMatch = {
         id: jobRaw.id,
         title: jobRaw.title,
+        seniority: jobRaw.seniority ?? null,
+        minYearsExperience: jobRaw.minYearsExperience ?? null,
         requiredSkills: jobRaw.requiredSkills.map((rs) => ({
           termId: rs.term.id,
           label: rs.term.label,
@@ -136,25 +164,29 @@ export default async function CandidateDetailPage({
     }
   }
 
-  // ✅ Calcular match si tenemos vacante
+  // ── Calcular match ────────────────────────────────────────────────────────
   const candidateSkillsForEngine: CandidateSkillInput[] = candidate.candidateSkills.map((cs) => ({
     termId: cs.term.id,
     label: cs.term.label,
     level: cs.level,
   }));
 
-  const matchResult =
-    jobForMatch && jobForMatch.requiredSkills.length > 0
-      ? computeMatchScore(jobForMatch.requiredSkills, candidateSkillsForEngine)
-      : null;
+  // ✅ Siempre calcular si hay job — aunque no haya skills, seniority/experience aportan score
+  const matchResult = jobForMatch
+    ? computeMatchScore({
+        jobSkills: jobForMatch.requiredSkills,
+        candidateSkills: candidateSkillsForEngine,
+        jobSeniority: toSeniorityLevel(jobForMatch.seniority),
+        candidateSeniority: toSeniorityLevel(candidate.seniority as string | null),
+        jobMinYearsExperience: jobForMatch.minYearsExperience,
+        candidateYearsExperience: candidate.yearsExperience,
+      })
+    : null;
 
-  // Gate de plan: esta es la vista de 1 candidato específico, rank=0 siempre
-  // (el reclutador está viendo un perfil directamente, no en lista)
-  // Lógica: FREE = bloqueado, STARTER+ = visible
   const matchLocked = plan === "FREE";
   const gatedScore = matchResult && !matchLocked ? matchResult.score : null;
 
-  // Postulaciones del candidato en mi empresa
+  // ── Postulaciones ─────────────────────────────────────────────────────────
   const myApps = companyId
     ? await prisma.application.findMany({
         where: { candidateId: candidate.id, job: { companyId } },
@@ -184,7 +216,7 @@ export default async function CandidateDetailPage({
       })
     : null;
 
-  // UI helpers
+  // ── UI helpers ────────────────────────────────────────────────────────────
   const Pill = ({ children, highlight = false }: { children: React.ReactNode; highlight?: boolean }) => (
     <span className={highlight
       ? "inline-block text-[11px] bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full px-2 py-0.5 mr-2 mb-2 dark:bg-emerald-900/20 dark:text-emerald-100 dark:border-emerald-500/40"
@@ -248,10 +280,28 @@ export default async function CandidateDetailPage({
     })
     .filter(Boolean) as string[];
 
-  // ✅ Separar skills para el breakdown: matched / missing
   const matchedDetails = matchResult?.details.filter((d) => d.matched) ?? [];
   const missingRequired = matchResult?.details.filter((d) => !d.matched && d.must) ?? [];
   const missingNice = matchResult?.details.filter((d) => !d.matched && !d.must) ?? [];
+
+  // ── Helpers de colores para fits ─────────────────────────────────────────
+  const fitBadge = (fit: string | undefined, type: "seniority" | "experience") => {
+    if (!fit || fit === "unknown") return null;
+    const isGood = type === "seniority" ? fit === "exact" : fit === "meets";
+    const isOk   = type === "seniority" ? fit === "close" : fit === "close";
+    const label  = type === "seniority"
+      ? { exact: "Seniority: exacto", close: "Seniority: cercano", below: "Seniority: bajo" }[fit] ?? fit
+      : { meets: "Experiencia: cumple", close: "Experiencia: cercana", below: "Experiencia: insuficiente" }[fit] ?? fit;
+    return (
+      <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium ${
+        isGood ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-600/50 dark:bg-emerald-900/20 dark:text-emerald-200"
+        : isOk  ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-300"
+        : "border-red-200 bg-red-50 text-red-700 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-300"
+      }`}>
+        {label}
+      </span>
+    );
+  };
 
   return (
     <main className="max-w-[1200px] mx-auto px-6 py-6 lg:py-8 space-y-6 lg:space-y-8">
@@ -269,6 +319,17 @@ export default async function CandidateDetailPage({
               <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-900/40">{candidate.email}</span>
               {candidate.location && <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-900/40">{candidate.location}</span>}
               {candidate.phone && <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-900/40">{candidate.phone}</span>}
+              {/* ✅ NUEVO: mostrar seniority y experiencia del candidato en el header */}
+              {candidate.seniority && (
+                <span className="inline-flex items-center rounded-full bg-violet-50 border border-violet-200 px-2 py-0.5 text-violet-700 dark:bg-violet-900/20 dark:border-violet-600/40 dark:text-violet-300">
+                  {SENIORITY_LABEL[candidate.seniority as string] ?? candidate.seniority}
+                </span>
+              )}
+              {candidate.yearsExperience != null && (
+                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-900/40">
+                  {candidate.yearsExperience} año{candidate.yearsExperience !== 1 ? "s" : ""} exp.
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -297,7 +358,7 @@ export default async function CandidateDetailPage({
         {/* Columna principal */}
         <section className="space-y-6 lg:col-span-2">
 
-          {/* ✅ NUEVO: Tarjeta de AI Match (solo si viene de una vacante) */}
+          {/* Tarjeta AI Match */}
           {jobForMatch && (
             <div className="glass-card border rounded-2xl p-4 md:p-6">
               <div className="flex items-center justify-between gap-4">
@@ -309,6 +370,17 @@ export default async function CandidateDetailPage({
                   >
                     {jobForMatch.title}
                   </Link>
+                  {/* ✅ NUEVO: seniority y años mínimos de la vacante */}
+                  {jobForMatch.seniority && (
+                    <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-normal text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      {SENIORITY_LABEL[jobForMatch.seniority] ?? jobForMatch.seniority}
+                    </span>
+                  )}
+                  {jobForMatch.minYearsExperience != null && (
+                    <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-normal text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                      {jobForMatch.minYearsExperience}+ años
+                    </span>
+                  )}
                 </h2>
                 {matchLocked && (
                   <Link
@@ -321,7 +393,6 @@ export default async function CandidateDetailPage({
               </div>
 
               {matchLocked ? (
-                // FREE: bloqueado
                 <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-700/40 dark:bg-amber-950/30">
                   <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
                   <div>
@@ -348,20 +419,15 @@ export default async function CandidateDetailPage({
                       </span>
                     </div>
                     <div className="flex-1 space-y-2">
-                      {/* Barra total */}
                       <div>
                         <div className="mb-1 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
                           <span>Score general</span>
                           <span>{gatedScore}%</span>
                         </div>
                         <div className="h-2 w-full rounded-full bg-zinc-200/60 dark:bg-zinc-700/50">
-                          <div
-                            className={`h-2 rounded-full transition-all ${scoreToColor(gatedScore!)}`}
-                            style={{ width: `${gatedScore}%` }}
-                          />
+                          <div className={`h-2 rounded-full transition-all ${scoreToColor(gatedScore!)}`} style={{ width: `${gatedScore}%` }} />
                         </div>
                       </div>
-                      {/* Barra must */}
                       {matchResult.totalRequired > 0 && (
                         <div>
                           <div className="mb-1 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
@@ -369,14 +435,10 @@ export default async function CandidateDetailPage({
                             <span>{matchResult.mustScore}%</span>
                           </div>
                           <div className="h-1.5 w-full rounded-full bg-zinc-200/60 dark:bg-zinc-700/50">
-                            <div
-                              className="h-1.5 rounded-full bg-emerald-500 transition-all"
-                              style={{ width: `${matchResult.mustScore}%` }}
-                            />
+                            <div className="h-1.5 rounded-full bg-emerald-500 transition-all" style={{ width: `${matchResult.mustScore}%` }} />
                           </div>
                         </div>
                       )}
-                      {/* Barra nice */}
                       {matchResult.totalNice > 0 && (
                         <div>
                           <div className="mb-1 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
@@ -384,23 +446,26 @@ export default async function CandidateDetailPage({
                             <span>{matchResult.niceScore}%</span>
                           </div>
                           <div className="h-1.5 w-full rounded-full bg-zinc-200/60 dark:bg-zinc-700/50">
-                            <div
-                              className="h-1.5 rounded-full bg-sky-400 transition-all"
-                              style={{ width: `${matchResult.niceScore}%` }}
-                            />
+                            <div className="h-1.5 rounded-full bg-sky-400 transition-all" style={{ width: `${matchResult.niceScore}%` }} />
                           </div>
                         </div>
                       )}
-                      {/* Resumen */}
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
                         {matchResult.matchedCount} de {jobForMatch.requiredSkills.length} skills coinciden
                       </p>
                     </div>
                   </div>
 
+                  {/* ✅ NUEVO: Seniority fit + Experience fit */}
+                  {(matchResult.seniorityFit !== "unknown" || matchResult.experienceFit !== "unknown") && (
+                    <div className="flex flex-wrap gap-2">
+                      {fitBadge(matchResult.seniorityFit, "seniority")}
+                      {fitBadge(matchResult.experienceFit, "experience")}
+                    </div>
+                  )}
+
                   {/* Breakdown: tiene / le falta */}
                   <div className="grid gap-4 sm:grid-cols-2">
-                    {/* Skills que tiene */}
                     <div>
                       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                         ✅ Tiene ({matchedDetails.length})
@@ -410,27 +475,20 @@ export default async function CandidateDetailPage({
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {matchedDetails.map((d) => (
-                            <span
-                              key={d.termId}
-                              title={d.must ? "Requerida" : "Deseable"}
+                            <span key={d.termId} title={d.must ? "Requerida" : "Deseable"}
                               className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium ${
                                 d.must
                                   ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-600/50 dark:bg-emerald-900/20 dark:text-emerald-200"
                                   : "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-200"
-                              }`}
-                            >
+                              }`}>
                               <CheckCircle2 className="h-3 w-3 shrink-0" />
                               {d.label}
-                              {d.candidateLevel && (
-                                <span className="opacity-60">L{d.candidateLevel}</span>
-                              )}
+                              {d.candidateLevel && <span className="opacity-60">L{d.candidateLevel}</span>}
                             </span>
                           ))}
                         </div>
                       )}
                     </div>
-
-                    {/* Skills que le faltan */}
                     <div>
                       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
                         ❌ Le falta ({missingRequired.length + missingNice.length})
@@ -440,22 +498,16 @@ export default async function CandidateDetailPage({
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {missingRequired.map((d) => (
-                            <span
-                              key={d.termId}
-                              title="Requerida — faltante"
-                              className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-300"
-                            >
+                            <span key={d.termId} title="Requerida — faltante"
+                              className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-700 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-300">
                               <XCircle className="h-3 w-3 shrink-0" />
                               {d.label}
                               <span className="text-[9px] font-semibold uppercase opacity-70">Req</span>
                             </span>
                           ))}
                           {missingNice.map((d) => (
-                            <span
-                              key={d.termId}
-                              title="Deseable — faltante"
-                              className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-400"
-                            >
+                            <span key={d.termId} title="Deseable — faltante"
+                              className="inline-flex items-center gap-1 rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[11px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-400">
                               <XCircle className="h-3 w-3 shrink-0 opacity-50" />
                               {d.label}
                             </span>
@@ -473,42 +525,30 @@ export default async function CandidateDetailPage({
           <div className="glass-card border rounded-2xl p-4 md:p-6">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Información</h2>
             <dl className="mt-3 grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+              <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Nombre</dt><dd className="text-zinc-900 dark:text-zinc-50">{candidate.name ?? "—"}</dd></div>
+              <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Email</dt><dd className="text-zinc-900 dark:text-zinc-50">{candidate.email}</dd></div>
+              <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Teléfono</dt><dd className="text-zinc-900 dark:text-zinc-50">{candidate.phone ?? "—"}</dd></div>
+              <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Ubicación</dt><dd className="text-zinc-900 dark:text-zinc-50">{candidate.location ?? "—"}</dd></div>
+              <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">Fecha de nacimiento</dt><dd className="text-zinc-900 dark:text-zinc-50">{candidate.birthdate ? new Date(candidate.birthdate).toLocaleDateString() : "—"}</dd></div>
+              {/* ✅ NUEVO: Seniority y años de experiencia en la sección info */}
               <div>
-                <dt className="text-xs text-zinc-500 dark:text-zinc-400">Nombre</dt>
-                <dd className="text-zinc-900 dark:text-zinc-50">{candidate.name ?? "—"}</dd>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">Seniority</dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">{candidate.seniority ? (SENIORITY_LABEL[candidate.seniority as string] ?? candidate.seniority) : "—"}</dd>
               </div>
               <div>
-                <dt className="text-xs text-zinc-500 dark:text-zinc-400">Email</dt>
-                <dd className="text-zinc-900 dark:text-zinc-50">{candidate.email}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-zinc-500 dark:text-zinc-400">Teléfono</dt>
-                <dd className="text-zinc-900 dark:text-zinc-50">{candidate.phone ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-zinc-500 dark:text-zinc-400">Ubicación</dt>
-                <dd className="text-zinc-900 dark:text-zinc-50">{candidate.location ?? "—"}</dd>
-              </div>
-              <div>
-                <dt className="text-xs text-zinc-500 dark:text-zinc-400">Fecha de nacimiento</dt>
-                <dd className="text-zinc-900 dark:text-zinc-50">
-                  {candidate.birthdate ? new Date(candidate.birthdate).toLocaleDateString() : "—"}
-                </dd>
+                <dt className="text-xs text-zinc-500 dark:text-zinc-400">Años de experiencia</dt>
+                <dd className="text-zinc-900 dark:text-zinc-50">{candidate.yearsExperience != null ? `${candidate.yearsExperience} años` : "—"}</dd>
               </div>
               <div>
                 <dt className="text-xs text-zinc-500 dark:text-zinc-400">LinkedIn</dt>
                 <dd className="text-zinc-900 dark:text-zinc-50">
-                  {candidate.linkedin ? (
-                    <a className="text-blue-600 hover:underline dark:text-blue-400" href={candidate.linkedin} target="_blank" rel="noreferrer">{candidate.linkedin}</a>
-                  ) : "—"}
+                  {candidate.linkedin ? <a className="text-blue-600 hover:underline dark:text-blue-400" href={candidate.linkedin} target="_blank" rel="noreferrer">{candidate.linkedin}</a> : "—"}
                 </dd>
               </div>
               <div>
                 <dt className="text-xs text-zinc-500 dark:text-zinc-400">GitHub</dt>
                 <dd className="text-zinc-900 dark:text-zinc-50">
-                  {candidate.github ? (
-                    <a className="text-blue-600 hover:underline dark:text-blue-400" href={candidate.github} target="_blank" rel="noreferrer">{candidate.github}</a>
-                  ) : "—"}
+                  {candidate.github ? <a className="text-blue-600 hover:underline dark:text-blue-400" href={candidate.github} target="_blank" rel="noreferrer">{candidate.github}</a> : "—"}
                 </dd>
               </div>
             </dl>
@@ -523,39 +563,20 @@ export default async function CandidateDetailPage({
                   {detailedSkills.map((s) => {
                     const levelValue = s.level ?? 0;
                     const pct = Math.max(0, Math.min(100, Math.round(levelValue * 20)));
-                    const levelLabel = s.level != null
-                      ? SKILL_LEVEL_LABEL[s.level as number] ?? `Nivel ${s.level}`
-                      : "Sin nivel";
-                    // ✅ Highlight si es skill requerida de la vacante activa
+                    const levelLabel = s.level != null ? SKILL_LEVEL_LABEL[s.level as number] ?? `Nivel ${s.level}` : "Sin nivel";
                     const isJobRequired = matchResult?.details.find((d) => d.termId === s.termId && d.must && d.matched);
                     const isJobNice = matchResult?.details.find((d) => d.termId === s.termId && !d.must && d.matched);
-
                     return (
                       <li key={s.id} className={`soft-panel px-3 py-2 ${isJobRequired ? "ring-1 ring-emerald-400/50 dark:ring-emerald-500/30" : ""}`}>
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-1.5">
                             <span className="font-medium">{s.label}</span>
-                            {isJobRequired && (
-                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                                Req
-                              </span>
-                            )}
-                            {isJobNice && !isJobRequired && (
-                              <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
-                                Nice
-                              </span>
-                            )}
+                            {isJobRequired && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Req</span>}
+                            {isJobNice && !isJobRequired && <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Nice</span>}
                           </div>
                           <span className="text-xs text-muted">{levelLabel}</span>
                         </div>
-                        <div
-                          className="mt-2 progress"
-                          role="progressbar"
-                          aria-label={`Nivel ${levelValue} de 5 en ${s.label}`}
-                          aria-valuemin={0}
-                          aria-valuemax={5}
-                          aria-valuenow={levelValue}
-                        >
+                        <div className="mt-2 progress" role="progressbar" aria-label={`Nivel ${levelValue} de 5 en ${s.label}`} aria-valuemin={0} aria-valuemax={5} aria-valuenow={levelValue}>
                           <div className="progress-bar" style={{ width: `${pct}%` }} />
                         </div>
                       </li>
@@ -566,7 +587,6 @@ export default async function CandidateDetailPage({
                 <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Sin skills capturados</p>
               )}
             </div>
-
             <div className="glass-card border rounded-2xl p-4 md:p-5">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Certificaciones</h2>
               <List items={candidate.certifications} emptyLabel="Sin certificaciones capturadas" />
@@ -592,7 +612,7 @@ export default async function CandidateDetailPage({
                 <a href={candidate.resumeUrl} target="_blank" rel="noreferrer" download className={headerBtnClasses}>Descargar</a>
               </div>
               <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-                Si el visor no carga, el sitio del CV podría bloquear la inserción. Usa "Abrir en nueva pestaña".
+                Si el visor no carga, el sitio del CV podría bloquear la inserción. Usa &quot;Abrir en nueva pestaña&quot;.
               </p>
             </div>
           )}
@@ -611,45 +631,21 @@ export default async function CandidateDetailPage({
                 const { matches, others } = buildRequiredSnapshot(a.job?.skills, candidateSkillNames);
                 const show = [...matches, ...others].slice(0, 4);
                 const isActive = a.job?.id === fromJobId;
-
                 return (
-                  <li
-                    key={a.id}
-                    className={`rounded-lg border p-3 text-sm shadow-sm ${
-                      isActive
-                        ? "border-emerald-300 bg-emerald-50 dark:border-emerald-600/40 dark:bg-emerald-950/30"
-                        : "border-zinc-200 bg-zinc-50 dark:border-zinc-800/70 dark:bg-zinc-950/70"
-                    }`}
-                  >
+                  <li key={a.id} className={`rounded-lg border p-3 text-sm shadow-sm ${isActive ? "border-emerald-300 bg-emerald-50 dark:border-emerald-600/40 dark:bg-emerald-950/30" : "border-zinc-200 bg-zinc-50 dark:border-zinc-800/70 dark:bg-zinc-950/70"}`}>
                     <div className="font-medium text-zinc-900 dark:text-zinc-50">
                       {a.job?.title} — {a.job?.company?.name ?? "—"}
-                      {isActive && (
-                        <span className="ml-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                          Activa
-                        </span>
-                      )}
+                      {isActive && <span className="ml-2 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Activa</span>}
                     </div>
-                    <div className="text-xs text-zinc-600 dark:text-zinc-400">
-                      Estado: {a.status} · {new Date(a.createdAt).toLocaleDateString()}
-                    </div>
+                    <div className="text-xs text-zinc-600 dark:text-zinc-400">Estado: {a.status} · {new Date(a.createdAt).toLocaleDateString()}</div>
                     {show.length > 0 && (
                       <div className="mt-2 flex flex-wrap gap-1">
                         {show.map((s) => <Pill key={s} highlight={matches.includes(s)}>{s}</Pill>)}
                       </div>
                     )}
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <a
-                        href={`/dashboard/messages?applicationId=${a.id}`}
-                        className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                      >
-                        Mensajes
-                      </a>
-                      <Link
-                        href={`/dashboard/jobs/${a.job?.id}/applications`}
-                        className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-800"
-                      >
-                        Ver vacante
-                      </Link>
+                      <a href={`/dashboard/messages?applicationId=${a.id}`} className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-800">Mensajes</a>
+                      <Link href={`/dashboard/jobs/${a.job?.id}/applications`} className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-800">Ver vacante</Link>
                     </div>
                   </li>
                 );

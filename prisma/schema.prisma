@@ -394,6 +394,8 @@ model User {
   // SKILLS Y EDUCACIÓN (mantener existente)
   certifications        String[]       @default([])
   highestEducationLevel EducationLevel @default(NONE)
+  seniority        Seniority?
+  yearsExperience  Int?
 
   // ✅ NUEVO: TIMESTAMPS MEJORADOS
   createdAt          DateTime  @default(now())
@@ -531,6 +533,7 @@ model Job {
 
   employmentType  EmploymentType
   seniority       Seniority?
+  minYearsExperience Int?
   description     String         @db.Text
   descriptionHtml String?        @db.Text
   schedule        String?

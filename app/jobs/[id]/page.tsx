@@ -1,4 +1,10 @@
 // app/jobs/[id]/page.tsx
+// CAMBIOS:
+// 1. candidateMatchResult se calcula siempre si hay candidato (no solo cuando hay jobSkills)
+//    — permite que seniority/experience aporten score aunque la vacante no tenga skills catalogadas
+// 2. Pasar seniority y yearsExperience del candidato al motor
+// 3. Pasar seniority y minYearsExperience del job al motor
+
 import { prisma } from "@/lib/server/prisma";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -11,6 +17,7 @@ import {
   computeMatchScore,
   type JobSkillInput,
   type CandidateSkillInput,
+  type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import type { Metadata } from "next";
 
@@ -22,7 +29,6 @@ type Params = { params: { id: string } };
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
 const SITE_NAME = "TaskIO";
 
-/* ─── Helpers ─── */
 function excerpt(text: string | null | undefined, max = 160) {
   const t = (text || "").replace(/\s+/g, " ").trim();
   if (!t) return "";
@@ -73,7 +79,6 @@ function buildDescription(job: {
   return header && desc ? `${header} — ${desc}` : header || desc || `Vacante: ${job.title}`;
 }
 
-/* ─── Metadata ─── */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const job = await prisma.job.findUnique({
     where: { id: params.id },
@@ -104,7 +109,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-/* ─── Page ─── */
+function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
+  return null;
+}
+
 export default async function JobDetail({ params }: Params) {
   let session = null;
   try {
@@ -130,7 +141,9 @@ export default async function JobDetail({ params }: Params) {
       description: true,
       descriptionHtml: true,
       skills: true,
-      requiredSkills: {                              // ✅ NUEVO: skills del catálogo
+      seniority: true,            // ✅ para el motor
+      minYearsExperience: true,   // ✅ para el motor
+      requiredSkills: {
         select: {
           must: true,
           weight: true,
@@ -188,8 +201,6 @@ export default async function JobDetail({ params }: Params) {
         })
       : null;
 
-  // ✅ NUEVO: calcular AI Match para el candidato logueado
-  let candidateMatchResult = null;
   const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
     termId: rs.term.id,
     label: rs.term.label,
@@ -197,22 +208,52 @@ export default async function JobDetail({ params }: Params) {
     weight: rs.weight,
   }));
 
-  if (isCandidate && user?.id && jobSkillsForEngine.length > 0) {
-    const candidateSkillsRaw = await prisma.candidateSkill.findMany({
-      where: { userId: user.id },
+  // ✅ Calcular match siempre que haya candidato logueado
+  // — aunque no haya skills catalogadas, seniority/experience pueden aportar score
+  let candidateMatchResult = null;
+
+  if (isCandidate && user?.id) {
+    const candidateRaw = await prisma.user.findUnique({
+      where: { id: user.id },
       select: {
-        level: true,
-        term: { select: { id: true, label: true } },
+        seniority: true,        // ✅ NUEVO
+        yearsExperience: true,  // ✅ NUEVO
+        candidateSkills: {
+          select: {
+            level: true,
+            term: { select: { id: true, label: true } },
+          },
+        },
       },
     });
 
-    const candidateSkillsForEngine: CandidateSkillInput[] = candidateSkillsRaw.map((cs) => ({
-      termId: cs.term.id,
-      label: cs.term.label,
-      level: cs.level,
-    }));
+    if (candidateRaw) {
+      const candidateSkillsForEngine: CandidateSkillInput[] = candidateRaw.candidateSkills.map((cs) => ({
+        termId: cs.term.id,
+        label: cs.term.label,
+        level: cs.level,
+      }));
 
-    candidateMatchResult = computeMatchScore(jobSkillsForEngine, candidateSkillsForEngine);
+      const result = computeMatchScore({
+        jobSkills: jobSkillsForEngine,
+        candidateSkills: candidateSkillsForEngine,
+        jobSeniority: toSeniorityLevel(job.seniority),                        // ✅ NUEVO
+        candidateSeniority: toSeniorityLevel(candidateRaw.seniority as string | null), // ✅ NUEVO
+        jobMinYearsExperience: job.minYearsExperience ?? null,                 // ✅ NUEVO
+        candidateYearsExperience: candidateRaw.yearsExperience ?? null,        // ✅ NUEVO
+      });
+
+      // Solo mostrar la tarjeta si hay algo que mostrar
+      // (score > 0 o al menos skills/seniority/experience definidos)
+      const hasJobSignals =
+        jobSkillsForEngine.length > 0 ||
+        job.seniority != null ||
+        job.minYearsExperience != null;
+
+      if (hasJobSignals) {
+        candidateMatchResult = result;
+      }
+    }
   }
 
   const panelJob = {
@@ -255,6 +296,7 @@ export default async function JobDetail({ params }: Params) {
   };
 
   const canApply = !isRecruiterOrAdmin;
+  const hasJobSignalsForAnon = jobSkillsForEngine.length > 0 || job.seniority != null || job.minYearsExperience != null;
 
   return (
     <main className="max-w-[1100px] xl:max-w-[1200px] mx-auto px-6 lg:px-10 py-8 space-y-6">
@@ -270,13 +312,13 @@ export default async function JobDetail({ params }: Params) {
         />
       )}
 
-      {/* ✅ NUEVO: AI Match para el candidato — solo si está logueado y hay skills en la vacante */}
+      {/* AI Match para candidato logueado */}
       {isCandidate && candidateMatchResult && (
         <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
       )}
 
-      {/* ✅ NUEVO: CTA para candidatos anónimos si la vacante tiene skills definidas */}
-      {!session && jobSkillsForEngine.length > 0 && (
+      {/* CTA para candidatos anónimos si la vacante tiene señales de matching */}
+      {!session && hasJobSignalsForAnon && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-700/40 dark:bg-emerald-950/20">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -304,8 +346,6 @@ export default async function JobDetail({ params }: Params) {
           </div>
         </div>
       )}
-
-      {/* ✅ NUEVO: si candidato logueado pero vacante sin skills en catálogo (solo tiene skills[]) — no mostrar nada */}
 
       <JobDetailPanel
         job={panelJob as any}

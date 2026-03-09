@@ -60,12 +60,10 @@ function parseAndValidateExperiences(json?: string | null):
   });
 
   const currents = parsed.filter((e) => e.isCurrent);
-  // Se permiten múltiples trabajos actuales (ej. freelance + empleo)
   for (const current of currents) {
     if (current.endDate) return { ok: false, error: "Un trabajo marcado como 'Actual' no debe tener fecha fin." };
   }
 
-  // Solo verificar traslape en experiencias terminadas (no actuales)
   const finishedExps = parsed.filter((e) => !e.isCurrent);
   const intervals = finishedExps.map((e) => ({ start: e.startDate.getTime(), end: e.endDate!.getTime() }));
   intervals.sort((a, b) => a.start - b.start);
@@ -214,6 +212,14 @@ function stripDiacritics(s: string) {
   return (s || "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase().trim();
 }
 
+/* ─── Seniority helper ─── */
+const ALLOWED_SENIORITY = new Set(["JUNIOR", "MID", "SENIOR"]);
+function parseSeniority(raw: string | undefined): "JUNIOR" | "MID" | "SENIOR" | null {
+  if (!raw) return null;
+  const v = raw.trim().toUpperCase();
+  return ALLOWED_SENIORITY.has(v) ? (v as "JUNIOR" | "MID" | "SENIOR") : null;
+}
+
 export async function updateProfileAction(fd: FormData) {
   try {
     const session = await getServerSession(authOptions);
@@ -292,6 +298,24 @@ export async function updateProfileAction(fd: FormData) {
       typeof certsCsv === "string" && certsCsv.length
         ? certsCsv.split(",").map((s) => s.trim()).filter(Boolean)
         : undefined;
+
+    // ✅ Seniority y años de experiencia
+    const seniority = fd.has("seniority")
+      ? parseSeniority(fd.get("seniority")?.toString())
+      : undefined;
+
+    const yearsExperience = (() => {
+      if (!fd.has("yearsExperience")) return undefined;
+      const raw = fd.get("yearsExperience")?.toString().trim();
+      if (!raw) return null;
+      const n = parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 0 || n > 50) return "INVALID";
+      return n;
+    })();
+
+    if (yearsExperience === "INVALID") {
+      return { error: "Años de experiencia inválidos (debe ser un número entre 0 y 50)." };
+    }
 
     const expsRaw = val(fd, "experiences");
     const parsed  = parseAndValidateExperiences(expsRaw ?? "");
@@ -388,6 +412,10 @@ export async function updateProfileAction(fd: FormData) {
     if (typeof github         !== "undefined") data.github        = github;
     if (typeof resumeUrl      !== "undefined") data.resumeUrl     = resumeUrl;
     if (typeof certifications !== "undefined") data.certifications = certifications;
+
+    // ✅ Seniority y años de experiencia — undefined = no enviar = no tocar en BD
+    if (typeof seniority      !== "undefined") data.seniority      = seniority;
+    if (typeof yearsExperience !== "undefined") data.yearsExperience = yearsExperience;
 
     if (cityFromForm   !== undefined) { data.city       = cityFromForm;   data.cityNorm   = stripDiacritics(cityFromForm); }
     if (admin1FromForm !== undefined) { data.admin1      = admin1FromForm; data.admin1Norm = stripDiacritics(admin1FromForm); }

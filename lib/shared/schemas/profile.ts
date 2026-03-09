@@ -34,11 +34,8 @@ export const ExperienceSchema = z
   })
   .refine(
     (v) => {
-      // Si es actual, endDate debe ser vacío o null
       if (v.isCurrent) return !v.endDate || v.endDate === "";
-      // Si NO es actual, endDate puede ser vacío/null (trabajo anterior sin fecha fin conocida)
       if (v.endDate === "" || v.endDate == null) return true;
-      // Si tiene endDate, validar cronología
       const s = new Date(`${v.startDate}-01T00:00:00.000Z`);
       const e = new Date(`${v.endDate}-01T00:00:00.000Z`);
       return !isNaN(s.getTime()) && !isNaN(e.getTime()) && s.getTime() <= e.getTime();
@@ -134,6 +131,9 @@ export const ProfileFormSchema = z.object({
   skillsDetailed: z.array(SkillDetailedSchema).optional().default([]),
   highestEducationLevel: EducationLevel.optional().default("NONE"),
   education: z.array(EducationSchema).optional().default([]),
+  // ✅ Nuevos campos para AI Match
+  seniority: z.enum(["JUNIOR", "MID", "SENIOR"]).optional().nullable(),
+  yearsExperience: z.number().int().min(0).max(50).optional().nullable(),
 });
 
 export type ProfileFormData = z.infer<typeof ProfileFormSchema>;

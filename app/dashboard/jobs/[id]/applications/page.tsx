@@ -1,4 +1,8 @@
 // app/dashboard/jobs/[id]/applications/page.tsx
+// CAMBIOS vs versión anterior:
+// 1. job query agrega: seniority, minYearsExperience
+// 2. candidate query agrega: seniority, yearsExperience
+// 3. computeMatchScore recibe objeto con todos los campos
 
 import Link from "next/link";
 import { prisma } from '@/lib/server/prisma';
@@ -18,6 +22,7 @@ import {
   type BillingPlan,
   type JobSkillInput,
   type CandidateSkillInput,
+  type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 
 const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
@@ -54,6 +59,14 @@ function scoreToRange(score: number): "HIGH" | "MED" | "LOW" {
   if (score >= 70) return "HIGH";
   if (score >= 40) return "MED";
   return "LOW";
+}
+
+// Convertir enum Prisma Seniority → SeniorityLevel del motor
+function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
+  return null; // LEAD no aplica al motor
 }
 
 export default async function JobApplicationsPage({
@@ -95,6 +108,8 @@ export default async function JobApplicationsPage({
       id: true,
       title: true,
       status: true,
+      seniority: true,           // ✅ NUEVO
+      minYearsExperience: true,  // ✅ NUEVO
       company: { select: { name: true } },
       skills: true,
       requiredSkills: {
@@ -126,6 +141,9 @@ export default async function JobApplicationsPage({
   }));
   const hasJobSkills = jobSkillsForEngine.length > 0;
 
+  // ✅ Seniority del job para el motor
+  const jobSeniorityForEngine = toSeniorityLevel(job.seniority);
+
   const allApps = await prisma.application.findMany({
     where: { jobId: job.id, job: { companyId } },
     orderBy: { createdAt: "desc" },
@@ -141,6 +159,8 @@ export default async function JobApplicationsPage({
           phone: true,
           location: true,
           certifications: true,
+          seniority: true,        // ✅ NUEVO
+          yearsExperience: true,  // ✅ NUEVO
           candidateSkills: {
             select: {
               level: true,
@@ -269,14 +289,24 @@ export default async function JobApplicationsPage({
   const cvParam = (searchParams?.cv as string | undefined) ?? "ALL";
   const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
 
-  // ── Enriquecer ────────────────────────────────────────────────────────────
+  // ── Enriquecer con match ──────────────────────────────────────────────────
   let enriched = allApps.map((a) => {
     const candidateSkillsForEngine: CandidateSkillInput[] = (a.candidate?.candidateSkills ?? []).map((cs: any) => ({
       termId: cs.term.id,
       label: cs.term.label,
       level: cs.level,
     }));
-    const matchResult = hasJobSkills ? computeMatchScore(jobSkillsForEngine, candidateSkillsForEngine) : null;
+
+    // ✅ Siempre calcular — aunque no haya skills, seniority/experience aportan score
+    const matchResult = computeMatchScore({
+      jobSkills: jobSkillsForEngine,
+      candidateSkills: candidateSkillsForEngine,
+      jobSeniority: jobSeniorityForEngine,
+      candidateSeniority: toSeniorityLevel((a.candidate as any)?.seniority),
+      jobMinYearsExperience: job.minYearsExperience ?? null,
+      candidateYearsExperience: (a.candidate as any)?.yearsExperience ?? null,
+    });
+
     const fullName =
       a.candidate?.name ||
       [(a.candidate as any)?.firstName, (a.candidate as any)?.lastName].filter(Boolean).join(" ") ||
@@ -300,7 +330,6 @@ export default async function JobApplicationsPage({
     });
   }
 
-  // Ordenar antes del gate
   const sorted = [...enriched].sort((a, b) => {
     if (sortKey === "recent") return new Date(b._lastActivity).getTime() - new Date(a._lastActivity).getTime();
     if (sortKey === "name")   return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
@@ -312,7 +341,6 @@ export default async function JobApplicationsPage({
     return { ...a, _gatedScore: gatedScore, _locked: gatedScore === null };
   });
 
-  // Filtros post-gate
   const apps = withGate.filter((a) => {
     if (matchFilter !== "ALL" && hasJobSkills && !a._locked) {
       if (scoreToRange(a._gatedScore ?? 0) !== matchFilter) return false;
@@ -324,14 +352,12 @@ export default async function JobApplicationsPage({
 
   const lockedCount = withGate.filter((a) => a._locked).length;
 
-  // Conteos para chips
   const matchCounts: Record<MatchFilter, number> = { ALL: 0, HIGH: 0, MED: 0, LOW: 0 };
   for (const a of withGate) {
     matchCounts.ALL++;
     if (!a._locked && hasJobSkills) matchCounts[scoreToRange(a._gatedScore ?? 0)]++;
   }
 
-  // URL builder
   function buildHref(overrides: { interest?: string; q?: string; sort?: string; match?: string; cv?: string }) {
     const usp = new URLSearchParams();
     const i  = "interest" in overrides ? overrides.interest : interestParam;
@@ -352,6 +378,11 @@ export default async function JobApplicationsPage({
 
   const activeFiltersCount = (matchFilter !== "ALL" ? 1 : 0) + (cvFilter !== "ALL" ? 1 : 0);
 
+  // ── Etiquetas de seniority/experience para el header de la vacante ────────
+  const seniorityLabel = job.seniority
+    ? { JUNIOR: "Junior", MID: "Mid", SENIOR: "Senior", LEAD: "Lead" }[job.seniority] ?? job.seniority
+    : null;
+
   return (
     <main className="max-w-none p-0">
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-8 lg:px-10">
@@ -362,6 +393,8 @@ export default async function JobApplicationsPage({
             <h1 className="text-xl font-bold leading-tight sm:text-2xl">{job.title}</h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
               {job.company?.name ?? "—"}{job.location ? ` · ${job.location}` : ""} · {fromNow(job.createdAt)}
+              {seniorityLabel && <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{seniorityLabel}</span>}
+              {job.minYearsExperience != null && <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{job.minYearsExperience}+ años</span>}
             </p>
           </div>
           <div className="flex flex-row flex-wrap items-center gap-2">
@@ -403,10 +436,9 @@ export default async function JobApplicationsPage({
           </div>
         </section>
 
-        {/* ✅ Filtros rápidos */}
+        {/* Filtros rápidos */}
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-col gap-3">
-            {/* Label de filtros */}
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-3.5 w-3.5 text-zinc-400" />
               <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Filtrar por</span>
@@ -421,11 +453,7 @@ export default async function JobApplicationsPage({
                 </Link>
               )}
             </div>
-
-            {/* Chips en dos filas en mobile, una en desktop */}
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-
-              {/* Match score */}
               {hasJobSkills && (
                 <div className="flex items-center gap-2">
                   <span className="w-10 shrink-0 text-[11px] text-zinc-400">Match</span>
@@ -446,8 +474,6 @@ export default async function JobApplicationsPage({
                   </div>
                 </div>
               )}
-
-              {/* CV */}
               <div className="flex items-center gap-2">
                 <span className="w-10 shrink-0 text-[11px] text-zinc-400">CV</span>
                 <div className="flex gap-1.5">
@@ -482,7 +508,7 @@ export default async function JobApplicationsPage({
         ) : (
           <div className="rounded-2xl border border-zinc-100 bg-white/90 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/70">
 
-            {/* Toolbar: búsqueda + sort */}
+            {/* Toolbar */}
             <div className="flex flex-col gap-2 border-b border-zinc-100 p-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:p-4">
               <form method="get" className="relative w-full sm:max-w-xs">
                 {interestParam && <input type="hidden" name="interest" value={interestParam} />}
@@ -511,7 +537,7 @@ export default async function JobApplicationsPage({
               {apps.length} candidato{apps.length !== 1 ? "s" : ""}{activeFiltersCount > 0 ? " (filtrado)" : ""}
             </div>
 
-            {/* ── Mobile: cards ── */}
+            {/* Mobile: cards */}
             <div className="block divide-y divide-zinc-100 dark:divide-zinc-800 sm:hidden">
               {apps.map((a: any) => {
                 const matchResult = a._matchResult;
@@ -524,7 +550,6 @@ export default async function JobApplicationsPage({
 
                 return (
                   <div key={a.id} className="space-y-2.5 p-4">
-                    {/* Nombre + score */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         {candidateHref ? (
@@ -549,14 +574,36 @@ export default async function JobApplicationsPage({
                       )}
                     </div>
 
-                    {/* Barra match */}
                     {hasJobSkills && !locked && gatedScore !== null && (
                       <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
                         <div className={`h-1.5 rounded-full ${scoreToColor(gatedScore)}`} style={{ width: `${gatedScore}%` }} />
                       </div>
                     )}
 
-                    {/* Skills */}
+                    {/* ✅ NUEVO: badges seniority/experience fit en mobile */}
+                    {!locked && matchResult && (matchResult.seniorityFit !== "unknown" || matchResult.experienceFit !== "unknown") && (
+                      <div className="flex flex-wrap gap-1">
+                        {matchResult.seniorityFit !== "unknown" && (
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                            matchResult.seniorityFit === "exact" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+                            : matchResult.seniorityFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-300"
+                            : "border-red-200 bg-red-50 text-red-600 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-400"
+                          }`}>
+                            Seniority: {matchResult.seniorityFit === "exact" ? "✓" : matchResult.seniorityFit === "close" ? "~" : "↓"}
+                          </span>
+                        )}
+                        {matchResult.experienceFit !== "unknown" && (
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                            matchResult.experienceFit === "meets" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+                            : matchResult.experienceFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-300"
+                            : "border-red-200 bg-red-50 text-red-600 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-400"
+                          }`}>
+                            Exp: {matchResult.experienceFit === "meets" ? "✓" : matchResult.experienceFit === "close" ? "~" : "↓"}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
                     {!locked && matchResult && matchResult.details.filter((d: any) => d.matched).length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {matchResult.details.filter((d: any) => d.matched).slice(0, 3).map((d: any) => (
@@ -568,7 +615,6 @@ export default async function JobApplicationsPage({
                       </div>
                     )}
 
-                    {/* Estado + acciones */}
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 max-w-[160px]">
                         <InterestSelect applicationId={a.id} initial={getAppInterest(a)} />
@@ -604,7 +650,7 @@ export default async function JobApplicationsPage({
               })}
             </div>
 
-            {/* ── Desktop: tabla ── */}
+            {/* Desktop: tabla */}
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-900/40 dark:text-zinc-400">
@@ -687,14 +733,37 @@ export default async function JobApplicationsPage({
                               </div>
                             </div>
                           ) : (
-                            <div className="min-w-[100px]">
+                            <div className="min-w-[120px]">
                               <div className="flex items-center gap-2">
                                 <span className={`text-sm font-semibold ${scoreToTextColor(gatedScore!)}`}>{gatedScore}%</span>
                                 <div className="h-1.5 w-16 rounded bg-zinc-200/60 dark:bg-zinc-700/50">
                                   <div className={`h-1.5 rounded ${scoreToColor(gatedScore!)}`} style={{ width: `${Math.max(0, Math.min(gatedScore!, 100))}%` }} />
                                 </div>
                               </div>
-                              <p className="mt-0.5 text-[10px] text-zinc-500">{scoreToLabel(gatedScore!)} · {matchResult?.matchedCount ?? 0}/{jobSkillsForEngine.length}</p>
+                              <p className="mt-0.5 text-[10px] text-zinc-500">{scoreToLabel(gatedScore!)} · {matchResult?.matchedCount ?? 0}/{jobSkillsForEngine.length} skills</p>
+                              {/* ✅ NUEVO: badges seniority/experience fit en desktop */}
+                              {(matchResult?.seniorityFit !== "unknown" || matchResult?.experienceFit !== "unknown") && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {matchResult?.seniorityFit !== "unknown" && (
+                                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+                                      matchResult?.seniorityFit === "exact" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+                                      : matchResult?.seniorityFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700"
+                                      : "border-red-200 bg-red-50 text-red-600"
+                                    }`}>
+                                      Sen {matchResult?.seniorityFit === "exact" ? "✓" : matchResult?.seniorityFit === "close" ? "~" : "↓"}
+                                    </span>
+                                  )}
+                                  {matchResult?.experienceFit !== "unknown" && (
+                                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
+                                      matchResult?.experienceFit === "meets" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+                                      : matchResult?.experienceFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700"
+                                      : "border-red-200 bg-red-50 text-red-600"
+                                    }`}>
+                                      Exp {matchResult?.experienceFit === "meets" ? "✓" : matchResult?.experienceFit === "close" ? "~" : "↓"}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </td>

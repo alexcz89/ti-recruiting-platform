@@ -1,4 +1,7 @@
 // app/api/ai/cv/upload-and-parse/route.ts
+// CAMBIOS:
+// 1. _meta excluido del response al cliente (no exponer trazabilidad interna)
+// 2. Sin otros cambios — lógica correcta
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +48,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const analysis = await analyzeCv(cvText);
+    const aiResponse = await analyzeCv(cvText);
+
+    // ✅ Separar _meta del payload de datos — no exponer trazabilidad al cliente
+    const { _meta, ...analysis } = aiResponse;
 
     const rawSkills = Array.isArray(analysis.skills) ? analysis.skills : [];
     const normalizedSkills = await normalizeSkillsFromAI(rawSkills);
@@ -88,6 +94,7 @@ export async function POST(req: Request) {
       fileName: file.name,
       analysis: enrichedAnalysis,
       textLength: cvText.length,
+      // _meta excluido intencionalmente — solo para logs internos
     });
   } catch (error) {
     console.error("CV upload-and-parse error:", error);

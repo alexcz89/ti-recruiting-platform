@@ -66,6 +66,8 @@ type Initial = {
   }>;
   skillsDetailed?: Array<{ termId: string; label: string; level: 1 | 2 | 3 | 4 | 5 }>;
   education?: EducationEntry[];
+  seniority?: "JUNIOR" | "MID" | "SENIOR" | null;
+  yearsExperience?: number | null;
 };
 
 type LanguageOption = { id: string; label: string };
@@ -309,6 +311,8 @@ export default function ProfileForm({
         endDate: (ed.endDate || "")?.slice(0, 7) || "",
         sortIndex: ed.sortIndex ?? i,
       })),
+      seniority: initial.seniority ?? undefined,
+      yearsExperience: initial.yearsExperience ?? undefined,
     },
   });
 
@@ -364,6 +368,8 @@ export default function ProfileForm({
         endDate: (ed.endDate || "")?.slice(0, 7) || "",
         sortIndex: ed.sortIndex ?? i,
       })),
+      seniority: initial.seniority ?? undefined,
+      yearsExperience: initial.yearsExperience ?? undefined,
     });
   }, [initial, reset]);
 
@@ -414,12 +420,14 @@ export default function ProfileForm({
 
   /* ===== Experiencias ===== */
   const makeCurrent = useCallback((idx: number, checked: boolean) => {
-    // Cada checkbox es independiente — se permite más de un trabajo actual
-    setValue(`experiences.${idx}.isCurrent` as const, checked, { shouldDirty: true, shouldValidate: true });
-    if (checked) {
-      setValue(`experiences.${idx}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
+    const total = getValues("experiences")?.length || 0;
+    for (let i = 0; i < total; i++) {
+      setValue(`experiences.${i}.isCurrent` as const, i === idx ? checked : false, { shouldDirty: true, shouldValidate: true });
+      if (i === idx && checked) {
+        setValue(`experiences.${i}.endDate` as const, null as string | null, { shouldDirty: true, shouldValidate: true });
+      }
     }
-  }, [setValue]);
+  }, [getValues, setValue]);
 
   /* ===== Skills ===== */
   const [skillQuery, setSkillQuery] = useState("");
@@ -555,6 +563,35 @@ export default function ProfileForm({
       appliedSomething = true;
     }
 
+    // Seniority desde CV — solo si el candidato NO tiene uno ya guardado
+    const currentSeniority = getValues("seniority");
+    if (analysis.seniority && !currentSeniority) {
+      const seniorityMap: Record<string, "JUNIOR" | "MID" | "SENIOR"> = {
+        junior: "JUNIOR",
+        mid: "MID",
+        senior: "SENIOR",
+      };
+      const mapped = seniorityMap[analysis.seniority];
+      if (mapped) {
+        setValue("seniority", mapped, { shouldDirty: true, shouldValidate: true });
+        appliedSomething = true;
+      }
+    }
+
+    // Años de experiencia desde CV — solo si el campo está vacío
+    const currentYears = getValues("yearsExperience");
+    if (
+      typeof analysis.yearsExperience === "number" &&
+      analysis.yearsExperience > 0 &&
+      currentYears == null
+    ) {
+      setValue("yearsExperience", analysis.yearsExperience, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      appliedSomething = true;
+    }
+
     if (Array.isArray(analysis.education) && analysis.education.length > 0 && educationRows.length === 0) {
       setValue(
         "education",
@@ -638,15 +675,12 @@ export default function ProfileForm({
     }
 
     const exps = vals.experiences || [];
-    const currentCount = exps.filter((e) => e.isCurrent).length;
-    if (currentCount > 1) {
-      const ok = window.confirm(
-        `Tienes ${currentCount} trabajos marcados como actuales. ¿Deseas guardar así?`
-      );
-      if (!ok) return;
+    if (exps.filter((e) => e.isCurrent).length > 1) {
+      setError("root", { type: "manual", message: "Solo puedes marcar una experiencia como 'Actual'." });
+      return;
     }
 
-    if (MONTH_OVERLAPS(exps.filter((e) => !e.isCurrent).map((e) => ({ startDate: e.startDate, endDate: e.endDate || null })))) {
+    if (MONTH_OVERLAPS(exps.map((e) => ({ startDate: e.startDate, endDate: e.isCurrent ? null : e.endDate || null })))) {
       setError("root", { type: "manual", message: "Tus experiencias no pueden traslaparse." });
       return;
     }
@@ -693,6 +727,14 @@ export default function ProfileForm({
     fd.set("educations", eduPayload);
     fd.set("educationJson", eduPayload);
 
+    // Seniority y años de experiencia — se manda aunque sea null para que el backend pueda limpiar
+    if (vals.seniority !== undefined) {
+      fd.set("seniority", vals.seniority ?? "");
+    }
+    if (vals.yearsExperience !== undefined) {
+      fd.set("yearsExperience", vals.yearsExperience == null ? "" : String(vals.yearsExperience));
+    }
+
     if (countryCode) fd.set("countryCode", countryCode);
     if (admin1) fd.set("admin1", admin1);
     if (city) fd.set("city", city);
@@ -720,6 +762,8 @@ export default function ProfileForm({
         <SectionPersonal />
         <SectionContact />
         <SectionNetworks />
+
+        <SectionSeniority />
 
         <SectionCV
           resumeUrl={currentResumeUrl}
@@ -1094,7 +1138,7 @@ function SectionExperience({
                         {...register(`experiences.${idx}.endDate` as const, {
                           onChange: (e) => {
                             if (String(e.target.value || "") === "") {
-                              setValue(`experiences.${idx}.endDate` as const, null as any, { shouldDirty: true, shouldValidate: true });
+                              setValue(`experiences.${idx}.endDate` as const, null as string | null, { shouldDirty: true, shouldValidate: true });
                             }
                           },
                         })}
@@ -1535,6 +1579,99 @@ function SectionEducation({
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+/* ============================================================
+   SectionSeniority — Nivel de seniority + años de experiencia
+   Alimenta User.seniority y User.yearsExperience en el motor AI Match
+   ============================================================ */
+function SectionSeniority() {
+  const { control, setValue } = useFormContext<ProfileFormData>();
+  const seniority = useWatch({ control, name: "seniority" });
+  const yearsExperience = useWatch({ control, name: "yearsExperience" });
+
+  const SENIORITY_OPTIONS: Array<{
+    value: "JUNIOR" | "MID" | "SENIOR";
+    label: string;
+    desc: string;
+  }> = [
+    { value: "JUNIOR", label: "Junior", desc: "0–2 años de experiencia" },
+    { value: "MID",    label: "Mid",    desc: "2–5 años de experiencia" },
+    { value: "SENIOR", label: "Senior", desc: "5+ años de experiencia" },
+  ];
+
+  const SENIORITY_COLORS: Record<"JUNIOR" | "MID" | "SENIOR", string> = {
+    JUNIOR: "border-blue-400 bg-blue-50 text-blue-800 dark:border-blue-500/60 dark:bg-blue-900/20 dark:text-blue-200",
+    MID:    "border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-500/60 dark:bg-amber-900/20 dark:text-amber-200",
+    SENIOR: "border-emerald-500 bg-emerald-50 text-emerald-800 dark:border-emerald-500/60 dark:bg-emerald-900/20 dark:text-emerald-200",
+  };
+
+  return (
+    <section id="seniority" className={`${SECTION_CARD} scroll-mt-24`}>
+      <header className="space-y-1">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Nivel de experiencia
+        </h2>
+        <p className={SUBTEXT_BASE}>
+          Estos datos mejoran tu AI Match con las vacantes.
+        </p>
+      </header>
+
+      <div>
+        <label className={LABEL_BASE}>Seniority</label>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {SENIORITY_OPTIONS.map((opt) => {
+            const isActive = seniority === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() =>
+                  setValue("seniority", isActive ? null : opt.value, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+                className={`inline-flex flex-col items-start rounded-xl border px-4 py-2.5 text-left transition-all ${
+                  isActive
+                    ? SENIORITY_COLORS[opt.value]
+                    : "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+                }`}
+              >
+                <span className="text-sm font-semibold">{opt.label}</span>
+                <span className="text-[11px] opacity-70">{opt.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 max-w-[200px]">
+        <label className={LABEL_BASE}>
+          Años de experiencia{" "}
+          <span className="text-zinc-400 font-normal">(opcional)</span>
+        </label>
+        <input
+          type="number"
+          min={0}
+          max={50}
+          step={1}
+          className={INPUT_BASE}
+          placeholder="Ej. 4"
+          value={yearsExperience ?? ""}
+          onChange={(e) => {
+            const raw = e.target.value.trim();
+            const v = raw === "" ? null : parseInt(raw, 10);
+            setValue("yearsExperience", Number.isFinite(v as number) ? (v as number) : null, {
+              shouldDirty: true,
+              shouldValidate: true,
+            });
+          }}
+        />
+        <p className={SUBTEXT_BASE}>Total de años trabajando en TI</p>
+      </div>
     </section>
   );
 }
