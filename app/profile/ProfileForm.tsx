@@ -950,12 +950,12 @@ function SectionContact() {
   const phoneLocalValue = useWatch({ control, name: "phoneLocal" }) || "";
 
   return (
-    <section id="contacto" className={`${SECTION_CARD} scroll-mt-24`}>
+    <section id="contacto" className={`${SECTION_CARD} scroll-mt-24 overflow-visible`}>
       <header className="space-y-1">
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Teléfono y ubicación</h2>
         <p className={SUBTEXT_BASE}>Ayuda a que los reclutadores puedan contactarte fácilmente.</p>
       </header>
-      <div className="grid md:grid-cols-2 gap-4">
+      <div className="grid md:grid-cols-2 gap-4 overflow-visible">
         <PhoneInputField
           value={phoneLocalValue}
           onChange={(val) => setValue("phoneLocal", val, { shouldDirty: true, shouldValidate: true })}
