@@ -1,4 +1,4 @@
-// app/api/ai/cv/candidate-summary/route.ts
+// app/api/ai/candidate-summary/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import type { Prisma } from "@prisma/client";

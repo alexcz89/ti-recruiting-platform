@@ -1,7 +1,7 @@
 // components/dashboard/MatchScorePopover.tsx
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import {
   ChevronDown,
   CheckCircle2,
@@ -37,6 +37,15 @@ interface MatchResult {
   experienceScore?: number;
 }
 
+interface MatchExplanation {
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  interviewFocus: string[];
+  recommendation: "STRONG_MATCH" | "REVIEW" | "WEAK_MATCH";
+  generatedAt: string;
+}
+
 interface Props {
   score: number;
   matchResult: MatchResult;
@@ -44,6 +53,8 @@ interface Props {
   scoreColor: string;
   scoreTextColor: string;
   scoreLabel: string;
+  candidateId?: string | null;
+  jobId?: string | null;
 }
 
 const SKILL_LEVEL_LABEL: Record<number, string> = {
@@ -76,6 +87,35 @@ function getRecommendation(score: number) {
   return "No hay suficientes señales para evaluar.";
 }
 
+function recommendationPill(rec?: MatchExplanation["recommendation"]) {
+  if (!rec) return null;
+
+  const map = {
+    STRONG_MATCH: {
+      label: "Strong match",
+      cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300",
+    },
+    REVIEW: {
+      label: "Review",
+      cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-300",
+    },
+    WEAK_MATCH: {
+      label: "Weak match",
+      cls: "border-red-200 bg-red-50 text-red-600 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-400",
+    },
+  }[rec];
+
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${map.cls}`}>
+      {map.label}
+    </span>
+  );
+}
+
+function buildExplanationUrl(candidateId: string, jobId: string) {
+  return `/api/ai/match-explanation?candidateId=${encodeURIComponent(candidateId)}&jobId=${encodeURIComponent(jobId)}`;
+}
+
 export default function MatchScorePopover({
   score,
   matchResult,
@@ -83,8 +123,16 @@ export default function MatchScorePopover({
   scoreColor,
   scoreTextColor,
   scoreLabel,
+  candidateId,
+  jobId,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState<MatchExplanation | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiFromCache, setAiFromCache] = useState<boolean | null>(null);
+  const [aiLoadedOnce, setAiLoadedOnce] = useState(false);
+
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -96,6 +144,95 @@ export default function MatchScorePopover({
     if (open) document.addEventListener("mousedown", handle);
     return () => document.removeEventListener("mousedown", handle);
   }, [open]);
+
+  useEffect(() => {
+    setAiExplanation(null);
+    setAiLoading(false);
+    setAiError(null);
+    setAiFromCache(null);
+    setAiLoadedOnce(false);
+  }, [candidateId, jobId]);
+
+  const loadAiExplanation = useCallback(async () => {
+    if (!candidateId || !jobId) return;
+
+    const cid: string = candidateId;
+    const jid: string = jobId;
+
+    try {
+      setAiLoading(true);
+      setAiError(null);
+
+      const res = await fetch(buildExplanationUrl(cid, jid), {
+        method: "GET",
+        cache: "no-store",
+        headers: { "Cache-Control": "no-store" },
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "No se pudo generar la explicación AI");
+      }
+
+      setAiExplanation((data?.explanation ?? null) as MatchExplanation | null);
+      setAiFromCache(Boolean(data?.fromCache));
+      setAiLoadedOnce(true);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "No se pudo cargar la explicación AI");
+      setAiLoadedOnce(true);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [candidateId, jobId]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!candidateId || !jobId) return;
+    if (aiLoadedOnce) return;
+
+    const cid: string = candidateId;
+    const jid: string = jobId;
+    let cancelled = false;
+
+    async function run() {
+      try {
+        setAiLoading(true);
+        setAiError(null);
+
+        const res = await fetch(buildExplanationUrl(cid, jid), {
+          method: "GET",
+          cache: "no-store",
+          headers: { "Cache-Control": "no-store" },
+        });
+
+        const data = await res.json().catch(() => null);
+
+        if (!res.ok) {
+          throw new Error(data?.error || "No se pudo generar la explicación AI");
+        }
+
+        if (!cancelled) {
+          setAiExplanation((data?.explanation ?? null) as MatchExplanation | null);
+          setAiFromCache(Boolean(data?.fromCache));
+          setAiLoadedOnce(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setAiError(err instanceof Error ? err.message : "No se pudo cargar la explicación AI");
+          setAiLoadedOnce(true);
+        }
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
+    }
+
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, candidateId, jobId, aiLoadedOnce]);
 
   const matched = useMemo(
     () => matchResult.details.filter((d) => d.matched),
@@ -256,7 +393,7 @@ export default function MatchScorePopover({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-[320px] rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-[340px] rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
           <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
             <div>
               <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">
@@ -271,12 +408,12 @@ export default function MatchScorePopover({
             <span className={`text-xl font-black ${scoreTextColor}`}>{score}</span>
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto space-y-4 p-3">
+          <div className="max-h-[460px] overflow-y-auto space-y-4 p-3">
             <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
               <div className="mb-2 flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                  Explicación
+                  Explicación determinística
                 </p>
               </div>
               <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
@@ -290,6 +427,103 @@ export default function MatchScorePopover({
                 ))}
               </ul>
             </div>
+
+            {candidateId && jobId && (
+              <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-3 dark:border-violet-700/40 dark:bg-violet-950/20">
+                <div className="mb-2 flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                    Explicación AI
+                  </p>
+                  {aiFromCache === true && (
+                    <span className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-[9px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-400">
+                      cache
+                    </span>
+                  )}
+                </div>
+
+                {aiLoading ? (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Generando explicación AI…
+                  </p>
+                ) : aiExplanation ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      {recommendationPill(aiExplanation.recommendation)}
+                    </div>
+
+                    <p className="text-xs text-zinc-700 dark:text-zinc-200">
+                      {aiExplanation.summary}
+                    </p>
+
+                    {aiExplanation.strengths.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                          Fortalezas
+                        </p>
+                        <ul className="space-y-1">
+                          {aiExplanation.strengths.map((item, idx) => (
+                            <li key={`${item}-${idx}`} className="text-xs text-zinc-600 dark:text-zinc-300">
+                              • {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {aiExplanation.gaps.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                          Gaps
+                        </p>
+                        <ul className="space-y-1">
+                          {aiExplanation.gaps.map((item, idx) => (
+                            <li key={`${item}-${idx}`} className="text-xs text-zinc-600 dark:text-zinc-300">
+                              • {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {aiExplanation.interviewFocus.length > 0 && (
+                      <div>
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-500">
+                          Enfoque de entrevista
+                        </p>
+                        <ul className="space-y-1">
+                          {aiExplanation.interviewFocus.map((item, idx) => (
+                            <li key={`${item}-${idx}`} className="text-xs text-zinc-600 dark:text-zinc-300">
+                              • {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                ) : aiError ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                      No se pudo cargar la explicación AI.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAiLoadedOnce(false);
+                        void loadAiExplanation();
+                      }}
+                      className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-[11px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    La explicación AI aparecerá aquí.
+                  </p>
+                )}
+              </div>
+            )}
 
             {jobSkillCount > 0 && (
               <div>

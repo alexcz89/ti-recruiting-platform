@@ -299,13 +299,13 @@ model Company {
   assessmentCreditsUsed     Decimal   @default(0) @db.Decimal(10, 2)
   assessmentCreditsReserved Decimal   @default(0) @db.Decimal(10, 2)
   lastCreditRefill          DateTime?
-  stripeCustomerId String? @unique
+  stripeCustomerId          String?   @unique
 
   // Plan de evaluaciones
   assessmentPlan                String? // "BASIC" | "PRO" | "ENTERPRISE"
-  assessmentPlanCreditsPerMonth Int       @default(0)
+  assessmentPlanCreditsPerMonth Int                  @default(0)
   assessmentPlanStartedAt       DateTime?
-  customTemplates AssessmentTemplate[]
+  customTemplates               AssessmentTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -361,13 +361,13 @@ model User {
   gender Gender?
 
   // ✅ NUEVO: ONBOARDING Y COMPLETITUD
-  onboardingStep    Int     @default(0) // 0-3: pasos del signup completados
-  profileCompleted  Boolean @default(false) // true cuando perfil está completo
-  profileCompletion Int     @default(0) // 0-100: porcentaje de completitud
+  onboardingStep    Int     @default(0)
+  profileCompleted  Boolean @default(false)
+  profileCompletion Int     @default(0)
 
   // ✅ NUEVO: METADATA DE SIGNUP
-  signupSource    String? // "organic", "linkedin", "google", "referral"
-  signupDevice    String? // "mobile", "desktop", "tablet"
+  signupSource    String?
+  signupDevice    String?
   signupIp        String?
   signupUserAgent String?
 
@@ -394,8 +394,8 @@ model User {
   // SKILLS Y EDUCACIÓN (mantener existente)
   certifications        String[]       @default([])
   highestEducationLevel EducationLevel @default(NONE)
-  seniority        Seniority?
-  yearsExperience  Int?
+  seniority             Seniority?
+  yearsExperience       Int?
 
   // ✅ NUEVO: TIMESTAMPS MEJORADOS
   createdAt          DateTime  @default(now())
@@ -409,9 +409,9 @@ model User {
   isSuspended     Boolean   @default(false)
   suspendedAt     DateTime?
   suspendedReason String?
-  deletedAt       DateTime? // Soft delete
+  deletedAt       DateTime?
 
-  // RELACIONES (mantener todas las existentes)
+  // RELACIONES
   applications              Application[]
   jobs                      Job[]                    @relation("PostedJobs")
   company                   Company?                 @relation(fields: [companyId], references: [id])
@@ -430,16 +430,16 @@ model User {
   codeExecutions            CodeExecution[]
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
-  autoLoginTokens           AutoLoginToken[] 
+  autoLoginTokens           AutoLoginToken[]
 
   // AI
-  candidateSummaries        CandidateSummaryCache[]
+  candidateSummaries CandidateSummaryCache[]
+  matchExplanations  MatchExplanationCache[]
 
-  // FLAGS DE NOTIFICACIONES (mantener)
+  // FLAGS DE NOTIFICACIONES
   emailNotificationsEnabled Boolean @default(true)
   pushNotificationsEnabled  Boolean @default(false)
 
-  // ✅ ÍNDICES MEJORADOS
   @@index([email])
   @@index([role])
   @@index([companyId])
@@ -449,20 +449,20 @@ model User {
   @@index([country, city])
   @@index([cityNorm])
   @@index([admin1Norm])
-  @@index([profileCompleted]) // NUEVO
-  @@index([onboardingStep]) // NUEVO
-  @@index([lastActivityAt]) // NUEVO
+  @@index([profileCompleted])
+  @@index([onboardingStep])
+  @@index([lastActivityAt])
   @@index([createdAt])
 }
 
 model AutoLoginToken {
-  id        String   @id @default(cuid())
-  token     String   @unique
+  id        String    @id @default(cuid())
+  token     String    @unique
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([token])
   @@index([userId])
@@ -534,13 +534,13 @@ model Job {
   cityNorm   String?
   admin1Norm String?
 
-  employmentType  EmploymentType
-  seniority       Seniority?
+  employmentType     EmploymentType
+  seniority          Seniority?
   minYearsExperience Int?
-  description     String         @db.Text
-  descriptionHtml String?        @db.Text
-  schedule        String?
-  publishAt       DateTime?
+  description        String         @db.Text
+  descriptionHtml    String?        @db.Text
+  schedule           String?
+  publishAt          DateTime?
 
   skills         String[]
   requiredSkills JobRequiredSkill[]
@@ -570,11 +570,10 @@ model Job {
   recruiterId String?
   recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id], onDelete: SetNull)
 
-  applications Application[]
-
-  assessments JobAssessment[]
-
+  applications      Application[]
+  assessments       JobAssessment[]
   assessmentInvites AssessmentInvite[]
+  matchExplanations MatchExplanationCache[]
 
   @@index([companyId])
   @@index([title])
@@ -883,9 +882,29 @@ model CandidateSummaryCache {
   generatedAt    DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  candidate      User     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate User @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   @@index([candidateId])
+  @@index([candidateId, jobId])
+  @@index([fingerprint])
+}
+
+model MatchExplanationCache {
+  id              String   @id @default(cuid())
+  cacheKey        String   @unique
+  candidateId     String
+  jobId           String
+  fingerprint     String
+  version         String   @default("v1")
+  explanationJson Json
+  generatedAt     DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  candidate User @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([jobId])
   @@index([candidateId, jobId])
   @@index([fingerprint])
 }
@@ -933,11 +952,11 @@ model AssessmentTemplate {
   pricingConfig Json? // { reserve: 0.5, onComplete: 0.5, refundIfNotCompleted: true }
 
   isActive  Boolean  @default(true)
-  language    String?   // "javascript" | "python" | "cpp" | null (para MCQ genéricos)
-  companyId   String?   // null = template global de Taskio, string = template privado del reclutador
-  isGlobal    Boolean   @default(true) // false = creado por reclutador
-// Relación con Company (agregar junto a las otras relaciones):
-  company     Company?  @relation(fields: [companyId], references: [id])
+  language  String? // "javascript" | "python" | "cpp" | null (para MCQ genéricos)
+  companyId String? // null = template global de Taskio, string = template privado del reclutador
+  isGlobal  Boolean  @default(true) // false = creado por reclutador
+  // Relación con Company (agregar junto a las otras relaciones):
+  company   Company? @relation(fields: [companyId], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 

@@ -909,6 +909,8 @@ export default async function JobApplicationsPage({
                                 scoreColor={scoreToColor(gatedScore!)}
                                 scoreTextColor={scoreToTextColor(gatedScore!)}
                                 scoreLabel={scoreToLabel(gatedScore!)}
+                                candidateId={a.candidate?.id}
+                                jobId={job.id}
                               />
                               <MatchBreakdownMini
                                 matchResult={matchResult}
