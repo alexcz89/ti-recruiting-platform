@@ -1,10 +1,4 @@
 // app/jobs/[id]/page.tsx
-// CAMBIOS:
-// 1. candidateMatchResult se calcula siempre si hay candidato (no solo cuando hay jobSkills)
-//    — permite que seniority/experience aporten score aunque la vacante no tenga skills catalogadas
-// 2. Pasar seniority y yearsExperience del candidato al motor
-// 3. Pasar seniority y minYearsExperience del job al motor
-
 import { prisma } from "@/lib/server/prisma";
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -15,6 +9,7 @@ import AssessmentRequirement from "./AssessmentRequirement";
 import CandidateMatchCard from "@/components/jobs/CandidateMatchCard";
 import {
   computeMatchScore,
+  hasMatchSignals,
   type JobSkillInput,
   type CandidateSkillInput,
   type SeniorityLevel,
@@ -42,11 +37,16 @@ function stripHtml(html: string | null | undefined) {
 
 function labelEmploymentType(type: string | null | undefined) {
   switch (type) {
-    case "FULL_TIME":   return "Tiempo completo";
-    case "PART_TIME":   return "Medio tiempo";
-    case "CONTRACT":    return "Por periodo";
-    case "INTERNSHIP":  return "Prácticas profesionales";
-    default:            return null;
+    case "FULL_TIME":
+      return "Tiempo completo";
+    case "PART_TIME":
+      return "Medio tiempo";
+    case "CONTRACT":
+      return "Por periodo";
+    case "INTERNSHIP":
+      return "Prácticas profesionales";
+    default:
+      return null;
   }
 }
 
@@ -64,18 +64,28 @@ function buildDescription(job: {
   const parts: string[] = [];
   if (job.company?.name) parts.push(job.company.name);
   if (job.city) parts.push(job.city);
+
   const empLabel = labelEmploymentType(job.employmentType);
   if (empLabel) parts.push(empLabel);
+
   if (job.salaryMin || job.salaryMax) {
     const currency = job.currency ?? "MXN";
-    const fmt = (n: number) => new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
-    if (job.salaryMin && job.salaryMax) parts.push(`${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`);
-    else if (job.salaryMin) parts.push(`Desde ${currency} ${fmt(job.salaryMin)}`);
-    else if (job.salaryMax) parts.push(`Hasta ${currency} ${fmt(job.salaryMax)}`);
+    const fmt = (n: number) =>
+      new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
+
+    if (job.salaryMin && job.salaryMax) {
+      parts.push(`${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`);
+    } else if (job.salaryMin) {
+      parts.push(`Desde ${currency} ${fmt(job.salaryMin)}`);
+    } else if (job.salaryMax) {
+      parts.push(`Hasta ${currency} ${fmt(job.salaryMax)}`);
+    }
   }
+
   const header = parts.join(" · ");
   const rawDesc = job.description || stripHtml(job.descriptionHtml || "");
   const desc = excerpt(rawDesc, 120);
+
   return header && desc ? `${header} — ${desc}` : header || desc || `Vacante: ${job.title}`;
 }
 
@@ -83,12 +93,20 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const job = await prisma.job.findUnique({
     where: { id: params.id },
     select: {
-      id: true, title: true, description: true, descriptionHtml: true,
-      city: true, employmentType: true, salaryMin: true, salaryMax: true,
-      currency: true, updatedAt: true,
+      id: true,
+      title: true,
+      description: true,
+      descriptionHtml: true,
+      city: true,
+      employmentType: true,
+      salaryMin: true,
+      salaryMax: true,
+      currency: true,
+      updatedAt: true,
       company: { select: { name: true } },
     },
   });
+
   if (!job) return {};
 
   const companyName = job.company?.name ?? null;
@@ -102,10 +120,20 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     description,
     alternates: { canonical: url },
     openGraph: {
-      title, description, url, siteName: SITE_NAME, locale: "es_MX", type: "website",
+      title,
+      description,
+      url,
+      siteName: SITE_NAME,
+      locale: "es_MX",
+      type: "website",
       images: [{ url: ogImage, width: 630, height: 630, alt: title }],
     },
-    twitter: { card: "summary", title, description, images: [ogImage] },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+      images: [ogImage],
+    },
   };
 }
 
@@ -141,8 +169,8 @@ export default async function JobDetail({ params }: Params) {
       description: true,
       descriptionHtml: true,
       skills: true,
-      seniority: true,            // ✅ para el motor
-      minYearsExperience: true,   // ✅ para el motor
+      seniority: true,
+      minYearsExperience: true,
       requiredSkills: {
         select: {
           must: true,
@@ -169,8 +197,12 @@ export default async function JobDetail({ params }: Params) {
           templateId: true,
           template: {
             select: {
-              id: true, title: true, difficulty: true,
-              totalQuestions: true, timeLimit: true, passingScore: true,
+              id: true,
+              title: true,
+              difficulty: true,
+              totalQuestions: true,
+              timeLimit: true,
+              passingScore: true,
             },
           },
         },
@@ -208,16 +240,22 @@ export default async function JobDetail({ params }: Params) {
     weight: rs.weight,
   }));
 
-  // ✅ Calcular match siempre que haya candidato logueado
-  // — aunque no haya skills catalogadas, seniority/experience pueden aportar score
+  const jobSeniorityForEngine = toSeniorityLevel(job.seniority);
+
+  const hasJobMatchSignals = hasMatchSignals({
+    jobSkills: jobSkillsForEngine,
+    jobSeniority: jobSeniorityForEngine,
+    jobMinYearsExperience: job.minYearsExperience ?? null,
+  });
+
   let candidateMatchResult = null;
 
   if (isCandidate && user?.id) {
     const candidateRaw = await prisma.user.findUnique({
       where: { id: user.id },
       select: {
-        seniority: true,        // ✅ NUEVO
-        yearsExperience: true,  // ✅ NUEVO
+        seniority: true,
+        yearsExperience: true,
         candidateSkills: {
           select: {
             level: true,
@@ -227,32 +265,21 @@ export default async function JobDetail({ params }: Params) {
       },
     });
 
-    if (candidateRaw) {
+    if (candidateRaw && hasJobMatchSignals) {
       const candidateSkillsForEngine: CandidateSkillInput[] = candidateRaw.candidateSkills.map((cs) => ({
         termId: cs.term.id,
         label: cs.term.label,
         level: cs.level,
       }));
 
-      const result = computeMatchScore({
+      candidateMatchResult = computeMatchScore({
         jobSkills: jobSkillsForEngine,
         candidateSkills: candidateSkillsForEngine,
-        jobSeniority: toSeniorityLevel(job.seniority),                        // ✅ NUEVO
-        candidateSeniority: toSeniorityLevel(candidateRaw.seniority as string | null), // ✅ NUEVO
-        jobMinYearsExperience: job.minYearsExperience ?? null,                 // ✅ NUEVO
-        candidateYearsExperience: candidateRaw.yearsExperience ?? null,        // ✅ NUEVO
+        jobSeniority: jobSeniorityForEngine,
+        candidateSeniority: toSeniorityLevel(candidateRaw.seniority as string | null),
+        jobMinYearsExperience: job.minYearsExperience ?? null,
+        candidateYearsExperience: candidateRaw.yearsExperience ?? null,
       });
-
-      // Solo mostrar la tarjeta si hay algo que mostrar
-      // (score > 0 o al menos skills/seniority/experience definidos)
-      const hasJobSignals =
-        jobSkillsForEngine.length > 0 ||
-        job.seniority != null ||
-        job.minYearsExperience != null;
-
-      if (hasJobSignals) {
-        candidateMatchResult = result;
-      }
     }
   }
 
@@ -284,7 +311,16 @@ export default async function JobDetail({ params }: Params) {
     jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
     jobLocation: job.remote
       ? undefined
-      : [{ "@type": "Place", address: { "@type": "PostalAddress", addressLocality: job.location || "México", addressCountry: "MX" } }],
+      : [
+          {
+            "@type": "Place",
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: job.location || "México",
+              addressCountry: "MX",
+            },
+          },
+        ],
     description: job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
     employmentType: job.employmentType,
@@ -296,7 +332,7 @@ export default async function JobDetail({ params }: Params) {
   };
 
   const canApply = !isRecruiterOrAdmin;
-  const hasJobSignalsForAnon = jobSkillsForEngine.length > 0 || job.seniority != null || job.minYearsExperience != null;
+  const hasJobSignalsForAnon = hasJobMatchSignals;
 
   return (
     <main className="max-w-[1100px] xl:max-w-[1200px] mx-auto px-6 lg:px-10 py-8 space-y-6">
@@ -312,12 +348,10 @@ export default async function JobDetail({ params }: Params) {
         />
       )}
 
-      {/* AI Match para candidato logueado */}
       {isCandidate && candidateMatchResult && (
         <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
       )}
 
-      {/* CTA para candidatos anónimos si la vacante tiene señales de matching */}
       {!session && hasJobSignalsForAnon && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-700/40 dark:bg-emerald-950/20">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
