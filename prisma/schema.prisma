@@ -873,18 +873,21 @@ model CandidateCredential {
 }
 
 model CandidateSummaryCache {
-  id          String   @id @default(cuid())
-  cacheKey    String   @unique
-  candidateId String
-  jobId       String?
-  summaryJson String
-  generatedAt DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  cacheKey       String   @unique
+  candidateId    String
+  jobId          String?
+  fingerprint    String
+  summaryVersion String   @default("v1")
+  summaryJson    Json
+  generatedAt    DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  candidate   User     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate      User     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
 
   @@index([candidateId])
   @@index([candidateId, jobId])
+  @@index([fingerprint])
 }
 
 model Resume {

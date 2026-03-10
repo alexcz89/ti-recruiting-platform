@@ -1,11 +1,14 @@
-// app/api/ai/candidate-summary/route.ts
+// app/api/ai/cv/candidate-summary/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
 import {
   generateCandidateSummary,
+  buildFingerprint,
+  SUMMARY_VERSION,
   type CandidateSummaryInput,
 } from "@/lib/ai/candidateSummary";
 
@@ -42,7 +45,18 @@ function noStoreJson(body: unknown, status = 200) {
 }
 
 function buildCacheKey(candidateId: string, jobId: string | null) {
-  return `candidate:${candidateId}:job:${jobId ?? "general"}`;
+  return `${candidateId}:${jobId ?? "general"}`;
+}
+
+function formatMonthYear(date: Date | string | null | undefined): string {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("es-MX", { month: "short", year: "numeric" });
+}
+
+function toPrismaJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
 async function buildSummaryInput(
@@ -102,21 +116,9 @@ async function buildSummaryInput(
       return levelLabel ? `${l.term.label} · ${levelLabel}` : l.term.label;
     });
 
-  const experienceTitles = (candidate.experiences ?? []).map((e) => {
-    const start = e.startDate
-      ? new Date(e.startDate).toLocaleDateString("es-MX", {
-          month: "short",
-          year: "numeric",
-        })
-      : "";
-    const end = e.isCurrent
-      ? "actualidad"
-      : e.endDate
-      ? new Date(e.endDate).toLocaleDateString("es-MX", {
-          month: "short",
-          year: "numeric",
-        })
-      : "";
+  const experienceTitles = candidate.experiences.map((e) => {
+    const start = formatMonthYear(e.startDate);
+    const end = e.isCurrent ? "actualidad" : formatMonthYear(e.endDate);
     const period = start && end ? ` (${start}–${end})` : "";
     const company = e.company ? ` @ ${e.company}` : "";
     return `${e.role ?? ""}${company}${period}`.trim();
@@ -125,15 +127,16 @@ async function buildSummaryInput(
   const input: CandidateSummaryInput = {
     name: candidate.name ?? "Candidato",
     seniority: candidate.seniority
-      ? (SENIORITY_LABEL[candidate.seniority as string] ??
-          (candidate.seniority as string))
+      ? SENIORITY_LABEL[candidate.seniority as string] ?? String(candidate.seniority)
       : null,
-    yearsExperience: candidate.yearsExperience,
-    location: candidate.location,
+    yearsExperience: candidate.yearsExperience ?? null,
+    location: candidate.location ?? null,
     skills,
     languages,
     experienceTitles,
-    certifications: (candidate.certifications as string[] | null) ?? [],
+    certifications: Array.isArray(candidate.certifications)
+      ? (candidate.certifications as string[])
+      : [],
   };
 
   if (jobId && companyId) {
@@ -154,31 +157,26 @@ async function buildSummaryInput(
 
     if (jobRaw) {
       const jobSkillLabels = jobRaw.requiredSkills.map((rs) => rs.term.label);
-      const candidateSkillLabels = new Set(
-        candidate.candidateSkills.map((cs) => cs.term.label.toLowerCase())
+      const candidateSkillSet = new Set(
+        candidate.candidateSkills
+          .map((cs) => cs.term?.label?.toLowerCase())
+          .filter(Boolean) as string[]
       );
 
       const missingRequired = jobRaw.requiredSkills
-        .filter(
-          (rs) =>
-            rs.must && !candidateSkillLabels.has(rs.term.label.toLowerCase())
-        )
+        .filter((rs) => rs.must && !candidateSkillSet.has(rs.term.label.toLowerCase()))
         .map((rs) => rs.term.label);
 
       const missingNice = jobRaw.requiredSkills
-        .filter(
-          (rs) =>
-            !rs.must && !candidateSkillLabels.has(rs.term.label.toLowerCase())
-        )
+        .filter((rs) => !rs.must && !candidateSkillSet.has(rs.term.label.toLowerCase()))
         .map((rs) => rs.term.label);
 
       input.job = {
         title: jobRaw.title,
         seniority: jobRaw.seniority
-          ? (SENIORITY_LABEL[jobRaw.seniority as string] ??
-              (jobRaw.seniority as string))
+          ? SENIORITY_LABEL[jobRaw.seniority as string] ?? String(jobRaw.seniority)
           : null,
-        minYearsExperience: jobRaw.minYearsExperience,
+        minYearsExperience: jobRaw.minYearsExperience ?? null,
         requiredSkills: jobSkillLabels,
         missingRequired,
         missingNice,
@@ -213,15 +211,40 @@ export async function GET(req: NextRequest) {
     });
 
     if (cached) {
-      try {
-        const summary = JSON.parse(cached.summaryJson);
+      const input = await buildSummaryInput(candidateId, jobId, companyId);
+
+      if (input) {
+        const currentFingerprint = buildFingerprint(input);
+
+        if (
+          cached.fingerprint === currentFingerprint &&
+          cached.summaryVersion === SUMMARY_VERSION
+        ) {
+          return noStoreJson({
+            summary: cached.summaryJson,
+            fromCache: true,
+            generatedAt: cached.generatedAt,
+          });
+        }
+
+        const summary = await generateCandidateSummary(input);
+        const summaryJson = toPrismaJson(summary);
+
+        await prisma.candidateSummaryCache.update({
+          where: { cacheKey },
+          data: {
+            summaryJson,
+            fingerprint: currentFingerprint,
+            summaryVersion: SUMMARY_VERSION,
+            generatedAt: new Date(),
+          },
+        });
+
         return noStoreJson({
           summary,
-          fromCache: true,
-          generatedAt: cached.generatedAt,
+          fromCache: false,
+          generatedAt: summary.generatedAt,
         });
-      } catch {
-        // regenerar
       }
     }
   }
@@ -230,6 +253,8 @@ export async function GET(req: NextRequest) {
   if (!input) return noStoreJson({ error: "Candidato no encontrado" }, 404);
 
   const summary = await generateCandidateSummary(input);
+  const summaryJson = toPrismaJson(summary);
+  const fingerprint = buildFingerprint(input);
 
   await prisma.candidateSummaryCache.upsert({
     where: { cacheKey },
@@ -237,10 +262,14 @@ export async function GET(req: NextRequest) {
       cacheKey,
       candidateId,
       jobId,
-      summaryJson: JSON.stringify(summary),
+      fingerprint,
+      summaryVersion: SUMMARY_VERSION,
+      summaryJson,
     },
     update: {
-      summaryJson: JSON.stringify(summary),
+      summaryJson,
+      fingerprint,
+      summaryVersion: SUMMARY_VERSION,
       generatedAt: new Date(),
     },
   });
@@ -271,6 +300,8 @@ export async function POST(req: NextRequest) {
   if (!input) return noStoreJson({ error: "Candidato no encontrado" }, 404);
 
   const summary = await generateCandidateSummary(input);
+  const summaryJson = toPrismaJson(summary);
+  const fingerprint = buildFingerprint(input);
   const cacheKey = buildCacheKey(candidateId, jobId);
 
   await prisma.candidateSummaryCache.upsert({
@@ -279,10 +310,14 @@ export async function POST(req: NextRequest) {
       cacheKey,
       candidateId,
       jobId,
-      summaryJson: JSON.stringify(summary),
+      fingerprint,
+      summaryVersion: SUMMARY_VERSION,
+      summaryJson,
     },
     update: {
-      summaryJson: JSON.stringify(summary),
+      summaryJson,
+      fingerprint,
+      summaryVersion: SUMMARY_VERSION,
       generatedAt: new Date(),
     },
   });

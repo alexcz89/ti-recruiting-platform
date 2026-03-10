@@ -1,19 +1,23 @@
-// lib/ai/candidateSummary.ts
 import OpenAI from "openai";
 import { z } from "zod";
+import { createHash } from "crypto";
 import { AI_MODEL_SMART } from "./config";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+export const SUMMARY_VERSION = "v1";
 
 export interface CandidateSummaryInput {
   name: string;
   seniority?: string | null;
   yearsExperience?: number | null;
   location?: string | null;
+
   skills: string[];
   languages: string[];
   experienceTitles: string[];
   certifications?: string[];
+
   job?: {
     title: string;
     seniority?: string | null;
@@ -46,38 +50,93 @@ const CandidateSummarySchema = z.object({
   missingSkillsNote: z.string().optional(),
 });
 
-function buildPrompt(input: CandidateSummaryInput): string {
-  const { name, seniority, yearsExperience, location, skills, languages, experienceTitles, certifications, job } = input;
+function uniqClean(values: string[] | undefined | null, limit?: number): string[] {
+  const out = Array.from(
+    new Set((values ?? []).map((v) => String(v || "").trim()).filter(Boolean))
+  );
+  return typeof limit === "number" ? out.slice(0, limit) : out;
+}
 
+/**
+ * Fingerprint con datos estables, no con strings decoradas de UI.
+ * Así evitamos invalidar caché por cambios cosméticos.
+ */
+export function buildFingerprint(input: CandidateSummaryInput): string {
+  const stable = {
+    summaryVersion: SUMMARY_VERSION,
+    name: String(input.name || "").trim(),
+    seniority: input.seniority ?? null,
+    yearsExperience: input.yearsExperience ?? null,
+    location: input.location ?? null,
+
+    skills: uniqClean(input.skills).sort().slice(0, 12),
+    languages: uniqClean(input.languages).sort(),
+    experienceTitles: uniqClean(input.experienceTitles).slice(0, 5),
+    certifications: uniqClean(input.certifications).sort().slice(0, 8),
+
+    job: input.job
+      ? {
+          title: String(input.job.title || "").trim(),
+          seniority: input.job.seniority ?? null,
+          minYearsExperience: input.job.minYearsExperience ?? null,
+          requiredSkills: uniqClean(input.job.requiredSkills).sort(),
+          missingRequired: uniqClean(input.job.missingRequired).sort(),
+          missingNice: uniqClean(input.job.missingNice).sort(),
+          matchScore: input.job.matchScore ?? null,
+        }
+      : null,
+  };
+
+  return createHash("sha256")
+    .update(JSON.stringify(stable))
+    .digest("hex")
+    .slice(0, 32);
+}
+
+function buildPrompt(input: CandidateSummaryInput): string {
   const profileBlock = [
-    `Nombre: ${name}`,
-    seniority ? `Seniority: ${seniority}` : null,
-    yearsExperience != null ? `Años de experiencia: ${yearsExperience}` : null,
-    location ? `Ubicación: ${location}` : null,
-    skills.length ? `Skills: ${skills.join(", ")}` : null,
-    languages.length ? `Idiomas: ${languages.join(", ")}` : null,
-    experienceTitles.length ? `Experiencia:\n${experienceTitles.map((e) => `- ${e}`).join("\n")}` : null,
-    certifications?.length ? `Certificaciones: ${certifications.join(", ")}` : null,
+    `Nombre: ${input.name}`,
+    input.seniority ? `Seniority: ${input.seniority}` : null,
+    input.yearsExperience != null
+      ? `Años de experiencia: ${input.yearsExperience}`
+      : null,
+    input.location ? `Ubicación: ${input.location}` : null,
+    input.skills.length ? `Skills: ${input.skills.slice(0, 12).join(", ")}` : null,
+    input.languages.length ? `Idiomas: ${input.languages.join(", ")}` : null,
+    input.experienceTitles.length
+      ? `Experiencia reciente:\n${input.experienceTitles
+          .slice(0, 3)
+          .map((e) => `- ${e}`)
+          .join("\n")}`
+      : null,
+    input.certifications?.length
+      ? `Certificaciones: ${input.certifications.slice(0, 5).join(", ")}`
+      : null,
   ]
     .filter(Boolean)
     .join("\n");
 
-  const jobBlock = job
+  const jobBlock = input.job
     ? [
         `--- VACANTE ---`,
-        `Título: ${job.title}`,
-        job.seniority ? `Seniority requerido: ${job.seniority}` : null,
-        job.minYearsExperience != null
-          ? `Años mínimos requeridos: ${job.minYearsExperience}`
+        `Título: ${input.job.title}`,
+        input.job.seniority ? `Seniority requerido: ${input.job.seniority}` : null,
+        input.job.minYearsExperience != null
+          ? `Años mínimos: ${input.job.minYearsExperience}`
           : null,
-        job.requiredSkills.length
-          ? `Skills requeridos/deseables: ${job.requiredSkills.join(", ")}`
+        input.job.requiredSkills.length
+          ? `Skills requeridos/deseables: ${input.job.requiredSkills
+              .slice(0, 10)
+              .join(", ")}`
           : null,
-        job.missingRequired.length
-          ? `Skills requeridos faltantes: ${job.missingRequired.join(", ")}`
+        input.job.missingRequired.length
+          ? `Skills requeridos faltantes: ${input.job.missingRequired.join(", ")}`
           : null,
-        job.missingNice.length
-          ? `Skills deseables faltantes: ${job.missingNice.join(", ")}`
+        input.job.missingNice.length
+          ? `Skills deseables faltantes: ${input.job.missingNice.join(", ")}`
+          : null,
+        input.job.matchScore != null
+          ? `Match score actual: ${input.job.matchScore}`
           : null,
       ]
         .filter(Boolean)
@@ -85,29 +144,25 @@ function buildPrompt(input: CandidateSummaryInput): string {
     : "";
 
   return `
-Eres un recruiter senior de tecnología.
+Eres un recruiter técnico senior.
 
-Devuelve ÚNICAMENTE JSON válido con esta forma:
+Devuelve ÚNICAMENTE JSON válido con esta forma exacta:
 
 {
-  "headline": "string",
-  "summary": "string",
-  "strengths": ["string"],
-  "risks": ["string"],
-  "suggestedQuestions": ["string"],
-  "jobFitNotes": "string opcional",
-  "missingSkillsNote": "string opcional"
+  "headline": "máx 18 palabras",
+  "summary": "2-3 oraciones ejecutivas",
+  "strengths": ["máx 3 bullets concretos"],
+  "risks": ["máx 2 bullets reales, array vacío si no hay"],
+  "suggestedQuestions": ["3-5 preguntas útiles para entrevista"],
+  "jobFitNotes": "máx 50 palabras — solo si hay vacante",
+  "missingSkillsNote": "1 línea sobre gaps críticos — solo si hay gaps importantes"
 }
 
 Reglas:
-- headline: una sola línea, ejecutiva.
-- summary: 2 o 3 oraciones.
-- strengths: 3 a 5 bullets concretos.
-- risks: 0 a 3 bullets reales, no inventes.
-- suggestedQuestions: 3 a 5 preguntas útiles para entrevista.
-- Si no hay vacante, omite jobFitNotes y missingSkillsNote.
-- Si hay vacante, explica fit real, no adornes.
-- Responde en español.
+- Responde en español
+- No inventes datos que no estén en el perfil
+- Si no hay vacante, omite jobFitNotes y missingSkillsNote
+- Sé directo y útil para un reclutador, no poético
 
 PERFIL:
 ${profileBlock}
@@ -120,20 +175,19 @@ function fallbackSummary(input: CandidateSummaryInput): CandidateSummary {
   return {
     headline: `${input.name}${input.seniority ? ` · ${input.seniority}` : ""}`,
     summary: "Perfil generado con información estructurada del candidato.",
-    strengths: input.skills.slice(0, 5),
+    strengths: uniqClean(input.skills, 3),
     risks: input.job?.missingRequired?.length
-      ? [`Faltan skills requeridos: ${input.job.missingRequired.join(", ")}`]
+      ? [`Faltan skills requeridos: ${uniqClean(input.job.missingRequired).join(", ")}`]
       : [],
     suggestedQuestions: [
       "¿Cuál ha sido tu proyecto más relevante recientemente?",
       "¿Qué herramientas o tecnologías dominas mejor hoy?",
       "¿Qué tipo de rol estás buscando actualmente?",
     ],
-    jobFitNotes: input.job ? `Se evaluó contra la vacante ${input.job.title}.` : undefined,
-    missingSkillsNote:
-      input.job?.missingRequired?.length
-        ? `Faltan skills clave: ${input.job.missingRequired.join(", ")}`
-        : undefined,
+    jobFitNotes: input.job ? `Evaluado contra: ${input.job.title}` : undefined,
+    missingSkillsNote: input.job?.missingRequired?.length
+      ? `Faltan skills clave: ${uniqClean(input.job.missingRequired).join(", ")}`
+      : undefined,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -147,7 +201,7 @@ export async function generateCandidateSummary(
       messages: [{ role: "user", content: buildPrompt(input) }],
       response_format: { type: "json_object" },
       temperature: 0.3,
-      max_tokens: 900,
+      max_tokens: 700,
     });
 
     const raw = response.choices[0]?.message?.content ?? "{}";
@@ -160,9 +214,9 @@ export async function generateCandidateSummary(
 
     return {
       ...safe.data,
-      strengths: safe.data.strengths.slice(0, 5),
-      risks: safe.data.risks.slice(0, 3),
-      suggestedQuestions: safe.data.suggestedQuestions.slice(0, 5),
+      strengths: uniqClean(safe.data.strengths, 3),
+      risks: uniqClean(safe.data.risks, 2),
+      suggestedQuestions: uniqClean(safe.data.suggestedQuestions, 5),
       generatedAt: new Date().toISOString(),
     };
   } catch {
