@@ -1,18 +1,15 @@
 // app/dashboard/jobs/[id]/applications/page.tsx
-// CAMBIOS vs versión anterior:
-// 1. job query agrega: seniority, minYearsExperience
-// 2. candidate query agrega: seniority, yearsExperience
-// 3. computeMatchScore recibe objeto con todos los campos
-
 import Link from "next/link";
-import { prisma } from '@/lib/server/prisma';
-import { getSessionCompanyId } from '@/lib/server/session';
+import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyId } from "@/lib/server/session";
 import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
 import ActionsMenu from "./ActionsMenu";
 import { Phone, FileText as FileTextIcon, Search, Lock, SlidersHorizontal } from "lucide-react";
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
+import MatchScorePopover from "@/components/dashboard/MatchScorePopover";
+import MatchBreakdownMini from "@/components/jobs/MatchBreakdownMini";
 import {
   computeMatchScore,
   applyPlanGate,
@@ -39,6 +36,7 @@ const INTEREST_LABEL: Record<InterestKey, string> = {
   ACCEPTED: "Aceptado",
   REJECTED: "Rechazado",
 };
+
 function getAppInterest(a: any): InterestKey {
   const raw = (a?.recruiterInterest ?? "").toString().toUpperCase();
   if (raw === "MAYBE" || raw === "ACCEPTED" || raw === "REJECTED") return raw;
@@ -61,12 +59,11 @@ function scoreToRange(score: number): "HIGH" | "MED" | "LOW" {
   return "LOW";
 }
 
-// Convertir enum Prisma Seniority → SeniorityLevel del motor
 function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
   if (!s) return null;
   const lower = s.toLowerCase();
   if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
-  return null; // LEAD no aplica al motor
+  return null;
 }
 
 export default async function JobApplicationsPage({
@@ -108,8 +105,8 @@ export default async function JobApplicationsPage({
       id: true,
       title: true,
       status: true,
-      seniority: true,           // ✅ NUEVO
-      minYearsExperience: true,  // ✅ NUEVO
+      seniority: true,
+      minYearsExperience: true,
       company: { select: { name: true } },
       skills: true,
       requiredSkills: {
@@ -139,10 +136,12 @@ export default async function JobApplicationsPage({
     must: rs.must,
     weight: rs.weight,
   }));
-  const hasJobSkills = jobSkillsForEngine.length > 0;
 
-  // ✅ Seniority del job para el motor
   const jobSeniorityForEngine = toSeniorityLevel(job.seniority);
+
+  const hasJobSkills = jobSkillsForEngine.length > 0;
+  const hasMatchSignals =
+    hasJobSkills || jobSeniorityForEngine !== null || job.minYearsExperience !== null;
 
   const allApps = await prisma.application.findMany({
     where: { jobId: job.id, job: { companyId } },
@@ -159,8 +158,8 @@ export default async function JobApplicationsPage({
           phone: true,
           location: true,
           certifications: true,
-          seniority: true,        // ✅ NUEVO
-          yearsExperience: true,  // ✅ NUEVO
+          seniority: true,
+          yearsExperience: true,
           candidateSkills: {
             select: {
               level: true,
@@ -178,7 +177,6 @@ export default async function JobApplicationsPage({
     },
   });
 
-  // ── Assessment meta ───────────────────────────────────────────────────────
   type AssessmentRowMeta = {
     enabled: boolean;
     templateId: string;
@@ -214,6 +212,7 @@ export default async function JobApplicationsPage({
       if (v === "NOT_STARTED") return 1;
       return 0;
     };
+
     const isFinalInvite = (s: any) => {
       const v = String(s || "").toUpperCase();
       return v === "SUBMITTED" || v === "EVALUATED" || v === "COMPLETED";
@@ -223,48 +222,106 @@ export default async function JobApplicationsPage({
     for (const a of attempts) {
       if (!a.applicationId) continue;
       const prev = attemptMap.get(a.applicationId);
-      if (!prev || statusRank(a.status) >= statusRank(prev.status))
+      if (!prev || statusRank(a.status) >= statusRank(prev.status)) {
         attemptMap.set(a.applicationId, a);
+      }
     }
 
     const inviteMap = new Map<string, (typeof invites)[number]>();
     for (const inv of invites) {
-      if (inv.applicationId && !inviteMap.has(inv.applicationId))
+      if (inv.applicationId && !inviteMap.has(inv.applicationId)) {
         inviteMap.set(inv.applicationId, inv);
+      }
     }
 
     for (const appId of applicationIds) {
       const at = attemptMap.get(appId);
       const iv = inviteMap.get(appId);
       const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
-      const inviteExpired  = !!iv?.expiresAt && new Date(iv.expiresAt) <= now;
+      const inviteExpired = !!iv?.expiresAt && new Date(iv.expiresAt) <= now;
 
       if (at && (at.status === "SUBMITTED" || at.status === "EVALUATED" || at.status === "COMPLETED")) {
-        assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: "COMPLETED", token: iv?.token ?? null, attemptId: at.id, score: at.totalScore ?? null });
+        assessmentByAppId.set(appId, {
+          enabled: true,
+          templateId: chosenTemplateId,
+          state: "COMPLETED",
+          token: iv?.token ?? null,
+          attemptId: at.id,
+          score: at.totalScore ?? null,
+        });
         continue;
       }
+
       if (attemptExpired || inviteExpired) {
-        assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: "EXPIRED", token: iv?.token ?? null, attemptId: at?.id ?? null, score: null });
+        assessmentByAppId.set(appId, {
+          enabled: true,
+          templateId: chosenTemplateId,
+          state: "EXPIRED",
+          token: iv?.token ?? null,
+          attemptId: at?.id ?? null,
+          score: null,
+        });
         continue;
       }
+
       if (at && at.status === "IN_PROGRESS") {
-        assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: "STARTED", token: iv?.token ?? null, attemptId: at.id, score: null });
+        assessmentByAppId.set(appId, {
+          enabled: true,
+          templateId: chosenTemplateId,
+          state: "STARTED",
+          token: iv?.token ?? null,
+          attemptId: at.id,
+          score: null,
+        });
         continue;
       }
+
       if (iv) {
         const invStatus = String(iv.status || "").toUpperCase();
+
         if (invStatus === "CANCELLED" || invStatus === "REVOKED") {
-          assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: "EXPIRED", token: iv.token ?? null, attemptId: at?.id ?? null, score: null });
+          assessmentByAppId.set(appId, {
+            enabled: true,
+            templateId: chosenTemplateId,
+            state: "EXPIRED",
+            token: iv.token ?? null,
+            attemptId: at?.id ?? null,
+            score: null,
+          });
           continue;
         }
+
         if (isFinalInvite(iv.status)) {
-          assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: "COMPLETED", token: iv.token ?? null, attemptId: at?.id ?? null, score: at?.totalScore ?? null });
+          assessmentByAppId.set(appId, {
+            enabled: true,
+            templateId: chosenTemplateId,
+            state: "COMPLETED",
+            token: iv.token ?? null,
+            attemptId: at?.id ?? null,
+            score: at?.totalScore ?? null,
+          });
           continue;
         }
-        assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: invStatus === "STARTED" ? "STARTED" : "SENT", token: iv.token ?? null, attemptId: null, score: null });
+
+        assessmentByAppId.set(appId, {
+          enabled: true,
+          templateId: chosenTemplateId,
+          state: invStatus === "STARTED" ? "STARTED" : "SENT",
+          token: iv.token ?? null,
+          attemptId: null,
+          score: null,
+        });
         continue;
       }
-      assessmentByAppId.set(appId, { enabled: true, templateId: chosenTemplateId, state: "NONE", token: null, attemptId: null, score: null });
+
+      assessmentByAppId.set(appId, {
+        enabled: true,
+        templateId: chosenTemplateId,
+        state: "NONE",
+        token: null,
+        attemptId: null,
+        score: null,
+      });
     }
   }
 
@@ -272,10 +329,9 @@ export default async function JobApplicationsPage({
   for (const a of allApps) counters[getAppInterest(a)]++;
   const total = allApps.length;
 
-  // ── Params ────────────────────────────────────────────────────────────────
   const interestParam = searchParams?.interest as string | undefined;
   const chosenInterest: InterestKey | undefined = !interestParam
-    ? ("REVIEW" as InterestKey)
+    ? "REVIEW"
     : interestParam === "ALL"
     ? undefined
     : (interestParam as InterestKey);
@@ -289,7 +345,6 @@ export default async function JobApplicationsPage({
   const cvParam = (searchParams?.cv as string | undefined) ?? "ALL";
   const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
 
-  // ── Enriquecer con match ──────────────────────────────────────────────────
   let enriched = allApps.map((a) => {
     const candidateSkillsForEngine: CandidateSkillInput[] = (a.candidate?.candidateSkills ?? []).map((cs: any) => ({
       termId: cs.term.id,
@@ -297,7 +352,6 @@ export default async function JobApplicationsPage({
       level: cs.level,
     }));
 
-    // ✅ Siempre calcular — aunque no haya skills, seniority/experience aportan score
     const matchResult = computeMatchScore({
       jobSkills: jobSkillsForEngine,
       candidateSkills: candidateSkillsForEngine,
@@ -311,6 +365,7 @@ export default async function JobApplicationsPage({
       a.candidate?.name ||
       [(a.candidate as any)?.firstName, (a.candidate as any)?.lastName].filter(Boolean).join(" ") ||
       "—";
+
     return {
       ...a,
       _matchResult: matchResult,
@@ -321,18 +376,23 @@ export default async function JobApplicationsPage({
     };
   });
 
-  if (chosenInterest) enriched = enriched.filter((a) => getAppInterest(a) === chosenInterest);
+  if (chosenInterest) {
+    enriched = enriched.filter((a) => getAppInterest(a) === chosenInterest);
+  }
+
   if (q) {
     enriched = enriched.filter((a) => {
       const skills = (a.candidate?.candidateSkills ?? []).map((cs: any) => cs.term.label).join(" ");
-      const haystack = [a._fullName, a.candidate?.email ?? "", a.candidate?.location ?? "", skills].join(" ").toLowerCase();
+      const haystack = [a._fullName, a.candidate?.email ?? "", a.candidate?.location ?? "", skills]
+        .join(" ")
+        .toLowerCase();
       return haystack.includes(q);
     });
   }
 
   const sorted = [...enriched].sort((a, b) => {
     if (sortKey === "recent") return new Date(b._lastActivity).getTime() - new Date(a._lastActivity).getTime();
-    if (sortKey === "name")   return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
+    if (sortKey === "name") return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
     return (b._score ?? 0) - (a._score ?? 0);
   });
 
@@ -342,7 +402,7 @@ export default async function JobApplicationsPage({
   });
 
   const apps = withGate.filter((a) => {
-    if (matchFilter !== "ALL" && hasJobSkills && !a._locked) {
+    if (matchFilter !== "ALL" && hasMatchSignals && !a._locked) {
       if (scoreToRange(a._gatedScore ?? 0) !== matchFilter) return false;
     }
     if (cvFilter === "YES" && !a._hasCV) return false;
@@ -355,21 +415,25 @@ export default async function JobApplicationsPage({
   const matchCounts: Record<MatchFilter, number> = { ALL: 0, HIGH: 0, MED: 0, LOW: 0 };
   for (const a of withGate) {
     matchCounts.ALL++;
-    if (!a._locked && hasJobSkills) matchCounts[scoreToRange(a._gatedScore ?? 0)]++;
+    if (!a._locked && hasMatchSignals) {
+      matchCounts[scoreToRange(a._gatedScore ?? 0)]++;
+    }
   }
 
   function buildHref(overrides: { interest?: string; q?: string; sort?: string; match?: string; cv?: string }) {
     const usp = new URLSearchParams();
-    const i  = "interest" in overrides ? overrides.interest : interestParam;
-    const qv = "q"        in overrides ? overrides.q        : qParam;
-    const sv = "sort"     in overrides ? overrides.sort     : sortKey;
-    const mv = "match"    in overrides ? overrides.match    : matchFilter !== "ALL" ? matchFilter : undefined;
-    const cv = "cv"       in overrides ? overrides.cv       : cvFilter !== "ALL" ? cvFilter : undefined;
-    if (i)  usp.set("interest", i);
+    const i = "interest" in overrides ? overrides.interest : interestParam;
+    const qv = "q" in overrides ? overrides.q : qParam;
+    const sv = "sort" in overrides ? overrides.sort : sortKey;
+    const mv = "match" in overrides ? overrides.match : matchFilter !== "ALL" ? matchFilter : undefined;
+    const cv = "cv" in overrides ? overrides.cv : cvFilter !== "ALL" ? cvFilter : undefined;
+
+    if (i) usp.set("interest", i);
     if (qv) usp.set("q", qv);
     if (sv) usp.set("sort", sv);
     if (mv) usp.set("match", mv);
     if (cv) usp.set("cv", cv);
+
     return `/dashboard/jobs/${params.id}/applications${usp.toString() ? `?${usp.toString()}` : ""}`;
   }
 
@@ -378,7 +442,6 @@ export default async function JobApplicationsPage({
 
   const activeFiltersCount = (matchFilter !== "ALL" ? 1 : 0) + (cvFilter !== "ALL" ? 1 : 0);
 
-  // ── Etiquetas de seniority/experience para el header de la vacante ────────
   const seniorityLabel = job.seniority
     ? { JUNIOR: "Junior", MID: "Mid", SENIOR: "Senior", LEAD: "Lead" }[job.seniority] ?? job.seniority
     : null;
@@ -386,15 +449,20 @@ export default async function JobApplicationsPage({
   return (
     <main className="max-w-none p-0">
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-8 lg:px-10">
-
-        {/* Header */}
         <header className="space-y-3">
           <div>
             <h1 className="text-xl font-bold leading-tight sm:text-2xl">{job.title}</h1>
             <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {job.company?.name ?? "—"}{job.location ? ` · ${job.location}` : ""} · {fromNow(job.createdAt)}
-              {seniorityLabel && <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{seniorityLabel}</span>}
-              {job.minYearsExperience != null && <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{job.minYearsExperience}+ años</span>}
+              {job.company?.name ?? "—"}
+              {job.location ? ` · ${job.location}` : ""} · {fromNow(job.createdAt)}
+              {seniorityLabel && (
+                <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{seniorityLabel}</span>
+              )}
+              {job.minYearsExperience != null && (
+                <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">
+                  {job.minYearsExperience}+ años
+                </span>
+              )}
             </p>
           </div>
           <div className="flex flex-row flex-wrap items-center gap-2">
@@ -405,7 +473,6 @@ export default async function JobApplicationsPage({
           </div>
         </header>
 
-        {/* Banner upgrade */}
         {lockedCount > 0 && (
           <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-700/40 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="flex items-start gap-3">
@@ -419,13 +486,15 @@ export default async function JobApplicationsPage({
                 </p>
               </div>
             </div>
-            <Link href="/dashboard/billing" className="self-start rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors sm:self-auto sm:shrink-0">
+            <Link
+              href="/dashboard/billing"
+              className="self-start rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors sm:self-auto sm:shrink-0"
+            >
               Mejorar plan →
             </Link>
           </div>
         )}
 
-        {/* Tabs interés */}
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
             <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} />
@@ -436,7 +505,6 @@ export default async function JobApplicationsPage({
           </div>
         </section>
 
-        {/* Filtros rápidos */}
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-col gap-3">
             <div className="flex items-center gap-2">
@@ -448,42 +516,62 @@ export default async function JobApplicationsPage({
                 </span>
               )}
               {activeFiltersCount > 0 && (
-                <Link href={buildHref({ match: undefined, cv: undefined })} className="ml-auto text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600">
+                <Link
+                  href={buildHref({ match: undefined, cv: undefined })}
+                  className="ml-auto text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600"
+                >
                   Limpiar
                 </Link>
               )}
             </div>
+
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-              {hasJobSkills && (
+              {hasMatchSignals && (
                 <div className="flex items-center gap-2">
                   <span className="w-10 shrink-0 text-[11px] text-zinc-400">Match</span>
                   <div className="flex flex-wrap gap-1.5">
                     {(["ALL", "HIGH", "MED", "LOW"] as MatchFilter[]).map((f) => (
-                      <Link key={f} href={buildHref({ match: f === "ALL" ? undefined : f })}
+                      <Link
+                        key={f}
+                        href={buildHref({ match: f === "ALL" ? undefined : f })}
                         className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                           matchFilter === f
-                            ? f === "HIGH" ? "border-emerald-500 bg-emerald-600 text-white"
-                              : f === "MED" ? "border-amber-500 bg-amber-500 text-white"
-                              : f === "LOW" ? "border-red-400 bg-red-500 text-white"
+                            ? f === "HIGH"
+                              ? "border-emerald-500 bg-emerald-600 text-white"
+                              : f === "MED"
+                              ? "border-amber-500 bg-amber-500 text-white"
+                              : f === "LOW"
+                              ? "border-red-400 bg-red-500 text-white"
                               : "border-zinc-500 bg-zinc-700 text-white dark:border-zinc-400 dark:bg-zinc-600"
                             : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
-                        }`}>
-                        {f === "ALL" ? `Todos (${matchCounts.ALL})` : f === "HIGH" ? `Alto (${matchCounts.HIGH})` : f === "MED" ? `Medio (${matchCounts.MED})` : `Bajo (${matchCounts.LOW})`}
+                        }`}
+                      >
+                        {f === "ALL"
+                          ? `Todos (${matchCounts.ALL})`
+                          : f === "HIGH"
+                          ? `Alto (${matchCounts.HIGH})`
+                          : f === "MED"
+                          ? `Medio (${matchCounts.MED})`
+                          : `Bajo (${matchCounts.LOW})`}
                       </Link>
                     ))}
                   </div>
                 </div>
               )}
+
               <div className="flex items-center gap-2">
                 <span className="w-10 shrink-0 text-[11px] text-zinc-400">CV</span>
                 <div className="flex gap-1.5">
                   {(["ALL", "YES", "NO"] as CvFilter[]).map((f) => (
-                    <Link key={f} href={buildHref({ cv: f === "ALL" ? undefined : f })}
+                    <Link
+                      key={f}
+                      href={buildHref({ cv: f === "ALL" ? undefined : f })}
                       className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
                         cvFilter === f
                           ? "border-emerald-500 bg-emerald-600 text-white"
                           : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
-                      }`}>
+                      }`}
+                    >
                       {f === "ALL" ? "Todos" : f === "YES" ? "Con CV" : "Sin CV"}
                     </Link>
                   ))}
@@ -493,11 +581,14 @@ export default async function JobApplicationsPage({
           </div>
         </section>
 
-        {/* Lista */}
         {apps.length === 0 ? (
           <div className="glass-card rounded-2xl border border-dashed p-6 text-center">
             <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              {activeFiltersCount > 0 ? "Ningún candidato coincide con los filtros." : chosenInterest ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.` : "Aún no hay postulaciones."}
+              {activeFiltersCount > 0
+                ? "Ningún candidato coincide con los filtros."
+                : chosenInterest
+                ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
+                : "Aún no hay postulaciones."}
             </p>
             {activeFiltersCount > 0 && (
               <Link href={buildHref({ match: undefined, cv: undefined })} className="mt-2 inline-block text-sm text-emerald-600 underline hover:no-underline">
@@ -507,8 +598,6 @@ export default async function JobApplicationsPage({
           </div>
         ) : (
           <div className="rounded-2xl border border-zinc-100 bg-white/90 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/70">
-
-            {/* Toolbar */}
             <div className="flex flex-col gap-2 border-b border-zinc-100 p-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:p-4">
               <form method="get" className="relative w-full sm:max-w-xs">
                 {interestParam && <input type="hidden" name="interest" value={interestParam} />}
@@ -523,6 +612,7 @@ export default async function JobApplicationsPage({
                   placeholder="Nombre, email, ciudad o skill…"
                 />
               </form>
+
               <div className="flex items-center gap-2 text-xs">
                 <span className="shrink-0 text-zinc-500">Ordenar:</span>
                 <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
@@ -537,13 +627,14 @@ export default async function JobApplicationsPage({
               {apps.length} candidato{apps.length !== 1 ? "s" : ""}{activeFiltersCount > 0 ? " (filtrado)" : ""}
             </div>
 
-            {/* Mobile: cards */}
             <div className="block divide-y divide-zinc-100 dark:divide-zinc-800 sm:hidden">
               {apps.map((a: any) => {
                 const matchResult = a._matchResult;
                 const gatedScore: number | null = a._gatedScore;
                 const locked: boolean = a._locked;
-                const candidateHref = a.candidate?.id ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}` : undefined;
+                const candidateHref = a.candidate?.id
+                  ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
+                  : undefined;
                 const phone = a.candidate?.phone as string | undefined;
                 const resumeUrl = a.candidate?.resumeUrl as string | undefined;
                 const assessMeta = assessmentEnabled && chosenTemplateId ? assessmentByAppId.get(a.id) ?? null : null;
@@ -553,13 +644,16 @@ export default async function JobApplicationsPage({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         {candidateHref ? (
-                          <Link href={candidateHref} className="block truncate font-semibold text-sm hover:underline">{a._fullName}</Link>
+                          <Link href={candidateHref} className="block truncate font-semibold text-sm hover:underline">
+                            {a._fullName}
+                          </Link>
                         ) : (
                           <span className="font-semibold text-sm">{a._fullName}</span>
                         )}
                         <p className="truncate text-xs text-zinc-500">{a.candidate?.location ?? "—"}</p>
                       </div>
-                      {hasJobSkills && (
+
+                      {hasMatchSignals && (
                         locked ? (
                           <div className="flex shrink-0 items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900/40">
                             <Lock className="h-3 w-3 text-zinc-400" />
@@ -574,44 +668,37 @@ export default async function JobApplicationsPage({
                       )}
                     </div>
 
-                    {hasJobSkills && !locked && gatedScore !== null && (
+                    {hasMatchSignals && !locked && gatedScore !== null && (
                       <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
-                        <div className={`h-1.5 rounded-full ${scoreToColor(gatedScore)}`} style={{ width: `${gatedScore}%` }} />
+                        <div className={`h-1.5 rounded ${scoreToColor(gatedScore)}`} style={{ width: `${gatedScore}%` }} />
                       </div>
                     )}
 
-                    {/* ✅ NUEVO: badges seniority/experience fit en mobile */}
-                    {!locked && matchResult && (matchResult.seniorityFit !== "unknown" || matchResult.experienceFit !== "unknown") && (
-                      <div className="flex flex-wrap gap-1">
-                        {matchResult.seniorityFit !== "unknown" && (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                            matchResult.seniorityFit === "exact" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
-                            : matchResult.seniorityFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-300"
-                            : "border-red-200 bg-red-50 text-red-600 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-400"
-                          }`}>
-                            Seniority: {matchResult.seniorityFit === "exact" ? "✓" : matchResult.seniorityFit === "close" ? "~" : "↓"}
-                          </span>
-                        )}
-                        {matchResult.experienceFit !== "unknown" && (
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                            matchResult.experienceFit === "meets" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
-                            : matchResult.experienceFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-300"
-                            : "border-red-200 bg-red-50 text-red-600 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-400"
-                          }`}>
-                            Exp: {matchResult.experienceFit === "meets" ? "✓" : matchResult.experienceFit === "close" ? "~" : "↓"}
-                          </span>
-                        )}
-                      </div>
+                    {!locked && hasMatchSignals && (
+                      <MatchBreakdownMini
+                        matchResult={matchResult}
+                        compact
+                        showCounts={hasJobSkills}
+                      />
                     )}
 
-                    {!locked && matchResult && matchResult.details.filter((d: any) => d.matched).length > 0 && (
+                    {!locked && hasJobSkills && matchResult.details.filter((d: any) => d.matched).length > 0 && (
                       <div className="flex flex-wrap gap-1">
                         {matchResult.details.filter((d: any) => d.matched).slice(0, 3).map((d: any) => (
-                          <span key={d.termId} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${d.must ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200" : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"}`}>
+                          <span
+                            key={d.termId}
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+                              d.must
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200"
+                                : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
+                            }`}
+                          >
                             {d.label}
                           </span>
                         ))}
-                        {matchResult.matchedCount > 3 && <span className="text-[10px] text-zinc-400">+{matchResult.matchedCount - 3}</span>}
+                        {matchResult.matchedCount > 3 && (
+                          <span className="text-[10px] text-zinc-400">+{matchResult.matchedCount - 3}</span>
+                        )}
                       </div>
                     )}
 
@@ -619,6 +706,7 @@ export default async function JobApplicationsPage({
                       <div className="min-w-0 max-w-[160px]">
                         <InterestSelect applicationId={a.id} initial={getAppInterest(a)} />
                       </div>
+
                       <div className="flex shrink-0 items-center gap-1.5">
                         {phone && (
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={phone}>
@@ -626,23 +714,58 @@ export default async function JobApplicationsPage({
                           </span>
                         )}
                         {resumeUrl && (
-                          <a href={resumeUrl} target="_blank" rel="noreferrer" className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70" title="Ver CV">
+                          <a
+                            href={resumeUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70"
+                            title="Ver CV"
+                          >
                             <FileTextIcon className="h-3 w-3" />
                           </a>
                         )}
-                        <ActionsMenu applicationId={a.id} jobId={job.id} candidateHref={candidateHref} resumeUrl={resumeUrl ?? null} candidateEmail={a.candidate?.email ?? ""} candidatePhone={phone ?? null}
-                          assessment={assessmentEnabled && chosenTemplateId ? ({ enabled: true, templateId: chosenTemplateId, state: (assessMeta?.state ?? "NONE") as any, token: assessMeta?.token ?? null, attemptId: assessMeta?.attemptId ?? null } as any) : ({ enabled: false } as any)} />
+                        <ActionsMenu
+                          applicationId={a.id}
+                          jobId={job.id}
+                          candidateHref={candidateHref}
+                          resumeUrl={resumeUrl ?? null}
+                          candidateEmail={a.candidate?.email ?? ""}
+                          candidatePhone={phone ?? null}
+                          assessment={
+                            assessmentEnabled && chosenTemplateId
+                              ? ({
+                                  enabled: true,
+                                  templateId: chosenTemplateId,
+                                  state: (assessMeta?.state ?? "NONE") as any,
+                                  token: assessMeta?.token ?? null,
+                                  attemptId: assessMeta?.attemptId ?? null,
+                                } as any)
+                              : ({ enabled: false } as any)
+                          }
+                        />
                       </div>
                     </div>
 
                     {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                      <span className={["inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                        assessMeta.state === "COMPLETED" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
-                        : assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
-                        : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                        : "border-violet-200 bg-violet-50 text-violet-700",
-                      ].join(" ")}>
-                        {assessMeta.state === "COMPLETED" ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}` : assessMeta.state === "STARTED" ? "Assessment: iniciado" : assessMeta.state === "EXPIRED" ? "Assessment: expirado" : "Assessment: enviado"}
+                      <span
+                        className={[
+                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                          assessMeta.state === "COMPLETED"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
+                            : assessMeta.state === "STARTED"
+                            ? "border-sky-200 bg-sky-50 text-sky-700"
+                            : assessMeta.state === "EXPIRED"
+                            ? "border-amber-200 bg-amber-50 text-amber-800"
+                            : "border-violet-200 bg-violet-50 text-violet-700",
+                        ].join(" ")}
+                      >
+                        {assessMeta.state === "COMPLETED"
+                          ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}`
+                          : assessMeta.state === "STARTED"
+                          ? "Assessment: iniciado"
+                          : assessMeta.state === "EXPIRED"
+                          ? "Assessment: expirado"
+                          : "Assessment: enviado"}
                       </span>
                     )}
                   </div>
@@ -650,14 +773,13 @@ export default async function JobApplicationsPage({
               })}
             </div>
 
-            {/* Desktop: tabla */}
             <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-900/40 dark:text-zinc-400">
                   <tr>
                     <th className="px-3 py-2.5 font-medium">Candidato</th>
                     <th className="px-3 py-2.5 font-medium">
-                      {hasJobSkills ? "AI Match" : <span className="text-zinc-400">AI Match <span className="font-normal">(sin skills)</span></span>}
+                      {hasMatchSignals ? "AI Match" : <span className="text-zinc-400">AI Match <span className="font-normal">(sin señales)</span></span>}
                     </th>
                     <th className="px-3 py-2.5 font-medium">Skills</th>
                     <th className="px-3 py-2.5 font-medium">Estado</th>
@@ -672,7 +794,9 @@ export default async function JobApplicationsPage({
                     const locked: boolean = a._locked;
                     const matchedDetails = (matchResult?.details ?? []).filter((d: any) => d.matched).slice(0, 4);
                     const hiddenCount = Math.max(0, (matchResult?.matchedCount ?? 0) - matchedDetails.length);
-                    const candidateHref = a.candidate?.id ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}` : undefined;
+                    const candidateHref = a.candidate?.id
+                      ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
+                      : undefined;
                     const phone = a.candidate?.phone as string | undefined;
                     const resumeUrl = a.candidate?.resumeUrl as string | undefined;
                     const hasWhatsApp = phone?.trim().startsWith("+52");
@@ -688,37 +812,74 @@ export default async function JobApplicationsPage({
                             ) : (
                               <span className="font-medium">{a._fullName}</span>
                             )}
+
                             <span className="text-xs text-zinc-500">{a.candidate?.location ?? "—"}</span>
+
                             {languages.length > 0 && (
                               <div className="mt-0.5 flex flex-wrap gap-1">
                                 {languages.slice(0, 2).map((l: any) => (
-                                  <span key={`${l.term.label}-${l.level}`} className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">
+                                  <span
+                                    key={`${l.term.label}-${l.level}`}
+                                    className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300"
+                                  >
                                     {l.term.label} {LANGUAGE_LEVEL_LABEL[l.level] ?? l.level}
                                   </span>
                                 ))}
                                 {languages.length > 2 && <span className="text-[10px] text-zinc-400">+{languages.length - 2}</span>}
                               </div>
                             )}
+
                             <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                              {phone && <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={`Tel: ${phone}`}><Phone className="h-3 w-3" /></span>}
-                              {resumeUrl && <a href={resumeUrl} target="_blank" rel="noreferrer" className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70" title="Ver CV"><FileTextIcon className="h-3 w-3" /></a>}
-                              {hasWhatsApp && <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">WA</span>}
+                              {phone && (
+                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={`Tel: ${phone}`}>
+                                  <Phone className="h-3 w-3" />
+                                </span>
+                              )}
+                              {resumeUrl && (
+                                <a
+                                  href={resumeUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70"
+                                  title="Ver CV"
+                                >
+                                  <FileTextIcon className="h-3 w-3" />
+                                </a>
+                              )}
+                              {hasWhatsApp && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                                  WA
+                                </span>
+                              )}
                             </div>
+
                             {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                              <span className={["mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                assessMeta.state === "COMPLETED" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                : assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
-                                : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                : "border-violet-200 bg-violet-50 text-violet-700",
-                              ].join(" ")}>
-                                {assessMeta.state === "COMPLETED" ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}` : assessMeta.state === "STARTED" ? "Iniciado" : assessMeta.state === "EXPIRED" ? "Expirado" : "Enviado"}
+                              <span
+                                className={[
+                                  "mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                  assessMeta.state === "COMPLETED"
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
+                                    : assessMeta.state === "STARTED"
+                                    ? "border-sky-200 bg-sky-50 text-sky-700"
+                                    : assessMeta.state === "EXPIRED"
+                                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                                    : "border-violet-200 bg-violet-50 text-violet-700",
+                                ].join(" ")}
+                              >
+                                {assessMeta.state === "COMPLETED"
+                                  ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}`
+                                  : assessMeta.state === "STARTED"
+                                  ? "Iniciado"
+                                  : assessMeta.state === "EXPIRED"
+                                  ? "Expirado"
+                                  : "Enviado"}
                               </span>
                             )}
                           </div>
                         </td>
 
                         <td className="px-3 py-2.5">
-                          {!hasJobSkills ? (
+                          {!hasMatchSignals ? (
                             <span className="text-xs text-zinc-400">—</span>
                           ) : locked ? (
                             <div className="group relative inline-flex cursor-pointer items-center gap-1.5">
@@ -728,42 +889,31 @@ export default async function JobApplicationsPage({
                               </div>
                               <div className="pointer-events-none absolute left-0 top-full z-10 mt-1 hidden w-52 rounded-xl border border-zinc-200 bg-white p-3 text-xs shadow-xl group-hover:block dark:border-zinc-700 dark:bg-zinc-900">
                                 <p className="font-semibold text-zinc-800 dark:text-zinc-100">AI Match bloqueado</p>
-                                <p className="mt-1 text-zinc-500 dark:text-zinc-400">Mejora a {plan === "FREE" ? "Starter" : "Pro"} para ver este score.</p>
-                                <Link href="/dashboard/billing" className="pointer-events-auto mt-2 block rounded-lg bg-emerald-600 px-2 py-1.5 text-center font-semibold text-white hover:bg-emerald-700">Ver planes →</Link>
+                                <p className="mt-1 text-zinc-500 dark:text-zinc-400">
+                                  Mejora a {plan === "FREE" ? "Starter" : "Pro"} para ver este score.
+                                </p>
+                                <Link
+                                  href="/dashboard/billing"
+                                  className="pointer-events-auto mt-2 block rounded-lg bg-emerald-600 px-2 py-1.5 text-center font-semibold text-white hover:bg-emerald-700"
+                                >
+                                  Ver planes →
+                                </Link>
                               </div>
                             </div>
                           ) : (
-                            <div className="min-w-[120px]">
-                              <div className="flex items-center gap-2">
-                                <span className={`text-sm font-semibold ${scoreToTextColor(gatedScore!)}`}>{gatedScore}%</span>
-                                <div className="h-1.5 w-16 rounded bg-zinc-200/60 dark:bg-zinc-700/50">
-                                  <div className={`h-1.5 rounded ${scoreToColor(gatedScore!)}`} style={{ width: `${Math.max(0, Math.min(gatedScore!, 100))}%` }} />
-                                </div>
-                              </div>
-                              <p className="mt-0.5 text-[10px] text-zinc-500">{scoreToLabel(gatedScore!)} · {matchResult?.matchedCount ?? 0}/{jobSkillsForEngine.length} skills</p>
-                              {/* ✅ NUEVO: badges seniority/experience fit en desktop */}
-                              {(matchResult?.seniorityFit !== "unknown" || matchResult?.experienceFit !== "unknown") && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {matchResult?.seniorityFit !== "unknown" && (
-                                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
-                                      matchResult?.seniorityFit === "exact" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
-                                      : matchResult?.seniorityFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700"
-                                      : "border-red-200 bg-red-50 text-red-600"
-                                    }`}>
-                                      Sen {matchResult?.seniorityFit === "exact" ? "✓" : matchResult?.seniorityFit === "close" ? "~" : "↓"}
-                                    </span>
-                                  )}
-                                  {matchResult?.experienceFit !== "unknown" && (
-                                    <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${
-                                      matchResult?.experienceFit === "meets" ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
-                                      : matchResult?.experienceFit === "close" ? "border-amber-200 bg-amber-50 text-amber-700"
-                                      : "border-red-200 bg-red-50 text-red-600"
-                                    }`}>
-                                      Exp {matchResult?.experienceFit === "meets" ? "✓" : matchResult?.experienceFit === "close" ? "~" : "↓"}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
+                            <div className="space-y-1.5">
+                              <MatchScorePopover
+                                score={gatedScore!}
+                                matchResult={matchResult}
+                                jobSkillCount={jobSkillsForEngine.length}
+                                scoreColor={scoreToColor(gatedScore!)}
+                                scoreTextColor={scoreToTextColor(gatedScore!)}
+                                scoreLabel={scoreToLabel(gatedScore!)}
+                              />
+                              <MatchBreakdownMini
+                                matchResult={matchResult}
+                                showCounts={hasJobSkills}
+                              />
                             </div>
                           )}
                         </td>
@@ -774,8 +924,15 @@ export default async function JobApplicationsPage({
                           ) : matchedDetails.length ? (
                             <div className="flex flex-wrap items-center gap-1">
                               {matchedDetails.map((d: any, i: number) => (
-                                <span key={`${d.termId}-${i}`} title={d.must ? "Requerida" : "Deseable"}
-                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${d.must ? "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-600/60 dark:bg-emerald-900/20 dark:text-emerald-200" : "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"}`}>
+                                <span
+                                  key={`${d.termId}-${i}`}
+                                  title={d.must ? "Requerida" : "Deseable"}
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${
+                                    d.must
+                                      ? "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-600/60 dark:bg-emerald-900/20 dark:text-emerald-200"
+                                      : "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
+                                  }`}
+                                >
                                   {d.must && <span className="mr-1 text-[9px] font-bold uppercase">Req</span>}
                                   {d.label}
                                   {d.candidateLevel && <span className="ml-1 text-[9px] opacity-50">L{d.candidateLevel}</span>}
@@ -783,7 +940,9 @@ export default async function JobApplicationsPage({
                               ))}
                               {hiddenCount > 0 && <span className="text-[10px] text-zinc-400">+{hiddenCount}</span>}
                             </div>
-                          ) : <span className="text-zinc-400">—</span>}
+                          ) : (
+                            <span className="text-zinc-400">—</span>
+                          )}
                         </td>
 
                         <td className="px-3 py-2.5">
@@ -797,8 +956,25 @@ export default async function JobApplicationsPage({
                         </td>
 
                         <td className="px-3 py-2.5 align-top">
-                          <ActionsMenu applicationId={a.id} jobId={job.id} candidateHref={candidateHref} resumeUrl={resumeUrl ?? null} candidateEmail={a.candidate?.email ?? ""} candidatePhone={phone ?? null}
-                            assessment={assessmentEnabled && chosenTemplateId ? ({ enabled: true, templateId: chosenTemplateId, state: (assessMeta?.state ?? "NONE") as any, token: assessMeta?.token ?? null, attemptId: assessMeta?.attemptId ?? null } as any) : ({ enabled: false } as any)} />
+                          <ActionsMenu
+                            applicationId={a.id}
+                            jobId={job.id}
+                            candidateHref={candidateHref}
+                            resumeUrl={resumeUrl ?? null}
+                            candidateEmail={a.candidate?.email ?? ""}
+                            candidatePhone={phone ?? null}
+                            assessment={
+                              assessmentEnabled && chosenTemplateId
+                                ? ({
+                                    enabled: true,
+                                    templateId: chosenTemplateId,
+                                    state: (assessMeta?.state ?? "NONE") as any,
+                                    token: assessMeta?.token ?? null,
+                                    attemptId: assessMeta?.attemptId ?? null,
+                                  } as any)
+                                : ({ enabled: false } as any)
+                            }
+                          />
                         </td>
                       </tr>
                     );
@@ -815,12 +991,14 @@ export default async function JobApplicationsPage({
 
 function FilterPill({ active, href, label }: { active?: boolean; href: string; label: string }) {
   return (
-    <Link href={href}
+    <Link
+      href={href}
       className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-medium transition sm:px-4 ${
         active
           ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
           : "border-zinc-200 bg-transparent text-zinc-600 hover:bg-zinc-100/70 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/60"
-      }`}>
+      }`}
+    >
       {label}
     </Link>
   );
@@ -828,12 +1006,14 @@ function FilterPill({ active, href, label }: { active?: boolean; href: string; l
 
 function SortPill({ href, active, children }: { href: string; active?: boolean; children: React.ReactNode }) {
   return (
-    <Link href={href}
+    <Link
+      href={href}
       className={`rounded-full px-2.5 py-1 text-xs transition sm:px-3 ${
         active
           ? "bg-white text-emerald-700 shadow-sm dark:bg-emerald-500/20 dark:text-emerald-200"
           : "text-zinc-500 hover:bg-white/70 dark:text-zinc-400 dark:hover:bg-zinc-800/60"
-      }`}>
+      }`}
+    >
       {children}
     </Link>
   );

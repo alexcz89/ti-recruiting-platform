@@ -36,6 +36,8 @@ export type SkillMatchDetail = {
 export type SeniorityFit = "exact" | "close" | "below" | "unknown";
 export type ExperienceFit = "meets" | "close" | "below" | "unknown";
 
+export type MatchLabel = "Muy alto" | "Alto" | "Medio" | "Bajo" | "Sin datos";
+
 export type MatchResult = {
   score: number;
   label: MatchLabel;
@@ -58,7 +60,14 @@ export type MatchResult = {
   experienceFit: ExperienceFit;
 };
 
-export type MatchLabel = "Muy alto" | "Alto" | "Medio" | "Bajo" | "Sin datos";
+export type ComputeMatchInput = {
+  jobSkills: JobSkillInput[];
+  candidateSkills: CandidateSkillInput[];
+  jobSeniority?: SeniorityLevel | null;
+  candidateSeniority?: SeniorityLevel | null;
+  jobMinYearsExperience?: number | null;
+  candidateYearsExperience?: number | null;
+};
 
 // ── Puntos máximos ────────────────────────────────────────────────────────
 
@@ -73,6 +82,10 @@ const SENIORITY_MAP: Record<SeniorityLevel, number> = {
 };
 
 // ── Helpers internos ──────────────────────────────────────────────────────
+
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
 
 function computeSeniorityScore(
   jobSeniority?: SeniorityLevel | null,
@@ -90,14 +103,17 @@ function computeSeniorityScore(
     return { score: MAX_SENIORITY_POINTS, fit: "exact" };
   }
 
-  if (diff === -1) {
+  // Un nivel abajo o arriba: cercano
+  if (Math.abs(diff) === 1) {
     return { score: 8, fit: "close" };
   }
 
+  // Dos o más niveles abajo
   if (diff <= -2) {
     return { score: 0, fit: "below" };
   }
 
+  // Dos o más niveles arriba: no penalizamos tan fuerte
   return { score: 8, fit: "close" };
 }
 
@@ -126,16 +142,25 @@ function computeExperienceScore(
   return { score: 0, fit: "below" };
 }
 
-// ── Firma de input ────────────────────────────────────────────────────────
+// ── Señales disponibles ───────────────────────────────────────────────────
 
-export type ComputeMatchInput = {
-  jobSkills: JobSkillInput[];
-  candidateSkills: CandidateSkillInput[];
+export function hasMatchSignals(input: {
+  jobSkills?: JobSkillInput[] | null;
   jobSeniority?: SeniorityLevel | null;
-  candidateSeniority?: SeniorityLevel | null;
   jobMinYearsExperience?: number | null;
-  candidateYearsExperience?: number | null;
-};
+}): boolean {
+  return Boolean(
+    (input.jobSkills?.length ?? 0) > 0 ||
+      input.jobSeniority != null ||
+      input.jobMinYearsExperience != null
+  );
+}
+
+export function scoreToRange(score: number): "HIGH" | "MED" | "LOW" {
+  if (score >= 70) return "HIGH";
+  if (score >= 40) return "MED";
+  return "LOW";
+}
 
 // ── Motor principal ───────────────────────────────────────────────────────
 
@@ -143,7 +168,7 @@ export function computeMatchScore(
   inputOrJobSkills: ComputeMatchInput | JobSkillInput[],
   candidateSkillsLegacy?: CandidateSkillInput[]
 ): MatchResult {
-  // Soporte de firma legacy: computeMatchScore(jobSkills[], candidateSkills[])
+  // Soporte firma legacy: computeMatchScore(jobSkills[], candidateSkills[])
   const input: ComputeMatchInput = Array.isArray(inputOrJobSkills)
     ? {
         jobSkills: inputOrJobSkills,
@@ -218,7 +243,7 @@ export function computeMatchScore(
   else if (hasMust) rawSkillScore = mustPct;
   else if (hasNice) rawSkillScore = nicePct;
 
-  rawSkillScore = Math.max(0, Math.min(100, rawSkillScore));
+  rawSkillScore = clamp(rawSkillScore, 0, 100);
 
   const { score: seniorityScore, fit: seniorityFit } = computeSeniorityScore(
     jobSeniority,
@@ -232,24 +257,25 @@ export function computeMatchScore(
 
   const hasSeniority = seniorityFit !== "unknown";
   const hasExperience = experienceFit !== "unknown";
+  const hasSkills = jobSkills.length > 0;
 
   const skillPoints = (rawSkillScore / 100) * MAX_SKILL_POINTS;
 
   let totalScore = 0;
 
-  if (hasSeniority && hasExperience) {
+  if (hasSkills && hasSeniority && hasExperience) {
     totalScore = skillPoints + seniorityScore + experienceScore;
-  } else if (hasSeniority) {
+  } else if (hasSkills && hasSeniority) {
     totalScore = (skillPoints + seniorityScore) / 0.8;
-  } else if (hasExperience) {
+  } else if (hasSkills && hasExperience) {
     totalScore = (skillPoints + experienceScore) / 0.85;
-  } else if (jobSkills.length > 0) {
+  } else if (hasSkills) {
     totalScore = rawSkillScore;
   } else {
     totalScore = seniorityScore + experienceScore;
   }
 
-  const score = Math.round(Math.max(0, Math.min(100, totalScore)));
+  const score = Math.round(clamp(totalScore, 0, 100));
 
   return {
     score,
