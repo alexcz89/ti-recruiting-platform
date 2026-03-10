@@ -393,7 +393,7 @@ export default function MatchScorePopover({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1.5 w-[340px] rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="absolute left-0 top-full z-50 mt-1.5 w-[340px] max-w-[calc(100vw-1rem)] rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
           <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
             <div>
               <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">
