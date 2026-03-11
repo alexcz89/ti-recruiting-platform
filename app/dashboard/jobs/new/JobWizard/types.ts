@@ -7,8 +7,8 @@ export type Currency = "MXN" | "USD";
 export type DegreeLevel = "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD";
 export type LanguageProficiency = "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
 
-export type PresetCompany = { 
-  id: string | null; 
+export type PresetCompany = {
+  id: string | null;
   name: string | null;
 };
 
@@ -69,11 +69,11 @@ export type JobWizardProps = {
     description?: string;
     descriptionHtml?: string | null;
     education?: Array<{ name: string; required: boolean }>;
-    minDegree?: DegreeLevel;
+    minDegree?: DegreeLevel | null;
     skills?: Array<{ name: string; required: boolean }>;
     certs?: string[];
     languages?: Array<{ name: string; level: LanguageProficiency }>;
-    assessmentTemplateId?: string | null; // ✅ NUEVO
+    assessmentTemplateId?: string | null;
   };
 };
 
@@ -115,12 +115,15 @@ export const jobSchema = z.object({
   aguinaldoDias: z.number().min(0),
   vacacionesDias: z.number().min(0),
   primaVacPct: z.number().min(0).max(100),
-  // ✅ Paso 4 - Evaluaciones (NUEVO)
+  // Paso 4 - Evaluaciones
   assessmentTemplateId: z.string().nullable().optional(),
-  // Paso 5 (antes paso 4)
+  // Paso 5
   descriptionHtml: z.string().optional(),
   descriptionPlain: z.string().min(50, "Mínimo 50 caracteres."),
-  minDegree: z.enum(["HIGHSCHOOL", "TECH", "BACHELOR", "MASTER", "PHD"]),
+  minDegree: z
+    .enum(["HIGHSCHOOL", "TECH", "BACHELOR", "MASTER", "PHD"])
+    .nullable()
+    .optional(),
   eduRequired: z.array(z.string()),
   eduNice: z.array(z.string()),
   requiredSkills: z.array(z.string()),

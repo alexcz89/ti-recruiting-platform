@@ -237,7 +237,8 @@ export default async function EditJobPage({ params }: PageProps) {
     const schedule = String(fd.get("schedule") || "");
 
     const hasBenefitsField = fd.has("benefitsJson");
-    const minDegreeField = fd.get("minDegree");
+    const hasMinDegreeField = fd.has("minDegree");
+    const minDegreeField = String(fd.get("minDegree") || "").trim();
     const hasEducationField = fd.has("educationJson");
     const educationJsonStr = String(fd.get("educationJson") || "[]");
 
@@ -273,7 +274,7 @@ export default async function EditJobPage({ params }: PageProps) {
       }
     }
 
-    const minDegree = minDegreeField ? String(minDegreeField) : null;
+    const minDegree = minDegreeField || null;
 
     let educationJson: any[] = [];
     if (hasEducationField) {
@@ -356,7 +357,7 @@ export default async function EditJobPage({ params }: PageProps) {
         showSalary,
         schedule: schedule || null,
         ...(hasBenefitsField ? { showBenefits, benefitsJson: parsedBenefits } : {}),
-        ...(minDegreeField ? { minDegree: minDegree as any } : {}),
+        ...(hasMinDegreeField ? { minDegree: minDegree as any } : {}),
         ...(hasEducationField ? { educationJson } : {}),
         locationLat,
         locationLng,

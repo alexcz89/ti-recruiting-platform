@@ -27,12 +27,15 @@ const EMPLOYMENT_TYPE_VALUES = [
   "INTERNSHIP",
 ] as const;
 const EDUCATION_LEVEL_VALUES = [
+  "NONE",
+  "PRIMARY",
+  "SECONDARY",
   "HIGH_SCHOOL",
   "TECHNICAL",
-  "ASSOCIATE",
-  "BACHELORS",
-  "MASTERS",
+  "BACHELOR",
+  "MASTER",
   "DOCTORATE",
+  "OTHER",
 ] as const;
 
 /* -------------------------------------------------
@@ -88,6 +91,51 @@ function isEducationLevel(value: string): value is EducationLevel {
   return EDUCATION_LEVEL_VALUES.includes(
     value as (typeof EDUCATION_LEVEL_VALUES)[number]
   );
+}
+
+function normalizeEducationLevel(value: string): EducationLevel | null | undefined {
+  const raw = value.trim();
+  if (!raw) return null;
+
+  const normalized = raw.toUpperCase();
+
+  const aliases: Record<string, EducationLevel> = {
+    NONE: "NONE",
+    PRIMARY: "PRIMARY",
+    SECONDARY: "SECONDARY",
+    HIGH_SCHOOL: "HIGH_SCHOOL",
+    HIGHSCHOOL: "HIGH_SCHOOL",
+    TECHNICAL: "TECHNICAL",
+    TECH: "TECHNICAL",
+    ASSOCIATE: "TECHNICAL",
+    BACHELOR: "BACHELOR",
+    MASTER: "MASTER",
+    DOCTORATE: "DOCTORATE",
+    PHD: "DOCTORATE",
+    OTHER: "OTHER",
+
+    "NINGUNO": "NONE",
+    "PRIMARIA": "PRIMARY",
+    "SECUNDARIA": "SECONDARY",
+    "BACHILLERATO": "HIGH_SCHOOL",
+    "TÉCNICO": "TECHNICAL",
+    "TECNICO": "TECHNICAL",
+    "LICENCIATURA / INGENIERÍA": "BACHELOR",
+    "LICENCIATURA / INGENIERIA": "BACHELOR",
+    "LICENCIATURA": "BACHELOR",
+    "INGENIERÍA": "BACHELOR",
+    "INGENIERIA": "BACHELOR",
+    "MAESTRÍA": "MASTER",
+    "MAESTRIA": "MASTER",
+    "DOCTORADO": "DOCTORATE",
+    "OTRO": "OTHER",
+  };
+
+  if (isEducationLevel(normalized)) {
+    return normalized;
+  }
+
+  return aliases[normalized];
 }
 
 /* -------------------------------------------------
@@ -409,18 +457,16 @@ export async function POST(req: NextRequest) {
     const employmentType: EmploymentType = rawEmploymentType;
 
     const rawMinDegree = getFormString(formData, "minDegree");
-    const minDegree: EducationLevel | null = rawMinDegree
-      ? isEducationLevel(rawMinDegree)
-        ? rawMinDegree
-        : null
-      : null;
+    const normalizedMinDegree = normalizeEducationLevel(rawMinDegree);
 
-    if (rawMinDegree && !minDegree) {
+    if (normalizedMinDegree === undefined) {
       return NextResponse.json(
         { error: "minDegree inválido" },
         { status: 400 }
       );
     }
+
+    const minDegree = normalizedMinDegree;
 
     const city = getFormString(formData, "city");
     const country = getFormString(formData, "country") || null;
@@ -558,7 +604,7 @@ export async function POST(req: NextRequest) {
           showBenefits,
 
           educationJson: educationJson ?? undefined,
-          minDegree: minDegree ?? undefined,
+          minDegree,
 
           skillsJson: skillsJson ?? undefined,
           certsJson: certsJson ?? undefined,

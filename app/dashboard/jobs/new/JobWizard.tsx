@@ -40,19 +40,98 @@ function plainToBasicHtml(plain: string): string {
   const paragraphs: string[][] = [];
   let buf: string[] = [];
   lines.forEach((line) => {
-    if (!line.trim()) { if (buf.length) { paragraphs.push(buf); buf = []; } return; }
+    if (!line.trim()) {
+      if (buf.length) {
+        paragraphs.push(buf);
+        buf = [];
+      }
+      return;
+    }
     buf.push(line);
   });
   if (buf.length) paragraphs.push(buf);
   const bulletPrefixes = ["- ", "* ", "• "];
-  return paragraphs.map((paraLines) => {
-    const allBullets = paraLines.every((l) => bulletPrefixes.some((p) => l.startsWith(p)));
-    if (allBullets) {
-      const items = paraLines.map((l) => { const p = bulletPrefixes.find((p) => l.startsWith(p)) || ""; return escape(l.slice(p.length).trim()); }).filter(Boolean);
-      return items.length ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>` : "";
-    }
-    return `<p>${paraLines.map(escape).join("<br/>")}</p>`;
-  }).filter(Boolean).join("");
+  return paragraphs
+    .map((paraLines) => {
+      const allBullets = paraLines.every((l) =>
+        bulletPrefixes.some((p) => l.startsWith(p))
+      );
+      if (allBullets) {
+        const items = paraLines
+          .map((l) => {
+            const p = bulletPrefixes.find((p) => l.startsWith(p)) || "";
+            return escape(l.slice(p.length).trim());
+          })
+          .filter(Boolean);
+        return items.length
+          ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>`
+          : "";
+      }
+      return `<p>${paraLines.map(escape).join("<br/>")}</p>`;
+    })
+    .filter(Boolean)
+    .join("");
+}
+
+/**
+ * Convierte cualquier valor (backend/label/frontend viejo) al enum del frontend:
+ * HIGHSCHOOL | TECH | BACHELOR | MASTER | PHD | undefined
+ */
+function normalizeDegreeClientValue(
+  value: string | null | undefined
+): "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD" | undefined {
+  const raw = String(value ?? "").trim();
+  if (!raw) return undefined;
+
+  const normalized = raw.toUpperCase();
+
+  const map: Record<string, "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD"> = {
+    HIGHSCHOOL: "HIGHSCHOOL",
+    HIGH_SCHOOL: "HIGHSCHOOL",
+    TECH: "TECH",
+    TECHNICAL: "TECH",
+    ASSOCIATE: "TECH",
+    BACHELOR: "BACHELOR",
+    BACHELORS: "BACHELOR",
+    MASTER: "MASTER",
+    MASTERS: "MASTER",
+    PHD: "PHD",
+    DOCTORATE: "PHD",
+
+    "BACHILLERATO": "HIGHSCHOOL",
+    "TÉCNICO": "TECH",
+    "TECNICO": "TECH",
+    "LICENCIATURA / INGENIERÍA": "BACHELOR",
+    "LICENCIATURA / INGENIERIA": "BACHELOR",
+    "MAESTRÍA": "MASTER",
+    "MAESTRIA": "MASTER",
+    "DOCTORADO": "PHD",
+  };
+
+  return map[normalized];
+}
+
+/**
+ * Convierte el enum del frontend al enum que espera el backend/Prisma:
+ * HIGH_SCHOOL | TECHNICAL | BACHELORS | MASTERS | DOCTORATE | ""
+ */
+function toBackendDegreeValue(
+  value: string | null | undefined
+): "" | "HIGH_SCHOOL" | "TECHNICAL" | "BACHELORS" | "MASTERS" | "DOCTORATE" {
+  const normalized = normalizeDegreeClientValue(value);
+
+  const map: Record<
+    string,
+    "" | "HIGH_SCHOOL" | "TECHNICAL" | "BACHELORS" | "MASTERS" | "DOCTORATE"
+  > = {
+    HIGHSCHOOL: "HIGH_SCHOOL",
+    TECH: "TECHNICAL",
+    BACHELOR: "BACHELORS",
+    MASTER: "MASTERS",
+    PHD: "DOCTORATE",
+  };
+
+  return normalized ? map[normalized] ?? "" : "";
 }
 
 /* ─── Componente principal ─── */
@@ -84,7 +163,10 @@ export default function JobWizard({
   });
 
   const { watch, reset, handleSubmit } = methods;
-  const { lastSaved, isSaving, loadDraft, clearDraft } = useAutosave(watch, initial?.id);
+  const { lastSaved, isSaving, loadDraft, clearDraft } = useAutosave(
+    watch,
+    initial?.id
+  );
   const qualityScore = useQualityScore(watch);
   const hasRestoredRef = useRef(false);
 
@@ -94,7 +176,11 @@ export default function JobWizard({
     const draft = loadDraft();
     if (draft) {
       hasRestoredRef.current = true;
-      if (window.confirm("¿Deseas continuar con el borrador guardado automáticamente?")) {
+      if (
+        window.confirm(
+          "¿Deseas continuar con el borrador guardado automáticamente?"
+        )
+      ) {
         reset(draft);
       } else {
         clearDraft();
@@ -130,27 +216,51 @@ export default function JobWizard({
     if (!tpl) return;
 
     let html = sanitizeHtml(tpl.descriptionHtml || "");
-    const plain = tpl.description ? tpl.description : html ? htmlToPlain(html) : "";
-    if (!html.trim() && plain.trim()) html = sanitizeHtml(plainToBasicHtml(plain));
+    const plain = tpl.description
+      ? tpl.description
+      : html
+        ? htmlToPlain(html)
+        : "";
+    if (!html.trim() && plain.trim()) {
+      html = sanitizeHtml(plainToBasicHtml(plain));
+    }
 
-    const benefitsBase = BENEFITS.reduce((acc, b) => { acc[b.key] = b.def; return acc; }, {} as Record<string, boolean>);
+    const benefitsBase = BENEFITS.reduce((acc, b) => {
+      acc[b.key] = b.def;
+      return acc;
+    }, {} as Record<string, boolean>);
     let benefitsJson = benefitsBase;
-    let aguinaldoDias = 15, vacacionesDias = 12, primaVacPct = 25, showBenefits = true;
+    let aguinaldoDias = 15,
+      vacacionesDias = 12,
+      primaVacPct = 25,
+      showBenefits = true;
 
     if (tpl.benefitsJson && typeof tpl.benefitsJson === "object") {
       const b = tpl.benefitsJson as any;
       benefitsJson = { ...benefitsBase };
-      for (const k of Object.keys(benefitsBase)) benefitsJson[k] = Boolean(b[k] ?? benefitsBase[k]);
+      for (const k of Object.keys(benefitsBase)) {
+        benefitsJson[k] = Boolean(b[k] ?? benefitsBase[k]);
+      }
       if (typeof b.aguinaldoDias === "number") aguinaldoDias = b.aguinaldoDias;
-      if (typeof b.vacacionesDias === "number") vacacionesDias = b.vacacionesDias;
+      if (typeof b.vacacionesDias === "number") {
+        vacacionesDias = b.vacacionesDias;
+      }
       if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
       showBenefits = Boolean(b.showBenefits ?? true);
     }
 
-    const eduReq = Array.isArray(tpl.education) ? tpl.education.filter((e) => e.required).map((e) => e.name) : [];
-    const eduNice = Array.isArray(tpl.education) ? tpl.education.filter((e) => !e.required).map((e) => e.name) : [];
-    const skillsReq = Array.isArray(tpl.skills) ? tpl.skills.filter((s) => s.required).map((s) => s.name) : [];
-    const skillsNice = Array.isArray(tpl.skills) ? tpl.skills.filter((s) => !s.required).map((s) => s.name) : [];
+    const eduReq = Array.isArray(tpl.education)
+      ? tpl.education.filter((e) => e.required).map((e) => e.name)
+      : [];
+    const eduNice = Array.isArray(tpl.education)
+      ? tpl.education.filter((e) => !e.required).map((e) => e.name)
+      : [];
+    const skillsReq = Array.isArray(tpl.skills)
+      ? tpl.skills.filter((s) => s.required).map((s) => s.name)
+      : [];
+    const skillsNice = Array.isArray(tpl.skills)
+      ? tpl.skills.filter((s) => !s.required).map((s) => s.name)
+      : [];
 
     reset({
       ...makeDefaultValues({ presetCompany, initial }),
@@ -176,7 +286,7 @@ export default function JobWizard({
       primaVacPct,
       descriptionHtml: html,
       descriptionPlain: plain,
-      minDegree: tpl.minDegree ?? "BACHELOR",
+      minDegree: normalizeDegreeClientValue(tpl.minDegree),
       eduRequired: eduReq,
       eduNice,
       requiredSkills: skillsReq,
@@ -192,6 +302,7 @@ export default function JobWizard({
   async function onValidSubmit(v: JobForm) {
     setBusy(true);
     try {
+      const normalizedMinDegree = toBackendDegreeValue(v.minDegree);
       const fd = new FormData();
 
       // Paso 1
@@ -207,8 +318,12 @@ export default function JobWizard({
       if (v.locationLat != null) fd.set("locationLat", String(v.locationLat));
       if (v.locationLng != null) fd.set("locationLng", String(v.locationLng));
       fd.set("currency", v.currency);
-      if (v.salaryMin != null) fd.set("salaryMin", String(Math.max(0, v.salaryMin)));
-      if (v.salaryMax != null) fd.set("salaryMax", String(Math.max(0, v.salaryMax)));
+      if (v.salaryMin != null) {
+        fd.set("salaryMin", String(Math.max(0, v.salaryMin)));
+      }
+      if (v.salaryMax != null) {
+        fd.set("salaryMax", String(Math.max(0, v.salaryMax)));
+      }
       fd.set("showSalary", String(v.showSalary));
 
       // Paso 2
@@ -227,24 +342,44 @@ export default function JobWizard({
       fd.set("benefitsJson", JSON.stringify(benefitsPayload));
 
       // Paso 4
-      if (v.assessmentTemplateId) fd.set("assessmentTemplateId", v.assessmentTemplateId);
+      if (v.assessmentTemplateId) {
+        fd.set("assessmentTemplateId", v.assessmentTemplateId);
+      }
 
       // Paso 5
       let safeHtml = sanitizeHtml((v.descriptionHtml || "").trim());
-      if (!safeHtml.trim() && v.descriptionPlain.trim()) safeHtml = sanitizeHtml(plainToBasicHtml(v.descriptionPlain.trim()));
+      if (!safeHtml.trim() && v.descriptionPlain.trim()) {
+        safeHtml = sanitizeHtml(plainToBasicHtml(v.descriptionPlain.trim()));
+      }
       fd.set("descriptionHtml", safeHtml);
       fd.set("description", v.descriptionPlain.trim() || htmlToPlain(safeHtml));
-      fd.set("minDegree", v.minDegree);
-      fd.set("educationJson", JSON.stringify([
-        ...v.eduRequired.map((name) => ({ name, required: true })),
-        ...v.eduNice.map((name) => ({ name, required: false })),
-      ]));
-      fd.set("skillsJson", JSON.stringify([
-        ...v.requiredSkills.map((name) => ({ name, required: true })),
-        ...v.niceSkills.map((name) => ({ name, required: false })),
-      ]));
+      fd.set("minDegree", normalizedMinDegree);
+
+      if (!normalizedMinDegree) {
+        toastError("No especificaste nivel académico mínimo.", {
+          description:
+            "La vacante se publicará de todos modos, pero definirlo ayuda a filtrar mejor candidatos.",
+        });
+      }
+
+      fd.set(
+        "educationJson",
+        JSON.stringify([
+          ...v.eduRequired.map((name) => ({ name, required: true })),
+          ...v.eduNice.map((name) => ({ name, required: false })),
+        ])
+      );
+      fd.set(
+        "skillsJson",
+        JSON.stringify([
+          ...v.requiredSkills.map((name) => ({ name, required: true })),
+          ...v.niceSkills.map((name) => ({ name, required: false })),
+        ])
+      );
       fd.set("certsJson", JSON.stringify(v.certs));
-      if (v.languages?.length) fd.set("languagesJson", JSON.stringify(v.languages));
+      if (v.languages?.length) {
+        fd.set("languagesJson", JSON.stringify(v.languages));
+      }
 
       const isEditing = !!initial?.id;
 
@@ -264,11 +399,15 @@ export default function JobWizard({
 
       if (!res.ok) {
         if (res.status === 402 && data?.code === "PLAN_LIMIT_REACHED") {
-          toastError(data?.error || "Has alcanzado el límite de vacantes activas.", {
-            description: typeof data?.maxActiveJobs === "number"
-              ? `Vacantes activas: ${data.currentActiveJobs ?? "•"} / ${data.maxActiveJobs}. Cierra una vacante o mejora tu plan.`
-              : undefined,
-          });
+          toastError(
+            data?.error || "Has alcanzado el límite de vacantes activas.",
+            {
+              description:
+                typeof data?.maxActiveJobs === "number"
+                  ? `Vacantes activas: ${data.currentActiveJobs ?? "•"} / ${data.maxActiveJobs}. Cierra una vacante o mejora tu plan.`
+                  : undefined,
+            }
+          );
           return;
         }
         throw new Error(data?.error || "Error al publicar la vacante");
@@ -279,7 +418,9 @@ export default function JobWizard({
       router.push(`/dashboard/jobs/${data.id}/applications`);
     } catch (err: any) {
       console.error("Error en handlePublish:", err);
-      toastError((err?.message as string) || "Ocurrió un error al guardar la vacante");
+      toastError(
+        (err?.message as string) || "Ocurrió un error al guardar la vacante"
+      );
     } finally {
       setBusy(false);
     }
@@ -292,7 +433,6 @@ export default function JobWizard({
       <form onSubmit={handleSubmit(onValidSubmit)}>
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
           <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
-
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-0">
               <div className="flex flex-col sm:flex-row sm:items-center gap-3">

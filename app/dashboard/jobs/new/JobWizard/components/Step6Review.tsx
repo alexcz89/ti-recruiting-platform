@@ -89,17 +89,23 @@ export default function Step6Review({
     : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} • ${v.city || ""}`;
 
   // Salario
-  const salaryMin = typeof v.salaryMin === "number" && !Number.isNaN(v.salaryMin) ? v.salaryMin : undefined;
-  const salaryMax = typeof v.salaryMax === "number" && !Number.isNaN(v.salaryMax) ? v.salaryMax : undefined;
+  const salaryMin =
+    typeof v.salaryMin === "number" && !Number.isNaN(v.salaryMin)
+      ? v.salaryMin
+      : undefined;
+  const salaryMax =
+    typeof v.salaryMax === "number" && !Number.isNaN(v.salaryMax)
+      ? v.salaryMax
+      : undefined;
   const fmt = (n: number) => new Intl.NumberFormat("es-MX").format(n);
   const salaryText =
     salaryMin == null && salaryMax == null
       ? "No especificado"
       : salaryMin != null && salaryMax != null
-      ? `${v.currency} ${fmt(salaryMin)} - ${fmt(salaryMax)}`
-      : salaryMin != null
-      ? `Desde ${v.currency} ${fmt(salaryMin)}`
-      : `Hasta ${v.currency} ${fmt(salaryMax!)}`;
+        ? `${v.currency} ${fmt(salaryMin)} - ${fmt(salaryMax)}`
+        : salaryMin != null
+          ? `Desde ${v.currency} ${fmt(salaryMin)}`
+          : `Hasta ${v.currency} ${fmt(salaryMax!)}`;
 
   // Prestaciones
   const benefitsList = Object.entries(v.benefits || {})
@@ -113,6 +119,7 @@ export default function Step6Review({
 
   const safeDescHtml = sanitizeHtml(v.descriptionHtml || "");
   const hasDescription = Boolean(v.descriptionPlain?.trim());
+  const degreeLabel = v.minDegree ? labelDegree(v.minDegree) : "Sin especificar";
 
   return (
     <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -128,11 +135,22 @@ export default function Step6Review({
           onEdit={() => onEditStep(1)}
         >
           <div className="grid gap-4">
-            <Row label="Título de la vacante" value={<span className="text-base font-medium text-zinc-900 dark:text-zinc-100">{v.title}</span>} />
+            <Row
+              label="Título de la vacante"
+              value={
+                <span className="text-base font-medium text-zinc-900 dark:text-zinc-100">
+                  {v.title}
+                </span>
+              }
+            />
             <div className="grid sm:grid-cols-2 gap-4">
               <Row
                 label="Empresa"
-                value={v.companyMode === "confidential" ? "Confidencial" : presetCompany?.name || "Mi empresa"}
+                value={
+                  v.companyMode === "confidential"
+                    ? "Confidencial"
+                    : presetCompany?.name || "Mi empresa"
+                }
               />
               <Row label="Ubicación" value={locationText} />
             </div>
@@ -182,7 +200,8 @@ export default function Step6Review({
             onEdit={() => onEditStep(4)}
           >
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Evaluación seleccionada — ID: <span className="font-mono text-xs">{v.assessmentTemplateId}</span>
+              Evaluación seleccionada — ID:{" "}
+              <span className="font-mono text-xs">{v.assessmentTemplateId}</span>
             </p>
           </ReviewCard>
         )}
@@ -191,21 +210,32 @@ export default function Step6Review({
         <ReviewCard
           icon={<BookOpen className="h-5 w-5 text-emerald-500" />}
           title="Requisitos"
-          onEdit={() => { onEditStep(5); onEditTab("skills"); }}
+          onEdit={() => {
+            onEditStep(5);
+            onEditTab("skills");
+          }}
         >
           <div className="grid gap-4">
             {/* Skills */}
             {(v.requiredSkills?.length > 0 || v.niceSkills?.length > 0) && (
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Skills</p>
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                  Skills
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {v.requiredSkills?.map((s) => (
-                    <span key={s} className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100">
+                    <span
+                      key={s}
+                      className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100"
+                    >
                       {s} <span className="text-emerald-500">★</span>
                     </span>
                   ))}
                   {v.niceSkills?.map((s) => (
-                    <span key={s} className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span
+                      key={s}
+                      className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    >
                       {s}
                     </span>
                   ))}
@@ -217,16 +247,22 @@ export default function Step6Review({
             {(v.eduRequired?.length > 0 || v.eduNice?.length > 0) && (
               <div>
                 <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
-                  Educación · {labelDegree(v.minDegree)} mínimo
+                  Educación · {degreeLabel} mínimo
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {v.eduRequired?.map((e) => (
-                    <span key={e} className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50/60 px-3 py-1 text-xs font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-100">
+                    <span
+                      key={e}
+                      className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50/60 px-3 py-1 text-xs font-medium text-blue-900 dark:border-blue-800 dark:bg-blue-950/20 dark:text-blue-100"
+                    >
                       {e} <span className="text-blue-500">★</span>
                     </span>
                   ))}
                   {v.eduNice?.map((e) => (
-                    <span key={e} className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                    <span
+                      key={e}
+                      className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    >
                       {e}
                     </span>
                   ))}
@@ -237,10 +273,15 @@ export default function Step6Review({
             {/* Certificaciones */}
             {v.certs?.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Certificaciones</p>
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                  Certificaciones
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {v.certs.map((c) => (
-                    <span key={c} className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50/60 px-3 py-1 text-xs font-medium text-violet-900 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-100">
+                    <span
+                      key={c}
+                      className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50/60 px-3 py-1 text-xs font-medium text-violet-900 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-100"
+                    >
                       {c}
                     </span>
                   ))}
@@ -251,10 +292,15 @@ export default function Step6Review({
             {/* Idiomas */}
             {v.languages?.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">Idiomas</p>
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                  Idiomas
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {v.languages.map((l, i) => (
-                    <span key={i} className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50/60 px-3 py-1 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-100">
+                    <span
+                      key={i}
+                      className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50/60 px-3 py-1 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-100"
+                    >
                       {l.name} · {labelLanguageLevel(l.level)}
                     </span>
                   ))}
@@ -262,9 +308,14 @@ export default function Step6Review({
               </div>
             )}
 
-            {!v.requiredSkills?.length && !v.niceSkills?.length && !v.eduRequired?.length && !v.eduNice?.length && !v.certs?.length && !v.languages?.length && (
-              <p className="text-sm text-zinc-500">Sin requisitos adicionales.</p>
-            )}
+            {!v.requiredSkills?.length &&
+              !v.niceSkills?.length &&
+              !v.eduRequired?.length &&
+              !v.eduNice?.length &&
+              !v.certs?.length &&
+              !v.languages?.length && (
+                <p className="text-sm text-zinc-500">Sin requisitos adicionales.</p>
+              )}
           </div>
         </ReviewCard>
 
@@ -272,7 +323,10 @@ export default function Step6Review({
         <ReviewCard
           icon={<Globe className="h-5 w-5 text-emerald-500" />}
           title="Descripción"
-          onEdit={() => { onEditStep(5); onEditTab("desc"); }}
+          onEdit={() => {
+            onEditStep(5);
+            onEditTab("desc");
+          }}
         >
           {hasDescription ? (
             <div
@@ -301,8 +355,12 @@ export default function Step6Review({
             className="rounded-md bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:bg-emerald-300 disabled:cursor-not-allowed transition shadow-sm hover:shadow-md"
           >
             {busy
-              ? isEditing ? "Guardando..." : "Publicando..."
-              : isEditing ? "Guardar cambios" : "Publicar vacante"}
+              ? isEditing
+                ? "Guardando..."
+                : "Publicando..."
+              : isEditing
+                ? "Guardar cambios"
+                : "Publicar vacante"}
           </button>
         </div>
       </div>
