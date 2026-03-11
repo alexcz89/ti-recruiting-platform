@@ -169,14 +169,14 @@ export function makeDefaultValues({
       typeof initial?.salaryMin === "number"
         ? initial.salaryMin
         : typeof initial?.salaryMin === "string"
-        ? Number(initial.salaryMin) || undefined
-        : undefined,
+          ? Number(initial.salaryMin) || undefined
+          : undefined,
     salaryMax:
       typeof initial?.salaryMax === "number"
         ? initial.salaryMax
         : typeof initial?.salaryMax === "string"
-        ? Number(initial.salaryMax) || undefined
-        : undefined,
+          ? Number(initial.salaryMax) || undefined
+          : undefined,
     showSalary: !!initial?.showSalary,
     employmentType: initial?.employmentType ?? "FULL_TIME",
     schedule: initial?.schedule ?? "",
@@ -185,11 +185,10 @@ export function makeDefaultValues({
     aguinaldoDias,
     vacacionesDias,
     primaVacPct,
-    // ✅ NUEVO: Evaluación
     assessmentTemplateId: initial?.assessmentTemplateId ?? null,
     descriptionHtml: html,
     descriptionPlain: plain,
-    minDegree: initial?.minDegree ?? "BACHELOR",
+    minDegree: initial?.minDegree ?? null,
     eduRequired: eduReq,
     eduNice,
     requiredSkills: skillsReq,
