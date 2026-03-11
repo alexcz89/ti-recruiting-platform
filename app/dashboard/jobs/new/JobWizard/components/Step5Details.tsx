@@ -41,7 +41,11 @@ export default function Step5Details({
   const [certQuery, setCertQuery] = useState("");
   const [educationQuery, setEducationQuery] = useState("");
   const [isEducationOpen, setIsEducationOpen] = useState(false);
+
+  const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
+
   const educationDropdownRef = useRef<HTMLDivElement | null>(null);
+  const skillsDropdownRef = useRef<HTMLDivElement | null>(null);
 
   const {
     fields: languageFields,
@@ -61,11 +65,11 @@ export default function Step5Details({
     : 0;
   const canNext = descLength >= 50;
 
-  // Fuse search
   const skillsFuse = useMemo(
     () => createStringFuse(skillsOptions || []),
     [skillsOptions]
   );
+
   const filteredSkills = useMemo(() => {
     const q = skillQuery.trim();
     if (!q) return (skillsOptions || []).slice(0, 30);
@@ -76,6 +80,7 @@ export default function Step5Details({
     () => createStringFuse(EDUCATION_SUGGESTIONS),
     []
   );
+
   const filteredEducation = useMemo(() => {
     const q = educationQuery.trim();
     if (!q) return EDUCATION_SUGGESTIONS.slice(0, 30);
@@ -86,56 +91,80 @@ export default function Step5Details({
     () => createStringFuse(certOptions || []),
     [certOptions]
   );
+
   const filteredCerts = useMemo(() => {
     const q = certQuery.trim();
     if (!q) return (certOptions || []).slice(0, 30);
     return searchStrings(certsFuse, q, 50);
   }, [certQuery, certsFuse, certOptions]);
 
-  // Cerrar dropdown educación al click fuera
+  useEffect(() => {
+    setHighlightedSkillIndex(0);
+  }, [skillQuery]);
+
   useEffect(() => {
     function handlePointerDown(e: PointerEvent | MouseEvent) {
       const target = e.target as Node | null;
+
       if (
-        !educationDropdownRef.current ||
-        !target ||
-        educationDropdownRef.current.contains(target)
+        educationDropdownRef.current &&
+        target &&
+        !educationDropdownRef.current.contains(target)
       ) {
-        return;
+        setIsEducationOpen(false);
       }
-      setIsEducationOpen(false);
+
+      if (
+        skillsDropdownRef.current &&
+        target &&
+        !skillsDropdownRef.current.contains(target)
+      ) {
+        setSkillQuery("");
+        setHighlightedSkillIndex(0);
+      }
     }
+
     function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setIsEducationOpen(false);
+      if (e.key === "Escape") {
+        setIsEducationOpen(false);
+        setSkillQuery("");
+        setHighlightedSkillIndex(0);
+      }
     }
+
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
+
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, []);
 
-  // Helpers
   function addSkill(name: string, to: "req" | "nice" = "req") {
     const n = name.trim();
     if (!n || requiredSkills.includes(n) || niceSkills.includes(n)) return;
+
     if (to === "req") {
       setValue("requiredSkills", [...requiredSkills, n], { shouldDirty: true });
     } else {
       setValue("niceSkills", [...niceSkills, n], { shouldDirty: true });
     }
+
     setSkillQuery("");
+    setHighlightedSkillIndex(0);
   }
 
   function addEdu(name: string, to: "req" | "nice" = "req") {
     const n = name.trim();
     if (!n || eduRequired.includes(n) || eduNice.includes(n)) return;
+
     if (to === "req") {
       setValue("eduRequired", [...eduRequired, n], { shouldDirty: true });
     } else {
       setValue("eduNice", [...eduNice, n], { shouldDirty: true });
     }
+
     setEducationQuery("");
     setIsEducationOpen(false);
   }
@@ -155,15 +184,21 @@ export default function Step5Details({
     e.dataTransfer.effectAllowed = "move";
   }
 
-  function onDropSkills(e: React.DragEvent<HTMLDivElement>, to: "req" | "nice") {
+  function onDropSkills(
+    e: React.DragEvent<HTMLDivElement>,
+    to: "req" | "nice"
+  ) {
     const data = e.dataTransfer.getData("application/json");
     if (!data) return;
+
     const payload = JSON.parse(data) as {
       kind: "skill" | "edu";
       name: string;
       from: "req" | "nice";
     };
+
     if (payload.kind !== "skill" || payload.from === to) return;
+
     if (to === "req") {
       if (!requiredSkills.includes(payload.name)) {
         setValue("requiredSkills", [...requiredSkills, payload.name], {
@@ -192,12 +227,15 @@ export default function Step5Details({
   function onDropEdu(e: React.DragEvent<HTMLDivElement>, to: "req" | "nice") {
     const data = e.dataTransfer.getData("application/json");
     if (!data) return;
+
     const payload = JSON.parse(data) as {
       kind: "skill" | "edu";
       name: string;
       from: "req" | "nice";
     };
+
     if (payload.kind !== "edu" || payload.from === to) return;
+
     if (to === "req") {
       if (!eduRequired.includes(payload.name)) {
         setValue("eduRequired", [...eduRequired, payload.name], {
@@ -221,6 +259,37 @@ export default function Step5Details({
     }
   }
 
+  function getHighlightedSkill() {
+    if (!filteredSkills.length) return null;
+    const safeIndex = Math.min(
+      Math.max(highlightedSkillIndex, 0),
+      filteredSkills.length - 1
+    );
+    return filteredSkills[safeIndex] || null;
+  }
+
+  function renderHighlightedText(text: string, query: string) {
+    const q = query.trim();
+    if (!q) return text;
+
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+
+    const start = text.slice(0, idx);
+    const match = text.slice(idx, idx + q.length);
+    const end = text.slice(idx + q.length);
+
+    return (
+      <>
+        {start}
+        <mark className="rounded bg-emerald-100 px-0.5 text-inherit dark:bg-emerald-900/40">
+          {match}
+        </mark>
+        {end}
+      </>
+    );
+  }
+
   const tabItems = [
     { k: "desc" as Tab, lbl: "Descripción", done: descLength > 0 },
     {
@@ -237,7 +306,7 @@ export default function Step5Details({
   ];
 
   return (
-    <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
       {/* Tabs */}
       <div
         role="tablist"
@@ -251,10 +320,10 @@ export default function Step5Details({
             role="tab"
             aria-selected={tab === t.k}
             className={clsx(
-              "flex items-center gap-2 rounded-lg h-9 px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50",
+              "flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50",
               tab === t.k
                 ? "bg-emerald-600 text-white shadow-sm"
-                : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
             )}
             onClick={() => setTab(t.k)}
           >
@@ -275,18 +344,20 @@ export default function Step5Details({
 
       {/* Tab: Descripción */}
       {tab === "desc" && (
-        <div className="animate-fade-in-up grid gap-4 mt-4">
+        <div className="mt-4 grid animate-fade-in-up gap-4">
           <label className="text-sm font-medium">Descripción de la vacante *</label>
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             Incluye responsabilidades, requisitos y beneficios.
           </p>
+
           <Controller
             name="descriptionHtml"
             control={control}
             render={({ field: { value, onChange } }) => {
               const isEmpty = !value || !value.trim();
+
               return (
-                <div className="relative [&_.job-editor]:min-h-[260px] md:[&_.job-editor]:min-h-[320px] [&_.job-editor+div]:hidden [&_.job-editor~div]:hidden">
+                <div className="relative [&_.job-editor+div]:hidden [&_.job-editor]:min-h-[260px] [&_.job-editor~div]:hidden md:[&_.job-editor]:min-h-[320px]">
                   <JobRichTextEditor
                     valueHtml={value || ""}
                     onChangeHtml={(html, plain) => {
@@ -299,7 +370,7 @@ export default function Step5Details({
                     }}
                   />
                   {isEmpty && (
-                    <div className="pointer-events-none absolute left-4 right-4 top-12 text-xs text-zinc-400 dark:text-zinc-500 whitespace-pre-line">
+                    <div className="pointer-events-none absolute left-4 right-4 top-12 whitespace-pre-line text-xs text-zinc-400 dark:text-zinc-500">
                       Ejemplo:{"\n"}- Responsabilidades principales{"\n"}-
                       Requisitos clave y tecnologías{"\n"}- Beneficios y cultura
                       del equipo
@@ -309,6 +380,7 @@ export default function Step5Details({
               );
             }}
           />
+
           <div
             className={clsx(
               "text-xs",
@@ -317,6 +389,7 @@ export default function Step5Details({
           >
             chars: {descLength}/500&nbsp;&nbsp;palabras: {wordCount}/80
           </div>
+
           {errors.descriptionPlain && (
             <p className="text-xs text-red-600">
               {errors.descriptionPlain.message}
@@ -327,42 +400,92 @@ export default function Step5Details({
 
       {/* Tab: Skills / Certs */}
       {tab === "skills" && (
-        <div className="animate-fade-in-up grid gap-6">
+        <div className="grid animate-fade-in-up gap-6">
           <div className="grid gap-3">
             <label className="text-sm font-medium">Skills / Certs</label>
-            <div className="relative">
+
+            <div ref={skillsDropdownRef} className="relative">
               <input
-                className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-md border border-zinc-300 bg-white p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 md:p-4 dark:border-zinc-700 dark:bg-zinc-900"
                 placeholder="Busca (ej. Python, AWS, React Native...) y presiona Enter"
                 value={skillQuery}
-                onChange={(e) => setSkillQuery(e.target.value)}
+                onChange={(e) => {
+                  setSkillQuery(e.target.value);
+                  setHighlightedSkillIndex(0);
+                }}
+                onFocus={() => {
+                  if (skillQuery.trim()) setHighlightedSkillIndex(0);
+                }}
                 onKeyDown={(e) => {
-                  if ((e.key === "Enter" || e.key === "Tab") && skillQuery.trim()) {
+                  if (!skillQuery.trim()) return;
+
+                  if (e.key === "ArrowDown") {
                     e.preventDefault();
-                    addSkill(filteredSkills[0] || skillQuery.trim(), "req");
+                    setHighlightedSkillIndex((prev) =>
+                      Math.min(prev + 1, Math.max(filteredSkills.length - 1, 0))
+                    );
+                    return;
+                  }
+
+                  if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setHighlightedSkillIndex((prev) => Math.max(prev - 1, 0));
+                    return;
+                  }
+
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setSkillQuery("");
+                    setHighlightedSkillIndex(0);
+                    return;
+                  }
+
+                  if (e.key === "Enter" || e.key === "Tab") {
+                    e.preventDefault();
+                    addSkill(getHighlightedSkill() || skillQuery.trim(), "req");
                   }
                 }}
               />
+
               {skillQuery && (
-                <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
+                <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
                   {filteredSkills.length === 0 ? (
-                    <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
+                    <div className="p-3 text-sm text-zinc-500">
+                      Sin resultados
+                    </div>
                   ) : (
-                    filteredSkills.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                        onClick={() => addSkill(s, "req")}
-                      >
-                        {s}
-                      </button>
-                    ))
+                    <>
+                      <div className="border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                        Enter agrega la opción seleccionada • ↑ ↓ para navegar
+                      </div>
+
+                      {filteredSkills.map((s, idx) => {
+                        const isActive = idx === highlightedSkillIndex;
+
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            className={clsx(
+                              "block w-full px-3 py-2.5 text-left text-sm transition",
+                              isActive
+                                ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
+                                : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                            )}
+                            onMouseEnter={() => setHighlightedSkillIndex(idx)}
+                            onClick={() => addSkill(s, "req")}
+                          >
+                            {renderHighlightedText(s, skillQuery)}
+                          </button>
+                        );
+                      })}
+                    </>
                   )}
                 </div>
               )}
             </div>
-            <div className="grid sm:grid-cols-2 gap-6">
+
+            <div className="grid gap-6 sm:grid-cols-2">
               <SkillBin
                 title="Obligatoria"
                 items={requiredSkills}
@@ -399,11 +522,14 @@ export default function Step5Details({
           </div>
 
           {/* Certificaciones */}
-          <div className="grid gap-3 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <label className="text-sm font-medium">Certificaciones (opcional)</label>
+          <div className="grid gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+            <label className="text-sm font-medium">
+              Certificaciones (opcional)
+            </label>
+
             <div className="relative">
               <input
-                className="w-full rounded-md border border-zinc-300 bg-white p-4 focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-md border border-zinc-300 bg-white p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 md:p-4 dark:border-zinc-700 dark:bg-zinc-900"
                 placeholder="Busca y selecciona (ej. AWS SAA, CCNA...)"
                 value={certQuery}
                 onChange={(e) => setCertQuery(e.target.value)}
@@ -414,10 +540,13 @@ export default function Step5Details({
                   }
                 }}
               />
+
               {certQuery && (
-                <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
+                <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
                   {filteredCerts.length === 0 ? (
-                    <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
+                    <div className="p-2 text-sm text-zinc-500">
+                      Sin resultados
+                    </div>
                   ) : (
                     filteredCerts.map((c) => (
                       <button
@@ -433,6 +562,7 @@ export default function Step5Details({
                 </div>
               )}
             </div>
+
             {certs.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {certs.map((c) => (
@@ -466,14 +596,14 @@ export default function Step5Details({
 
       {/* Tab: Idiomas */}
       {tab === "langs" && (
-        <div className="animate-fade-in-up grid gap-6">
-          <div className="flex items-center justify-between">
+        <div className="grid animate-fade-in-up gap-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <label className="text-sm font-medium">
               Idiomas requeridos (opcional)
             </label>
             <button
               type="button"
-              className="rounded-md border px-3 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              className="rounded-md border px-3 py-2 text-xs hover:bg-zinc-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
               onClick={() =>
                 addLanguageRow({ name: "Inglés", level: "PROFESSIONAL" })
               }
@@ -481,16 +611,18 @@ export default function Step5Details({
               + Añadir idioma
             </button>
           </div>
+
           {languageFields.length === 0 && (
             <p className="text-xs text-zinc-500">
               Añade uno o más idiomas relevantes (ej. Inglés profesional).
             </p>
           )}
-          <div className="grid gap-2">
+
+          <div className="grid gap-3">
             {languageFields.map((field, idx) => (
               <div
                 key={field.id}
-                className="grid grid-cols-[minmax(0,2fr)_minmax(0,2fr)_auto] gap-2 items-center"
+                className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_auto] sm:items-center"
               >
                 <select
                   className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
@@ -502,6 +634,7 @@ export default function Step5Details({
                     </option>
                   ))}
                 </select>
+
                 <select
                   className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                   {...register(`languages.${idx}.level` as const)}
@@ -511,10 +644,11 @@ export default function Step5Details({
                   <option value="CONVERSATIONAL">Conversacional (B1-B2)</option>
                   <option value="BASIC">Básico (A1-A2)</option>
                 </select>
+
                 <button
                   type="button"
                   aria-label="Remove"
-                  className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-zinc-200 text-emerald-700/60 transition hover:text-emerald-700 hover:border-emerald-300 dark:border-zinc-700"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-zinc-200 text-emerald-700/60 transition hover:border-emerald-300 hover:text-emerald-700 dark:border-zinc-700"
                   onClick={() => removeLanguageRow(idx)}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -527,9 +661,9 @@ export default function Step5Details({
 
       {/* Tab: Educación */}
       {tab === "edu" && (
-        <div className="animate-fade-in-up grid gap-6">
-          <div className="grid md:grid-cols-2 gap-6 min-w-0">
-            <div className="grid gap-2 min-w-0">
+        <div className="grid animate-fade-in-up gap-6">
+          <div className="grid min-w-0 gap-6 md:grid-cols-2">
+            <div className="grid min-w-0 gap-2">
               <label className="text-sm font-medium">Nivel mínimo</label>
               <select
                 className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
@@ -542,6 +676,7 @@ export default function Step5Details({
                 <option value="MASTER">Maestría</option>
                 <option value="PHD">Doctorado</option>
               </select>
+
               {!watch("minDegree") && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">
                   No es obligatorio, pero especificar un nivel mínimo ayuda a
@@ -549,13 +684,15 @@ export default function Step5Details({
                 </p>
               )}
             </div>
-            <div className="grid gap-2 min-w-0">
+
+            <div className="grid min-w-0 gap-2">
               <label className="text-sm font-medium">
                 Agregar Educación (programa / carrera)
               </label>
+
               <div className="relative" ref={educationDropdownRef}>
                 <input
-                  className="w-full min-w-0 h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                  className="h-10 w-full min-w-0 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                   placeholder="Ej. Ingeniería en Sistemas... (Enter agrega)"
                   value={educationQuery}
                   onChange={(e) => {
@@ -575,8 +712,9 @@ export default function Step5Details({
                     }
                   }}
                 />
+
                 {isEducationOpen && educationQuery && (
-                  <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
+                  <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
                     <button
                       type="button"
                       className="block w-full px-3 py-2 text-left text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-900/20"
@@ -584,6 +722,7 @@ export default function Step5Details({
                     >
                       {`Agregar "${educationQuery.trim()}"`}
                     </button>
+
                     {filteredEducation.map((s) => (
                       <button
                         key={s}
@@ -599,7 +738,8 @@ export default function Step5Details({
               </div>
             </div>
           </div>
-          <div className="grid sm:grid-cols-2 gap-6">
+
+          <div className="grid gap-6 sm:grid-cols-2">
             <SkillBin
               title="Obligatoria"
               items={eduRequired}
@@ -633,6 +773,7 @@ export default function Step5Details({
               onDrop={(e) => onDropEdu(e, "nice")}
             />
           </div>
+
           {eduRequired.length === 0 && eduNice.length === 0 && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Agrega al menos un programa educativo recomendado para la vacante.
@@ -642,22 +783,23 @@ export default function Step5Details({
       )}
 
       {/* Navegación */}
-      <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="mt-6 flex flex-col gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:justify-between dark:border-zinc-800">
         <button
           type="button"
-          className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+          className="w-full rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
           onClick={onBack}
         >
           Atrás
         </button>
+
         <button
           type="button"
           disabled={!canNext}
           className={clsx(
-            "rounded-md px-6 py-2.5 text-sm font-medium text-white transition",
+            "w-full rounded-md px-6 py-2.5 text-sm font-medium text-white transition sm:w-auto",
             canNext
               ? "bg-emerald-600 hover:bg-emerald-500"
-              : "bg-emerald-300 cursor-not-allowed"
+              : "cursor-not-allowed bg-emerald-300"
           )}
           onClick={onNext}
         >
