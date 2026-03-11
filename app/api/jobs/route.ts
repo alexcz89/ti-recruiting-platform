@@ -1,16 +1,39 @@
 // app/api/jobs/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { syncJobSkills } from "@/lib/server/syncJobSkills";
-import { getSessionCompanyId, getSessionOrThrow } from '@/lib/server/session';
+import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import { PLANS, type PlanId } from "@/config/plans";
 import {
   EmploymentType,
   JobStatus,
   EducationLevel,
   LocationType,
-  type Prisma, // 👈 para tipar orderBy correctamente
+  type Prisma,
 } from "@prisma/client";
+
+type JobSkillInput = {
+  name?: string;
+  required?: boolean;
+  weight?: number;
+};
+
+const LOCATION_TYPE_VALUES = ["ONSITE", "HYBRID", "REMOTE"] as const;
+const EMPLOYMENT_TYPE_VALUES = [
+  "FULL_TIME",
+  "PART_TIME",
+  "CONTRACT",
+  "TEMPORARY",
+  "INTERNSHIP",
+] as const;
+const EDUCATION_LEVEL_VALUES = [
+  "HIGH_SCHOOL",
+  "TECHNICAL",
+  "ASSOCIATE",
+  "BACHELORS",
+  "MASTERS",
+  "DOCTORATE",
+] as const;
 
 /* -------------------------------------------------
    Helpers
@@ -19,12 +42,14 @@ function getFormString(fd: FormData, key: string): string {
   const v = fd.get(key);
   return (typeof v === "string" ? v : v?.toString() || "").trim();
 }
+
 function getFormNumber(fd: FormData, key: string): number | null {
   const v = getFormString(fd, key);
   if (!v) return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
+
 function getFormBool(fd: FormData, key: string): boolean {
   const v = getFormString(fd, key).toLowerCase();
   return (
@@ -36,6 +61,7 @@ function getFormBool(fd: FormData, key: string): boolean {
     v === "si"
   );
 }
+
 function getFormJSON<T>(fd: FormData, key: string): T | null {
   const raw = getFormString(fd, key);
   if (!raw) return null;
@@ -44,6 +70,24 @@ function getFormJSON<T>(fd: FormData, key: string): T | null {
   } catch {
     return null;
   }
+}
+
+function isLocationType(value: string): value is LocationType {
+  return LOCATION_TYPE_VALUES.includes(
+    value as (typeof LOCATION_TYPE_VALUES)[number]
+  );
+}
+
+function isEmploymentType(value: string): value is EmploymentType {
+  return EMPLOYMENT_TYPE_VALUES.includes(
+    value as (typeof EMPLOYMENT_TYPE_VALUES)[number]
+  );
+}
+
+function isEducationLevel(value: string): value is EducationLevel {
+  return EDUCATION_LEVEL_VALUES.includes(
+    value as (typeof EDUCATION_LEVEL_VALUES)[number]
+  );
 }
 
 /* -------------------------------------------------
@@ -71,7 +115,7 @@ export async function GET(req: NextRequest) {
           remote: true,
           employmentType: true,
           description: true,
-          descriptionHtml: true, // 👈 IMPORTANTE: HTML con bullets
+          descriptionHtml: true,
           skills: true,
           skillsJson: true,
           educationJson: true,
@@ -93,15 +137,14 @@ export async function GET(req: NextRequest) {
 
       if (!job) return NextResponse.json({ job: null });
 
-      // Si es confidencial, ocultamos el objeto de compañía
       const companyObj = job.companyConfidential
         ? null
         : job.company
-        ? {
-            name: job.company.name ?? null,
-            logoUrl: job.company.logoUrl ?? null,
-          }
-        : null;
+          ? {
+              name: job.company.name ?? null,
+              logoUrl: job.company.logoUrl ?? null,
+            }
+          : null;
 
       return NextResponse.json({
         job: {
@@ -128,7 +171,6 @@ export async function GET(req: NextRequest) {
           remote: job.remote,
           employmentType: job.employmentType,
 
-          // 🔹 Texto plano y HTML
           description: job.description,
           descriptionHtml: job.descriptionHtml,
 
@@ -163,43 +205,55 @@ export async function GET(req: NextRequest) {
       remoteParam === "true"
         ? true
         : remoteParam === "false"
-        ? false
-        : undefined;
+          ? false
+          : undefined;
 
-    const employmentType = (searchParams.get("employmentType") ||
-      "") as EmploymentType | "";
+    const employmentTypeParam = (searchParams.get("employmentType") || "").trim();
+    const employmentType = isEmploymentType(employmentTypeParam)
+      ? employmentTypeParam
+      : undefined;
 
     const sort =
       (searchParams.get("sort") as "recent" | "updated") || "recent";
 
-    const where: any = { status: JobStatus.OPEN };
+    const andFilters: Prisma.JobWhereInput[] = [{ status: JobStatus.OPEN }];
 
     if (q) {
-      where.OR = [
-        { title: { contains: q, mode: "insensitive" } },
-        { description: { contains: q, mode: "insensitive" } },
-        { skills: { hasSome: [q] } },
-      ];
+      andFilters.push({
+        OR: [
+          { title: { contains: q, mode: "insensitive" } },
+          { description: { contains: q, mode: "insensitive" } },
+          { skills: { hasSome: [q] } },
+        ],
+      });
     }
 
     if (location) {
-      where.OR = [
-        ...(where.OR || []),
-        { location: { contains: location, mode: "insensitive" } },
-        { city: { contains: location, mode: "insensitive" } },
-        { admin1: { contains: location, mode: "insensitive" } },
-        { country: { contains: location, mode: "insensitive" } },
-      ];
+      andFilters.push({
+        OR: [
+          { location: { contains: location, mode: "insensitive" } },
+          { city: { contains: location, mode: "insensitive" } },
+          { admin1: { contains: location, mode: "insensitive" } },
+          { country: { contains: location, mode: "insensitive" } },
+        ],
+      });
     }
 
-    if (remote !== undefined) where.remote = remote;
-    if (employmentType) where.employmentType = employmentType;
+    if (remote !== undefined) {
+      andFilters.push({ remote });
+    }
 
-    // 👇 Tipamos orderBy para que Prisma/TS no se quejen
+    if (employmentType) {
+      andFilters.push({ employmentType });
+    }
+
+    const where: Prisma.JobWhereInput =
+      andFilters.length === 1 ? andFilters[0] : { AND: andFilters };
+
     const orderBy: Prisma.JobOrderByWithRelationInput[] =
       sort === "updated"
-        ? [{ updatedAt: "desc" }]
-        : [{ createdAt: "desc" }];
+        ? [{ updatedAt: "desc" }, { id: "desc" }]
+        : [{ createdAt: "desc" }, { id: "desc" }];
 
     const page = await prisma.job.findMany({
       where,
@@ -217,7 +271,7 @@ export async function GET(req: NextRequest) {
         remote: true,
         employmentType: true,
         description: true,
-        descriptionHtml: true, // opcional en el listado
+        descriptionHtml: true,
         skills: true,
         salaryMin: true,
         salaryMax: true,
@@ -234,8 +288,8 @@ export async function GET(req: NextRequest) {
       const companyObj = j.companyConfidential
         ? null
         : j.company
-        ? { name: j.company.name ?? null, logoUrl: j.company.logoUrl ?? null }
-        : null;
+          ? { name: j.company.name ?? null, logoUrl: j.company.logoUrl ?? null }
+          : null;
 
       return {
         id: j.id,
@@ -325,18 +379,8 @@ export async function POST(req: NextRequest) {
 
     /* ---------- Campos ---------- */
     const title = getFormString(formData, "title");
-
-    // 👇 Texto plano y HTML
     const description = getFormString(formData, "description");
     const descriptionHtml = getFormString(formData, "descriptionHtml");
-
-    let employmentType = getFormString(
-      formData,
-      "employmentType"
-    ) as EmploymentType;
-
-    const locationType = (getFormString(formData, "locationType") ||
-      "ONSITE") as LocationType;
 
     if (!title || !description) {
       return NextResponse.json(
@@ -345,12 +389,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (
-      !["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"].includes(
-        employmentType
-      )
-    ) {
-      employmentType = "FULL_TIME";
+    const rawLocationType = getFormString(formData, "locationType") || "ONSITE";
+    if (!isLocationType(rawLocationType)) {
+      return NextResponse.json(
+        { error: "locationType inválido" },
+        { status: 400 }
+      );
+    }
+    const locationType: LocationType = rawLocationType;
+
+    const rawEmploymentType =
+      getFormString(formData, "employmentType") || "FULL_TIME";
+    if (!isEmploymentType(rawEmploymentType)) {
+      return NextResponse.json(
+        { error: "employmentType inválido" },
+        { status: 400 }
+      );
+    }
+    const employmentType: EmploymentType = rawEmploymentType;
+
+    const rawMinDegree = getFormString(formData, "minDegree");
+    const minDegree: EducationLevel | null = rawMinDegree
+      ? isEducationLevel(rawMinDegree)
+        ? rawMinDegree
+        : null
+      : null;
+
+    if (rawMinDegree && !minDegree) {
+      return NextResponse.json(
+        { error: "minDegree inválido" },
+        { status: 400 }
+      );
     }
 
     const city = getFormString(formData, "city");
@@ -376,11 +445,7 @@ export async function POST(req: NextRequest) {
     const salaryMax = getFormNumber(formData, "salaryMax");
     const showSalary = getFormBool(formData, "showSalary");
 
-    if (
-      salaryMin != null &&
-      salaryMax != null &&
-      salaryMin > salaryMax
-    ) {
+    if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
       return NextResponse.json(
         { error: "El sueldo mínimo no puede ser mayor que el sueldo máximo." },
         { status: 400 }
@@ -389,30 +454,27 @@ export async function POST(req: NextRequest) {
 
     const schedule = getFormString(formData, "schedule") || null;
     const showBenefits = getFormBool(formData, "showBenefits");
-    const benefitsJson = getFormJSON<any>(formData, "benefitsJson");
+    const benefitsJson = getFormJSON<Prisma.JsonValue>(formData, "benefitsJson");
 
-    const educationJson = getFormJSON<any>(formData, "educationJson");
-    const minDegree = (getFormString(formData, "minDegree") ||
-      null) as EducationLevel | null;
-
-    const skillsJson = getFormJSON<any>(formData, "skillsJson");
-    const certsJson = getFormJSON<any>(formData, "certsJson");
+    const educationJson = getFormJSON<Prisma.JsonValue>(formData, "educationJson");
+    const skillsJson = getFormJSON<JobSkillInput[]>(formData, "skillsJson");
+    const certsJson = getFormJSON<Prisma.JsonValue>(formData, "certsJson");
 
     const skillsList: string[] = Array.isArray(skillsJson)
       ? skillsJson
-          .map((s: any) =>
+          .map((s) =>
             typeof s?.name === "string"
-              ? `${s?.required ? "Req" : "Dese"}: ${s.name}`
+              ? `${s.required ? "Req" : "Dese"}: ${s.name}`
               : ""
           )
           .filter(Boolean)
       : [];
 
-    const companyMode = getFormString(formData, "companyMode"); // "own" | "confidential"
+    const companyMode = getFormString(formData, "companyMode");
     const companyConfidential = companyMode === "confidential";
 
     /* -------------------------------------------------
-       🔁 ANTI-DUPLICADOS (antes del límite del plan)
+       🔁 ANTI-DUPLICADOS
     --------------------------------------------------*/
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
 
@@ -470,58 +532,56 @@ export async function POST(req: NextRequest) {
     }
 
     /* -------------------------------------------------
-       Crear la vacante
+       Crear vacante + syncJobSkills en transacción
     --------------------------------------------------*/
-    const job = await prisma.job.create({
-      data: {
-        title,
-        // 👇 Guardamos ambos
-        description,
-        descriptionHtml: descriptionHtml || undefined,
+    const job = await prisma.$transaction(async (tx) => {
+      const createdJob = await tx.job.create({
+        data: {
+          title,
+          description,
+          descriptionHtml: descriptionHtml || undefined,
 
-        location:
-          locationType === "REMOTE"
-            ? "Remoto"
-            : city
-            ? city
-            : "—",
-        locationType,
-        locationLat: safeLat ?? undefined,
-        locationLng: safeLng ?? undefined,
-        country: country || undefined,
-        admin1: admin1 || undefined,
-        city: city || undefined,
-        cityNorm: cityNorm || undefined,
-        admin1Norm: admin1Norm || undefined,
+          location: remote ? "Remoto" : city || "—",
+          locationType,
+          locationLat: safeLat ?? undefined,
+          locationLng: safeLng ?? undefined,
+          country: country ?? undefined,
+          admin1: admin1 ?? undefined,
+          city: city ?? undefined,
+          cityNorm: cityNorm ?? undefined,
+          admin1Norm: admin1Norm ?? undefined,
 
-        remote,
-        employmentType,
-        schedule,
-        benefitsJson: benefitsJson ?? undefined,
-        showBenefits,
+          remote,
+          employmentType,
+          schedule,
+          benefitsJson: benefitsJson ?? undefined,
+          showBenefits,
 
-        educationJson: educationJson ?? undefined,
-        minDegree: minDegree ?? undefined,
+          educationJson: educationJson ?? undefined,
+          minDegree: minDegree ?? undefined,
 
-        skillsJson: skillsJson ?? undefined,
-        certsJson: certsJson ?? undefined,
-        skills: skillsList,
+          skillsJson: skillsJson ?? undefined,
+          certsJson: certsJson ?? undefined,
+          skills: skillsList,
 
-        salaryMin: salaryMin ?? undefined,
-        salaryMax: salaryMax ?? undefined,
-        currency,
-        showSalary,
+          salaryMin: salaryMin ?? undefined,
+          salaryMax: salaryMax ?? undefined,
+          currency,
+          showSalary,
 
-        companyConfidential,
-        status: JobStatus.OPEN,
+          companyConfidential,
+          status: JobStatus.OPEN,
 
-        companyId,
-        recruiterId: userId,
-      },
-      select: { id: true },
+          companyId,
+          recruiterId: userId,
+        },
+        select: { id: true },
+      });
+
+      await syncJobSkills(tx, createdJob.id, skillsJson);
+
+      return createdJob;
     });
-
-    await syncJobSkills(prisma, job.id, skillsJson);
 
     /* -------------------------------------------------
        Guardar plantilla (JobTemplate)

@@ -1,7 +1,7 @@
 // lib/server/syncJobSkills.ts
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
-type PrismaLike = PrismaClient;
+type PrismaLike = PrismaClient | Prisma.TransactionClient;
 
 interface RawSkill {
   name?: string;
@@ -35,15 +35,25 @@ export async function syncJobSkills(
         typeof s?.weight === "number" && Number.isFinite(s.weight)
           ? s.weight
           : s?.required
-          ? 5
-          : 2,
+            ? 5
+            : 2,
     }))
     .filter((s) => s.name.length > 0);
 
   if (cleaned.length === 0) return;
 
   const uniqueNames = Array.from(new Set(cleaned.map((s) => norm(s.name))));
+  if (uniqueNames.length === 0) return;
+
   const allTerms = await prisma.taxonomyTerm.findMany({
+    where: {
+      OR: uniqueNames.map((name) => ({
+        label: {
+          equals: name,
+          mode: "insensitive",
+        },
+      })),
+    },
     select: { id: true, label: true },
   });
 
@@ -61,8 +71,6 @@ export async function syncJobSkills(
 
   for (const skill of cleaned) {
     const key = norm(skill.name);
-    if (!uniqueNames.includes(key)) continue;
-
     const termId = termMap.get(key);
     if (!termId) continue;
 
