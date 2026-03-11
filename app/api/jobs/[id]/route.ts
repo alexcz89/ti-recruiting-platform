@@ -1,6 +1,7 @@
 // app/api/jobs/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
+import { syncJobSkills } from "@/lib/server/syncJobSkills";
 import { getSessionOrThrow, getSessionCompanyId } from '@/lib/server/session';
 import { EmploymentType, JobStatus, EducationLevel, LocationType } from "@prisma/client";
 
@@ -213,7 +214,7 @@ export async function PATCH(
     const educationJson = getJson(fd, "educationJson");
     const minDegree =
       (getStr(fd, "minDegree") as EducationLevel) || null;
-    const skillsJson = getJson(fd, "skillsJson");
+    const skillsJson = getJson<Array<{ name?: string; required?: boolean; weight?: number }>>(fd, "skillsJson");
     const certsJson = getJson(fd, "certsJson");
 
     // Lista plana para búsquedas
@@ -272,6 +273,8 @@ export async function PATCH(
       },
       select: { id: true },
     });
+
+    await syncJobSkills(prisma, params.id, skillsJson);
 
     // -------------------------
     // Autoguardar plantilla

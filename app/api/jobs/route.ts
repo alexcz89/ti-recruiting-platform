@@ -1,6 +1,7 @@
 // app/api/jobs/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
+import { syncJobSkills } from "@/lib/server/syncJobSkills";
 import { getSessionCompanyId, getSessionOrThrow } from '@/lib/server/session';
 import { PLANS, type PlanId } from "@/config/plans";
 import {
@@ -519,6 +520,8 @@ export async function POST(req: NextRequest) {
       },
       select: { id: true },
     });
+
+    await syncJobSkills(prisma, job.id, skillsJson);
 
     /* -------------------------------------------------
        Guardar plantilla (JobTemplate)
