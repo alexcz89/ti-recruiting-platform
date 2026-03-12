@@ -182,6 +182,43 @@ const sanitizeFilename = (raw: string) =>
     .replace(/\s+/g, " ")
     .trim() || "candidato";
 
+
+const isFilled = (v?: string | null) => typeof v === "string" && v.trim().length > 0;
+
+const mergeIdentityWithDraft = (base: CvIdentity, draft?: Partial<CvIdentity> | null): CvIdentity => ({
+  ...base,
+  firstName: isFilled(draft?.firstName) ? draft!.firstName!.trim() : base.firstName,
+  lastName1: isFilled(draft?.lastName1) ? draft!.lastName1!.trim() : base.lastName1,
+  lastName2: isFilled(draft?.lastName2) ? draft!.lastName2!.trim() : base.lastName2,
+  email: isFilled(draft?.email) ? draft!.email!.trim() : base.email,
+  phone: isFilled(draft?.phone) ? draft!.phone!.trim() : base.phone,
+  location: isFilled(draft?.location) ? draft!.location!.trim() : base.location,
+  linkedin: isFilled(draft?.linkedin) ? draft!.linkedin!.trim() : base.linkedin,
+  github: isFilled(draft?.github) ? draft!.github!.trim() : base.github,
+  birthdate: isFilled(draft?.birthdate) ? draft!.birthdate!.trim() : (base.birthdate || ""),
+  role: isFilled(draft?.role) ? draft!.role!.trim() : base.role,
+});
+
+const normalizeDraftExperiences = (items: any[]): CvExperience[] =>
+  items.map((e: any) => {
+    const description =
+      e?.description ?? e?.bulletsText ?? (Array.isArray(e?.bullets) ? e.bullets.join("\n") : "") ?? "";
+    return {
+      ...e,
+      city: e?.city || "",
+      description,
+      bulletsText: e?.bulletsText || description || (Array.isArray(e?.bullets) ? e.bullets.join("\n") : ""),
+      descriptionHtml: e?.descriptionHtml || "",
+    };
+  });
+
+const normalizeDraftEducation = (items: any[]): CvEducation[] =>
+  items.map((e: any) => ({
+    ...e,
+    isCurrent: !!e?.isCurrent,
+    endDate: e?.isCurrent ? null : e?.endDate ?? "",
+  }));
+
 const groupSkills = (skills: CvSkill[]) => {
   // Convertir arrays readonly a arrays normales para búsqueda
   const lenguajes = [...PROGRAMMING_LANGUAGES];
@@ -490,26 +527,30 @@ export default function CvBuilder({
       const raw = localStorage.getItem(draftKey);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.identity) setIdentity((p) => ({ ...p, ...parsed.identity }));
-        if (Array.isArray(parsed.experiences))
-          setExperiences(
-            parsed.experiences.map((e: any) => ({
-              ...e,
-              city: e.city || "",
-            }))
-          );
-        if (Array.isArray(parsed.education))
-          setEducation(
-            parsed.education.map((e: any) => ({
-              ...e,
-              isCurrent: !!e.isCurrent,
-              endDate: e.isCurrent ? null : e.endDate ?? "",
-            }))
-          );
-        if (Array.isArray(parsed.skills)) setSkills(parsed.skills);
-        if (Array.isArray(parsed.languages)) setLanguages(parsed.languages);
-        if (Array.isArray(parsed.certifications))
+
+        if (parsed?.identity) {
+          setIdentity((current) => mergeIdentityWithDraft(current, parsed.identity));
+        }
+
+        if (Array.isArray(parsed?.experiences) && parsed.experiences.length > 0) {
+          setExperiences(normalizeDraftExperiences(parsed.experiences));
+        }
+
+        if (Array.isArray(parsed?.education) && parsed.education.length > 0) {
+          setEducation(normalizeDraftEducation(parsed.education));
+        }
+
+        if (Array.isArray(parsed?.skills) && parsed.skills.length > 0) {
+          setSkills(parsed.skills);
+        }
+
+        if (Array.isArray(parsed?.languages) && parsed.languages.length > 0) {
+          setLanguages(parsed.languages);
+        }
+
+        if (Array.isArray(parsed?.certifications) && parsed.certifications.length > 0) {
           setCertifications(parsed.certifications);
+        }
       }
       loadedDraftKeyRef.current = draftKey;
     } catch {
