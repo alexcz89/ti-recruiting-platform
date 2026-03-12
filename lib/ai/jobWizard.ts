@@ -39,7 +39,7 @@ const JobWizardOutputSchema = z.object({
 export type JobWizardAIOutput = z.infer<typeof JobWizardOutputSchema>;
 
 export type JobWizardAIInput = {
-  mode?: "generate-all" | "improve-description";
+  mode?: "generate-all" | "improve-description" | "extract-structure";
   title: string;
   companyMode?: "own" | "confidential";
   locationType?: "REMOTE" | "HYBRID" | "ONSITE";
@@ -201,9 +201,11 @@ function buildPrompt(input: JobWizardAIInput) {
   const objective =
     mode === "improve-description"
       ? "Mejorar, reestructurar y profesionalizar la descripción actual sin cambiar innecesariamente la intención del reclutador."
-      : hasExistingDescription
-        ? "Mejorar y estructurar el contenido base del reclutador, complementándolo solo cuando haga sentido."
-        : "Generar un primer borrador útil a partir del título y del contexto disponible.";
+      : mode === "extract-structure"
+        ? "Analizar la descripción actual y convertirla en estructura útil para el ATS, sin reescribir ni expandir innecesariamente el texto."
+        : hasExistingDescription
+          ? "Mejorar y estructurar el contenido base del reclutador, complementándolo solo cuando haga sentido."
+          : "Generar un primer borrador útil a partir del título y del contexto disponible.";
 
   const modeRules =
     mode === "improve-description"
@@ -216,7 +218,19 @@ Reglas adicionales para este modo:
 - No inventes tecnologías, beneficios o requisitos nuevos si no están respaldados por el contexto.
 - Mantén requiredSkills, niceSkills, eduRequired, eduNice, certs y languages estables, salvo ajustes mínimos y obvios de consistencia.
 `
-      : `
+      : mode === "extract-structure"
+        ? `
+Reglas adicionales para este modo:
+- No reescribas ni expandas la descripción.
+- Conserva "descriptionPlain" esencialmente igual al texto actual, salvo limpieza mínima.
+- Extrae requiredSkills y niceSkills a partir de la descripción y del contexto.
+- Si una skill parece claramente esencial para ejecutar el rol, colócala en requiredSkills.
+- Si una skill parece complementaria, opcional o deseable, colócala en niceSkills.
+- Extrae educación, idiomas y certificaciones solo si aparecen o se infieren claramente.
+- No inventes tecnologías no mencionadas ni no inferibles claramente.
+- Si no hay suficiente evidencia para una categoría, devuelve array vacío en esa categoría.
+`
+        : `
 Reglas adicionales para este modo:
 - Puedes proponer un borrador integral de descripción, skills, educación, certificaciones e idiomas.
 - Si ya existe contenido útil, úsalo como base.
@@ -225,7 +239,7 @@ Reglas adicionales para este modo:
   return `
 Eres un recruiter técnico senior en México, especializado en vacantes de TI.
 
-Tu tarea es ayudar a redactar una vacante profesional, clara y útil para filtrar talento real.
+Tu tarea es ayudar a redactar o estructurar una vacante profesional, clara y útil para filtrar talento real.
 Debes devolver ÚNICAMENTE JSON válido, sin texto adicional.
 
 Formato exacto:
@@ -271,7 +285,7 @@ Reglas:
 - No digas "prestaciones superiores a la ley" a menos que se indique explícitamente.
 - Si ya existe contenido útil, mejóralo, organízalo y complétalo sin contradecirlo absurdamente.
 - Si el reclutador ya escribió una base del job description, reescríbela en mejor formato, pero conserva su intención.
-- Mantén la descripción entre 120 y 300 palabras aproximadamente.
+- Mantén la descripción entre 120 y 300 palabras aproximadamente, excepto cuando el modo sea extracción de estructura.
 - No repitas skills en requiredSkills y niceSkills.
 - La descripción debe seguir esta estructura cuando sea posible: contexto del rol, responsabilidades, requisitos, condiciones o prestaciones.
 ${modeRules}

@@ -24,7 +24,7 @@ type Props = {
   onTabChange?: (tab: Step5Tab) => void;
 };
 
-type AiMode = "generate-all" | "improve-description";
+type AiMode = "generate-all" | "improve-description" | "extract-structure";
 
 function plainToBasicHtml(plain: string): string {
   const escape = (s: string) =>
@@ -98,6 +98,7 @@ export default function Step5Details({
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
+  const [isExtractingStructure, setIsExtractingStructure] = useState(false);
 
   const educationDropdownRef = useRef<HTMLDivElement | null>(null);
   const skillsDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -533,6 +534,66 @@ export default function Step5Details({
     }
   }
 
+  async function handleExtractStructureWithAi() {
+    if (!title?.trim() || title.trim().length < 3) {
+      toastError("Primero captura un título válido para la vacante.");
+      return;
+    }
+
+    if (!descriptionPlain.trim()) {
+      toastError("Primero escribe o genera una descripción para extraer estructura.");
+      return;
+    }
+
+    setIsExtractingStructure(true);
+
+    try {
+      const { draft } = await callAi("extract-structure");
+
+      setValue("minDegree", draft.minDegree ?? null, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue(
+        "requiredSkills",
+        Array.isArray(draft.requiredSkills) ? draft.requiredSkills : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
+      setValue(
+        "niceSkills",
+        Array.isArray(draft.niceSkills) ? draft.niceSkills : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
+      setValue(
+        "eduRequired",
+        Array.isArray(draft.eduRequired) ? draft.eduRequired : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
+      setValue(
+        "eduNice",
+        Array.isArray(draft.eduNice) ? draft.eduNice : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
+      setValue("certs", Array.isArray(draft.certs) ? draft.certs : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("languages", Array.isArray(draft.languages) ? draft.languages : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
+      changeTab("skills");
+      toastSuccess("Skills y requisitos extraídos con AI");
+    } catch (err: any) {
+      toastError(
+        err?.message || "Ocurrió un error al extraer skills y requisitos con AI."
+      );
+    } finally {
+      setIsExtractingStructure(false);
+    }
+  }
+
   const tabItems = [
     { k: "desc" as Step5Tab, lbl: "Descripción", done: descLength > 0 },
     {
@@ -549,39 +610,39 @@ export default function Step5Details({
   ];
 
   return (
-    <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm md:space-y-6 md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/10">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-            <Sparkles className="h-4 w-4" />
-            Asistente AI para redactar la vacante
+            <Sparkles className="h-4 w-4 shrink-0" />
+            <span>Asistente AI para redactar la vacante</span>
           </div>
-          <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80">
+          <p className="text-xs leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
             Genera o mejora la descripción usando el título, el contexto capturado y
             la base escrita por el reclutador.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <button
             type="button"
             onClick={handleGenerateWithAi}
-            disabled={isGeneratingAi || isImprovingDescription}
+            disabled={isGeneratingAi || isImprovingDescription || isExtractingStructure}
             className={clsx(
-              "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition",
-              isGeneratingAi || isImprovingDescription
+              "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition",
+              isGeneratingAi || isImprovingDescription || isExtractingStructure
                 ? "cursor-not-allowed bg-emerald-300 text-white"
                 : "bg-emerald-600 text-white hover:bg-emerald-500"
             )}
           >
             {isGeneratingAi ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                 Generando...
               </>
             ) : (
               <>
-                <Sparkles className="h-4 w-4" />
+                <Sparkles className="h-4 w-4 shrink-0" />
                 Generar con AI
               </>
             )}
@@ -590,10 +651,15 @@ export default function Step5Details({
           <button
             type="button"
             onClick={handleImproveDescriptionWithAi}
-            disabled={isGeneratingAi || isImprovingDescription || !descriptionPlain.trim()}
+            disabled={
+              isGeneratingAi ||
+              isImprovingDescription ||
+              isExtractingStructure ||
+              !descriptionPlain.trim()
+            }
             className={clsx(
-              "inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition",
-              isGeneratingAi || isImprovingDescription
+              "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-center text-sm font-semibold transition",
+              isGeneratingAi || isImprovingDescription || isExtractingStructure
                 ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
                 : !descriptionPlain.trim()
                   ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
@@ -602,13 +668,44 @@ export default function Step5Details({
           >
             {isImprovingDescription ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
                 Mejorando...
               </>
             ) : (
               <>
-                <Wand2 className="h-4 w-4" />
+                <Wand2 className="h-4 w-4 shrink-0" />
                 Mejorar descripción
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExtractStructureWithAi}
+            disabled={
+              isGeneratingAi ||
+              isImprovingDescription ||
+              isExtractingStructure ||
+              !descriptionPlain.trim()
+            }
+            className={clsx(
+              "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-center text-sm font-semibold transition sm:col-span-2 xl:col-span-1",
+              isGeneratingAi || isImprovingDescription || isExtractingStructure
+                ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
+                : !descriptionPlain.trim()
+                  ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
+                  : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/20"
+            )}
+          >
+            {isExtractingStructure ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                Extrayendo...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4 shrink-0" />
+                Extraer skills y requisitos
               </>
             )}
           </button>
@@ -618,7 +715,7 @@ export default function Step5Details({
       <div
         role="tablist"
         aria-label="Detalles de la vacante"
-        className="flex flex-wrap items-center gap-1 rounded-xl border border-zinc-200 bg-zinc-50/70 p-1 dark:border-zinc-800 dark:bg-zinc-900/60"
+        className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto rounded-xl border border-zinc-200 bg-zinc-50/70 p-1 scrollbar-none md:mx-0 md:flex-wrap md:overflow-visible dark:border-zinc-800 dark:bg-zinc-900/60"
       >
         {tabItems.map((t) => (
           <button
@@ -627,23 +724,24 @@ export default function Step5Details({
             role="tab"
             aria-selected={tab === t.k}
             className={clsx(
-              "flex min-h-9 items-center gap-2 rounded-lg px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50",
+              "flex min-h-10 shrink-0 snap-start items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 md:min-h-9 md:justify-start",
+              "min-w-[132px] md:min-w-0",
               tab === t.k
                 ? "bg-emerald-600 text-white shadow-sm"
                 : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
             )}
             onClick={() => changeTab(t.k)}
           >
-            <span>{t.lbl}</span>
+            <span className="whitespace-nowrap">{t.lbl}</span>
             {t.done ? (
               <CheckCircle2
                 className={clsx(
-                  "h-3.5 w-3.5",
+                  "h-3.5 w-3.5 shrink-0",
                   tab === t.k ? "text-white/90" : "text-emerald-500"
                 )}
               />
             ) : (
-              <span className="h-1.5 w-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600" />
             )}
           </button>
         ))}
@@ -663,7 +761,7 @@ export default function Step5Details({
               const isEmpty = !value || !value.trim();
 
               return (
-                <div className="relative [&_.job-editor+div]:hidden [&_.job-editor]:min-h-[260px] [&_.job-editor~div]:hidden md:[&_.job-editor]:min-h-[320px]">
+                <div className="relative [&_.job-editor+div]:hidden [&_.job-editor]:min-h-[220px] [&_.job-editor~div]:hidden md:[&_.job-editor]:min-h-[320px]">
                   <JobRichTextEditor
                     valueHtml={value || ""}
                     onChangeHtml={(html, plain) => {
@@ -676,7 +774,7 @@ export default function Step5Details({
                     }}
                   />
                   {isEmpty && (
-                    <div className="pointer-events-none absolute left-4 right-4 top-12 whitespace-pre-line text-xs text-zinc-400 dark:text-zinc-500">
+                    <div className="pointer-events-none absolute left-3 right-3 top-12 whitespace-pre-line text-xs leading-relaxed text-zinc-400 dark:text-zinc-500 md:left-4 md:right-4">
                       Ejemplo:{"\n"}- Responsabilidades principales{"\n"}- Requisitos clave y
                       tecnologías{"\n"}- Beneficios y cultura del equipo
                     </div>
@@ -688,7 +786,7 @@ export default function Step5Details({
 
           <div
             className={clsx(
-              "text-xs",
+              "text-xs leading-relaxed",
               canNext ? "text-emerald-600" : "text-red-500"
             )}
           >
@@ -710,7 +808,7 @@ export default function Step5Details({
 
             <div ref={skillsDropdownRef} className="relative">
               <input
-                className="w-full rounded-md border border-zinc-300 bg-white p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 md:p-4 dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-md border border-zinc-300 bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 md:p-4 dark:border-zinc-700 dark:bg-zinc-900"
                 placeholder="Busca (ej. Python, AWS, React Native...) y presiona Enter"
                 value={skillQuery}
                 onChange={(e) => {
@@ -787,7 +885,7 @@ export default function Step5Details({
               )}
             </div>
 
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid gap-4 sm:gap-6 sm:grid-cols-2">
               <SkillBin
                 title="Obligatoria"
                 items={requiredSkills}
@@ -830,7 +928,7 @@ export default function Step5Details({
 
             <div className="relative">
               <input
-                className="w-full rounded-md border border-zinc-300 bg-white p-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 md:p-4 dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-md border border-zinc-300 bg-white p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 md:p-4 dark:border-zinc-700 dark:bg-zinc-900"
                 placeholder="Busca y selecciona (ej. AWS SAA, CCNA...)"
                 value={certQuery}
                 onChange={(e) => setCertQuery(e.target.value)}
@@ -867,12 +965,12 @@ export default function Step5Details({
                 {certs.map((c) => (
                   <span
                     key={c}
-                    className="group inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100"
+                    className="group inline-flex max-w-full items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100"
                   >
-                    {c}
+                    <span className="truncate">{c}</span>
                     <button
                       type="button"
-                      className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full text-emerald-700/60 opacity-60 group-hover:opacity-100"
+                      className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-emerald-700/60 opacity-60 group-hover:opacity-100"
                       onClick={() =>
                         setValue(
                           "certs",
@@ -959,11 +1057,11 @@ export default function Step5Details({
 
       {tab === "edu" && (
         <div className="grid animate-fade-in-up gap-6">
-          <div className="grid min-w-0 gap-6 md:grid-cols-2">
+          <div className="grid min-w-0 gap-4 md:gap-6 md:grid-cols-2">
             <div className="grid min-w-0 gap-2">
               <label className="text-sm font-medium">Nivel mínimo</label>
               <select
-                className="h-10 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
+                className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
                 {...register("minDegree")}
               >
                 <option value="">Sin especificar</option>
@@ -975,7 +1073,7 @@ export default function Step5Details({
               </select>
 
               {!watch("minDegree") && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
+                <p className="text-xs leading-relaxed text-amber-600 dark:text-amber-400">
                   No es obligatorio, pero especificar un nivel mínimo ayuda a
                   filtrar mejor candidatos.
                 </p>
@@ -1036,7 +1134,7 @@ export default function Step5Details({
             </div>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-4 sm:gap-6 sm:grid-cols-2">
             <SkillBin
               title="Obligatoria"
               items={eduRequired}
@@ -1079,7 +1177,7 @@ export default function Step5Details({
         </div>
       )}
 
-      <div className="mt-6 flex flex-col gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:justify-between dark:border-zinc-800">
+      <div className="mt-6 flex flex-col-reverse gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:justify-between dark:border-zinc-800">
         <button
           type="button"
           className="w-full rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
