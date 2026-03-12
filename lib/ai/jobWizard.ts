@@ -39,6 +39,7 @@ const JobWizardOutputSchema = z.object({
 export type JobWizardAIOutput = z.infer<typeof JobWizardOutputSchema>;
 
 export type JobWizardAIInput = {
+  mode?: "generate-all" | "improve-description";
   title: string;
   companyMode?: "own" | "confidential";
   locationType?: "REMOTE" | "HYBRID" | "ONSITE";
@@ -160,14 +161,18 @@ function plainToBasicHtml(plain: string): string {
 }
 
 function buildPrompt(input: JobWizardAIInput) {
+  const mode = input.mode ?? "generate-all";
+
   const benefitsBlock =
     input.benefits && input.benefits.length
       ? input.benefits.map((b) => `- ${b}`).join("\n")
       : "No especificadas";
 
+  const hasExistingDescription = !!input.currentDescriptionPlain?.trim();
+
   const existingBlock = [
     input.currentDescriptionPlain?.trim()
-      ? `Descripción actual:\n${input.currentDescriptionPlain.trim()}`
+      ? `Descripción base escrita por el reclutador:\n${input.currentDescriptionPlain.trim()}`
       : null,
     input.currentRequiredSkills?.length
       ? `Skills obligatorias actuales: ${input.currentRequiredSkills.join(", ")}`
@@ -193,10 +198,34 @@ function buildPrompt(input: JobWizardAIInput) {
     .filter(Boolean)
     .join("\n");
 
+  const objective =
+    mode === "improve-description"
+      ? "Mejorar, reestructurar y profesionalizar la descripción actual sin cambiar innecesariamente la intención del reclutador."
+      : hasExistingDescription
+        ? "Mejorar y estructurar el contenido base del reclutador, complementándolo solo cuando haga sentido."
+        : "Generar un primer borrador útil a partir del título y del contexto disponible.";
+
+  const modeRules =
+    mode === "improve-description"
+      ? `
+Reglas adicionales para este modo:
+- Enfócate principalmente en "descriptionPlain".
+- Reescribe la descripción para que sea más clara, profesional y publicable.
+- Conserva la intención del texto base del reclutador.
+- No cambies radicalmente el perfil buscado.
+- No inventes tecnologías, beneficios o requisitos nuevos si no están respaldados por el contexto.
+- Mantén requiredSkills, niceSkills, eduRequired, eduNice, certs y languages estables, salvo ajustes mínimos y obvios de consistencia.
+`
+      : `
+Reglas adicionales para este modo:
+- Puedes proponer un borrador integral de descripción, skills, educación, certificaciones e idiomas.
+- Si ya existe contenido útil, úsalo como base.
+`;
+
   return `
 Eres un recruiter técnico senior en México, especializado en vacantes de TI.
 
-Tu tarea es ayudar a redactar una vacante profesional y útil para filtrar talento.
+Tu tarea es ayudar a redactar una vacante profesional, clara y útil para filtrar talento real.
 Debes devolver ÚNICAMENTE JSON válido, sin texto adicional.
 
 Formato exacto:
@@ -213,24 +242,42 @@ Formato exacto:
   ]
 }
 
+Prioridad de fuentes:
+1) Si existe contenido base escrito por el reclutador, úsalo como fuente principal.
+2) Usa el título y demás campos del formulario solo para complementar, ordenar y enriquecer.
+3) Si el contenido escrito por el reclutador entra en conflicto con el título, prioriza el contenido escrito por el reclutador.
+4) No reemplaces arbitrariamente la intención del reclutador por una interpretación genérica del título.
+
 Reglas:
 - Responde en español.
-- No inventes tecnologías extremadamente específicas si no se pueden inferir del puesto.
+- No inventes tecnologías extremadamente específicas si no se pueden inferir del puesto o del contenido base.
 - Prioriza claridad y utilidad para reclutamiento real.
-- "descriptionPlain" debe incluir:
+- "descriptionPlain" debe incluir, cuando aplique:
   1) breve contexto del rol,
   2) responsabilidades,
   3) requisitos,
-  4) beneficios o condiciones si aplica.
+  4) beneficios o condiciones.
 - Usa saltos de línea y bullets simples con "- " cuando ayude.
 - Separa skills obligatorias vs deseables de forma realista.
-- No agregues certificaciones o idiomas a menos que tengan sentido.
+- No agregues certificaciones o idiomas a menos que tengan sentido claro.
 - Evita duplicados.
 - No exageres seniority ni requisitos.
-- Para vacantes generales de TI en México, "Inglés" puede ser deseable solo si hace sentido.
-- Si no hay base para estudios muy específicos, usa una combinación razonable.
+- Si no hay base para estudios muy específicos, usa una sugerencia razonable.
 - Si el rol es técnico profesional, normalmente "BACHELOR" es una sugerencia razonable.
-- Si ya existe contenido útil, mejóralo sin contradecirlo absurdamente.
+- No inventes salario, horario, esquema de trabajo ni beneficios adicionales.
+- Usa únicamente la información proporcionada.
+- Si existen prestaciones capturadas, menciónalas de forma precisa.
+- Si solo existen prestaciones base o legales, puedes referirte a ellas como "prestaciones de ley".
+- No digas "prestaciones superiores a la ley" a menos que se indique explícitamente.
+- Si ya existe contenido útil, mejóralo, organízalo y complétalo sin contradecirlo absurdamente.
+- Si el reclutador ya escribió una base del job description, reescríbela en mejor formato, pero conserva su intención.
+- Mantén la descripción entre 120 y 300 palabras aproximadamente.
+- No repitas skills en requiredSkills y niceSkills.
+- La descripción debe seguir esta estructura cuando sea posible: contexto del rol, responsabilidades, requisitos, condiciones o prestaciones.
+${modeRules}
+
+Objetivo:
+${objective}
 
 Contexto de la vacante:
 Título: ${input.title}
@@ -255,35 +302,56 @@ ${existingBlock || "Sin contenido previo"}
 
 function fallbackOutput(input: JobWizardAIInput): JobWizardAIOutput {
   const title = String(input.title || "").trim() || "Especialista de TI";
+  const mode = input.mode ?? "generate-all";
 
-  const descriptionPlain = [
-    `Buscamos un perfil para la posición de ${title}.`,
-    "",
-    "Responsabilidades:",
-    "- Ejecutar las funciones clave del puesto.",
-    "- Colaborar con el equipo y áreas relacionadas.",
-    "- Dar seguimiento a entregables, incidencias o mejoras según el rol.",
-    "",
-    "Requisitos:",
-    "- Experiencia previa en un rol similar.",
-    "- Conocimientos técnicos acordes a la vacante.",
-    "- Capacidad para trabajar en equipo y comunicar avances.",
-    "",
-    input.benefits?.length ? "Prestaciones / condiciones:" : "",
-    ...(input.benefits?.length ? input.benefits.map((b) => `- ${b}`) : []),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const descriptionPlain = input.currentDescriptionPlain?.trim()
+    ? input.currentDescriptionPlain.trim()
+    : [
+        `Buscamos un perfil para la posición de ${title}.`,
+        "",
+        "Responsabilidades:",
+        "- Ejecutar las funciones clave del puesto.",
+        "- Colaborar con el equipo y áreas relacionadas.",
+        "- Dar seguimiento a entregables, incidencias o mejoras según el rol.",
+        "",
+        "Requisitos:",
+        "- Experiencia previa en un rol similar.",
+        "- Conocimientos técnicos acordes a la vacante.",
+        "- Capacidad para trabajar en equipo y comunicar avances.",
+        "",
+        input.benefits?.length ? "Prestaciones / condiciones:" : "",
+        ...(input.benefits?.length ? input.benefits.map((b) => `- ${b}`) : []),
+      ]
+        .filter(Boolean)
+        .join("\n");
 
   return {
     descriptionPlain,
     minDegree: "BACHELOR",
-    requiredSkills: uniqClean(input.currentRequiredSkills, 8),
-    niceSkills: uniqClean(input.currentNiceSkills, 8),
-    eduRequired: uniqClean(input.currentEduRequired, 5),
-    eduNice: uniqClean(input.currentEduNice, 5),
-    certs: uniqClean(input.currentCerts, 5),
-    languages: uniqLanguages(input.currentLanguages, 5),
+    requiredSkills:
+      mode === "improve-description"
+        ? uniqClean(input.currentRequiredSkills, 8)
+        : uniqClean(input.currentRequiredSkills, 8),
+    niceSkills:
+      mode === "improve-description"
+        ? uniqClean(input.currentNiceSkills, 8)
+        : uniqClean(input.currentNiceSkills, 8),
+    eduRequired:
+      mode === "improve-description"
+        ? uniqClean(input.currentEduRequired, 5)
+        : uniqClean(input.currentEduRequired, 5),
+    eduNice:
+      mode === "improve-description"
+        ? uniqClean(input.currentEduNice, 5)
+        : uniqClean(input.currentEduNice, 5),
+    certs:
+      mode === "improve-description"
+        ? uniqClean(input.currentCerts, 5)
+        : uniqClean(input.currentCerts, 5),
+    languages:
+      mode === "improve-description"
+        ? uniqLanguages(input.currentLanguages, 5)
+        : uniqLanguages(input.currentLanguages, 5),
   };
 }
 

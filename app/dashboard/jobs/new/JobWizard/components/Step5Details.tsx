@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Controller, useFormContext, useFieldArray } from "react-hook-form";
-import { X, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
+import { X, CheckCircle2, Sparkles, Loader2, Wand2 } from "lucide-react";
 import clsx from "clsx";
 import { JobForm } from "../types";
 import { BENEFITS, EDUCATION_SUGGESTIONS } from "../constants";
@@ -23,6 +23,8 @@ type Props = {
   activeTab?: Step5Tab;
   onTabChange?: (tab: Step5Tab) => void;
 };
+
+type AiMode = "generate-all" | "improve-description";
 
 function plainToBasicHtml(plain: string): string {
   const escape = (s: string) =>
@@ -95,6 +97,7 @@ export default function Step5Details({
   const [isEducationOpen, setIsEducationOpen] = useState(false);
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [isImprovingDescription, setIsImprovingDescription] = useState(false);
 
   const educationDropdownRef = useRef<HTMLDivElement | null>(null);
   const skillsDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -369,6 +372,82 @@ export default function Step5Details({
     );
   }
 
+  function buildAiPayload(mode: AiMode) {
+    const activeBenefits = Object.entries(benefits || {})
+      .filter(([, enabled]) => enabled)
+      .map(([key]) => {
+        if (key === "aguinaldo") return `Aguinaldo (${aguinaldoDias} días)`;
+        if (key === "vacaciones") return `Vacaciones (${vacacionesDias} días)`;
+        if (key === "primaVac") return `Prima vacacional (${primaVacPct}%)`;
+        return BENEFITS.find((b) => b.key === key)?.label ?? key;
+      });
+
+    return {
+      mode,
+      title,
+      companyMode,
+      locationType,
+      city,
+      country,
+      currency,
+      salaryMin:
+        typeof salaryMin === "number"
+          ? salaryMin
+          : typeof salaryMin === "string"
+            ? Number(salaryMin) || null
+            : null,
+      salaryMax:
+        typeof salaryMax === "number"
+          ? salaryMax
+          : typeof salaryMax === "string"
+            ? Number(salaryMax) || null
+            : null,
+      employmentType,
+      schedule,
+      benefits: activeBenefits,
+      assessmentSelected: !!assessmentTemplateId,
+      currentDescriptionPlain: descriptionPlain,
+      currentRequiredSkills: requiredSkills,
+      currentNiceSkills: niceSkills,
+      currentEduRequired: eduRequired,
+      currentEduNice: eduNice,
+      currentCerts: certs,
+      currentLanguages: languages,
+      currentMinDegree: minDegree,
+    };
+  }
+
+  async function callAi(mode: AiMode) {
+    const res = await fetch("/api/ai/job-wizard/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildAiPayload(mode)),
+    });
+
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok) {
+      throw new Error(data?.error || "No se pudo generar contenido con AI.");
+    }
+
+    const draft = data?.draft;
+    if (!draft) {
+      throw new Error("La respuesta de AI llegó vacía.");
+    }
+
+    const html =
+      typeof draft.descriptionHtml === "string" && draft.descriptionHtml.trim()
+        ? sanitizeHtml(draft.descriptionHtml)
+        : sanitizeHtml(plainToBasicHtml(draft.descriptionPlain || ""));
+
+    const plain =
+      typeof draft.descriptionPlain === "string" && draft.descriptionPlain.trim()
+        ? draft.descriptionPlain.trim()
+        : htmlToPlain(html);
+
+    return { draft, html, plain };
+  }
+
   async function handleGenerateWithAi() {
     if (!title?.trim() || title.trim().length < 3) {
       toastError("Primero captura un título válido para la vacante.");
@@ -378,72 +457,7 @@ export default function Step5Details({
     setIsGeneratingAi(true);
 
     try {
-      const activeBenefits = Object.entries(benefits || {})
-        .filter(([, enabled]) => enabled)
-        .map(([key]) => {
-          if (key === "aguinaldo") return `Aguinaldo (${aguinaldoDias} días)`;
-          if (key === "vacaciones") return `Vacaciones (${vacacionesDias} días)`;
-          if (key === "primaVac") return `Prima vacacional (${primaVacPct}%)`;
-          return BENEFITS.find((b) => b.key === key)?.label ?? key;
-        });
-
-      const res = await fetch("/api/ai/job-wizard/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title,
-          companyMode,
-          locationType,
-          city,
-          country,
-          currency,
-          salaryMin:
-            typeof salaryMin === "number"
-              ? salaryMin
-              : typeof salaryMin === "string"
-                ? Number(salaryMin) || null
-                : null,
-          salaryMax:
-            typeof salaryMax === "number"
-              ? salaryMax
-              : typeof salaryMax === "string"
-                ? Number(salaryMax) || null
-                : null,
-          employmentType,
-          schedule,
-          benefits: activeBenefits,
-          assessmentSelected: !!assessmentTemplateId,
-          currentDescriptionPlain: descriptionPlain,
-          currentRequiredSkills: requiredSkills,
-          currentNiceSkills: niceSkills,
-          currentEduRequired: eduRequired,
-          currentEduNice: eduNice,
-          currentCerts: certs,
-          currentLanguages: languages,
-          currentMinDegree: minDegree,
-        }),
-      });
-
-      const data = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(data?.error || "No se pudo generar contenido con AI.");
-      }
-
-      const draft = data?.draft;
-      if (!draft) {
-        throw new Error("La respuesta de AI llegó vacía.");
-      }
-
-      const html =
-        typeof draft.descriptionHtml === "string" && draft.descriptionHtml.trim()
-          ? sanitizeHtml(draft.descriptionHtml)
-          : sanitizeHtml(plainToBasicHtml(draft.descriptionPlain || ""));
-
-      const plain =
-        typeof draft.descriptionPlain === "string" && draft.descriptionPlain.trim()
-          ? draft.descriptionPlain.trim()
-          : htmlToPlain(html);
+      const { draft, html, plain } = await callAi("generate-all");
 
       setValue("descriptionHtml", html, { shouldDirty: true, shouldValidate: true });
       setValue("descriptionPlain", plain, { shouldDirty: true, shouldValidate: true });
@@ -451,22 +465,26 @@ export default function Step5Details({
         shouldDirty: true,
         shouldValidate: true,
       });
-      setValue("requiredSkills", Array.isArray(draft.requiredSkills) ? draft.requiredSkills : [], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-      setValue("niceSkills", Array.isArray(draft.niceSkills) ? draft.niceSkills : [], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-      setValue("eduRequired", Array.isArray(draft.eduRequired) ? draft.eduRequired : [], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-      setValue("eduNice", Array.isArray(draft.eduNice) ? draft.eduNice : [], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
+      setValue(
+        "requiredSkills",
+        Array.isArray(draft.requiredSkills) ? draft.requiredSkills : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
+      setValue(
+        "niceSkills",
+        Array.isArray(draft.niceSkills) ? draft.niceSkills : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
+      setValue(
+        "eduRequired",
+        Array.isArray(draft.eduRequired) ? draft.eduRequired : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
+      setValue(
+        "eduNice",
+        Array.isArray(draft.eduNice) ? draft.eduNice : [],
+        { shouldDirty: true, shouldValidate: true }
+      );
       setValue("certs", Array.isArray(draft.certs) ? draft.certs : [], {
         shouldDirty: true,
         shouldValidate: true,
@@ -482,6 +500,36 @@ export default function Step5Details({
       toastError(err?.message || "Ocurrió un error al generar contenido con AI.");
     } finally {
       setIsGeneratingAi(false);
+    }
+  }
+
+  async function handleImproveDescriptionWithAi() {
+    if (!title?.trim() || title.trim().length < 3) {
+      toastError("Primero captura un título válido para la vacante.");
+      return;
+    }
+
+    if (!descriptionPlain.trim()) {
+      toastError("Primero escribe una base de descripción para poder mejorarla.");
+      return;
+    }
+
+    setIsImprovingDescription(true);
+
+    try {
+      const { html, plain } = await callAi("improve-description");
+
+      setValue("descriptionHtml", html, { shouldDirty: true, shouldValidate: true });
+      setValue("descriptionPlain", plain, { shouldDirty: true, shouldValidate: true });
+
+      changeTab("desc");
+      toastSuccess("Descripción mejorada con AI");
+    } catch (err: any) {
+      toastError(
+        err?.message || "Ocurrió un error al mejorar la descripción con AI."
+      );
+    } finally {
+      setIsImprovingDescription(false);
     }
   }
 
@@ -502,41 +550,69 @@ export default function Step5Details({
 
   return (
     <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/10 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/10">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-200">
             <Sparkles className="h-4 w-4" />
             Asistente AI para redactar la vacante
           </div>
           <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80">
-            Genera descripción, skills, educación, certificaciones e idiomas a partir
-            del título y la información capturada.
+            Genera o mejora la descripción usando el título, el contexto capturado y
+            la base escrita por el reclutador.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handleGenerateWithAi}
-          disabled={isGeneratingAi}
-          className={clsx(
-            "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition",
-            isGeneratingAi
-              ? "cursor-not-allowed bg-emerald-300 text-white"
-              : "bg-emerald-600 text-white hover:bg-emerald-500"
-          )}
-        >
-          {isGeneratingAi ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Generando...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              Generar con AI
-            </>
-          )}
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={handleGenerateWithAi}
+            disabled={isGeneratingAi || isImprovingDescription}
+            className={clsx(
+              "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition",
+              isGeneratingAi || isImprovingDescription
+                ? "cursor-not-allowed bg-emerald-300 text-white"
+                : "bg-emerald-600 text-white hover:bg-emerald-500"
+            )}
+          >
+            {isGeneratingAi ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generando...
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                Generar con AI
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleImproveDescriptionWithAi}
+            disabled={isGeneratingAi || isImprovingDescription || !descriptionPlain.trim()}
+            className={clsx(
+              "inline-flex items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition",
+              isGeneratingAi || isImprovingDescription
+                ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
+                : !descriptionPlain.trim()
+                  ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
+                  : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/20"
+            )}
+          >
+            {isImprovingDescription ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Mejorando...
+              </>
+            ) : (
+              <>
+                <Wand2 className="h-4 w-4" />
+                Mejorar descripción
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div
