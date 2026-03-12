@@ -1,32 +1,84 @@
-// app/dashboard/jobs/new/JobWizard/components/Step5Details.tsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { Controller, useFormContext, useFieldArray } from "react-hook-form";
-import { X, CheckCircle2 } from "lucide-react";
+import { X, CheckCircle2, Sparkles, Loader2 } from "lucide-react";
 import clsx from "clsx";
 import { JobForm } from "../types";
-import { EDUCATION_SUGGESTIONS } from "../constants";
+import { BENEFITS, EDUCATION_SUGGESTIONS } from "../constants";
 import { sanitizeHtml, htmlToPlain } from "../utils/helpers";
 import { createStringFuse, searchStrings } from "@/lib/search/fuse";
 import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
 import JobRichTextEditor from "@/components/jobs/JobRichTextEditor";
 import SkillBin from "./SkillBin";
+import { toastError, toastSuccess } from "@/lib/ui/toast";
 
-type Tab = "desc" | "skills" | "langs" | "edu";
+export type Step5Tab = "desc" | "skills" | "langs" | "edu";
 
 type Props = {
   skillsOptions: string[];
   certOptions: string[];
   onNext: () => void;
   onBack: () => void;
+  activeTab?: Step5Tab;
+  onTabChange?: (tab: Step5Tab) => void;
 };
+
+function plainToBasicHtml(plain: string): string {
+  const escape = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  const lines = plain.replace(/\r\n/g, "\n").split("\n");
+  const paragraphs: string[][] = [];
+  let buffer: string[] = [];
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      if (buffer.length) {
+        paragraphs.push(buffer);
+        buffer = [];
+      }
+      continue;
+    }
+    buffer.push(line);
+  }
+
+  if (buffer.length) paragraphs.push(buffer);
+
+  const bulletPrefixes = ["- ", "* ", "• "];
+
+  return paragraphs
+    .map((paraLines) => {
+      const allBullets = paraLines.every((line) =>
+        bulletPrefixes.some((prefix) => line.startsWith(prefix))
+      );
+
+      if (allBullets) {
+        const items = paraLines
+          .map((line) => {
+            const prefix = bulletPrefixes.find((p) => line.startsWith(p)) || "";
+            return escape(line.slice(prefix.length).trim());
+          })
+          .filter(Boolean);
+
+        return items.length
+          ? `<ul>${items.map((item) => `<li>${item}</li>`).join("")}</ul>`
+          : "";
+      }
+
+      return `<p>${paraLines.map(escape).join("<br/>")}</p>`;
+    })
+    .filter(Boolean)
+    .join("");
+}
 
 export default function Step5Details({
   skillsOptions,
   certOptions,
   onNext,
   onBack,
+  activeTab = "desc",
+  onTabChange,
 }: Props) {
   const {
     watch,
@@ -36,13 +88,13 @@ export default function Step5Details({
     formState: { errors },
   } = useFormContext<JobForm>();
 
-  const [tab, setTab] = useState<Tab>("desc");
+  const [tab, setTab] = useState<Step5Tab>(activeTab);
   const [skillQuery, setSkillQuery] = useState("");
   const [certQuery, setCertQuery] = useState("");
   const [educationQuery, setEducationQuery] = useState("");
   const [isEducationOpen, setIsEducationOpen] = useState(false);
-
   const [highlightedSkillIndex, setHighlightedSkillIndex] = useState(0);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   const educationDropdownRef = useRef<HTMLDivElement | null>(null);
   const skillsDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -64,6 +116,33 @@ export default function Step5Details({
     ? descriptionPlain.trim().split(/\s+/).filter(Boolean).length
     : 0;
   const canNext = descLength >= 50;
+
+  const title = watch("title");
+  const companyMode = watch("companyMode");
+  const locationType = watch("locationType");
+  const city = watch("city");
+  const country = watch("country");
+  const currency = watch("currency");
+  const salaryMin = watch("salaryMin");
+  const salaryMax = watch("salaryMax");
+  const employmentType = watch("employmentType");
+  const schedule = watch("schedule");
+  const benefits = watch("benefits");
+  const aguinaldoDias = watch("aguinaldoDias");
+  const vacacionesDias = watch("vacacionesDias");
+  const primaVacPct = watch("primaVacPct");
+  const assessmentTemplateId = watch("assessmentTemplateId");
+  const languages = watch("languages");
+  const minDegree = watch("minDegree");
+
+  useEffect(() => {
+    setTab(activeTab);
+  }, [activeTab]);
+
+  function changeTab(next: Step5Tab) {
+    setTab(next);
+    onTabChange?.(next);
+  }
 
   const skillsFuse = useMemo(
     () => createStringFuse(skillsOptions || []),
@@ -290,16 +369,132 @@ export default function Step5Details({
     );
   }
 
+  async function handleGenerateWithAi() {
+    if (!title?.trim() || title.trim().length < 3) {
+      toastError("Primero captura un título válido para la vacante.");
+      return;
+    }
+
+    setIsGeneratingAi(true);
+
+    try {
+      const activeBenefits = Object.entries(benefits || {})
+        .filter(([, enabled]) => enabled)
+        .map(([key]) => {
+          if (key === "aguinaldo") return `Aguinaldo (${aguinaldoDias} días)`;
+          if (key === "vacaciones") return `Vacaciones (${vacacionesDias} días)`;
+          if (key === "primaVac") return `Prima vacacional (${primaVacPct}%)`;
+          return BENEFITS.find((b) => b.key === key)?.label ?? key;
+        });
+
+      const res = await fetch("/api/ai/job-wizard/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          companyMode,
+          locationType,
+          city,
+          country,
+          currency,
+          salaryMin:
+            typeof salaryMin === "number"
+              ? salaryMin
+              : typeof salaryMin === "string"
+                ? Number(salaryMin) || null
+                : null,
+          salaryMax:
+            typeof salaryMax === "number"
+              ? salaryMax
+              : typeof salaryMax === "string"
+                ? Number(salaryMax) || null
+                : null,
+          employmentType,
+          schedule,
+          benefits: activeBenefits,
+          assessmentSelected: !!assessmentTemplateId,
+          currentDescriptionPlain: descriptionPlain,
+          currentRequiredSkills: requiredSkills,
+          currentNiceSkills: niceSkills,
+          currentEduRequired: eduRequired,
+          currentEduNice: eduNice,
+          currentCerts: certs,
+          currentLanguages: languages,
+          currentMinDegree: minDegree,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "No se pudo generar contenido con AI.");
+      }
+
+      const draft = data?.draft;
+      if (!draft) {
+        throw new Error("La respuesta de AI llegó vacía.");
+      }
+
+      const html =
+        typeof draft.descriptionHtml === "string" && draft.descriptionHtml.trim()
+          ? sanitizeHtml(draft.descriptionHtml)
+          : sanitizeHtml(plainToBasicHtml(draft.descriptionPlain || ""));
+
+      const plain =
+        typeof draft.descriptionPlain === "string" && draft.descriptionPlain.trim()
+          ? draft.descriptionPlain.trim()
+          : htmlToPlain(html);
+
+      setValue("descriptionHtml", html, { shouldDirty: true, shouldValidate: true });
+      setValue("descriptionPlain", plain, { shouldDirty: true, shouldValidate: true });
+      setValue("minDegree", draft.minDegree ?? null, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("requiredSkills", Array.isArray(draft.requiredSkills) ? draft.requiredSkills : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("niceSkills", Array.isArray(draft.niceSkills) ? draft.niceSkills : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("eduRequired", Array.isArray(draft.eduRequired) ? draft.eduRequired : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("eduNice", Array.isArray(draft.eduNice) ? draft.eduNice : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("certs", Array.isArray(draft.certs) ? draft.certs : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("languages", Array.isArray(draft.languages) ? draft.languages : [], {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
+      changeTab("desc");
+      toastSuccess("Contenido generado con AI");
+    } catch (err: any) {
+      toastError(err?.message || "Ocurrió un error al generar contenido con AI.");
+    } finally {
+      setIsGeneratingAi(false);
+    }
+  }
+
   const tabItems = [
-    { k: "desc" as Tab, lbl: "Descripción", done: descLength > 0 },
+    { k: "desc" as Step5Tab, lbl: "Descripción", done: descLength > 0 },
     {
-      k: "skills" as Tab,
+      k: "skills" as Step5Tab,
       lbl: "Skills / Certs",
       done: requiredSkills.length + niceSkills.length + certs.length > 0,
     },
-    { k: "langs" as Tab, lbl: "Idiomas", done: languageFields.length > 0 },
+    { k: "langs" as Step5Tab, lbl: "Idiomas", done: languageFields.length > 0 },
     {
-      k: "edu" as Tab,
+      k: "edu" as Step5Tab,
       lbl: "Educación",
       done: eduRequired.length + eduNice.length > 0,
     },
@@ -307,7 +502,43 @@ export default function Step5Details({
 
   return (
     <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
-      {/* Tabs */}
+      <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/10 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+            <Sparkles className="h-4 w-4" />
+            Asistente AI para redactar la vacante
+          </div>
+          <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80">
+            Genera descripción, skills, educación, certificaciones e idiomas a partir
+            del título y la información capturada.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleGenerateWithAi}
+          disabled={isGeneratingAi}
+          className={clsx(
+            "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold transition",
+            isGeneratingAi
+              ? "cursor-not-allowed bg-emerald-300 text-white"
+              : "bg-emerald-600 text-white hover:bg-emerald-500"
+          )}
+        >
+          {isGeneratingAi ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Generando...
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-4 w-4" />
+              Generar con AI
+            </>
+          )}
+        </button>
+      </div>
+
       <div
         role="tablist"
         aria-label="Detalles de la vacante"
@@ -325,7 +556,7 @@ export default function Step5Details({
                 ? "bg-emerald-600 text-white shadow-sm"
                 : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
             )}
-            onClick={() => setTab(t.k)}
+            onClick={() => changeTab(t.k)}
           >
             <span>{t.lbl}</span>
             {t.done ? (
@@ -342,7 +573,6 @@ export default function Step5Details({
         ))}
       </div>
 
-      {/* Tab: Descripción */}
       {tab === "desc" && (
         <div className="mt-4 grid animate-fade-in-up gap-4">
           <label className="text-sm font-medium">Descripción de la vacante *</label>
@@ -371,9 +601,8 @@ export default function Step5Details({
                   />
                   {isEmpty && (
                     <div className="pointer-events-none absolute left-4 right-4 top-12 whitespace-pre-line text-xs text-zinc-400 dark:text-zinc-500">
-                      Ejemplo:{"\n"}- Responsabilidades principales{"\n"}-
-                      Requisitos clave y tecnologías{"\n"}- Beneficios y cultura
-                      del equipo
+                      Ejemplo:{"\n"}- Responsabilidades principales{"\n"}- Requisitos clave y
+                      tecnologías{"\n"}- Beneficios y cultura del equipo
                     </div>
                   )}
                 </div>
@@ -398,7 +627,6 @@ export default function Step5Details({
         </div>
       )}
 
-      {/* Tab: Skills / Certs */}
       {tab === "skills" && (
         <div className="grid animate-fade-in-up gap-6">
           <div className="grid gap-3">
@@ -450,9 +678,7 @@ export default function Step5Details({
               {skillQuery && (
                 <div className="absolute z-20 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
                   {filteredSkills.length === 0 ? (
-                    <div className="p-3 text-sm text-zinc-500">
-                      Sin resultados
-                    </div>
+                    <div className="p-3 text-sm text-zinc-500">Sin resultados</div>
                   ) : (
                     <>
                       <div className="border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
@@ -521,7 +747,6 @@ export default function Step5Details({
             </div>
           </div>
 
-          {/* Certificaciones */}
           <div className="grid gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
             <label className="text-sm font-medium">
               Certificaciones (opcional)
@@ -544,9 +769,7 @@ export default function Step5Details({
               {certQuery && (
                 <div className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
                   {filteredCerts.length === 0 ? (
-                    <div className="p-2 text-sm text-zinc-500">
-                      Sin resultados
-                    </div>
+                    <div className="p-2 text-sm text-zinc-500">Sin resultados</div>
                   ) : (
                     filteredCerts.map((c) => (
                       <button
@@ -594,7 +817,6 @@ export default function Step5Details({
         </div>
       )}
 
-      {/* Tab: Idiomas */}
       {tab === "langs" && (
         <div className="grid animate-fade-in-up gap-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -659,7 +881,6 @@ export default function Step5Details({
         </div>
       )}
 
-      {/* Tab: Educación */}
       {tab === "edu" && (
         <div className="grid animate-fade-in-up gap-6">
           <div className="grid min-w-0 gap-6 md:grid-cols-2">
@@ -782,7 +1003,6 @@ export default function Step5Details({
         </div>
       )}
 
-      {/* Navegación */}
       <div className="mt-6 flex flex-col gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:justify-between dark:border-zinc-800">
         <button
           type="button"

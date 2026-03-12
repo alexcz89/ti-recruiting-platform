@@ -1,14 +1,13 @@
 ﻿// app/dashboard/jobs/new/JobWizard.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { Save, CheckCircle2 } from "lucide-react";
 
-import { JobForm, JobWizardProps } from "./JobWizard/types";
-import { jobSchema } from "./JobWizard/types";
+import { JobForm, JobWizardProps, jobSchema } from "./JobWizard/types";
 import { BENEFITS } from "./JobWizard/constants";
 import { makeDefaultValues, sanitizeHtml, htmlToPlain } from "./JobWizard/utils/helpers";
 import { useAutosave } from "./JobWizard/hooks/useAutosave";
@@ -21,10 +20,9 @@ import Step1Basic from "./JobWizard/components/Step1Basic";
 import Step2Employment from "./JobWizard/components/Step2Employment";
 import Step3Benefits from "./JobWizard/components/Step3Benefits";
 import Step4Assessments from "./JobWizard/components/Step4Assessments";
-import Step5Details from "./JobWizard/components/Step5Details";
+import Step5Details, { type Step5Tab } from "./JobWizard/components/Step5Details";
 import Step6Review from "./JobWizard/components/Step6Review";
 
-/* ─── Helpers ─── */
 function getTimeAgo(date: Date): string {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
   if (seconds < 60) return "hace unos segundos";
@@ -36,9 +34,11 @@ function getTimeAgo(date: Date): string {
 function plainToBasicHtml(plain: string): string {
   const escape = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
   const lines = plain.replace(/\r\n/g, "\n").split("\n");
   const paragraphs: string[][] = [];
   let buf: string[] = [];
+
   lines.forEach((line) => {
     if (!line.trim()) {
       if (buf.length) {
@@ -49,13 +49,17 @@ function plainToBasicHtml(plain: string): string {
     }
     buf.push(line);
   });
+
   if (buf.length) paragraphs.push(buf);
+
   const bulletPrefixes = ["- ", "* ", "• "];
+
   return paragraphs
     .map((paraLines) => {
       const allBullets = paraLines.every((l) =>
         bulletPrefixes.some((p) => l.startsWith(p))
       );
+
       if (allBullets) {
         const items = paraLines
           .map((l) => {
@@ -63,20 +67,18 @@ function plainToBasicHtml(plain: string): string {
             return escape(l.slice(p.length).trim());
           })
           .filter(Boolean);
+
         return items.length
           ? `<ul>${items.map((i) => `<li>${i}</li>`).join("")}</ul>`
           : "";
       }
+
       return `<p>${paraLines.map(escape).join("<br/>")}</p>`;
     })
     .filter(Boolean)
     .join("");
 }
 
-/**
- * Convierte cualquier valor (backend/label/frontend viejo) al enum del frontend:
- * HIGHSCHOOL | TECH | BACHELOR | MASTER | PHD | undefined
- */
 function normalizeDegreeClientValue(
   value: string | null | undefined
 ): "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD" | undefined {
@@ -97,24 +99,19 @@ function normalizeDegreeClientValue(
     MASTERS: "MASTER",
     PHD: "PHD",
     DOCTORATE: "PHD",
-
-    "BACHILLERATO": "HIGHSCHOOL",
-    "TÉCNICO": "TECH",
-    "TECNICO": "TECH",
+    BACHILLERATO: "HIGHSCHOOL",
+    TÉCNICO: "TECH",
+    TECNICO: "TECH",
     "LICENCIATURA / INGENIERÍA": "BACHELOR",
     "LICENCIATURA / INGENIERIA": "BACHELOR",
-    "MAESTRÍA": "MASTER",
-    "MAESTRIA": "MASTER",
-    "DOCTORADO": "PHD",
+    MAESTRÍA: "MASTER",
+    MAESTRIA: "MASTER",
+    DOCTORADO: "PHD",
   };
 
   return map[normalized];
 }
 
-/**
- * Convierte el enum del frontend al enum que espera el backend/Prisma:
- * HIGH_SCHOOL | TECHNICAL | BACHELORS | MASTERS | DOCTORATE | ""
- */
 function toBackendDegreeValue(
   value: string | null | undefined
 ): "" | "HIGH_SCHOOL" | "TECHNICAL" | "BACHELORS" | "MASTERS" | "DOCTORATE" {
@@ -134,7 +131,6 @@ function toBackendDegreeValue(
   return normalized ? map[normalized] ?? "" : "";
 }
 
-/* ─── Componente principal ─── */
 export default function JobWizard({
   onSubmit,
   presetCompany,
@@ -147,14 +143,15 @@ export default function JobWizard({
   const [step, setStep] = useState(1);
   const [maxStepVisited, setMaxStepVisited] = useState(1);
   const [stepCompletion, setStepCompletion] = useState<boolean[]>([
-    false, // 1: Básicos
-    false, // 2: Empleo
-    false, // 3: Prestaciones
-    false, // 4: Evaluaciones
-    false, // 5: Detalles
-    false, // 6: Revisión
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
   ]);
   const [busy, setBusy] = useState(false);
+  const [step5Tab, setStep5Tab] = useState<Step5Tab>("desc");
 
   const methods = useForm<JobForm>({
     resolver: zodResolver(jobSchema),
@@ -170,7 +167,6 @@ export default function JobWizard({
   const qualityScore = useQualityScore(watch);
   const hasRestoredRef = useRef(false);
 
-  // Restaurar borrador
   useEffect(() => {
     if (hasRestoredRef.current || initial?.id) return;
     const draft = loadDraft();
@@ -186,8 +182,7 @@ export default function JobWizard({
         clearDraft();
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [clearDraft, initial?.id, loadDraft, reset]);
 
   function goNextStep(next: number) {
     setStepCompletion((prev) => {
@@ -209,7 +204,6 @@ export default function JobWizard({
     }
   }
 
-  // Aplicar plantilla
   function applyTemplateById(id: string) {
     if (!id) return;
     const tpl = templates.find((t) => t.id === id);
@@ -221,6 +215,7 @@ export default function JobWizard({
       : html
         ? htmlToPlain(html)
         : "";
+
     if (!html.trim() && plain.trim()) {
       html = sanitizeHtml(plainToBasicHtml(plain));
     }
@@ -229,11 +224,12 @@ export default function JobWizard({
       acc[b.key] = b.def;
       return acc;
     }, {} as Record<string, boolean>);
+
     let benefitsJson = benefitsBase;
-    let aguinaldoDias = 15,
-      vacacionesDias = 12,
-      primaVacPct = 25,
-      showBenefits = true;
+    let aguinaldoDias = 15;
+    let vacacionesDias = 12;
+    let primaVacPct = 25;
+    let showBenefits = true;
 
     if (tpl.benefitsJson && typeof tpl.benefitsJson === "object") {
       const b = tpl.benefitsJson as any;
@@ -242,9 +238,7 @@ export default function JobWizard({
         benefitsJson[k] = Boolean(b[k] ?? benefitsBase[k]);
       }
       if (typeof b.aguinaldoDias === "number") aguinaldoDias = b.aguinaldoDias;
-      if (typeof b.vacacionesDias === "number") {
-        vacacionesDias = b.vacacionesDias;
-      }
+      if (typeof b.vacacionesDias === "number") vacacionesDias = b.vacacionesDias;
       if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
       showBenefits = Boolean(b.showBenefits ?? true);
     }
@@ -298,14 +292,13 @@ export default function JobWizard({
     toastSuccess("Plantilla aplicada");
   }
 
-  // Submit
   async function onValidSubmit(v: JobForm) {
     setBusy(true);
+
     try {
       const normalizedMinDegree = toBackendDegreeValue(v.minDegree);
       const fd = new FormData();
 
-      // Paso 1
       fd.set("title", v.title.trim());
       fd.set("companyMode", v.companyMode);
       fd.set("companyOtherName", (v.companyOtherName || "").trim());
@@ -318,19 +311,18 @@ export default function JobWizard({
       if (v.locationLat != null) fd.set("locationLat", String(v.locationLat));
       if (v.locationLng != null) fd.set("locationLng", String(v.locationLng));
       fd.set("currency", v.currency);
+
       if (v.salaryMin != null) {
-        fd.set("salaryMin", String(Math.max(0, v.salaryMin)));
+        fd.set("salaryMin", String(Math.max(0, Number(v.salaryMin))));
       }
       if (v.salaryMax != null) {
-        fd.set("salaryMax", String(Math.max(0, v.salaryMax)));
+        fd.set("salaryMax", String(Math.max(0, Number(v.salaryMax))));
       }
-      fd.set("showSalary", String(v.showSalary));
 
-      // Paso 2
+      fd.set("showSalary", String(v.showSalary));
       fd.set("employmentType", v.employmentType);
       if (v.schedule) fd.set("schedule", v.schedule);
 
-      // Paso 3
       const benefitsPayload = {
         ...v.benefits,
         aguinaldoDias: v.aguinaldoDias,
@@ -338,19 +330,19 @@ export default function JobWizard({
         primaVacPct: v.primaVacPct,
         showBenefits: v.showBenefits,
       };
+
       fd.set("showBenefits", String(v.showBenefits));
       fd.set("benefitsJson", JSON.stringify(benefitsPayload));
 
-      // Paso 4
       if (v.assessmentTemplateId) {
         fd.set("assessmentTemplateId", v.assessmentTemplateId);
       }
 
-      // Paso 5
       let safeHtml = sanitizeHtml((v.descriptionHtml || "").trim());
       if (!safeHtml.trim() && v.descriptionPlain.trim()) {
         safeHtml = sanitizeHtml(plainToBasicHtml(v.descriptionPlain.trim()));
       }
+
       fd.set("descriptionHtml", safeHtml);
       fd.set("description", v.descriptionPlain.trim() || htmlToPlain(safeHtml));
       fd.set("minDegree", normalizedMinDegree);
@@ -369,6 +361,7 @@ export default function JobWizard({
           ...v.eduNice.map((name) => ({ name, required: false })),
         ])
       );
+
       fd.set(
         "skillsJson",
         JSON.stringify([
@@ -376,7 +369,9 @@ export default function JobWizard({
           ...v.niceSkills.map((name) => ({ name, required: false })),
         ])
       );
+
       fd.set("certsJson", JSON.stringify(v.certs));
+
       if (v.languages?.length) {
         fd.set("languagesJson", JSON.stringify(v.languages));
       }
@@ -433,10 +428,9 @@ export default function JobWizard({
       <form onSubmit={handleSubmit(onValidSubmit)}>
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
           <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-0">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                <h2 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
+            <div className="mb-0 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 sm:text-3xl">
                   {isEditing ? "Editar vacante" : "Nueva vacante"}
                 </h2>
                 <div className="flex items-center gap-2 text-xs sm:text-sm">
@@ -453,12 +447,12 @@ export default function JobWizard({
                   ) : null}
                 </div>
               </div>
+
               <div className="lg:hidden">
                 <QualityIndicator score={qualityScore} compact />
               </div>
             </div>
 
-            {/* Layout de dos columnas */}
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
               <div className="space-y-0">
                 <div className="mb-0">
@@ -506,6 +500,8 @@ export default function JobWizard({
                     certOptions={certOptions}
                     onNext={() => goNextStep(6)}
                     onBack={() => setStep(4)}
+                    activeTab={step5Tab}
+                    onTabChange={setStep5Tab}
                   />
                 )}
 
@@ -516,12 +512,11 @@ export default function JobWizard({
                     isEditing={isEditing}
                     onBack={() => setStep(5)}
                     onEditStep={setStep}
-                    onEditTab={() => {}}
+                    onEditTab={setStep5Tab}
                   />
                 )}
               </div>
 
-              {/* Sidebar - Quality Indicator */}
               <aside className="hidden lg:block">
                 <div className="sticky top-8">
                   <QualityIndicator score={qualityScore} />
