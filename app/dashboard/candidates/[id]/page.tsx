@@ -15,7 +15,7 @@ import {
   type CandidateSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
-import { Lock, CheckCircle2, XCircle } from "lucide-react";
+import { ArrowLeft, Download, GitBranch, Lock, CheckCircle2, XCircle } from "lucide-react";
 import CandidateSummaryCard from "@/components/dashboard/CandidateSummaryCard";
 
 export const metadata = { title: "Candidato | Panel" };
@@ -275,7 +275,13 @@ export default async function CandidateDetailPage({
   }
 
   const headerBtnClasses =
-    "inline-flex items-center justify-center gap-1 rounded-full border border-zinc-200 bg-white/80 px-3.5 py-1.5 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:hover:bg-zinc-900";
+    "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800";
+
+  const headerBtnPrimaryClasses =
+    "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 shadow-sm transition hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-950/50";
+
+  const headerBtnWhatsAppClasses =
+    "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-500";
 
   const detailedSkills = (candidate.candidateSkills || [])
     .map((s) => ({ id: s.id, label: s.term?.label || "", level: s.level ?? null, termId: s.term?.id || "" }))
@@ -324,7 +330,7 @@ export default async function CandidateDetailPage({
 
   return (
     <main className="mx-auto max-w-[1200px] space-y-6 px-6 py-6 lg:space-y-8 lg:py-8">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-600/90 text-sm font-semibold text-white shadow-sm">
             {candidate.name
@@ -366,31 +372,70 @@ export default async function CandidateDetailPage({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap lg:justify-end">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
           {fromJobId && (
             <>
-              <Link href={`/dashboard/jobs/${fromJobId}/applications`} className={headerBtnClasses}>
-                ← Volver a la vacante
+              <Link
+                href={`/dashboard/jobs/${fromJobId}/applications`}
+                title="Regresar a la vacante y ver sus postulaciones"
+                aria-label="Volver a la vacante"
+                className={headerBtnClasses}
+              >
+                <ArrowLeft className="h-4 w-4 shrink-0" />
+                <span>Volver a la vacante</span>
               </Link>
-              <Link href={`/dashboard/jobs/${fromJobId}`} className={headerBtnClasses}>
-                Ver Pipeline
+              <Link
+                href={`/dashboard/jobs/${fromJobId}`}
+                title="Abrir el pipeline de la vacante"
+                aria-label="Ver pipeline"
+                className={headerBtnClasses}
+              >
+                <GitBranch className="h-4 w-4 shrink-0" />
+                <span>Ver pipeline</span>
               </Link>
             </>
           )}
+
           {candidate.resumeUrl ? (
-            <a href={candidate.resumeUrl} target="_blank" rel="noreferrer" className={headerBtnClasses}>
-              Descargar CV
+            <a
+              href={candidate.resumeUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Abrir o descargar el CV del candidato"
+              aria-label="Descargar CV"
+              className={headerBtnPrimaryClasses}
+            >
+              <Download className="h-4 w-4 shrink-0" />
+              <span>Descargar CV</span>
             </a>
           ) : (
-            <span className="text-xs text-zinc-500 dark:text-zinc-500">Sin CV</span>
+            <span
+              title="Este candidato no tiene CV disponible"
+              className="inline-flex min-h-10 items-center justify-center rounded-xl border border-dashed border-zinc-300 px-4 py-2 text-sm text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
+            >
+              Sin CV
+            </span>
           )}
+
           {waHref ? (
-            <a href={waHref} target="_blank" rel="noreferrer" className={headerBtnClasses}>
-              WhatsApp
+            <a
+              href={waHref}
+              target="_blank"
+              rel="noreferrer"
+              title={`Abrir conversación por WhatsApp con ${candidate.phone}`}
+              aria-label="Abrir WhatsApp"
+              className={headerBtnWhatsAppClasses}
+            >
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4 shrink-0 fill-current"
+              >
+                <path d="M19.05 4.91A9.82 9.82 0 0 0 12.03 2C6.62 2 2.22 6.4 2.22 11.81c0 1.73.45 3.42 1.31 4.92L2 22l5.42-1.5a9.78 9.78 0 0 0 4.61 1.17h.01c5.41 0 9.81-4.4 9.81-9.81 0-2.62-1.02-5.08-2.8-6.95Zm-7.02 15.1h-.01a8.1 8.1 0 0 1-4.12-1.13l-.29-.17-3.21.89.86-3.13-.19-.32a8.13 8.13 0 0 1-1.25-4.33c0-4.49 3.65-8.14 8.15-8.14 2.17 0 4.21.84 5.75 2.38a8.08 8.08 0 0 1 2.39 5.76c0 4.49-3.65 8.14-8.08 8.14Zm4.46-6.07c-.24-.12-1.4-.69-1.62-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06-.24-.12-1.02-.37-1.94-1.18-.72-.64-1.2-1.42-1.34-1.66-.14-.24-.02-.37.1-.49.1-.1.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.46-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.68 2.56 4.06 3.59.57.25 1.01.4 1.36.52.57.18 1.09.16 1.5.1.46-.07 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28Z" />
+              </svg>
+              <span>WhatsApp</span>
             </a>
-          ) : (
-            <span className="text-xs text-zinc-500 dark:text-zinc-500">Sin teléfono</span>
-          )}
+          ) : null}
         </div>
       </div>
 
