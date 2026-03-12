@@ -219,6 +219,53 @@ const normalizeDraftEducation = (items: any[]): CvEducation[] =>
     endDate: e?.isCurrent ? null : e?.endDate ?? "",
   }));
 
+const hasMeaningfulIdentity = (identity?: Partial<CvIdentity> | null) =>
+  !!identity &&
+  [
+    identity.firstName,
+    identity.lastName1,
+    identity.lastName2,
+    identity.email,
+    identity.phone,
+    identity.location,
+    identity.linkedin,
+    identity.github,
+    identity.birthdate,
+    identity.role,
+  ].some((value) => isFilled(value ?? ""));
+
+const hasMeaningfulExperiences = (items?: CvExperience[] | null) =>
+  Array.isArray(items) &&
+  items.some(
+    (item) =>
+      isFilled(item?.role) ||
+      isFilled(item?.company) ||
+      isFilled(item?.description) ||
+      isFilled(item?.bulletsText) ||
+      isFilled(item?.descriptionHtml)
+  );
+
+const hasMeaningfulEducation = (items?: CvEducation[] | null) =>
+  Array.isArray(items) &&
+  items.some((item) => isFilled(item?.institution) || isFilled(item?.program));
+
+const hasMeaningfulSkills = (items?: CvSkill[] | null) =>
+  Array.isArray(items) && items.some((item) => isFilled(item?.label));
+
+const hasMeaningfulLanguages = (items?: CvLanguage[] | null) =>
+  Array.isArray(items) && items.some((item) => isFilled(item?.label));
+
+const hasMeaningfulCertifications = (items?: CvCertification[] | null) =>
+  Array.isArray(items) && items.some((item) => isFilled(item?.name));
+
+const hasMeaningfulCvData = (data: Props["initial"]) =>
+  hasMeaningfulIdentity(data.identity) ||
+  hasMeaningfulExperiences(data.experiences) ||
+  hasMeaningfulEducation(data.education) ||
+  hasMeaningfulSkills(data.skills) ||
+  hasMeaningfulLanguages(data.languages) ||
+  hasMeaningfulCertifications(data.certifications);
+
 const groupSkills = (skills: CvSkill[]) => {
   // Convertir arrays readonly a arrays normales para búsqueda
   const lenguajes = [...PROGRAMMING_LANGUAGES];
@@ -371,13 +418,12 @@ export default function CvBuilder({
   const isCandidate = role === "CANDIDATE";
   const draftKey = useMemo(() => buildDraftKey(user), [user]);
 
-  const [identity, setIdentity] = useState<CvIdentity>({
-    ...initial.identity,
-    birthdate: initial.identity.birthdate || "",
-  });
-
-  const [experiences, setExperiences] = useState<CvExperience[]>(
-    (initial.experiences || []).map((e) => {
+  const normalizedInitial = useMemo<Props["initial"]>(() => ({
+    identity: {
+      ...initial.identity,
+      birthdate: initial.identity.birthdate || "",
+    },
+    experiences: (initial.experiences || []).map((e) => {
       const description =
         e.description ?? e.bulletsText ?? e.bullets?.join("\n") ?? "";
       return {
@@ -387,31 +433,34 @@ export default function CvBuilder({
         bulletsText: e.bulletsText || description || e.bullets?.join("\n") || "",
         descriptionHtml: e.descriptionHtml || "",
       };
-    })
-  );
-
-  const [education, setEducation] = useState<CvEducation[]>(
-    (initial.education || []).map((e) => ({
+    }),
+    education: (initial.education || []).map((e) => ({
       ...e,
       isCurrent: !!(e as any).isCurrent,
       endDate: (e as any).isCurrent ? null : e.endDate ?? "",
-    }))
-  );
+    })),
+    skills: initial.skills || [],
+    languages: initial.languages || [],
+    certifications: (initial.certifications || []).map((c, idx) =>
+      typeof c === "string"
+        ? { id: `initial-cert-${idx}-${c}`, name: c, date: "", url: "" }
+        : c
+    ),
+  }), [initial]);
 
-  const [skills, setSkills] = useState<CvSkill[]>(initial.skills || []);
-  const [languages, setLanguages] = useState<CvLanguage[]>(
-    initial.languages || []
-  );
-  const [certifications, setCertifications] = useState<CvCertification[]>(
-    (initial.certifications || []).map(c => 
-      typeof c === 'string' ? { id: Date.now().toString(), name: c, date: '', url: '' } : c
-    )
-  );
+  const [identity, setIdentity] = useState<CvIdentity>(normalizedInitial.identity);
+  const [experiences, setExperiences] = useState<CvExperience[]>(normalizedInitial.experiences);
+  const [education, setEducation] = useState<CvEducation[]>(normalizedInitial.education);
+  const [skills, setSkills] = useState<CvSkill[]>(normalizedInitial.skills);
+  const [languages, setLanguages] = useState<CvLanguage[]>(normalizedInitial.languages);
+  const [certifications, setCertifications] = useState<CvCertification[]>(normalizedInitial.certifications);
 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [autoSaving, setAutoSaving] = useState(false);
+  const [syncingProfile, setSyncingProfile] = useState(false);
+  const [showProfileSyncBanner, setShowProfileSyncBanner] = useState(false);
 
   // ✅ NUEVO: modal preview
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -430,6 +479,58 @@ export default function CvBuilder({
     () => sanitizeFilename(fullName || "candidato"),
     [fullName]
   );
+
+  const currentBuilderHasMeaningfulData = useMemo(
+    () =>
+      hasMeaningfulIdentity(identity) ||
+      hasMeaningfulExperiences(experiences) ||
+      hasMeaningfulEducation(education) ||
+      hasMeaningfulSkills(skills) ||
+      hasMeaningfulLanguages(languages) ||
+      hasMeaningfulCertifications(certifications),
+    [identity, experiences, education, skills, languages, certifications]
+  );
+
+  const profileHasMeaningfulData = useMemo(
+    () => hasMeaningfulCvData(normalizedInitial),
+    [normalizedInitial]
+  );
+
+  const applyProfileData = () => {
+    setIdentity(normalizedInitial.identity);
+    setExperiences(normalizedInitial.experiences);
+    setEducation(normalizedInitial.education);
+    setSkills(normalizedInitial.skills);
+    setLanguages(normalizedInitial.languages);
+    setCertifications(normalizedInitial.certifications);
+  };
+
+  const handleSyncFromProfile = async (opts?: { silent?: boolean }) => {
+    if (!profileHasMeaningfulData) {
+      if (!opts?.silent) {
+        alert("No encontramos información suficiente en tu perfil para sincronizar.");
+      }
+      return;
+    }
+
+    if (!opts?.silent) {
+      const confirmed = window.confirm(
+        "Esto reemplazará la información actual del CV Builder con la información de tu perfil. ¿Deseas continuar?"
+      );
+      if (!confirmed) return;
+    }
+
+    setSyncingProfile(true);
+    try {
+      applyProfileData();
+      setShowProfileSyncBanner(false);
+      if (!opts?.silent) {
+        alert("✅ Tu CV fue actualizado con la información de tu perfil.");
+      }
+    } finally {
+      setSyncingProfile(false);
+    }
+  };
 
   // ====== Imprimir / Guardar como PDF ======
   const restorePrintStylesRef = useRef<null | (() => void)>(null);
@@ -523,40 +624,65 @@ export default function CvBuilder({
     if (typeof window === "undefined" || !draftKey) return;
     if (loadedDraftKeyRef.current === draftKey) return;
 
+    let importedMeaningfulDraft = false;
+
     try {
       const raw = localStorage.getItem(draftKey);
       if (raw) {
         const parsed = JSON.parse(raw);
 
-        if (parsed?.identity) {
+        if (parsed?.identity && hasMeaningfulIdentity(parsed.identity)) {
+          importedMeaningfulDraft = true;
           setIdentity((current) => mergeIdentityWithDraft(current, parsed.identity));
         }
 
-        if (Array.isArray(parsed?.experiences) && parsed.experiences.length > 0) {
+        if (Array.isArray(parsed?.experiences) && hasMeaningfulExperiences(parsed.experiences)) {
+          importedMeaningfulDraft = true;
           setExperiences(normalizeDraftExperiences(parsed.experiences));
         }
 
-        if (Array.isArray(parsed?.education) && parsed.education.length > 0) {
+        if (Array.isArray(parsed?.education) && hasMeaningfulEducation(parsed.education)) {
+          importedMeaningfulDraft = true;
           setEducation(normalizeDraftEducation(parsed.education));
         }
 
-        if (Array.isArray(parsed?.skills) && parsed.skills.length > 0) {
+        if (Array.isArray(parsed?.skills) && hasMeaningfulSkills(parsed.skills)) {
+          importedMeaningfulDraft = true;
           setSkills(parsed.skills);
         }
 
-        if (Array.isArray(parsed?.languages) && parsed.languages.length > 0) {
+        if (Array.isArray(parsed?.languages) && hasMeaningfulLanguages(parsed.languages)) {
+          importedMeaningfulDraft = true;
           setLanguages(parsed.languages);
         }
 
-        if (Array.isArray(parsed?.certifications) && parsed.certifications.length > 0) {
+        if (Array.isArray(parsed?.certifications) && hasMeaningfulCertifications(parsed.certifications)) {
+          importedMeaningfulDraft = true;
           setCertifications(parsed.certifications);
         }
       }
-      loadedDraftKeyRef.current = draftKey;
     } catch {
       // ignore
+    } finally {
+      loadedDraftKeyRef.current = draftKey;
+      if (!importedMeaningfulDraft && profileHasMeaningfulData) {
+        applyProfileData();
+      }
+      setShowProfileSyncBanner(importedMeaningfulDraft && profileHasMeaningfulData);
     }
-  }, [draftKey]);
+  }, [draftKey, profileHasMeaningfulData, normalizedInitial]);
+
+
+  useEffect(() => {
+    if (!profileHasMeaningfulData) {
+      setShowProfileSyncBanner(false);
+      return;
+    }
+
+    if (!currentBuilderHasMeaningfulData) {
+      setShowProfileSyncBanner(false);
+    }
+  }, [profileHasMeaningfulData, currentBuilderHasMeaningfulData]);
 
   // ====== Guardar borrador automáticamente ======
   useEffect(() => {
@@ -1025,6 +1151,27 @@ export default function CvBuilder({
       <div className="w-full md:max-w-4xl md:mx-auto">
         {/* ====== Header con título y botones de acción ====== */}
         <div className="bg-white dark:bg-zinc-900 md:rounded-2xl md:shadow-lg md:border md:border-zinc-200 md:dark:border-zinc-800 p-4 md:p-6 mb-4 md:mb-6">
+          {showProfileSyncBanner && (
+            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">Detectamos información en tu perfil.</p>
+                  <p className="text-emerald-800/90 dark:text-emerald-200/90">
+                    Puedes importar esos datos al CV Builder si hiciste cambios en tu perfil y quieres reflejarlos aquí.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSyncFromProfile()}
+                  disabled={syncingProfile}
+                  title="Reemplazar la información actual del CV Builder con la información de tu perfil"
+                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/40"
+                >
+                  {syncingProfile ? "Actualizando..." : "Actualizar desde mi perfil"}
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1">
               <div className="flex items-center gap-3">
@@ -1055,7 +1202,18 @@ export default function CvBuilder({
                   : "Sin registro: completa tu CV y descárgalo. Si quieres guardarlo en tu cuenta y postularte en un clic, al final podrás crear tu cuenta gratis."}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
+              {profileHasMeaningfulData && (
+                <button
+                  type="button"
+                  onClick={() => handleSyncFromProfile()}
+                  disabled={syncingProfile}
+                  title="Actualizar los datos del CV usando la información guardada en tu perfil"
+                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-zinc-900 dark:text-white shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 transition-all"
+                >
+                  {syncingProfile ? "Actualizando..." : "Actualizar desde mi perfil"}
+                </button>
+              )}
               {/* ✅ NUEVO: botón abre modal */}
               <button
                 type="button"
