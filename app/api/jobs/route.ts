@@ -96,10 +96,15 @@ function isEducationLevel(value: string): value is EducationLevel {
 function normalizeEducationLevel(value: string): EducationLevel | null | undefined {
   const raw = value.trim();
   if (!raw) return null;
-
-  const normalized = raw.toUpperCase();
-
+ 
+  // Normalizar: uppercase + quitar acentos para comparación robusta
+  const normalized = raw
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // elimina diacríticos
+ 
   const aliases: Record<string, EducationLevel> = {
+    // Valores del enum directo
     NONE: "NONE",
     PRIMARY: "PRIMARY",
     SECONDARY: "SECONDARY",
@@ -113,29 +118,57 @@ function normalizeEducationLevel(value: string): EducationLevel | null | undefin
     DOCTORATE: "DOCTORATE",
     PHD: "DOCTORATE",
     OTHER: "OTHER",
-
-    "NINGUNO": "NONE",
-    "PRIMARIA": "PRIMARY",
-    "SECUNDARIA": "SECONDARY",
-    "BACHILLERATO": "HIGH_SCHOOL",
-    "TÉCNICO": "TECHNICAL",
-    "TECNICO": "TECHNICAL",
-    "LICENCIATURA / INGENIERÍA": "BACHELOR",
-    "LICENCIATURA / INGENIERIA": "BACHELOR",
-    "LICENCIATURA": "BACHELOR",
-    "INGENIERÍA": "BACHELOR",
-    "INGENIERIA": "BACHELOR",
-    "MAESTRÍA": "MASTER",
-    "MAESTRIA": "MASTER",
-    "DOCTORADO": "DOCTORATE",
-    "OTRO": "OTHER",
+ 
+    // Español sin acentos (resultado del normalize NFD)
+    NINGUNO: "NONE",
+    PRIMARIA: "PRIMARY",
+    SECUNDARIA: "SECONDARY",
+    BACHILLERATO: "HIGH_SCHOOL",
+    TECNICO: "TECHNICAL",
+    TECNICA: "TECHNICAL",
+    "LICENCIATURA / INGENIERIA": "BACHELOR",  // ← el bug: í → i después del normalize
+    "LICENCIATURA / INGENIERA": "BACHELOR",   // variante
+    LICENCIATURA: "BACHELOR",
+    INGENIERIA: "BACHELOR",
+    INGENIERO: "BACHELOR",
+    MAESTRIA: "MASTER",
+    DOCTORADO: "DOCTORATE",
+    OTRO: "OTHER",
+ 
+    // Por si el frontend manda solo el número o abreviatura
+    "0": "NONE",
+    "1": "PRIMARY",
+    "2": "SECONDARY",
+    "3": "HIGH_SCHOOL",
+    "4": "TECHNICAL",
+    "5": "BACHELOR",
+    "6": "MASTER",
+    "7": "DOCTORATE",
   };
-
-  if (isEducationLevel(normalized)) {
-    return normalized;
+ 
+  // Primero intentar con el valor normalizado (sin acentos, uppercase)
+  if (aliases[normalized]) return aliases[normalized];
+ 
+  // Si ya es un valor válido del enum, usarlo directamente
+  const EDUCATION_LEVEL_VALUES = [
+    "NONE", "PRIMARY", "SECONDARY", "HIGH_SCHOOL", "TECHNICAL",
+    "BACHELOR", "MASTER", "DOCTORATE", "OTHER",
+  ];
+  if (EDUCATION_LEVEL_VALUES.includes(normalized as EducationLevel)) {
+    return normalized as EducationLevel;
   }
-
-  return aliases[normalized];
+ 
+  // Fallback: buscar parcialmente (ej. "LICENCIATURA" dentro de "LICENCIATURA / INGENIERIA")
+  if (normalized.includes("LICENCIATURA") || normalized.includes("INGENIERIA")) return "BACHELOR";
+  if (normalized.includes("MAESTRIA")) return "MASTER";
+  if (normalized.includes("DOCTORADO")) return "DOCTORATE";
+  if (normalized.includes("BACHILLERATO") || normalized.includes("PREPARATORIA") || normalized.includes("PREPA")) return "HIGH_SCHOOL";
+  if (normalized.includes("TECNICO") || normalized.includes("TECNICA")) return "TECHNICAL";
+  if (normalized.includes("SECUNDARIA")) return "SECONDARY";
+  if (normalized.includes("PRIMARIA")) return "PRIMARY";
+ 
+  // Valor no reconocido → undefined activa el 400 (comportamiento correcto para valores basura)
+  return undefined;
 }
 
 /* -------------------------------------------------
