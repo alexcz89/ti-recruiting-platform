@@ -136,22 +136,9 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
             <!-- ===== LOGO ===== -->
             <tr>
               <td align="center" style="padding-bottom:28px;">
-                <table role="presentation" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <!-- Ícono verde -->
-                    <td style="background-color:#10b981;border-radius:10px;width:36px;height:36px;text-align:center;vertical-align:middle;mso-padding-alt:0;">
-                      <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" style="width:36px;height:36px;" arcsize="28%" stroke="f" fillcolor="#10b981"><v:textbox inset="0,0,0,0"><center><![endif]-->
-                      <span style="display:block;font-size:22px;font-weight:700;color:#ffffff;line-height:36px;text-align:center;">+</span>
-                      <!--[if mso]></center></v:textbox></v:roundrect><![endif]-->
-                    </td>
-                    <!-- Wordmark -->
-                    <td style="padding-left:10px;vertical-align:middle;white-space:nowrap;">
-                      <span style="font-size:24px;font-weight:800;letter-spacing:-0.5px;color:#0f172a;">TASK</span><span style="font-size:24px;font-weight:800;letter-spacing:-0.5px;color:#7c3aed;">IO</span>
-                    </td>
-                  </tr>
-                </table>
+                <img src="https://taskio.com.mx/TASKIO.png" alt="TaskIO" width="130" height="auto" style="display:block;border:0;max-width:130px;" />
               </td>
-            </tr>
+            <tr>
 
             <!-- ===== CARD ===== -->
             <tr>
@@ -603,14 +590,7 @@ export async function sendNewApplicationToRecruiterEmail(params: {
           <!-- Logo -->
           <tr>
             <td align="center" style="padding-bottom:28px;">
-              <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-                <td style="background-color:#10b981;border-radius:10px;width:36px;height:36px;text-align:center;vertical-align:middle;">
-                  <span style="display:block;font-size:20px;font-weight:700;color:#ffffff;line-height:36px;text-align:center;">+</span>
-                </td>
-                <td style="padding-left:10px;vertical-align:middle;white-space:nowrap;">
-                  <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#0f172a;">TASK</span><span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#7c3aed;">IO</span>
-                </td>
-              </tr></table>
+              <img src="https://taskio.com.mx/TASKIO.png" alt="TaskIO" width="130" height="auto" style="display:block;border:0;max-width:130px;" />
             </td>
           </tr>
 
@@ -758,16 +738,7 @@ function htmlLayout({ title, body }: { title: string; body: string }) {
             <!-- Logo -->
             <tr>
               <td align="center" style="padding-bottom:24px;">
-                <table role="presentation" cellpadding="0" cellspacing="0">
-                  <tr>
-                    <td style="background-color:#10b981;border-radius:10px;width:34px;height:34px;text-align:center;vertical-align:middle;">
-                      <span style="display:block;font-size:20px;font-weight:700;color:#ffffff;line-height:34px;text-align:center;">+</span>
-                    </td>
-                    <td style="padding-left:9px;vertical-align:middle;white-space:nowrap;">
-                      <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#0f172a;">TASK</span><span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#7c3aed;">IO</span>
-                    </td>
-                  </tr>
-                </table>
+                <img src="https://taskio.com.mx/TASKIO.png" alt="TaskIO" width="130" height="auto" style="display:block;border:0;max-width:130px;" />
               </td>
             </tr>
 
