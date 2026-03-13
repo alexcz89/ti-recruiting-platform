@@ -3,6 +3,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { UserCircle, Building2, CheckCircle2 } from "lucide-react";
 
 export default function SignupPage() {
@@ -12,24 +13,28 @@ export default function SignupPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center px-4 py-16">
       <div className="w-full max-w-2xl">
 
-        {/* Logo */}
-        <div className="flex justify-center mb-10">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                <path d="M4 9h10M9 4v10" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-              </svg>
-            </div>
-            <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              TASK<span className="text-violet-600 dark:text-violet-400">IO</span>
-            </span>
-          </Link>
-        </div>
-
-        {/* Header */}
+        {/* Header — "Únete a" + logo inline */}
         <div className="text-center mb-10">
-          <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 tracking-tight">
-            Únete a TaskIO
+          <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 tracking-tight flex items-center justify-center gap-3 flex-wrap">
+            Únete a
+            {/* Light mode logo */}
+            <Image
+              src="/logos/logo-taskio-light.svg"
+              alt="TaskIO"
+              width={120}
+              height={32}
+              className="block dark:hidden"
+              priority
+            />
+            {/* Dark mode logo */}
+            <Image
+              src="/logos/logo-taskio-dark.svg"
+              alt="TaskIO"
+              width={120}
+              height={32}
+              className="hidden dark:block"
+              priority
+            />
           </h1>
           <p className="text-base text-zinc-500 dark:text-zinc-400">
             Selecciona el tipo de cuenta que deseas crear
@@ -144,20 +149,22 @@ function RoleCard({
       `}
       onClick={onClick}
     >
-      {/* Tag + Icon row */}
-      <div className="flex items-center justify-between mb-5">
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${colors.tag}`}>
-          {tag}
-        </span>
+      {/* Title + Icon row — moved to top */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">
+          {title}
+        </h2>
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${colors.iconBg} ${colors.iconText}`}>
           {icon}
         </div>
       </div>
 
-      {/* Text */}
-      <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-1.5 tracking-tight">
-        {title}
-      </h2>
+      {/* Tag */}
+      <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-lg mb-3 ${colors.tag}`}>
+        {tag}
+      </span>
+
+      {/* Description */}
       <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5 leading-relaxed">
         {description}
       </p>
