@@ -105,8 +105,11 @@ function normalizeEducationLevel(value: string): EducationLevel | null | undefin
     TECH: "TECHNICAL",
     ASSOCIATE: "TECHNICAL",
     BACHELOR: "BACHELOR",
+    BACHELORS: "BACHELOR",
     MASTER: "MASTER",
+    MASTERS: "MASTER",
     DOCTORATE: "DOCTORATE",
+    DOCTORATES: "DOCTORATE",
     PHD: "DOCTORATE",
     OTHER: "OTHER",
  
