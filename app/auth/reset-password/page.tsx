@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import ResetPasswordForm from "./ResetPasswordForm";
 
 export const metadata = {
-  title: "Restablecer contraseña | TaskIT",
+  title: "Restablecer contraseña | TaskIO",
 };
 
 export default function ResetPasswordPage() {

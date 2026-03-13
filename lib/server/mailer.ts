@@ -114,7 +114,8 @@ export async function sendEmail(opts: {
   }
 }
 
-// ✅ CORREGIDO: asunto y copy menos spam-trigger
+/* ====================== Verification Email ======================= */
+
 export async function sendVerificationEmail(to: string, verifyUrl: string) {
   const subject = `Tu acceso a ${APP_NAME} está listo`;
   const safeUrl = escapeHtml(verifyUrl);
@@ -130,62 +131,107 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
       <tr>
         <td align="center">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
 
+            <!-- ===== LOGO ===== -->
             <tr>
-              <td align="center" style="padding-bottom:24px;">
-                <span style="font-size:26px;font-weight:800;color:#7c3aed;letter-spacing:-0.5px;">${escapeHtml(APP_NAME)}</span>
+              <td align="center" style="padding-bottom:28px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <!-- Ícono verde -->
+                    <td style="background-color:#10b981;border-radius:10px;width:36px;height:36px;text-align:center;vertical-align:middle;mso-padding-alt:0;">
+                      <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" style="width:36px;height:36px;" arcsize="28%" stroke="f" fillcolor="#10b981"><v:textbox inset="0,0,0,0"><center><![endif]-->
+                      <span style="display:block;font-size:22px;font-weight:700;color:#ffffff;line-height:36px;text-align:center;">+</span>
+                      <!--[if mso]></center></v:textbox></v:roundrect><![endif]-->
+                    </td>
+                    <!-- Wordmark -->
+                    <td style="padding-left:10px;vertical-align:middle;white-space:nowrap;">
+                      <span style="font-size:24px;font-weight:800;letter-spacing:-0.5px;color:#0f172a;">TASK</span><span style="font-size:24px;font-weight:800;letter-spacing:-0.5px;color:#7c3aed;">IO</span>
+                    </td>
+                  </tr>
+                </table>
               </td>
             </tr>
 
+            <!-- ===== CARD ===== -->
             <tr>
-              <td style="background:#ffffff;border-radius:16px;padding:40px 40px 32px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-
+              <td style="background:#ffffff;border-radius:16px;border:1px solid #e4e4e7;padding:40px 40px 36px;">
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+
+                  <!-- Icono envelope -->
                   <tr>
                     <td align="center" style="padding-bottom:24px;">
-                      <div style="display:inline-block;background:#f3f0ff;border-radius:50%;width:64px;height:64px;line-height:64px;text-align:center;font-size:28px;">✉️</div>
+                      <table role="presentation" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="background:#f3f0ff;border-radius:50%;width:64px;height:64px;text-align:center;vertical-align:middle;">
+                            <span style="font-size:28px;line-height:64px;">✉️</span>
+                          </td>
+                        </tr>
+                      </table>
                     </td>
                   </tr>
-                </table>
 
-                <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;text-align:center;">
-                  Un paso más para entrar
-                </h1>
-                <p style="margin:0 0 24px;font-size:14px;color:#6b7280;text-align:center;line-height:1.6;">
-                  Haz clic en el botón para completar tu registro en
-                  <strong style="color:#111827;">${escapeHtml(APP_NAME)}</strong>.
-                </p>
-
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <!-- Heading -->
                   <tr>
-                    <td align="center" style="padding:8px 0 28px;">
+                    <td align="center" style="padding-bottom:10px;">
+                      <h1 style="margin:0;font-size:22px;font-weight:700;color:#0f172a;letter-spacing:-0.4px;">
+                        Un paso más para entrar
+                      </h1>
+                    </td>
+                  </tr>
+
+                  <!-- Subtext -->
+                  <tr>
+                    <td align="center" style="padding-bottom:32px;">
+                      <p style="margin:0;font-size:14px;color:#71717a;line-height:1.65;max-width:360px;">
+                        Haz clic en el botón para completar tu registro en
+                        <strong style="color:#0f172a;">${escapeHtml(APP_NAME)}</strong>.
+                      </p>
+                    </td>
+                  </tr>
+
+                  <!-- CTA -->
+                  <tr>
+                    <td align="center" style="padding-bottom:32px;">
+                      <!--[if mso]>
+                      <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${safeUrl}" style="height:48px;v-text-anchor:middle;width:220px;" arcsize="21%" stroke="f" fillcolor="#7c3aed">
+                        <w:anchorlock/>
+                        <center style="color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:600;">Completar registro</center>
+                      </v:roundrect>
+                      <![endif]-->
+                      <!--[if !mso]><!-->
                       <a href="${safeUrl}" target="_blank" rel="noreferrer"
-                        style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 36px;border-radius:10px;letter-spacing:0.2px;">
+                        style="display:inline-block;background:#7c3aed;color:#ffffff;text-decoration:none;font-size:15px;font-weight:600;padding:14px 36px;border-radius:10px;letter-spacing:0.1px;">
                         Completar registro
                       </a>
+                      <!--<![endif]-->
                     </td>
                   </tr>
-                </table>
 
-                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <!-- Divider -->
                   <tr>
-                    <td style="background:#fafafa;border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;">
-                      <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.5;">
-                        ⏱️ Este enlace es válido por <strong style="color:#374151;">60 minutos</strong>.
+                    <td style="border-top:1px solid #f4f4f5;padding-bottom:24px;"></td>
+                  </tr>
+
+                  <!-- Expiry + fallback URL -->
+                  <tr>
+                    <td style="background:#fafafa;border:1px solid #e4e4e7;border-radius:8px;padding:14px 16px;">
+                      <p style="margin:0 0 8px;font-size:12px;color:#71717a;line-height:1.5;">
+                        ⏱ Este enlace es válido por <strong style="color:#374151;">60 minutos</strong>.
                         Si el botón no funciona, copia y pega este link en tu navegador:
                       </p>
-                      <p style="margin:6px 0 0;font-size:11px;word-break:break-all;color:#7c3aed;">${safeUrl}</p>
+                      <p style="margin:0;font-size:11px;word-break:break-all;color:#7c3aed;line-height:1.5;">${safeUrl}</p>
                     </td>
                   </tr>
-                </table>
 
+                </table>
               </td>
             </tr>
 
+            <!-- ===== FOOTER ===== -->
             <tr>
               <td align="center" style="padding:24px 0 8px;">
-                <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+                <p style="margin:0;font-size:12px;color:#a1a1aa;line-height:1.7;">
                   Si no creaste esta cuenta, puedes ignorar este correo.<br/>
                   © ${new Date().getFullYear()} ${escapeHtml(APP_NAME)} — Todos los derechos reservados.
                 </p>
@@ -513,19 +559,53 @@ export async function sendPasswordResetEmail(params: {
 
 /* ====================== helpers ======================= */
 
+/**
+ * Layout base para emails secundarios (assessments, postulaciones, mensajes, reset).
+ * Incluye el logo de TaskIO en el header.
+ */
 function htmlLayout({ title, body }: { title: string; body: string }) {
   return `<!doctype html>
-<html>
-  <head><meta charset="utf-8" /><title>${escapeHtml(title)}</title></head>
-  <body style="background:#f8fafc;margin:0;padding:24px;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica Neue,Arial;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:640px;margin:0 auto;background:white;border:1px solid #e5e7eb;border-radius:12px;">
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body style="background:#f4f4f5;margin:0;padding:0;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
       <tr>
-        <td style="padding:20px 24px;">
-          <h1 style="font-size:18px;margin:0 0 8px 0;">${escapeHtml(APP_NAME)}</h1>
-          <div style="color:#111827;font-size:14px;line-height:1.6;">${body}</div>
-          <p style="margin-top:28px;color:#6b7280;font-size:12px;">© ${new Date().getFullYear()} ${escapeHtml(
-            APP_NAME
-          )} — Este correo fue enviado automáticamente.</p>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+
+            <!-- Logo -->
+            <tr>
+              <td align="center" style="padding-bottom:24px;">
+                <table role="presentation" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="background-color:#10b981;border-radius:10px;width:34px;height:34px;text-align:center;vertical-align:middle;">
+                      <span style="display:block;font-size:20px;font-weight:700;color:#ffffff;line-height:34px;text-align:center;">+</span>
+                    </td>
+                    <td style="padding-left:9px;vertical-align:middle;white-space:nowrap;">
+                      <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#0f172a;">TASK</span><span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#7c3aed;">IO</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Card -->
+            <tr>
+              <td style="background:#ffffff;border-radius:14px;border:1px solid #e4e4e7;padding:32px 36px;">
+                <div style="color:#111827;font-size:14px;line-height:1.7;">
+                  ${body}
+                </div>
+                <p style="margin-top:28px;padding-top:20px;border-top:1px solid #f4f4f5;font-size:12px;color:#9ca3af;">
+                  © ${new Date().getFullYear()} ${escapeHtml(APP_NAME)} — Este correo fue enviado automáticamente.
+                </p>
+              </td>
+            </tr>
+
+          </table>
         </td>
       </tr>
     </table>
