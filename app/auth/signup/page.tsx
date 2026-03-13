@@ -3,74 +3,116 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserCircle, Building2 } from "lucide-react";
+import { UserCircle, Building2, CheckCircle2, Zap, Shield, Users } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-50 dark:bg-zinc-950 px-4 py-12">
-      <div className="w-full max-w-4xl">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-zinc-50 mb-3">
-            Únete a TaskIT
-          </h1>
-          <p className="text-base text-zinc-600 dark:text-zinc-400">
-            Selecciona el tipo de cuenta que deseas crear
-          </p>
-        </div>
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
+      {/* Trust bar */}
+      <div className="bg-emerald-600 text-white text-xs font-medium text-center py-2 px-4 tracking-wide">
+        +5,000 candidatos activos · +800 empresas registradas · Contrataciones verificadas
+      </div>
 
-        {/* Cards Grid */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          {/* Tarjeta Candidato */}
-          <RoleCard
-            icon={<UserCircle className="h-12 w-12" />}
-            title="Busco trabajo"
-            subtitle="Soy Candidato"
-            description="Accede a oportunidades de trabajo en tecnología"
-            features={[
-              "Crea tu CV profesional en minutos",
-              "Postula a vacantes con un clic",
-              "Realiza evaluaciones técnicas",
-              "Recibe ofertas directas de empresas",
-            ]}
-            buttonText="Crear cuenta como candidato"
-            buttonColor="emerald"
-            onClick={() => router.push("/auth/signup/candidate")}
-          />
+      {/* Main content */}
+      <div className="flex flex-col items-center justify-center px-4 py-14 sm:py-20">
+        <div className="w-full max-w-2xl">
 
-          {/* Tarjeta Reclutador */}
-          <RoleCard
-            icon={<Building2 className="h-12 w-12" />}
-            title="Busco talento"
-            subtitle="Soy Reclutador / Empresa"
-            description="Encuentra y contrata profesionales tech"
-            features={[
-              "Publica vacantes ilimitadas",
-              "Accede a CVs verificados",
-              "Gestiona evaluaciones técnicas",
-              "Pipeline completo de candidatos",
-            ]}
-            buttonText="Crear cuenta como reclutador"
-            buttonColor="violet"
-            onClick={() => router.push("/auth/signup/recruiter")}
-          />
-        </div>
-
-        {/* Footer */}
-        <div className="text-center">
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            ¿Ya tienes cuenta?{" "}
-            <Link
-              href="/auth/signin"
-              className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-500 dark:hover:text-emerald-400 font-medium transition-colors"
-            >
-              Iniciar sesión
+          {/* Logo */}
+          <div className="flex justify-center mb-10">
+            <Link href="/" className="flex items-center gap-2 group">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                  <path d="M4 9h10M9 4v10" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+                </svg>
+              </div>
+              <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+                TASK<span className="text-violet-600 dark:text-violet-400">IO</span>
+              </span>
             </Link>
-          </p>
+          </div>
+
+          {/* Header */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-5 tracking-wide uppercase">
+              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+              Plataforma líder de tech recruiting
+            </div>
+            <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 tracking-tight">
+              Únete a TaskIO
+            </h1>
+            <p className="text-base text-zinc-500 dark:text-zinc-400">
+              Selecciona el tipo de cuenta que deseas crear
+            </p>
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid sm:grid-cols-2 gap-4 mb-8">
+            <RoleCard
+              icon={<UserCircle className="h-6 w-6" />}
+              tag="Busco trabajo"
+              title="Soy Candidato"
+              description="Accede a oportunidades de trabajo en tecnología y conecta con las mejores empresas."
+              features={[
+                "Crea tu CV profesional en minutos",
+                "Postula a vacantes con un clic",
+                "Realiza evaluaciones técnicas",
+                "Recibe ofertas directas de empresas",
+              ]}
+              buttonText="Crear cuenta como candidato"
+              buttonColor="emerald"
+              onClick={() => router.push("/auth/signup/candidate")}
+            />
+
+            <RoleCard
+              icon={<Building2 className="h-6 w-6" />}
+              tag="Busco talento"
+              title="Soy Reclutador"
+              description="Encuentra y contrata profesionales tech con el pipeline más eficiente del mercado."
+              features={[
+                "Publica vacantes ilimitadas",
+                "Accede a CVs verificados",
+                "Gestiona evaluaciones técnicas",
+                "Pipeline completo de candidatos",
+              ]}
+              buttonText="Crear cuenta como reclutador"
+              buttonColor="violet"
+              onClick={() => router.push("/auth/signup/recruiter")}
+            />
+          </div>
+
+          {/* Trust icons */}
+          <div className="flex items-center justify-center gap-6 mb-8 flex-wrap">
+            <TrustItem icon={<Shield className="w-3.5 h-3.5" />} label="Datos seguros" />
+            <TrustItem icon={<Zap className="w-3.5 h-3.5" />} label="Registro en 2 min" />
+            <TrustItem icon={<Users className="w-3.5 h-3.5" />} label="Comunidad activa" />
+          </div>
+
+          {/* Footer */}
+          <div className="text-center">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              ¿Ya tienes cuenta?{" "}
+              <Link
+                href="/auth/signin"
+                className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-semibold transition-colors"
+              >
+                Inicia sesión
+              </Link>
+            </p>
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* -------- Trust Item -------- */
+function TrustItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 font-medium">
+      <span className="text-emerald-500">{icon}</span>
+      {label}
     </div>
   );
 }
@@ -78,8 +120,8 @@ export default function SignupPage() {
 /* -------- Role Card Component -------- */
 interface RoleCardProps {
   icon: React.ReactNode;
+  tag: string;
   title: string;
-  subtitle: string;
   description: string;
   features: string[];
   buttonText: string;
@@ -89,120 +131,89 @@ interface RoleCardProps {
 
 function RoleCard({
   icon,
+  tag,
   title,
-  subtitle,
   description,
   features,
   buttonText,
   buttonColor,
   onClick,
 }: RoleCardProps) {
-  const colorClasses = {
+  const colors = {
     emerald: {
       iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
       iconText: "text-emerald-600 dark:text-emerald-400",
-      button: "bg-emerald-600 hover:bg-emerald-700 text-white",
-      border: "hover:border-emerald-300 dark:hover:border-emerald-700",
-      checkmark: "text-emerald-600 dark:text-emerald-500",
+      button: "bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm shadow-emerald-200 dark:shadow-emerald-900/40",
+      border: "hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-emerald-100 dark:hover:shadow-emerald-950",
+      tag: "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900",
+      check: "text-emerald-500 dark:text-emerald-400",
+      glow: "bg-emerald-500",
     },
     violet: {
       iconBg: "bg-violet-100 dark:bg-violet-900/30",
       iconText: "text-violet-600 dark:text-violet-400",
-      button: "bg-violet-600 hover:bg-violet-700 text-white",
-      border: "hover:border-violet-300 dark:hover:border-violet-700",
-      checkmark: "text-violet-600 dark:text-violet-500",
+      button: "bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white shadow-sm shadow-violet-200 dark:shadow-violet-900/40",
+      border: "hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-violet-100 dark:hover:shadow-violet-950",
+      tag: "bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 border-violet-100 dark:border-violet-900",
+      check: "text-violet-500 dark:text-violet-400",
+      glow: "bg-violet-500",
     },
-  };
-
-  const colors = colorClasses[buttonColor];
+  }[buttonColor];
 
   return (
     <div
       className={`
-        group relative rounded-2xl border-2 p-6 md:p-8
-        transition-all duration-200 cursor-pointer
-        border-zinc-200 dark:border-zinc-800
+        group relative rounded-2xl border p-6 cursor-pointer
         bg-white dark:bg-zinc-900
+        border-zinc-200 dark:border-zinc-800
+        transition-all duration-200
         hover:shadow-xl hover:-translate-y-1
         ${colors.border}
       `}
       onClick={onClick}
     >
-      {/* Icon & Title */}
-      <div className="text-center mb-6">
-        <div
-          className={`
-          inline-flex items-center justify-center
-          w-20 h-20 rounded-2xl mb-4
-          transition-transform group-hover:scale-110
-          ${colors.iconBg} ${colors.iconText}
-        `}
-        >
-          {icon}
+      {/* Tag + Icon row */}
+      <div className="flex items-center justify-between mb-5">
+        <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${colors.tag}`}>
+          {tag}
         </div>
-        
-        <div className="space-y-1">
-          <p className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
-            {title}
-          </p>
-          <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-            {subtitle}
-          </h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            {description}
-          </p>
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${colors.iconBg} ${colors.iconText}`}>
+          {icon}
         </div>
       </div>
 
-      {/* Features List */}
-      <ul className="space-y-3 mb-6">
-        {features.map((feature, index) => (
-          <li
-            key={index}
-            className="flex items-start gap-3 text-sm text-zinc-700 dark:text-zinc-300"
-          >
-            <svg
-              className={`h-5 w-5 shrink-0 mt-0.5 ${colors.checkmark}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-            <span>{feature}</span>
+      {/* Text */}
+      <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 mb-1.5 tracking-tight">
+        {title}
+      </h2>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400 mb-5 leading-relaxed">
+        {description}
+      </p>
+
+      {/* Divider */}
+      <div className="border-t border-zinc-100 dark:border-zinc-800 mb-5" />
+
+      {/* Features */}
+      <ul className="space-y-2.5 mb-6">
+        {features.map((feature, i) => (
+          <li key={i} className="flex items-center gap-2.5 text-sm text-zinc-700 dark:text-zinc-300">
+            <CheckCircle2 className={`w-4 h-4 shrink-0 ${colors.check}`} />
+            {feature}
           </li>
         ))}
       </ul>
 
-      {/* CTA Button */}
+      {/* CTA */}
       <button
-        className={`
-          w-full h-11 rounded-lg
-          text-sm font-semibold
-          transition-all duration-200
-          ${colors.button}
-          group-hover:shadow-lg
-        `}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}
+        className={`w-full h-11 rounded-xl text-sm font-semibold transition-all duration-200 ${colors.button}`}
+        onClick={(e) => { e.stopPropagation(); onClick(); }}
       >
-        {buttonText}
+        {buttonText} →
       </button>
 
-      {/* Decorative gradient (optional) */}
+      {/* Subtle glow on hover */}
       <div
-        className={`
-        absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-5
-        transition-opacity pointer-events-none
-        ${buttonColor === "emerald" ? "bg-emerald-600" : "bg-violet-600"}
-      `}
+        className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-[0.03] transition-opacity pointer-events-none ${colors.glow}`}
       />
     </div>
   );

@@ -1202,4 +1202,4 @@ export default function Step5Details({
       </div>
     </div>
   );
-}
+} 
