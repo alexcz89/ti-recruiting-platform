@@ -3,116 +3,88 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { UserCircle, Building2, CheckCircle2, Zap, Shield, Users } from "lucide-react";
+import { UserCircle, Building2, CheckCircle2 } from "lucide-react";
 
 export default function SignupPage() {
   const router = useRouter();
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      {/* Trust bar */}
-      <div className="bg-emerald-600 text-white text-xs font-medium text-center py-2 px-4 tracking-wide">
-        +5,000 candidatos activos · +800 empresas registradas · Contrataciones verificadas
-      </div>
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex flex-col items-center justify-center px-4 py-16">
+      <div className="w-full max-w-2xl">
 
-      {/* Main content */}
-      <div className="flex flex-col items-center justify-center px-4 py-14 sm:py-20">
-        <div className="w-full max-w-2xl">
-
-          {/* Logo */}
-          <div className="flex justify-center mb-10">
-            <Link href="/" className="flex items-center gap-2 group">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-                  <path d="M4 9h10M9 4v10" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-                TASK<span className="text-violet-600 dark:text-violet-400">IO</span>
-              </span>
-            </Link>
-          </div>
-
-          {/* Header */}
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 text-xs font-semibold px-3 py-1.5 rounded-full mb-5 tracking-wide uppercase">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              Plataforma líder de tech recruiting
+        {/* Logo */}
+        <div className="flex justify-center mb-10">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <path d="M4 9h10M9 4v10" stroke="white" strokeWidth="2.2" strokeLinecap="round" />
+              </svg>
             </div>
-            <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 tracking-tight">
-              Únete a TaskIO
-            </h1>
-            <p className="text-base text-zinc-500 dark:text-zinc-400">
-              Selecciona el tipo de cuenta que deseas crear
-            </p>
-          </div>
-
-          {/* Cards Grid */}
-          <div className="grid sm:grid-cols-2 gap-4 mb-8">
-            <RoleCard
-              icon={<UserCircle className="h-6 w-6" />}
-              tag="Busco trabajo"
-              title="Soy Candidato"
-              description="Accede a oportunidades de trabajo en tecnología y conecta con las mejores empresas."
-              features={[
-                "Crea tu CV profesional en minutos",
-                "Postula a vacantes con un clic",
-                "Realiza evaluaciones técnicas",
-                "Recibe ofertas directas de empresas",
-              ]}
-              buttonText="Crear cuenta como candidato"
-              buttonColor="emerald"
-              onClick={() => router.push("/auth/signup/candidate")}
-            />
-
-            <RoleCard
-              icon={<Building2 className="h-6 w-6" />}
-              tag="Busco talento"
-              title="Soy Reclutador"
-              description="Encuentra y contrata profesionales tech con el pipeline más eficiente del mercado."
-              features={[
-                "Publica vacantes ilimitadas",
-                "Accede a CVs verificados",
-                "Gestiona evaluaciones técnicas",
-                "Pipeline completo de candidatos",
-              ]}
-              buttonText="Crear cuenta como reclutador"
-              buttonColor="violet"
-              onClick={() => router.push("/auth/signup/recruiter")}
-            />
-          </div>
-
-          {/* Trust icons */}
-          <div className="flex items-center justify-center gap-6 mb-8 flex-wrap">
-            <TrustItem icon={<Shield className="w-3.5 h-3.5" />} label="Datos seguros" />
-            <TrustItem icon={<Zap className="w-3.5 h-3.5" />} label="Registro en 2 min" />
-            <TrustItem icon={<Users className="w-3.5 h-3.5" />} label="Comunidad activa" />
-          </div>
-
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              ¿Ya tienes cuenta?{" "}
-              <Link
-                href="/auth/signin"
-                className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-semibold transition-colors"
-              >
-                Inicia sesión
-              </Link>
-            </p>
-          </div>
+            <span className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+              TASK<span className="text-violet-600 dark:text-violet-400">IO</span>
+            </span>
+          </Link>
         </div>
-      </div>
-    </div>
-  );
-}
 
-/* -------- Trust Item -------- */
-function TrustItem({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 font-medium">
-      <span className="text-emerald-500">{icon}</span>
-      {label}
+        {/* Header */}
+        <div className="text-center mb-10">
+          <h1 className="text-3xl md:text-4xl font-bold text-zinc-900 dark:text-zinc-50 mb-3 tracking-tight">
+            Únete a TaskIO
+          </h1>
+          <p className="text-base text-zinc-500 dark:text-zinc-400">
+            Selecciona el tipo de cuenta que deseas crear
+          </p>
+        </div>
+
+        {/* Cards Grid */}
+        <div className="grid sm:grid-cols-2 gap-4 mb-8">
+          <RoleCard
+            icon={<UserCircle className="h-6 w-6" />}
+            tag="Busco trabajo"
+            title="Soy Candidato"
+            description="Accede a oportunidades de trabajo en tecnología y conecta con las mejores empresas."
+            features={[
+              "Crea tu CV profesional en minutos",
+              "Postula a vacantes con un clic",
+              "Realiza evaluaciones técnicas",
+              "Recibe ofertas directas de empresas",
+            ]}
+            buttonText="Crear cuenta como candidato"
+            buttonColor="emerald"
+            onClick={() => router.push("/auth/signup/candidate")}
+          />
+
+          <RoleCard
+            icon={<Building2 className="h-6 w-6" />}
+            tag="Busco talento"
+            title="Soy Reclutador"
+            description="Encuentra y contrata profesionales tech con el pipeline más eficiente del mercado."
+            features={[
+              "Publica vacantes ilimitadas",
+              "Accede a CVs verificados",
+              "Gestiona evaluaciones técnicas",
+              "Pipeline completo de candidatos",
+            ]}
+            buttonText="Crear cuenta como reclutador"
+            buttonColor="violet"
+            onClick={() => router.push("/auth/signup/recruiter")}
+          />
+        </div>
+
+        {/* Footer */}
+        <div className="text-center">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            ¿Ya tienes cuenta?{" "}
+            <Link
+              href="/auth/signin"
+              className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 font-semibold transition-colors"
+            >
+              Inicia sesión
+            </Link>
+          </p>
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -143,18 +115,18 @@ function RoleCard({
     emerald: {
       iconBg: "bg-emerald-100 dark:bg-emerald-900/30",
       iconText: "text-emerald-600 dark:text-emerald-400",
-      button: "bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white shadow-sm shadow-emerald-200 dark:shadow-emerald-900/40",
-      border: "hover:border-emerald-300 dark:hover:border-emerald-700 hover:shadow-emerald-100 dark:hover:shadow-emerald-950",
-      tag: "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900",
+      button: "bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white",
+      border: "hover:border-emerald-300 dark:hover:border-emerald-700",
+      tag: "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900",
       check: "text-emerald-500 dark:text-emerald-400",
       glow: "bg-emerald-500",
     },
     violet: {
       iconBg: "bg-violet-100 dark:bg-violet-900/30",
       iconText: "text-violet-600 dark:text-violet-400",
-      button: "bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white shadow-sm shadow-violet-200 dark:shadow-violet-900/40",
-      border: "hover:border-violet-300 dark:hover:border-violet-700 hover:shadow-violet-100 dark:hover:shadow-violet-950",
-      tag: "bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 border-violet-100 dark:border-violet-900",
+      button: "bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white",
+      border: "hover:border-violet-300 dark:hover:border-violet-700",
+      tag: "bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 border border-violet-100 dark:border-violet-900",
       check: "text-violet-500 dark:text-violet-400",
       glow: "bg-violet-500",
     },
@@ -174,9 +146,9 @@ function RoleCard({
     >
       {/* Tag + Icon row */}
       <div className="flex items-center justify-between mb-5">
-        <div className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border ${colors.tag}`}>
+        <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg ${colors.tag}`}>
           {tag}
-        </div>
+        </span>
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${colors.iconBg} ${colors.iconText}`}>
           {icon}
         </div>
@@ -212,9 +184,7 @@ function RoleCard({
       </button>
 
       {/* Subtle glow on hover */}
-      <div
-        className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-[0.03] transition-opacity pointer-events-none ${colors.glow}`}
-      />
+      <div className={`absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-[0.03] transition-opacity pointer-events-none ${colors.glow}`} />
     </div>
   );
 }
