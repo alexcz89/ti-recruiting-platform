@@ -557,6 +557,184 @@ export async function sendPasswordResetEmail(params: {
   });
 }
 
+/* ====================== Nueva aplicación → Reclutador ======================= */
+// ✅ NUEVO: Reemplaza el htmlLayout genérico que generaba el link roto
+//    "[undefined/dashboard/jobs/ID/applications]Ver aplicación"
+
+export async function sendNewApplicationToRecruiterEmail(params: {
+  to: string;
+  recruiterName?: string;
+  candidateName: string;
+  candidateEmail?: string;
+  jobTitle: string;
+  jobId: string;
+  applicationId: string;
+  coverLetterPreview?: string;
+}) {
+  const subject = `Nueva aplicación: ${params.candidateName} → ${params.jobTitle}`;
+
+  // ✅ BUG FIX: usa BASE_URL para construir el link absoluto
+  const applicationUrl = `${BASE_URL}/dashboard/jobs/${params.jobId}/applications`;
+  const safeUrl       = escapeHtml(applicationUrl);
+  const safeName      = escapeHtml(params.candidateName);
+  const safeJob       = escapeHtml(params.jobTitle);
+  const safeRecruiter = params.recruiterName ? escapeHtml(params.recruiterName) : "";
+  const safePreview   = params.coverLetterPreview
+    ? escapeHtml(truncate(params.coverLetterPreview, 180))
+    : "";
+
+  const initials = params.candidateName
+    .split(" ").slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${escapeHtml(subject)}</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4f4f5;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding-bottom:28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+                <td style="background-color:#10b981;border-radius:10px;width:36px;height:36px;text-align:center;vertical-align:middle;">
+                  <span style="display:block;font-size:20px;font-weight:700;color:#ffffff;line-height:36px;text-align:center;">+</span>
+                </td>
+                <td style="padding-left:10px;vertical-align:middle;white-space:nowrap;">
+                  <span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#0f172a;">TASK</span><span style="font-size:22px;font-weight:800;letter-spacing:-0.5px;color:#7c3aed;">IO</span>
+                </td>
+              </tr></table>
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background:#ffffff;border-radius:16px;border:1px solid #e4e4e7;overflow:hidden;">
+
+              <!-- Header verde -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="background:#10b981;padding:20px 28px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+                      <td style="vertical-align:middle;padding-right:10px;font-size:22px;line-height:1;">📋</td>
+                      <td style="vertical-align:middle;">
+                        <p style="margin:0;font-size:15px;font-weight:700;color:#ffffff;">Nueva aplicación recibida</p>
+                        <p style="margin:2px 0 0;font-size:12px;color:#d1fae5;">${safeJob}</p>
+                      </td>
+                    </tr></table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Body -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="padding:28px 28px 0;">
+
+                  ${safeRecruiter ? `<p style="margin:0 0 20px;font-size:14px;color:#374151;">Hola <strong>${safeRecruiter}</strong>,</p>` : ""}
+
+                  <!-- Candidato card -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:20px;">
+                    <tr><td style="padding:16px 18px;">
+                      <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+                        <td style="vertical-align:middle;padding-right:14px;">
+                          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+                            <td style="width:44px;height:44px;border-radius:50%;background:#7c3aed;text-align:center;vertical-align:middle;font-size:15px;font-weight:700;color:#ffffff;line-height:44px;">${initials}</td>
+                          </tr></table>
+                        </td>
+                        <td style="vertical-align:middle;">
+                          <p style="margin:0;font-size:15px;font-weight:700;color:#111827;">${safeName}</p>
+                          ${params.candidateEmail ? `<p style="margin:3px 0 0;font-size:12px;color:#6b7280;">${escapeHtml(params.candidateEmail)}</p>` : ""}
+                        </td>
+                      </tr></table>
+                    </td></tr>
+                  </table>
+
+                  <!-- Vacante -->
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:${safePreview ? "20px" : "0"};">
+                    <tr>
+                      <td style="padding:12px 16px;background:#f0fdf4;border-left:3px solid #10b981;border-radius:0 6px 6px 0;">
+                        <p style="margin:0;font-size:11px;font-weight:600;color:#059669;letter-spacing:.5px;text-transform:uppercase;">Vacante</p>
+                        <p style="margin:3px 0 0;font-size:14px;font-weight:600;color:#065f46;">${safeJob}</p>
+                      </td>
+                    </tr>
+                  </table>
+
+                  <!-- Carta de presentación (opcional) -->
+                  ${safePreview ? `
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                    <tr><td style="padding-top:20px;">
+                      <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#9ca3af;letter-spacing:.5px;text-transform:uppercase;">Carta de presentación</p>
+                      <p style="margin:0;font-size:13px;color:#4b5563;line-height:1.65;font-style:italic;">"${safePreview}…"</p>
+                    </td></tr>
+                  </table>` : ""}
+
+                </td></tr>
+
+                <!-- CTA -->
+                <tr><td style="padding:24px 28px 28px;">
+                  <!--[if mso]>
+                  <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${safeUrl}" style="height:46px;v-text-anchor:middle;width:200px;" arcsize="22%" stroke="f" fillcolor="#10b981">
+                    <w:anchorlock/><center style="color:#ffffff;font-family:sans-serif;font-size:14px;font-weight:700;">Ver aplicación →</center>
+                  </v:roundrect>
+                  <![endif]-->
+                  <!--[if !mso]><!-->
+                  <a href="${safeUrl}" target="_blank" rel="noreferrer"
+                    style="display:inline-block;background:#10b981;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;padding:13px 28px;border-radius:9px;">
+                    Ver aplicación →
+                  </a>
+                  <!--<![endif]-->
+                </td></tr>
+
+                <!-- Nota footer -->
+                <tr><td style="padding:0 28px 24px;border-top:1px solid #f4f4f5;">
+                  <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;line-height:1.6;">
+                    Correo automático de ${escapeHtml(APP_NAME)}. Ajusta tus preferencias en
+                    <a href="${escapeHtml(BASE_URL)}/dashboard/notifications/preferences" style="color:#7c3aed;text-decoration:none;">tu perfil</a>.
+                  </p>
+                </td></tr>
+
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr><td align="center" style="padding:24px 0 8px;">
+            <p style="margin:0;font-size:12px;color:#a1a1aa;">
+              © ${new Date().getFullYear()} ${escapeHtml(APP_NAME)} —
+              <a href="${escapeHtml(BASE_URL)}" style="color:#a1a1aa;text-decoration:underline;">taskio.com.mx</a>
+            </p>
+          </td></tr>
+
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+
+  const text =
+    `Nueva aplicación recibida\n\n` +
+    `${params.candidateName} aplicó a ${params.jobTitle}.\n` +
+    (params.candidateEmail ? `Email: ${params.candidateEmail}\n` : "") +
+    (params.coverLetterPreview ? `\n"${truncate(params.coverLetterPreview, 180)}"\n` : "") +
+    `\nVer aplicación: ${applicationUrl}\n\n` +
+    `Correo automático de ${APP_NAME}.`;
+
+  return sendEmail({
+    to: params.to,
+    subject,
+    html,
+    text,
+    dedupeKey: `new-application-recruiter:${params.applicationId}`,
+  });
+}
+
 /* ====================== helpers ======================= */
 
 /**
