@@ -31,19 +31,6 @@ import { sendWebhookNotification } from './channels/webhook';
 export class NotificationService {
   /**
    * Create a new notification
-   * 
-   * @example
-   * await NotificationService.create({
-   *   userId: 'user-123',
-   *   type: 'NEW_APPLICATION',
-   *   metadata: {
-   *     candidateName: 'Juan Pérez',
-   *     jobTitle: 'Senior Developer',
-   *     applicationId: 'app-123',
-   *     jobId: 'job-123',
-   *     candidateId: 'candidate-123',
-   *   },
-   * });
    */
   static async create<T extends NotificationType>(
     request: CreateNotificationRequest<T>
@@ -65,6 +52,8 @@ export class NotificationService {
     const priority = template.priority;
 
     // 3. Get user preferences to determine channels
+    // ✅ FIX: getUserPreferences tiene su propio try/catch — un cold start de DB
+    // no debe bloquear la creación de la notificación
     const userPreferences = await this.getUserPreferences(userId);
     const enabledChannels = this.determineChannels(
       type,
@@ -213,7 +202,6 @@ export class NotificationService {
     preferences: NotificationPreference[],
     requestedChannels?: NotificationChannel[]
   ): NotificationChannel[] {
-    // Find preference for this notification type
     const pref = preferences.find((p) => p.type === type);
 
     if (!pref) {
@@ -221,7 +209,6 @@ export class NotificationService {
       return requestedChannels || DEFAULT_CHANNELS[type] || ['IN_APP'];
     }
 
-    // Build list of enabled channels based on preferences
     const channels: NotificationChannel[] = [];
     if (pref.inApp) channels.push('IN_APP');
     if (pref.email) channels.push('EMAIL');
@@ -232,31 +219,36 @@ export class NotificationService {
 
   /**
    * Get user's notification preferences
+   * ✅ FIX: wrapped in try/catch para que un cold start o timeout de DB
+   * no rompa el flujo de notificaciones. Si falla, usa los canales por defecto.
    */
   private static async getUserPreferences(
     userId: string
   ): Promise<NotificationPreference[]> {
-    // Check if user has global notifications disabled
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        emailNotificationsEnabled: true,
-        pushNotificationsEnabled: true,
-      },
-    });
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          emailNotificationsEnabled: true,
+          pushNotificationsEnabled: true,
+        },
+      });
 
-    if (!user?.emailNotificationsEnabled) {
-      // User disabled all email notifications
-      // Return empty to filter out email channel
+      if (!user?.emailNotificationsEnabled) {
+        return [];
+      }
+
+      return await prisma.notificationPreference.findMany({
+        where: { userId },
+      });
+    } catch (err) {
+      // Cold start de Neon o timeout — usar defaults sin bloquear
+      console.warn(
+        `[Notifications] getUserPreferences failed for ${userId}, using defaults:`,
+        err
+      );
       return [];
     }
-
-    // Get user's specific preferences
-    const prefs = await prisma.notificationPreference.findMany({
-      where: { userId },
-    });
-
-    return prefs;
   }
 
   /**
@@ -274,28 +266,17 @@ export class NotificationService {
       priority,
     } = params;
 
-    // Build where clause
     const where: any = {
       userId,
       archived: false,
     };
 
-    if (unreadOnly) {
-      where.read = false;
-    }
+    if (unreadOnly) where.read = false;
+    if (type) where.type = type;
+    if (priority) where.priority = priority;
 
-    if (type) {
-      where.type = type;
-    }
-
-    if (priority) {
-      where.priority = priority;
-    }
-
-    // Get total count
     const total = await prisma.notification.count({ where });
 
-    // Get paginated notifications
     const notifications = await prisma.notification.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -303,13 +284,8 @@ export class NotificationService {
       skip: (page - 1) * limit,
     });
 
-    // Get unread count
     const unreadCount = await prisma.notification.count({
-      where: {
-        userId,
-        read: false,
-        archived: false,
-      },
+      where: { userId, read: false, archived: false },
     });
 
     return {
@@ -330,11 +306,7 @@ export class NotificationService {
    */
   static async getUnreadCount(userId: string): Promise<number> {
     return prisma.notification.count({
-      where: {
-        userId,
-        read: false,
-        archived: false,
-      },
+      where: { userId, read: false, archived: false },
     });
   }
 
@@ -345,7 +317,6 @@ export class NotificationService {
     notificationId: string,
     userId: string
   ): Promise<Notification> {
-    // Verify ownership
     const notification = await prisma.notification.findFirst({
       where: { id: notificationId, userId },
     });
@@ -354,16 +325,11 @@ export class NotificationService {
       throw new Error('Notification not found or access denied');
     }
 
-    if (notification.read) {
-      return notification; // Already read
-    }
+    if (notification.read) return notification;
 
     return prisma.notification.update({
       where: { id: notificationId },
-      data: {
-        read: true,
-        readAt: new Date(),
-      },
+      data: { read: true, readAt: new Date() },
     });
   }
 
@@ -372,17 +338,9 @@ export class NotificationService {
    */
   static async markAllAsRead(userId: string): Promise<number> {
     const result = await prisma.notification.updateMany({
-      where: {
-        userId,
-        read: false,
-        archived: false,
-      },
-      data: {
-        read: true,
-        readAt: new Date(),
-      },
+      where: { userId, read: false, archived: false },
+      data: { read: true, readAt: new Date() },
     });
-
     return result.count;
   }
 
@@ -393,7 +351,6 @@ export class NotificationService {
     notificationId: string,
     userId: string
   ): Promise<Notification> {
-    // Verify ownership
     const notification = await prisma.notification.findFirst({
       where: { id: notificationId, userId },
     });
@@ -404,16 +361,12 @@ export class NotificationService {
 
     return prisma.notification.update({
       where: { id: notificationId },
-      data: {
-        archived: true,
-        archivedAt: new Date(),
-      },
+      data: { archived: true, archivedAt: new Date() },
     });
   }
 
   /**
    * Create default preferences for a new user
-   * Call this when a user signs up
    */
   static async createDefaultPreferences(
     userId: string
@@ -426,7 +379,6 @@ export class NotificationService {
       webhook: boolean;
     }> = [];
 
-    // Create a preference for each notification type with defaults
     const allTypes: NotificationType[] = [
       'NEW_APPLICATION',
       'APPLICATION_STATUS_CHANGE',
@@ -456,16 +408,12 @@ export class NotificationService {
       });
     }
 
-    // Use createMany for efficiency
     await prisma.notificationPreference.createMany({
       data: defaultPrefs,
       skipDuplicates: true,
     });
 
-    // Return created preferences
-    return prisma.notificationPreference.findMany({
-      where: { userId },
-    });
+    return prisma.notificationPreference.findMany({ where: { userId } });
   }
 
   /**
@@ -480,20 +428,10 @@ export class NotificationService {
       webhook: boolean;
     }>
   ): Promise<NotificationPreference[]> {
-    // Update each preference
     for (const pref of preferences) {
       await prisma.notificationPreference.upsert({
-        where: {
-          userId_type: {
-            userId,
-            type: pref.type,
-          },
-        },
-        update: {
-          inApp: pref.inApp,
-          email: pref.email,
-          webhook: pref.webhook,
-        },
+        where: { userId_type: { userId, type: pref.type } },
+        update: { inApp: pref.inApp, email: pref.email, webhook: pref.webhook },
         create: {
           userId,
           type: pref.type,
@@ -504,9 +442,6 @@ export class NotificationService {
       });
     }
 
-    // Return updated preferences
-    return prisma.notificationPreference.findMany({
-      where: { userId },
-    });
+    return prisma.notificationPreference.findMany({ where: { userId } });
   }
 }
