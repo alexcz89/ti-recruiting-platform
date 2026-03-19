@@ -120,6 +120,8 @@ export default function Step5Details({
     ? descriptionPlain.trim().split(/\s+/).filter(Boolean).length
     : 0;
   const canNext = descLength >= 50;
+  const totalSkills = requiredSkills.length + niceSkills.length;
+  const hasSkills = totalSkills > 0;
 
   const title = watch("title");
   const companyMode = watch("companyMode");
@@ -592,6 +594,20 @@ export default function Step5Details({
     } finally {
       setIsExtractingStructure(false);
     }
+  }
+
+  function handleNextWithWarnings() {
+    if (!canNext) return;
+
+    if (!hasSkills) {
+      const confirmed = window.confirm(
+        "Aún no has agregado skills.\n\nLas skills ayudan a mejorar el filtrado y el match con candidatos.\n\n¿Deseas continuar de todos modos?"
+      );
+
+      if (!confirmed) return;
+    }
+
+    onNext();
   }
 
   const tabItems = [
@@ -1177,6 +1193,12 @@ export default function Step5Details({
         </div>
       )}
 
+      {!hasSkills && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300">
+          Aún no has agregado skills. No es obligatorio, pero sí recomendable para mejorar el filtrado y el match con candidatos.
+        </div>
+      )}
+
       <div className="mt-6 flex flex-col-reverse gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:justify-between dark:border-zinc-800">
         <button
           type="button"
@@ -1195,11 +1217,11 @@ export default function Step5Details({
               ? "bg-emerald-600 hover:bg-emerald-500"
               : "cursor-not-allowed bg-emerald-300"
           )}
-          onClick={onNext}
+          onClick={handleNextWithWarnings}
         >
           Siguiente
         </button>
       </div>
     </div>
   );
-} 
+}

@@ -16,8 +16,8 @@ const STEP_LABELS = [
   "Básicos",
   "Empleo",
   "Prestaciones",
-  "Evaluaciones",
   "Detalles",
+  "Evaluaciones",
   "Revisión",
 ];
 
@@ -40,23 +40,22 @@ export default function Stepper({
           const isComplete = stepCompletion[idx];
 
           return (
-            <li key={n} className="flex flex-1 items-center min-w-0">
+            <li key={n} className="flex min-w-0 flex-1 items-center">
               <button
                 type="button"
                 onClick={() => canJump && onJump?.(n)}
                 disabled={!canJump}
                 className={clsx(
-                  "group relative flex flex-col items-center gap-1.5 transition-all duration-200 w-full",
+                  "group relative flex w-full flex-col items-center gap-1.5 transition-all duration-200",
                   canJump ? "cursor-pointer" : "cursor-not-allowed opacity-50"
                 )}
                 aria-current={active ? "step" : undefined}
               >
-                {/* Circle */}
                 <div
                   className={clsx(
-                    "relative z-10 flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-full border-2 font-semibold text-xs sm:text-sm transition-all duration-200",
+                    "relative z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all duration-200 sm:h-9 sm:w-9 sm:text-sm",
                     active &&
-                      "border-emerald-600 bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 scale-110",
+                      "scale-110 border-emerald-600 bg-emerald-600 text-white shadow-lg shadow-emerald-600/25",
                     done &&
                       !active &&
                       "border-emerald-500 bg-emerald-500 text-white",
@@ -79,10 +78,9 @@ export default function Stepper({
                   )}
                 </div>
 
-                {/* Label */}
                 <span
                   className={clsx(
-                    "text-[10px] sm:text-[11px] font-medium transition-colors hidden sm:block text-center leading-snug whitespace-nowrap",
+                    "hidden whitespace-nowrap text-center text-[10px] font-medium leading-snug transition-colors sm:block sm:text-[11px]",
                     active && "text-emerald-600 dark:text-emerald-400",
                     done && !active && "text-emerald-600 dark:text-emerald-400",
                     !done && !active && "text-zinc-500 dark:text-zinc-400"
@@ -92,15 +90,12 @@ export default function Stepper({
                 </span>
               </button>
 
-              {/* Connector Line */}
               {n < total && (
-                <div className="flex-1 px-1 sm:px-2 min-w-[8px]">
+                <div className="min-w-[8px] flex-1 px-1 sm:px-2">
                   <div
                     className={clsx(
                       "h-0.5 transition-colors duration-300",
-                      done
-                        ? "bg-emerald-500"
-                        : "bg-zinc-200 dark:bg-zinc-700"
+                      done ? "bg-emerald-500" : "bg-zinc-200 dark:bg-zinc-700"
                     )}
                   />
                 </div>
@@ -110,10 +105,11 @@ export default function Stepper({
         })}
       </ol>
 
-      {/* Mobile progress bar */}
       <div className="mt-4 sm:hidden">
-        <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-2">
-          <span>Paso {step} de {total}</span>
+        <div className="mb-2 flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
+          <span>
+            Paso {step} de {total} · {STEP_LABELS[step - 1] || `Paso ${step}`}
+          </span>
           <span>{Math.round((step / total) * 100)}% completado</span>
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">

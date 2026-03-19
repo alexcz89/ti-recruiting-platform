@@ -2,7 +2,15 @@
 "use client";
 
 import { useFormContext } from "react-hook-form";
-import { Briefcase, DollarSign, Gift, BookOpen, FileText, Globe } from "lucide-react";
+import {
+  Briefcase,
+  DollarSign,
+  Gift,
+  BookOpen,
+  FileText,
+  Globe,
+  AlertTriangle,
+} from "lucide-react";
 import { JobForm, PresetCompany } from "../types";
 import { BENEFITS } from "../constants";
 import {
@@ -27,7 +35,7 @@ function EditBtn({ label, onClick }: { label?: string; onClick: () => void }) {
   return (
     <button
       type="button"
-      className="text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-md px-2 py-1"
+      className="rounded-md px-2 py-1 text-xs font-medium text-emerald-600 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
       onClick={onClick}
     >
       {label ?? "Editar"}
@@ -47,9 +55,9 @@ function ReviewCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
+    <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-4 flex items-center justify-between gap-4">
-        <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+        <h4 className="flex items-center gap-2 text-base font-semibold text-zinc-900 dark:text-zinc-100">
           {icon}
           {title}
         </h4>
@@ -82,13 +90,11 @@ export default function Step6Review({
   const { watch } = useFormContext<JobForm>();
   const v = watch();
 
-  // Ubicación
   const isRemote = v.locationType === "REMOTE";
   const locationText = isRemote
     ? "Remoto"
     : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} • ${v.city || ""}`;
 
-  // Salario
   const salaryMin =
     typeof v.salaryMin === "number" && !Number.isNaN(v.salaryMin)
       ? v.salaryMin
@@ -107,7 +113,6 @@ export default function Step6Review({
           ? `Desde ${v.currency} ${fmt(salaryMin)}`
           : `Hasta ${v.currency} ${fmt(salaryMax!)}`;
 
-  // Prestaciones
   const benefitsList = Object.entries(v.benefits || {})
     .filter(([, val]) => val)
     .map(([k]) => {
@@ -121,14 +126,59 @@ export default function Step6Review({
   const hasDescription = Boolean(v.descriptionPlain?.trim());
   const degreeLabel = v.minDegree ? labelDegree(v.minDegree) : "Sin especificar";
 
+  const missingRecommended: string[] = [];
+  if ((v.requiredSkills?.length || 0) + (v.niceSkills?.length || 0) === 0) {
+    missingRecommended.push("Skills");
+  }
+  if (salaryMin == null && salaryMax == null) {
+    missingRecommended.push("Sueldo");
+  }
+  if (!v.minDegree) {
+    missingRecommended.push("Educación mínima");
+  }
+
+  function handleSubmitWarning(
+    e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+  ) {
+    if (busy) return;
+
+    if (missingRecommended.length > 0) {
+      const confirmed = window.confirm(
+        `Tu vacante se puede publicar, pero le faltan elementos recomendados:\n\n- ${missingRecommended.join(
+          "\n- "
+        )}\n\nEsto puede reducir la calidad del match y la visibilidad.\n\n¿Deseas publicar de todos modos?`
+      );
+
+      if (!confirmed) {
+        e.preventDefault();
+      }
+    }
+  }
+
   return (
-    <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+    <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
+      <h3 className="text-lg font-bold text-zinc-900 sm:text-xl dark:text-zinc-100">
         6) Revisión y publicación
       </h3>
 
+      {missingRecommended.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-900 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4" />
+            Recomendaciones antes de publicar
+          </div>
+          <p className="text-sm text-amber-800 dark:text-amber-300/90">
+            Tu vacante está lista para publicarse, pero le faltan elementos recomendados:
+          </p>
+          <ul className="mt-2 list-disc pl-5 text-sm text-amber-800 dark:text-amber-300/90">
+            {missingRecommended.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="grid gap-6">
-        {/* 1. Información básica */}
         <ReviewCard
           icon={<Briefcase className="h-5 w-5 text-emerald-500" />}
           title="Información básica"
@@ -143,7 +193,7 @@ export default function Step6Review({
                 </span>
               }
             />
-            <div className="grid sm:grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <Row
                 label="Empresa"
                 value={
@@ -157,20 +207,18 @@ export default function Step6Review({
           </div>
         </ReviewCard>
 
-        {/* 2. Compensación */}
         <ReviewCard
           icon={<DollarSign className="h-5 w-5 text-emerald-500" />}
           title="Compensación"
           onEdit={() => onEditStep(2)}
         >
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Row label="Sueldo" value={salaryText} />
             <Row label="Tipo de empleo" value={labelEmployment(v.employmentType)} />
             {v.schedule && <Row label="Horario" value={v.schedule} />}
           </div>
         </ReviewCard>
 
-        {/* 3. Prestaciones */}
         <ReviewCard
           icon={<Gift className="h-5 w-5 text-emerald-500" />}
           title="Prestaciones"
@@ -192,12 +240,11 @@ export default function Step6Review({
           )}
         </ReviewCard>
 
-        {/* 4. Evaluación técnica */}
         {v.assessmentTemplateId && (
           <ReviewCard
             icon={<FileText className="h-5 w-5 text-emerald-500" />}
             title="Evaluación técnica"
-            onEdit={() => onEditStep(4)}
+            onEdit={() => onEditStep(5)}
           >
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
               Evaluación seleccionada — ID:{" "}
@@ -206,20 +253,18 @@ export default function Step6Review({
           </ReviewCard>
         )}
 
-        {/* 5. Requisitos */}
         <ReviewCard
           icon={<BookOpen className="h-5 w-5 text-emerald-500" />}
           title="Requisitos"
           onEdit={() => {
-            onEditStep(5);
+            onEditStep(4);
             onEditTab("skills");
           }}
         >
           <div className="grid gap-4">
-            {/* Skills */}
             {(v.requiredSkills?.length > 0 || v.niceSkills?.length > 0) && (
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Skills
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -243,10 +288,9 @@ export default function Step6Review({
               </div>
             )}
 
-            {/* Educación */}
             {(v.eduRequired?.length > 0 || v.eduNice?.length > 0) && (
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Educación · {degreeLabel} mínimo
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -270,10 +314,9 @@ export default function Step6Review({
               </div>
             )}
 
-            {/* Certificaciones */}
             {v.certs?.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Certificaciones
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -289,10 +332,9 @@ export default function Step6Review({
               </div>
             )}
 
-            {/* Idiomas */}
             {v.languages?.length > 0 && (
               <div>
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide mb-2">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Idiomas
                 </p>
                 <div className="flex flex-wrap gap-2">
@@ -319,18 +361,17 @@ export default function Step6Review({
           </div>
         </ReviewCard>
 
-        {/* 6. Descripción */}
         <ReviewCard
           icon={<Globe className="h-5 w-5 text-emerald-500" />}
           title="Descripción"
           onEdit={() => {
-            onEditStep(5);
+            onEditStep(4);
             onEditTab("desc");
           }}
         >
           {hasDescription ? (
             <div
-              className="prose prose-sm dark:prose-invert max-w-none max-h-64 overflow-auto text-sm text-zinc-700 dark:text-zinc-300"
+              className="prose prose-sm max-h-64 max-w-none overflow-auto text-sm text-zinc-700 dark:prose-invert dark:text-zinc-300"
               dangerouslySetInnerHTML={{ __html: safeDescHtml }}
             />
           ) : (
@@ -339,12 +380,11 @@ export default function Step6Review({
         </ReviewCard>
       </div>
 
-      {/* Navegación */}
-      <div className="pt-10 mt-10 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="mt-10 border-t border-zinc-200 pt-10 dark:border-zinc-800">
         <div className="flex justify-between gap-4">
           <button
             type="button"
-            className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+            className="rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
             onClick={onBack}
           >
             Atrás
@@ -352,7 +392,8 @@ export default function Step6Review({
           <button
             type="submit"
             disabled={busy}
-            className="rounded-md bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-500 disabled:bg-emerald-300 disabled:cursor-not-allowed transition shadow-sm hover:shadow-md"
+            onClick={handleSubmitWarning}
+            className="rounded-md bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 hover:shadow-md disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
             {busy
               ? isEditing

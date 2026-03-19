@@ -488,20 +488,20 @@ export default function JobWizard({
                 )}
 
                 {step === 4 && (
-                  <Step4Assessments
+                  <Step5Details
+                    skillsOptions={skillsOptions}
+                    certOptions={certOptions}
                     onNext={() => goNextStep(5)}
                     onBack={() => setStep(3)}
+                    activeTab={step5Tab}
+                    onTabChange={setStep5Tab}
                   />
                 )}
 
                 {step === 5 && (
-                  <Step5Details
-                    skillsOptions={skillsOptions}
-                    certOptions={certOptions}
+                  <Step4Assessments
                     onNext={() => goNextStep(6)}
                     onBack={() => setStep(4)}
-                    activeTab={step5Tab}
-                    onTabChange={setStep5Tab}
                   />
                 )}
 
@@ -511,8 +511,14 @@ export default function JobWizard({
                     busy={busy}
                     isEditing={isEditing}
                     onBack={() => setStep(5)}
-                    onEditStep={setStep}
-                    onEditTab={setStep5Tab}
+                    onEditStep={(targetStep) => {
+                      setStep(targetStep);
+                      if (targetStep === 4) setStep5Tab("desc");
+                    }}
+                    onEditTab={(tab) => {
+                      setStep5Tab(tab);
+                      setStep(4);
+                    }}
                   />
                 )}
               </div>
