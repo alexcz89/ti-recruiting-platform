@@ -1,6 +1,7 @@
 // app/dashboard/jobs/new/JobWizard/components/Step6Review.tsx
 "use client";
 
+import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import {
   Briefcase,
@@ -18,7 +19,9 @@ import {
   labelDegree,
   labelLanguageLevel,
   sanitizeHtml,
+  getJobQualitySummary,
 } from "../utils/helpers";
+import WizardWarningModal from "./WizardWarningModal";
 
 type Tab = "desc" | "skills" | "langs" | "edu";
 
@@ -79,6 +82,33 @@ function Row({ label, value }: { label: string; value?: React.ReactNode }) {
   );
 }
 
+function qualityTone(score: number) {
+  if (score >= 80) {
+    return {
+      badge:
+        "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-300",
+      bar: "bg-emerald-500",
+      label: "Alta",
+    };
+  }
+
+  if (score >= 55) {
+    return {
+      badge:
+        "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-300",
+      bar: "bg-amber-500",
+      label: "Media",
+    };
+  }
+
+  return {
+    badge:
+      "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300",
+    bar: "bg-red-500",
+    label: "Baja",
+  };
+}
+
 export default function Step6Review({
   presetCompany,
   busy,
@@ -89,6 +119,7 @@ export default function Step6Review({
 }: Props) {
   const { watch } = useFormContext<JobForm>();
   const v = watch();
+  const [showPublishWarningModal, setShowPublishWarningModal] = useState(false);
 
   const isRemote = v.locationType === "REMOTE";
   const locationText = isRemote
@@ -126,16 +157,9 @@ export default function Step6Review({
   const hasDescription = Boolean(v.descriptionPlain?.trim());
   const degreeLabel = v.minDegree ? labelDegree(v.minDegree) : "Sin especificar";
 
-  const missingRecommended: string[] = [];
-  if ((v.requiredSkills?.length || 0) + (v.niceSkills?.length || 0) === 0) {
-    missingRecommended.push("Skills");
-  }
-  if (salaryMin == null && salaryMax == null) {
-    missingRecommended.push("Sueldo");
-  }
-  if (!v.minDegree) {
-    missingRecommended.push("Educación mínima");
-  }
+  const quality = getJobQualitySummary(v);
+  const missingRecommended = quality.missingRecommended;
+  const tone = qualityTone(quality.score);
 
   function handleSubmitWarning(
     e: React.MouseEvent<HTMLButtonElement, MouseEvent>
@@ -143,15 +167,8 @@ export default function Step6Review({
     if (busy) return;
 
     if (missingRecommended.length > 0) {
-      const confirmed = window.confirm(
-        `Tu vacante se puede publicar, pero le faltan elementos recomendados:\n\n- ${missingRecommended.join(
-          "\n- "
-        )}\n\nEsto puede reducir la calidad del match y la visibilidad.\n\n¿Deseas publicar de todos modos?`
-      );
-
-      if (!confirmed) {
-        e.preventDefault();
-      }
+      e.preventDefault();
+      setShowPublishWarningModal(true);
     }
   }
 
@@ -160,6 +177,50 @@ export default function Step6Review({
       <h3 className="text-lg font-bold text-zinc-900 sm:text-xl dark:text-zinc-100">
         6) Revisión y publicación
       </h3>
+
+      <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/30">
+        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+              Calidad de la vacante
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Basada en descripción, skills, sueldo, educación y otros elementos clave.
+            </p>
+          </div>
+
+          <div
+            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${tone.badge}`}
+          >
+            {quality.score}/100 · {tone.label}
+          </div>
+        </div>
+
+        <div className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+          <div
+            className={`h-full rounded-full transition-all ${tone.bar}`}
+            style={{ width: `${Math.max(0, Math.min(quality.score, 100))}%` }}
+          />
+        </div>
+
+        {quality.strengths.length > 0 && (
+          <div className="mt-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Fortalezas
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {quality.strengths.map((item) => (
+                <span
+                  key={item}
+                  className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {missingRecommended.length > 0 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/50 dark:bg-amber-950/20">
@@ -385,7 +446,10 @@ export default function Step6Review({
           <button
             type="button"
             className="rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-            onClick={onBack}
+            onClick={() => {
+              setShowPublishWarningModal(false);
+              onBack();
+            }}
           >
             Atrás
           </button>
@@ -405,6 +469,21 @@ export default function Step6Review({
           </button>
         </div>
       </div>
+
+      <WizardWarningModal
+        open={showPublishWarningModal}
+        title="Publicar con advertencias"
+        description="Tu vacante está lista, pero le faltan elementos recomendados:"
+        items={missingRecommended}
+        confirmLabel="Publicar de todos modos"
+        cancelLabel="Volver"
+        onCancel={() => setShowPublishWarningModal(false)}
+        onConfirm={() => {
+          setShowPublishWarningModal(false);
+          const form = document.querySelector("form");
+          form?.requestSubmit();
+        }}
+      />
     </div>
   );
 }

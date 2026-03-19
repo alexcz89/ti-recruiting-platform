@@ -197,3 +197,114 @@ export function makeDefaultValues({
     languages: languagesInit,
   };
 }
+
+export type JobQualitySummary = {
+  score: number;
+  missingRecommended: string[];
+  strengths: string[];
+};
+
+function hasMeaningfulDescription(values: Partial<JobForm>) {
+  const plain = String(values.descriptionPlain || "").trim();
+  return plain.length >= 80;
+}
+
+function getTotalSkills(values: Partial<JobForm>) {
+  return (values.requiredSkills?.length || 0) + (values.niceSkills?.length || 0);
+}
+
+function hasSalaryInfo(values: Partial<JobForm>) {
+  return (
+    typeof values.salaryMin === "number" ||
+    typeof values.salaryMax === "number"
+  );
+}
+
+function hasBenefitsInfo(values: Partial<JobForm>) {
+  return Object.values(values.benefits || {}).some(Boolean);
+}
+
+function hasLanguagesInfo(values: Partial<JobForm>) {
+  return (values.languages?.length || 0) > 0;
+}
+
+function hasEducationInfo(values: Partial<JobForm>) {
+  return (values.eduRequired?.length || 0) + (values.eduNice?.length || 0) > 0;
+}
+
+export function getJobQualitySummary(values: Partial<JobForm>): JobQualitySummary {
+  const missingRecommended: string[] = [];
+  const strengths: string[] = [];
+  let score = 0;
+
+  const hasDescription = hasMeaningfulDescription(values);
+  const totalSkills = getTotalSkills(values);
+  const hasSalary = hasSalaryInfo(values);
+  const hasMinDegree = !!values.minDegree;
+  const hasEducation = hasEducationInfo(values);
+  const hasAssessment = !!values.assessmentTemplateId;
+  const hasBenefits = hasBenefitsInfo(values);
+  const hasLanguages = hasLanguagesInfo(values);
+
+  if (hasDescription) {
+    score += 25;
+    strengths.push("Descripción suficiente");
+  } else {
+    missingRecommended.push("Descripción robusta");
+  }
+
+  if (totalSkills > 0) {
+    score += 25;
+    strengths.push("Skills capturadas");
+  } else {
+    missingRecommended.push("Skills");
+  }
+
+  if (hasSalary) {
+    score += 15;
+    strengths.push("Sueldo definido");
+  } else {
+    missingRecommended.push("Sueldo");
+  }
+
+  if (hasMinDegree) {
+    score += 10;
+    strengths.push("Educación mínima definida");
+  } else {
+    missingRecommended.push("Educación mínima");
+  }
+
+  if (hasEducation) {
+    score += 10;
+    strengths.push("Carreras o programas sugeridos");
+  }
+
+  if (hasAssessment) {
+    score += 5;
+    strengths.push("Evaluación técnica");
+  }
+
+  if (hasBenefits) {
+    score += 5;
+    strengths.push("Prestaciones");
+  }
+
+  if (hasLanguages) {
+    score += 5;
+    strengths.push("Idiomas");
+  }
+
+  return {
+    score: Math.min(score, 100),
+    missingRecommended,
+    strengths,
+  };
+}
+
+export function getJobRecommendedMissing(values: Partial<JobForm>) {
+  return getJobQualitySummary(values).missingRecommended;
+}
+
+export function getJobQualityScore(values: Partial<JobForm>) {
+  return getJobQualitySummary(values).score;
+}

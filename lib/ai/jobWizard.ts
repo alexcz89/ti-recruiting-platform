@@ -36,6 +36,9 @@ const JobWizardOutputSchema = z.object({
     .default([]),
 });
 
+type Degree = z.infer<typeof DegreeSchema>;
+type LanguageLevel = z.infer<typeof LanguageLevelSchema>;
+
 export type JobWizardAIOutput = z.infer<typeof JobWizardOutputSchema>;
 
 export type JobWizardAIInput = {
@@ -58,18 +61,50 @@ export type JobWizardAIInput = {
   currentEduRequired?: string[];
   currentEduNice?: string[];
   currentCerts?: string[];
+  currentMinDegree?: Degree | null;
   currentLanguages?: Array<{
     name: string;
-    level: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+    level: LanguageLevel;
   }>;
 };
+
+const WEAK_SKILL_TERMS = new Set([
+  "comunicación",
+  "comunicacion",
+  "trabajo en equipo",
+  "proactivo",
+  "proactiva",
+  "proactividad",
+  "responsable",
+  "responsabilidad",
+  "liderazgo",
+  "actitud",
+  "compromiso",
+  "organización",
+  "organizacion",
+  "analítico",
+  "analitico",
+  "analitica",
+  "analítica",
+  "adaptabilidad",
+  "resolución de problemas",
+  "resolucion de problemas",
+]);
+
+function normalizeText(value: string) {
+  return String(value || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/^[•*\-]\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function uniqClean(values: string[] | undefined | null, limit?: number): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
 
   for (const raw of values ?? []) {
-    const value = String(raw || "").trim();
+    const value = normalizeText(raw);
     if (!value) continue;
     const key = value.toLowerCase();
     if (seen.has(key)) continue;
@@ -81,11 +116,24 @@ function uniqClean(values: string[] | undefined | null, limit?: number): string[
   return out;
 }
 
+function normalizeLanguageName(name: string) {
+  const raw = normalizeText(name).toLowerCase();
+
+  if (!raw) return "";
+  if (["ingles", "inglés", "english"].includes(raw)) return "Inglés";
+  if (["espanol", "español", "spanish"].includes(raw)) return "Español";
+  if (["portugues", "portugués", "portuguese"].includes(raw)) return "Portugués";
+  if (["frances", "francés", "french"].includes(raw)) return "Francés";
+  if (["aleman", "alemán", "german"].includes(raw)) return "Alemán";
+
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
 function uniqLanguages(
   values:
     | Array<{
         name: string;
-        level: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+        level: LanguageLevel;
       }>
     | undefined
     | null,
@@ -94,17 +142,19 @@ function uniqLanguages(
   const seen = new Set<string>();
   const out: Array<{
     name: string;
-    level: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+    level: LanguageLevel;
   }> = [];
 
   for (const item of values ?? []) {
-    const name = String(item?.name || "").trim();
+    const name = normalizeLanguageName(item?.name || "");
     const level = item?.level;
     if (!name || !level) continue;
+
     const key = name.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ name, level });
+
     if (out.length >= limit) break;
   }
 
@@ -160,6 +210,49 @@ function plainToBasicHtml(plain: string): string {
     .join("");
 }
 
+function isWeakSkillItem(value: string) {
+  const item = normalizeText(value).toLowerCase();
+  if (!item) return true;
+  if (item.length <= 2) return true;
+  if (item.length > 60) return true;
+  if (WEAK_SKILL_TERMS.has(item)) return true;
+  return false;
+}
+
+function cleanSkills(values: string[] | undefined | null, limit = 12) {
+  return uniqClean(values, limit).filter((item) => !isWeakSkillItem(item));
+}
+
+function removeOverlap(primary: string[], secondary: string[], limit: number) {
+  const primarySet = new Set(primary.map((item) => item.trim().toLowerCase()));
+  return uniqClean(
+    secondary.filter((item) => !primarySet.has(item.trim().toLowerCase())),
+    limit
+  );
+}
+
+function preferExistingIfWeak<T>(
+  next: T[],
+  current: T[],
+  options?: { minItems?: number }
+) {
+  const minItems = options?.minItems ?? 1;
+  if (next.length >= minItems) return next;
+  if (current.length > 0) return current;
+  return next;
+}
+
+function chooseMinDegree(
+  next: Degree | null | undefined,
+  current: Degree | null | undefined,
+  mode: JobWizardAIInput["mode"]
+): Degree | null {
+  if (next) return next;
+  if (current) return current;
+  if (mode === "extract-structure" || mode === "improve-description") return current ?? null;
+  return "BACHELOR";
+}
+
 function buildPrompt(input: JobWizardAIInput) {
   const mode = input.mode ?? "generate-all";
 
@@ -189,6 +282,9 @@ function buildPrompt(input: JobWizardAIInput) {
     input.currentCerts?.length
       ? `Certificaciones actuales: ${input.currentCerts.join(", ")}`
       : null,
+    input.currentMinDegree
+      ? `Nivel mínimo actual: ${input.currentMinDegree}`
+      : null,
     input.currentLanguages?.length
       ? `Idiomas actuales: ${input.currentLanguages
           .map((l) => `${l.name} (${l.level})`)
@@ -216,7 +312,7 @@ Reglas adicionales para este modo:
 - Conserva la intención del texto base del reclutador.
 - No cambies radicalmente el perfil buscado.
 - No inventes tecnologías, beneficios o requisitos nuevos si no están respaldados por el contexto.
-- Mantén requiredSkills, niceSkills, eduRequired, eduNice, certs y languages estables, salvo ajustes mínimos y obvios de consistencia.
+- Mantén requiredSkills, niceSkills, eduRequired, eduNice, certs, minDegree y languages estables, salvo ajustes mínimos y obvios de consistencia.
 `
       : mode === "extract-structure"
         ? `
@@ -316,7 +412,6 @@ ${existingBlock || "Sin contenido previo"}
 
 function fallbackOutput(input: JobWizardAIInput): JobWizardAIOutput {
   const title = String(input.title || "").trim() || "Especialista de TI";
-  const mode = input.mode ?? "generate-all";
 
   const descriptionPlain = input.currentDescriptionPlain?.trim()
     ? input.currentDescriptionPlain.trim()
@@ -341,31 +436,69 @@ function fallbackOutput(input: JobWizardAIInput): JobWizardAIOutput {
 
   return {
     descriptionPlain,
-    minDegree: "BACHELOR",
-    requiredSkills:
-      mode === "improve-description"
-        ? uniqClean(input.currentRequiredSkills, 8)
-        : uniqClean(input.currentRequiredSkills, 8),
-    niceSkills:
-      mode === "improve-description"
-        ? uniqClean(input.currentNiceSkills, 8)
-        : uniqClean(input.currentNiceSkills, 8),
-    eduRequired:
-      mode === "improve-description"
-        ? uniqClean(input.currentEduRequired, 5)
-        : uniqClean(input.currentEduRequired, 5),
-    eduNice:
-      mode === "improve-description"
-        ? uniqClean(input.currentEduNice, 5)
-        : uniqClean(input.currentEduNice, 5),
-    certs:
-      mode === "improve-description"
-        ? uniqClean(input.currentCerts, 5)
-        : uniqClean(input.currentCerts, 5),
-    languages:
-      mode === "improve-description"
-        ? uniqLanguages(input.currentLanguages, 5)
-        : uniqLanguages(input.currentLanguages, 5),
+    minDegree: input.currentMinDegree ?? "BACHELOR",
+    requiredSkills: uniqClean(input.currentRequiredSkills, 8),
+    niceSkills: uniqClean(input.currentNiceSkills, 8),
+    eduRequired: uniqClean(input.currentEduRequired, 5),
+    eduNice: uniqClean(input.currentEduNice, 5),
+    certs: uniqClean(input.currentCerts, 5),
+    languages: uniqLanguages(input.currentLanguages, 5),
+  };
+}
+
+function normalizeOutput(
+  safeData: JobWizardAIOutput,
+  input: JobWizardAIInput
+): JobWizardAIOutput {
+  const cleanedRequiredSkills = cleanSkills(safeData.requiredSkills, 12);
+  const cleanedNiceSkills = removeOverlap(
+    cleanedRequiredSkills,
+    cleanSkills(safeData.niceSkills, 12),
+    12
+  );
+
+  const cleanedEduRequired = uniqClean(safeData.eduRequired, 8);
+  const cleanedEduNice = removeOverlap(
+    cleanedEduRequired,
+    uniqClean(safeData.eduNice, 8),
+    8
+  );
+
+  const cleanedCerts = uniqClean(safeData.certs, 8);
+  const cleanedLanguages = uniqLanguages(safeData.languages, 5);
+
+  const currentRequiredSkills = uniqClean(input.currentRequiredSkills, 12);
+  const currentNiceSkills = uniqClean(input.currentNiceSkills, 12);
+  const currentEduRequired = uniqClean(input.currentEduRequired, 8);
+  const currentEduNice = uniqClean(input.currentEduNice, 8);
+  const currentCerts = uniqClean(input.currentCerts, 8);
+  const currentLanguages = uniqLanguages(input.currentLanguages, 5);
+
+  return {
+    descriptionPlain: safeData.descriptionPlain.trim(),
+    minDegree: chooseMinDegree(
+      safeData.minDegree ?? null,
+      input.currentMinDegree ?? null,
+      input.mode
+    ),
+    requiredSkills: preferExistingIfWeak(cleanedRequiredSkills, currentRequiredSkills, {
+      minItems: input.mode === "extract-structure" ? 2 : 1,
+    }),
+    niceSkills: preferExistingIfWeak(cleanedNiceSkills, currentNiceSkills, {
+      minItems: 1,
+    }),
+    eduRequired: preferExistingIfWeak(cleanedEduRequired, currentEduRequired, {
+      minItems: 1,
+    }),
+    eduNice: preferExistingIfWeak(cleanedEduNice, currentEduNice, {
+      minItems: 1,
+    }),
+    certs: preferExistingIfWeak(cleanedCerts, currentCerts, {
+      minItems: 1,
+    }),
+    languages: preferExistingIfWeak(cleanedLanguages, currentLanguages, {
+      minItems: 1,
+    }),
   };
 }
 
@@ -393,32 +526,7 @@ export async function generateJobWizardDraft(
       };
     }
 
-    const normalized: JobWizardAIOutput = {
-      descriptionPlain: safe.data.descriptionPlain.trim(),
-      minDegree: safe.data.minDegree ?? null,
-      requiredSkills: uniqClean(safe.data.requiredSkills, 12),
-      niceSkills: uniqClean(
-        safe.data.niceSkills.filter(
-          (item) =>
-            !safe.data.requiredSkills.some(
-              (req) => req.trim().toLowerCase() === item.trim().toLowerCase()
-            )
-        ),
-        12
-      ),
-      eduRequired: uniqClean(safe.data.eduRequired, 8),
-      eduNice: uniqClean(
-        safe.data.eduNice.filter(
-          (item) =>
-            !safe.data.eduRequired.some(
-              (req) => req.trim().toLowerCase() === item.trim().toLowerCase()
-            )
-        ),
-        8
-      ),
-      certs: uniqClean(safe.data.certs, 8),
-      languages: uniqLanguages(safe.data.languages, 5),
-    };
+    const normalized = normalizeOutput(safe.data, input);
 
     return {
       ...normalized,

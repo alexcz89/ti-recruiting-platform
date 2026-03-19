@@ -1,7 +1,7 @@
 // JobWizard/components/QualityIndicator.tsx
 "use client";
 
-import { CheckCircle, TrendingUp } from "lucide-react";
+import { CheckCircle, TrendingUp, AlertTriangle } from "lucide-react";
 import { QualityScore } from "../hooks/useQualityScore";
 import clsx from "clsx";
 
@@ -30,6 +30,14 @@ export default function QualityIndicator({
     return "from-red-500 to-red-600";
   };
 
+  const getLevelLabel = (value: number) => {
+    if (value >= 90) return "Excelente";
+    if (value >= 75) return "Muy buena";
+    if (value >= 60) return "Buena";
+    if (value >= 40) return "Mejorable";
+    return "Baja";
+  };
+
   const stepsToGood = (() => {
     if (score.overall >= 60) return 0;
     const uniqueSteps = new Set(score.issues.map((issue) => issue.step)).size;
@@ -39,25 +47,31 @@ export default function QualityIndicator({
   const progressMessage =
     stepsToGood > 0
       ? `Faltan ${stepsToGood} pasos para llegar a Buena`
-      : "Vacante en buen nivel";
+      : `Nivel actual: ${getLevelLabel(score.overall)}`;
 
   const missingItems = Array.from(
     new Set(
       score.issues.map((issue) => {
         const msg = issue.message.toLowerCase();
+
         if (msg.includes("skills")) return "Skills";
         if (msg.includes("prestaciones")) return "Prestaciones";
         if (msg.includes("sueldo") || msg.includes("rango salarial")) return "Sueldo";
         if (msg.includes("ingl") || msg.includes("idiomas")) return "Idiomas";
-        if (msg.includes("requisitos")) return "Requisitos";
+        if (msg.includes("educa") || msg.includes("acad")) return "Educación";
+        if (msg.includes("descrip")) return "Descripción";
+        if (msg.includes("horario")) return "Horario";
+        if (msg.includes("evaluación") || msg.includes("evaluacion")) return "Evaluación";
         return issue.message;
       })
     )
-  );
+  ).slice(0, 5);
+
+  const topIssues = score.issues.slice(0, 3);
 
   if (compact) {
     return (
-      <div className="inline-flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-4 py-3">
+      <div className="inline-flex items-center gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-700 dark:bg-zinc-900">
         <TrendingUp className="h-4 w-4 text-emerald-500" />
         <span className="text-sm font-medium">Calidad:</span>
         <span className={clsx("text-sm font-bold", getScoreColor(score.overall))}>
@@ -68,8 +82,8 @@ export default function QualityIndicator({
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4">
-      <div className="flex items-start justify-between gap-4 mb-4">
+    <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <TrendingUp className="h-5 w-5 text-emerald-500" />
           <h3 className="font-semibold">Calidad de la vacante</h3>
@@ -78,11 +92,12 @@ export default function QualityIndicator({
           <span className={clsx("text-2xl font-semibold", getScoreColor(score.overall))}>
             {score.overall}%
           </span>
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">{progressMessage}</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            {progressMessage}
+          </span>
         </div>
       </div>
 
-      {/* Progress Bar */}
       <div className="mb-4">
         <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
           <div
@@ -95,22 +110,22 @@ export default function QualityIndicator({
         </div>
       </div>
 
-      {/* Breakdown */}
-      <div className="grid grid-cols-2 gap-4 mb-4">
+      <div className="mb-4 grid grid-cols-2 gap-4">
         <div className="text-sm">
-          <div className="text-zinc-500 dark:text-zinc-400 mb-1">Completitud</div>
+          <div className="mb-1 text-zinc-500 dark:text-zinc-400">Completitud</div>
           <div className="font-semibold">{score.completeness}%</div>
         </div>
         <div className="text-sm">
-          <div className="text-zinc-500 dark:text-zinc-400 mb-1">Calidad</div>
+          <div className="mb-1 text-zinc-500 dark:text-zinc-400">Calidad</div>
           <div className="font-semibold">{score.quality}%</div>
         </div>
       </div>
 
-      {/* Missing checklist */}
       {missingItems.length > 0 && (
-        <div className="rounded-lg border border-zinc-200/70 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50 p-3 mb-4">
-          <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">Faltan:</div>
+        <div className="mb-4 rounded-lg border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+            Áreas a reforzar
+          </div>
           <ul className="mt-2 grid gap-1 text-xs text-zinc-600 dark:text-zinc-400">
             {missingItems.map((item) => (
               <li key={item} className="flex items-center gap-2">
@@ -122,7 +137,29 @@ export default function QualityIndicator({
         </div>
       )}
 
-      {/* Suggestions */}
+      {topIssues.length > 0 && (
+        <div className="mb-4 space-y-2">
+          {topIssues.map((issue, idx) => (
+            <div
+              key={`${issue.step}-${idx}-${issue.message}`}
+              className="flex items-start gap-3 text-xs text-zinc-600 dark:text-zinc-400"
+            >
+              <AlertTriangle
+                className={clsx(
+                  "mt-0.5 h-3.5 w-3.5 flex-shrink-0",
+                  issue.type === "error"
+                    ? "text-red-500"
+                    : issue.type === "warning"
+                      ? "text-amber-500"
+                      : "text-blue-500"
+                )}
+              />
+              <span>{issue.message}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {score.suggestions.length > 0 && (
         <div className="space-y-2">
           {score.suggestions.slice(0, 3).map((suggestion, idx) => (
@@ -130,7 +167,7 @@ export default function QualityIndicator({
               key={idx}
               className="flex items-start gap-3 text-xs text-zinc-600 dark:text-zinc-400"
             >
-              <CheckCircle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-emerald-500" />
+              <CheckCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
               <span>{suggestion}</span>
             </div>
           ))}

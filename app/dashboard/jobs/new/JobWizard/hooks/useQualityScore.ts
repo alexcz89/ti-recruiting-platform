@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { UseFormWatch } from "react-hook-form";
 import { JobForm } from "../types";
 import { QUALITY_THRESHOLDS } from "../constants";
+import { getJobQualitySummary } from "../utils/helpers";
 
 export type QualityIssue = {
   type: "error" | "warning" | "info";
@@ -24,39 +25,49 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
   const formData = watch();
 
   return useMemo(() => {
+    const summary = getJobQualitySummary(formData);
     const issues: QualityIssue[] = [];
     const suggestions: string[] = [];
-    let completenessScore = 0;
-    let qualityScore = 0;
 
-    // === COMPLETENESS (50 puntos) ===
-    
-    // Paso 1: Basic info (10 puntos)
-    if (formData.title?.trim()) completenessScore += 5;
-    if (formData.city?.trim() || formData.locationType === "REMOTE") completenessScore += 2.5;
-    if (formData.salaryMin || formData.salaryMax) {
-      completenessScore += 2.5;
-    } else {
+    const benefitsCount = Object.values(formData.benefits || {}).filter(Boolean).length;
+    const descLength = formData.descriptionPlain?.replace(/\s+/g, "").length || 0;
+    const skillsCount =
+      (formData.requiredSkills?.length || 0) + (formData.niceSkills?.length || 0);
+
+    const requiredCount = formData.requiredSkills?.length || 0;
+    const niceCount = formData.niceSkills?.length || 0;
+
+    const hasTitle = !!formData.title?.trim();
+    const hasLocation = !!formData.city?.trim() || formData.locationType === "REMOTE";
+    const hasSalary =
+      typeof formData.salaryMin === "number" ||
+      typeof formData.salaryMax === "number";
+    const hasSchedule = !!formData.schedule?.trim();
+    const hasEducation =
+      (formData.eduRequired?.length || 0) + (formData.eduNice?.length || 0) > 0;
+    const hasLanguages = (formData.languages?.length || 0) > 0;
+    const hasCerts = (formData.certs?.length || 0) > 0;
+    const hasAssessment = !!formData.assessmentTemplateId;
+    const hasRequiredSkills = requiredCount > 0;
+    const hasNiceSkills = niceCount > 0;
+    const hasMinDegree = !!formData.minDegree;
+    const hasBenefits = benefitsCount > 0;
+    const showSalary = !!formData.showSalary;
+
+    // === ISSUES / SUGGESTIONS ===
+
+    if (!hasSalary) {
       issues.push({
         type: "warning",
         message: "Agregar rango salarial aumenta un 40% las postulaciones",
-        step: 1,
+        step: 2,
       });
     }
 
-    // Paso 2: Employment (5 puntos)
-    if (formData.employmentType) completenessScore += 2.5;
-    if (formData.schedule?.trim()) {
-      completenessScore += 2.5;
-    } else {
+    if (!hasSchedule) {
       suggestions.push("Agrega un horario de referencia para más claridad");
     }
 
-    // Paso 3: Benefits (10 puntos)
-    const benefitsCount = Object.values(formData.benefits || {}).filter(Boolean).length;
-    if (benefitsCount >= QUALITY_THRESHOLDS.benefits.min) completenessScore += 5;
-    if (benefitsCount >= QUALITY_THRESHOLDS.benefits.good) completenessScore += 5;
-    
     if (benefitsCount < QUALITY_THRESHOLDS.benefits.min) {
       issues.push({
         type: "warning",
@@ -65,15 +76,15 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
       });
     }
 
-    // Paso 4: Description & Requirements (25 puntos)
-    const descLength = formData.descriptionPlain?.replace(/\s+/g, "").length || 0;
-    if (descLength >= QUALITY_THRESHOLDS.description.min) completenessScore += 8;
-    if (descLength >= QUALITY_THRESHOLDS.description.good) completenessScore += 8;
-    if (descLength >= QUALITY_THRESHOLDS.description.excellent) completenessScore += 9;
-
-    const skillsCount = (formData.requiredSkills?.length || 0) + (formData.niceSkills?.length || 0);
-    if (skillsCount >= QUALITY_THRESHOLDS.skills.min) completenessScore += 5;
-    if (skillsCount >= QUALITY_THRESHOLDS.skills.good) completenessScore += 5;
+    if (descLength < QUALITY_THRESHOLDS.description.min) {
+      issues.push({
+        type: "warning",
+        message: `La descripción es corta. Recomendado mínimo: ${QUALITY_THRESHOLDS.description.min} caracteres útiles`,
+        step: 4,
+      });
+    } else if (descLength < QUALITY_THRESHOLDS.description.good) {
+      suggestions.push("Una descripción más detallada mejora la calidad de postulantes");
+    }
 
     if (skillsCount < QUALITY_THRESHOLDS.skills.min) {
       issues.push({
@@ -83,68 +94,46 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
       });
     }
 
-    if ((formData.eduRequired?.length || 0) + (formData.eduNice?.length || 0) > 0) {
-      completenessScore += 5;
-    } else {
-      suggestions.push("Especifica requisitos educativos para filtrar mejor");
+    if (!hasEducation) {
+      suggestions.push("Especifica carreras o programas recomendados para filtrar mejor");
     }
 
-    // === QUALITY (50 puntos) ===
-
-    // Descripción detallada
-    if (descLength >= QUALITY_THRESHOLDS.description.excellent) {
-      qualityScore += 15;
-    } else if (descLength >= QUALITY_THRESHOLDS.description.good) {
-      qualityScore += 10;
-    } else if (descLength >= QUALITY_THRESHOLDS.description.min) {
-      qualityScore += 5;
-      suggestions.push("Una descripción más detallada mejora la calidad de postulantes");
+    if (!hasMinDegree) {
+      suggestions.push("Define un nivel académico mínimo para mejorar el filtrado");
     }
 
-    // Skills bien definidos
-    const hasRequiredSkills = (formData.requiredSkills?.length || 0) > 0;
-    const hasNiceSkills = (formData.niceSkills?.length || 0) > 0;
-    
-    if (hasRequiredSkills && hasNiceSkills) {
-      qualityScore += 10;
-    } else if (hasRequiredSkills) {
-      qualityScore += 5;
+    if (hasRequiredSkills && !hasNiceSkills) {
       suggestions.push('Agrega skills "Deseables" para atraer más talento');
     }
 
-    // Balance skills requeridos/deseables
-    const requiredCount = formData.requiredSkills?.length || 0;
-    const niceCount = formData.niceSkills?.length || 0;
-    
     if (requiredCount > 8) {
       issues.push({
         type: "warning",
         message: "Demasiados requisitos obligatorios pueden limitar postulantes",
         step: 4,
       });
-    } else if (requiredCount >= 3 && requiredCount <= 6) {
-      qualityScore += 10;
     }
 
-    // Sueldo competitivo
-    if (formData.showSalary && (formData.salaryMin || formData.salaryMax)) {
-      qualityScore += 10;
-      if (!formData.salaryMin || !formData.salaryMax) {
+    if (showSalary && hasSalary) {
+      if (
+        typeof formData.salaryMin !== "number" ||
+        typeof formData.salaryMax !== "number"
+      ) {
         suggestions.push("Especifica rango completo de sueldo para más transparencia");
       }
+    } else if (!showSalary && hasSalary) {
+      suggestions.push("Mostrar el sueldo puede mejorar la conversión de candidatos");
     }
 
-    // Prestaciones atractivas
-    if (benefitsCount >= QUALITY_THRESHOLDS.benefits.excellent) {
-      qualityScore += 5;
-    } else if (benefitsCount >= QUALITY_THRESHOLDS.benefits.good) {
-      qualityScore += 3;
-    }
-
-    // Idiomas especificados
-    if ((formData.languages?.length || 0) > 0) {
-      qualityScore += 5;
-    } else if (formData.requiredSkills?.some(s => s.toLowerCase().includes('english') || s.toLowerCase().includes('inglés'))) {
+    if (
+      !hasLanguages &&
+      formData.requiredSkills?.some(
+        (s) =>
+          s.toLowerCase().includes("english") ||
+          s.toLowerCase().includes("inglés") ||
+          s.toLowerCase().includes("ingles")
+      )
+    ) {
       issues.push({
         type: "info",
         message: 'Considera especificar nivel de inglés en la sección "Idiomas"',
@@ -152,26 +141,65 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
       });
     }
 
-    // Certificaciones
-    if ((formData.certs?.length || 0) > 0) {
-      qualityScore += 5;
+    if (!hasAssessment) {
+      suggestions.push("Agregar una evaluación técnica puede ayudarte a filtrar mejor");
     }
 
-    const overall = Math.min(100, Math.round(completenessScore + qualityScore));
+    // === COMPLETENESS / QUALITY ===
+    // Se mantienen como métricas separadas para el UI actual,
+    // pero alineadas con la lógica central del summary.
+
+    let completeness = 0;
+    if (hasTitle) completeness += 15;
+    if (hasLocation) completeness += 10;
+    if (hasSalary) completeness += 15;
+    if (hasSchedule) completeness += 5;
+    if (descLength >= QUALITY_THRESHOLDS.description.min) completeness += 20;
+    if (skillsCount >= QUALITY_THRESHOLDS.skills.min) completeness += 20;
+    if (hasEducation || hasMinDegree) completeness += 10;
+    if (hasBenefits) completeness += 5;
+
+    let quality = 0;
+    if (descLength >= QUALITY_THRESHOLDS.description.excellent) quality += 20;
+    else if (descLength >= QUALITY_THRESHOLDS.description.good) quality += 14;
+    else if (descLength >= QUALITY_THRESHOLDS.description.min) quality += 8;
+
+    if (hasRequiredSkills && hasNiceSkills) quality += 15;
+    else if (hasRequiredSkills) quality += 8;
+
+    if (requiredCount >= 3 && requiredCount <= 6) quality += 10;
+
+    if (showSalary && hasSalary) quality += 10;
+    else if (hasSalary) quality += 5;
+
+    if (benefitsCount >= QUALITY_THRESHOLDS.benefits.excellent) quality += 10;
+    else if (benefitsCount >= QUALITY_THRESHOLDS.benefits.good) quality += 6;
+    else if (benefitsCount >= QUALITY_THRESHOLDS.benefits.min) quality += 3;
+
+    if (hasLanguages) quality += 5;
+    if (hasCerts) quality += 5;
+    if (hasAssessment) quality += 10;
+    if (hasMinDegree) quality += 5;
+    if (hasEducation) quality += 5;
+
+    completeness = Math.min(100, Math.round(completeness));
+    quality = Math.min(100, Math.round(quality));
+
+    const overall = summary.score;
 
     // Sugerencia general
     if (overall < 60) {
-      suggestions.push("🎯 Completa más secciones para mejorar la visibilidad de tu vacante");
+      suggestions.push("Completa más secciones para mejorar la visibilidad de tu vacante");
     } else if (overall < 80) {
-      suggestions.push("✨ ¡Vas bien! Algunos detalles más y tendrás una vacante excelente");
+      suggestions.push("Vas bien. Algunos detalles más y tendrás una vacante más sólida");
     } else if (overall >= 90) {
-      suggestions.push("🚀 ¡Excelente! Esta vacante está muy completa");
+      suggestions.push("Excelente. Esta vacante está muy completa");
     }
 
     return {
       overall,
-      completeness: Math.min(100, completenessScore * 2),
-      quality: Math.min(100, qualityScore * 2),
+      completeness,
+      quality,
       issues,
       suggestions,
     };

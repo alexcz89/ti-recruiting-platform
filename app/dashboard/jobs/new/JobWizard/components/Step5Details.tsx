@@ -1,3 +1,4 @@
+// app/dashboard/jobs/new/JobWizard/components/Step5Details.tsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -11,6 +12,7 @@ import { createStringFuse, searchStrings } from "@/lib/search/fuse";
 import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
 import JobRichTextEditor from "@/components/jobs/JobRichTextEditor";
 import SkillBin from "./SkillBin";
+import WizardWarningModal from "./WizardWarningModal";
 import { toastError, toastSuccess } from "@/lib/ui/toast";
 
 export type Step5Tab = "desc" | "skills" | "langs" | "edu";
@@ -85,6 +87,7 @@ export default function Step5Details({
   const {
     watch,
     setValue,
+    getValues,
     register,
     control,
     formState: { errors },
@@ -99,6 +102,7 @@ export default function Step5Details({
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [isExtractingStructure, setIsExtractingStructure] = useState(false);
+  const [showMissingSkillsModal, setShowMissingSkillsModal] = useState(false);
 
   const educationDropdownRef = useRef<HTMLDivElement | null>(null);
   const skillsDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -144,6 +148,12 @@ export default function Step5Details({
   useEffect(() => {
     setTab(activeTab);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (hasSkills && showMissingSkillsModal) {
+      setShowMissingSkillsModal(false);
+    }
+  }, [hasSkills, showMissingSkillsModal]);
 
   function changeTab(next: Step5Tab) {
     setTab(next);
@@ -448,7 +458,44 @@ export default function Step5Details({
         ? draft.descriptionPlain.trim()
         : htmlToPlain(html);
 
-    return { draft, html, plain };
+    const hasUsefulStringArray = (value: unknown, minItems = 1) =>
+      Array.isArray(value) &&
+      value.filter((item) => String(item || "").trim()).length >= minItems;
+
+    const hasUsefulLanguages = (
+      value: unknown,
+      minItems = 1
+    ): value is Array<{
+      name: string;
+      level: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+    }> => {
+      if (!Array.isArray(value)) return false;
+
+      const valid = value.filter((item) => {
+        if (!item || typeof item !== "object") return false;
+
+        const name = String((item as { name?: unknown }).name || "").trim();
+        const level = (item as { level?: unknown }).level;
+
+        return (
+          !!name &&
+          (level === "NATIVE" ||
+            level === "PROFESSIONAL" ||
+            level === "CONVERSATIONAL" ||
+            level === "BASIC")
+        );
+      });
+
+      return valid.length >= minItems;
+    };
+
+    return {
+      draft,
+      html,
+      plain,
+      hasUsefulStringArray,
+      hasUsefulLanguages,
+    };
   }
 
   async function handleGenerateWithAi() {
@@ -460,42 +507,62 @@ export default function Step5Details({
     setIsGeneratingAi(true);
 
     try {
-      const { draft, html, plain } = await callAi("generate-all");
+      const { draft, html, plain, hasUsefulStringArray, hasUsefulLanguages } =
+        await callAi("generate-all");
 
-      setValue("descriptionHtml", html, { shouldDirty: true, shouldValidate: true });
-      setValue("descriptionPlain", plain, { shouldDirty: true, shouldValidate: true });
-      setValue("minDegree", draft.minDegree ?? null, {
+      setValue("descriptionHtml", html, {
         shouldDirty: true,
         shouldValidate: true,
       });
+      setValue("descriptionPlain", plain, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
+      if (draft.minDegree) {
+        setValue("minDegree", draft.minDegree, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+
       setValue(
         "requiredSkills",
-        Array.isArray(draft.requiredSkills) ? draft.requiredSkills : [],
+        hasUsefulStringArray(draft.requiredSkills, 1) ? draft.requiredSkills : [],
         { shouldDirty: true, shouldValidate: true }
       );
+
       setValue(
         "niceSkills",
-        Array.isArray(draft.niceSkills) ? draft.niceSkills : [],
+        hasUsefulStringArray(draft.niceSkills, 1) ? draft.niceSkills : [],
         { shouldDirty: true, shouldValidate: true }
       );
+
       setValue(
         "eduRequired",
-        Array.isArray(draft.eduRequired) ? draft.eduRequired : [],
+        hasUsefulStringArray(draft.eduRequired, 1) ? draft.eduRequired : [],
         { shouldDirty: true, shouldValidate: true }
       );
+
       setValue(
         "eduNice",
-        Array.isArray(draft.eduNice) ? draft.eduNice : [],
+        hasUsefulStringArray(draft.eduNice, 1) ? draft.eduNice : [],
         { shouldDirty: true, shouldValidate: true }
       );
-      setValue("certs", Array.isArray(draft.certs) ? draft.certs : [], {
+
+      setValue("certs", hasUsefulStringArray(draft.certs, 1) ? draft.certs : [], {
         shouldDirty: true,
         shouldValidate: true,
       });
-      setValue("languages", Array.isArray(draft.languages) ? draft.languages : [], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
+
+      setValue(
+        "languages",
+        hasUsefulLanguages(draft.languages, 1) ? draft.languages : [],
+        {
+          shouldDirty: true,
+          shouldValidate: true,
+        }
+      );
 
       changeTab("desc");
       toastSuccess("Contenido generado con AI");
@@ -520,10 +587,23 @@ export default function Step5Details({
     setIsImprovingDescription(true);
 
     try {
-      const { html, plain } = await callAi("improve-description");
+      const { draft, html, plain } = await callAi("improve-description");
 
-      setValue("descriptionHtml", html, { shouldDirty: true, shouldValidate: true });
-      setValue("descriptionPlain", plain, { shouldDirty: true, shouldValidate: true });
+      setValue("descriptionHtml", html, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setValue("descriptionPlain", plain, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
+      if (draft.minDegree) {
+        setValue("minDegree", draft.minDegree, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
 
       changeTab("desc");
       toastSuccess("Descripción mejorada con AI");
@@ -550,40 +630,79 @@ export default function Step5Details({
     setIsExtractingStructure(true);
 
     try {
-      const { draft } = await callAi("extract-structure");
+      const { draft, hasUsefulStringArray, hasUsefulLanguages } = await callAi(
+        "extract-structure"
+      );
 
-      setValue("minDegree", draft.minDegree ?? null, {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
+      const currentRequiredSkills = getValues("requiredSkills") || [];
+      const currentNiceSkills = getValues("niceSkills") || [];
+      const currentEduRequired = getValues("eduRequired") || [];
+      const currentEduNice = getValues("eduNice") || [];
+      const currentCerts = getValues("certs") || [];
+      const currentLanguages = getValues("languages") || [];
+      const currentMinDegree = getValues("minDegree");
+
+      if (draft.minDegree) {
+        setValue("minDegree", draft.minDegree, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      } else if (currentMinDegree) {
+        setValue("minDegree", currentMinDegree, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+
       setValue(
         "requiredSkills",
-        Array.isArray(draft.requiredSkills) ? draft.requiredSkills : [],
+        hasUsefulStringArray(draft.requiredSkills, 2)
+          ? draft.requiredSkills
+          : currentRequiredSkills,
         { shouldDirty: true, shouldValidate: true }
       );
+
       setValue(
         "niceSkills",
-        Array.isArray(draft.niceSkills) ? draft.niceSkills : [],
+        hasUsefulStringArray(draft.niceSkills, 1)
+          ? draft.niceSkills
+          : currentNiceSkills,
         { shouldDirty: true, shouldValidate: true }
       );
+
       setValue(
         "eduRequired",
-        Array.isArray(draft.eduRequired) ? draft.eduRequired : [],
+        hasUsefulStringArray(draft.eduRequired, 1)
+          ? draft.eduRequired
+          : currentEduRequired,
         { shouldDirty: true, shouldValidate: true }
       );
+
       setValue(
         "eduNice",
-        Array.isArray(draft.eduNice) ? draft.eduNice : [],
+        hasUsefulStringArray(draft.eduNice, 1)
+          ? draft.eduNice
+          : currentEduNice,
         { shouldDirty: true, shouldValidate: true }
       );
-      setValue("certs", Array.isArray(draft.certs) ? draft.certs : [], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
-      setValue("languages", Array.isArray(draft.languages) ? draft.languages : [], {
-        shouldDirty: true,
-        shouldValidate: true,
-      });
+
+      setValue(
+        "certs",
+        hasUsefulStringArray(draft.certs, 1) ? draft.certs : currentCerts,
+        {
+          shouldDirty: true,
+          shouldValidate: true,
+        }
+      );
+
+      setValue(
+        "languages",
+        hasUsefulLanguages(draft.languages, 1) ? draft.languages : currentLanguages,
+        {
+          shouldDirty: true,
+          shouldValidate: true,
+        }
+      );
 
       changeTab("skills");
       toastSuccess("Skills y requisitos extraídos con AI");
@@ -600,11 +719,8 @@ export default function Step5Details({
     if (!canNext) return;
 
     if (!hasSkills) {
-      const confirmed = window.confirm(
-        "Aún no has agregado skills.\n\nLas skills ayudan a mejorar el filtrado y el match con candidatos.\n\n¿Deseas continuar de todos modos?"
-      );
-
-      if (!confirmed) return;
+      setShowMissingSkillsModal(true);
+      return;
     }
 
     onNext();
@@ -1203,7 +1319,10 @@ export default function Step5Details({
         <button
           type="button"
           className="w-full rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
-          onClick={onBack}
+          onClick={() => {
+            setShowMissingSkillsModal(false);
+            onBack();
+          }}
         >
           Atrás
         </button>
@@ -1222,6 +1341,20 @@ export default function Step5Details({
           Siguiente
         </button>
       </div>
+
+      <WizardWarningModal
+        open={showMissingSkillsModal}
+        title="Continuar sin skills"
+        description="Aún no has agregado skills. Esto puede reducir el filtrado y el match con candidatos."
+        items={["Sin skills requeridas", "Menor precisión en el match"]}
+        confirmLabel="Continuar de todos modos"
+        cancelLabel="Volver"
+        onCancel={() => setShowMissingSkillsModal(false)}
+        onConfirm={() => {
+          setShowMissingSkillsModal(false);
+          onNext();
+        }}
+      />
     </div>
   );
 }
