@@ -109,6 +109,15 @@ function qualityTone(score: number) {
   };
 }
 
+function parseSalary(value: unknown) {
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isNaN(n) ? undefined : n;
+  }
+  return undefined;
+}
+
 export default function Step6Review({
   presetCompany,
   busy,
@@ -126,14 +135,9 @@ export default function Step6Review({
     ? "Remoto"
     : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} • ${v.city || ""}`;
 
-  const salaryMin =
-    typeof v.salaryMin === "number" && !Number.isNaN(v.salaryMin)
-      ? v.salaryMin
-      : undefined;
-  const salaryMax =
-    typeof v.salaryMax === "number" && !Number.isNaN(v.salaryMax)
-      ? v.salaryMax
-      : undefined;
+  const salaryMin = parseSalary(v.salaryMin);
+  const salaryMax = parseSalary(v.salaryMax);
+
   const fmt = (n: number) => new Intl.NumberFormat("es-MX").format(n);
   const salaryText =
     salaryMin == null && salaryMax == null
@@ -271,7 +275,7 @@ export default function Step6Review({
         <ReviewCard
           icon={<DollarSign className="h-5 w-5 text-emerald-500" />}
           title="Compensación"
-          onEdit={() => onEditStep(2)}
+          onEdit={() => onEditStep(1)}
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <Row label="Sueldo" value={salaryText} />

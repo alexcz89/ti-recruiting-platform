@@ -213,10 +213,19 @@ function getTotalSkills(values: Partial<JobForm>) {
   return (values.requiredSkills?.length || 0) + (values.niceSkills?.length || 0);
 }
 
+function hasValidSalaryValue(value: unknown) {
+  if (typeof value === "number" && !Number.isNaN(value)) return true;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return !Number.isNaN(n);
+  }
+  return false;
+}
+
 function hasSalaryInfo(values: Partial<JobForm>) {
   return (
-    typeof values.salaryMin === "number" ||
-    typeof values.salaryMax === "number"
+    hasValidSalaryValue(values.salaryMin) ||
+    hasValidSalaryValue(values.salaryMax)
   );
 }
 

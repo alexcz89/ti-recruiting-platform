@@ -37,11 +37,20 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
     const requiredCount = formData.requiredSkills?.length || 0;
     const niceCount = formData.niceSkills?.length || 0;
 
+    const hasValidSalaryValue = (value: unknown) => {
+      if (typeof value === "number" && !Number.isNaN(value)) return true;
+      if (typeof value === "string" && value.trim()) {
+        const n = Number(value);
+        return !Number.isNaN(n);
+      }
+      return false;
+    };
+
     const hasTitle = !!formData.title?.trim();
     const hasLocation = !!formData.city?.trim() || formData.locationType === "REMOTE";
     const hasSalary =
-      typeof formData.salaryMin === "number" ||
-      typeof formData.salaryMax === "number";
+      hasValidSalaryValue(formData.salaryMin) ||
+      hasValidSalaryValue(formData.salaryMax);
     const hasSchedule = !!formData.schedule?.trim();
     const hasEducation =
       (formData.eduRequired?.length || 0) + (formData.eduNice?.length || 0) > 0;
@@ -54,13 +63,11 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
     const hasBenefits = benefitsCount > 0;
     const showSalary = !!formData.showSalary;
 
-    // === ISSUES / SUGGESTIONS ===
-
     if (!hasSalary) {
       issues.push({
         type: "warning",
         message: "Agregar rango salarial aumenta un 40% las postulaciones",
-        step: 2,
+        step: 1,
       });
     }
 
@@ -116,8 +123,8 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
 
     if (showSalary && hasSalary) {
       if (
-        typeof formData.salaryMin !== "number" ||
-        typeof formData.salaryMax !== "number"
+        !hasValidSalaryValue(formData.salaryMin) ||
+        !hasValidSalaryValue(formData.salaryMax)
       ) {
         suggestions.push("Especifica rango completo de sueldo para más transparencia");
       }
@@ -144,10 +151,6 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
     if (!hasAssessment) {
       suggestions.push("Agregar una evaluación técnica puede ayudarte a filtrar mejor");
     }
-
-    // === COMPLETENESS / QUALITY ===
-    // Se mantienen como métricas separadas para el UI actual,
-    // pero alineadas con la lógica central del summary.
 
     let completeness = 0;
     if (hasTitle) completeness += 15;
@@ -187,7 +190,6 @@ export function useQualityScore(watch: UseFormWatch<JobForm>): QualityScore {
 
     const overall = summary.score;
 
-    // Sugerencia general
     if (overall < 60) {
       suggestions.push("Completa más secciones para mejorar la visibilidad de tu vacante");
     } else if (overall < 80) {
