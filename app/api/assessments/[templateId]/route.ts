@@ -1,10 +1,22 @@
 // app/api/assessments/[templateId]/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
+
+type SessionUser = {
+  id?: string | null;
+  role?: string | null;
+};
+
+function jsonNoStore(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 export async function GET(
   _request: Request,
@@ -13,7 +25,19 @@ export async function GET(
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+      return jsonNoStore({ error: "No autorizado" }, 401);
+    }
+
+    const user = session.user as SessionUser;
+    const userId = String(user.id ?? "");
+    const role = String(user.role ?? "").toUpperCase();
+
+    if (!userId) {
+      return jsonNoStore({ error: "No autorizado" }, 401);
+    }
+
+    if (role !== "CANDIDATE") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
     const template = await prisma.assessmentTemplate.findUnique({
@@ -34,37 +58,34 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         _count: {
-          select: { questions: true, codingChallenges: true },
+          select: { questions: true },
         },
       },
     });
 
     if (!template || !template.isActive) {
-      return NextResponse.json({ error: "Template no encontrado" }, { status: 404 });
+      return jsonNoStore({ error: "Template no encontrado" }, 404);
     }
 
-    // ✅ Normalizaciones para evitar UI breaks
     const normalizedTotalQuestions =
       typeof template.totalQuestions === "number" && template.totalQuestions > 0
         ? template.totalQuestions
         : template._count.questions;
 
-    const normalizedSections = Array.isArray(template.sections) ? template.sections : [];
-
-    const user = session.user as any;
+    const normalizedSections = Array.isArray(template.sections)
+      ? template.sections
+      : [];
 
     const [attemptsUsed, lastAttempt] = await Promise.all([
-      // ✅ SOLO intentos “consumidos”
       prisma.assessmentAttempt.count({
         where: {
-          candidateId: user.id,
+          candidateId: userId,
           templateId: params.templateId,
-          status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] as any },
+          status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
         },
       }),
-      // ✅ último intento de cualquier status (para UX)
       prisma.assessmentAttempt.findFirst({
-        where: { candidateId: user.id, templateId: params.templateId },
+        where: { candidateId: userId, templateId: params.templateId },
         orderBy: { createdAt: "desc" },
         select: {
           id: true,
@@ -79,29 +100,25 @@ export async function GET(
       }),
     ]);
 
-    const canRetry = !!template.allowRetry;
+    const canRetry = Boolean(template.allowRetry);
     const maxAttempts = template.maxAttempts ?? 1;
-
     const canStart = canRetry ? attemptsUsed < maxAttempts : attemptsUsed === 0;
 
-    return NextResponse.json(
-      {
-        template: {
-          ...template,
-          totalQuestions: normalizedTotalQuestions,
-          sections: normalizedSections,
-        },
-        userStatus: {
-          attemptsUsed,
-          maxAttempts,
-          canStart,
-          lastAttempt: lastAttempt || null,
-        },
+    return jsonNoStore({
+      template: {
+        ...template,
+        totalQuestions: normalizedTotalQuestions,
+        sections: normalizedSections,
       },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+      userStatus: {
+        attemptsUsed,
+        maxAttempts,
+        canStart,
+        lastAttempt: lastAttempt || null,
+      },
+    });
   } catch (error) {
     console.error("Error fetching template:", error);
-    return NextResponse.json({ error: "Error al cargar template" }, { status: 500 });
+    return jsonNoStore({ error: "Error al cargar template" }, 500);
   }
 }

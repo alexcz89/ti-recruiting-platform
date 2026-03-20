@@ -8,8 +8,59 @@ import type { Prisma } from "@prisma/client";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function jsonNoStore(data: any, status = 200) {
-  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
+type SessionUser = {
+  id?: string | null;
+  role?: string | null;
+};
+
+type OptionLike = Record<string, unknown>;
+type FlagsMeta = {
+  questionOrder?: string[];
+  optionOrderByQuestion?: Record<string, string[]>;
+} | null;
+
+type StartBody = {
+  applicationId?: unknown;
+  token?: unknown;
+  attemptId?: unknown;
+};
+
+type QuestionRow = {
+  id: string;
+  section: string | null;
+  difficulty: string | null;
+  questionText: string;
+  codeSnippet: string | null;
+  options: unknown;
+  allowMultiple: boolean | null;
+  type: string | null;
+  language: string | null;
+  allowedLanguages: unknown;
+  starterCode: string | null;
+  timesUsed: number | null;
+  testCases?: Array<{
+    id: string;
+    input: string;
+    expectedOutput: string;
+    isHidden: boolean;
+    points: number | null;
+    orderIndex: number;
+  }>;
+};
+
+type AttemptStatusLike =
+  | "NOT_STARTED"
+  | "IN_PROGRESS"
+  | "SUBMITTED"
+  | "EVALUATED"
+  | "COMPLETED"
+  | string;
+
+function jsonNoStore(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 function getClientIp(req: Request) {
@@ -29,10 +80,10 @@ function shuffleInPlace<T>(arr: T[]) {
 
 function sanitizeOptions(raw: unknown) {
   const arr = Array.isArray(raw) ? raw : [];
-  return arr.map((opt: any) => {
+  return arr.map((opt) => {
     if (opt && typeof opt === "object" && !Array.isArray(opt)) {
-      const clean: Record<string, any> = {};
-      for (const [k, v] of Object.entries(opt)) {
+      const clean: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(opt as OptionLike)) {
         const key = String(k).toLowerCase();
         if (
           key.includes("correct") ||
@@ -51,13 +102,34 @@ function sanitizeOptions(raw: unknown) {
   });
 }
 
+function sanitizeTestCases(raw: unknown) {
+  const arr = Array.isArray(raw) ? raw : [];
+  return arr.map((tc) => {
+    if (!tc || typeof tc !== "object" || Array.isArray(tc)) return tc;
+
+    const t = tc as Record<string, unknown>;
+    const isHidden = Boolean(t.isHidden);
+
+    return {
+      id: typeof t.id === "string" ? t.id : "",
+      input: typeof t.input === "string" ? t.input : "",
+      expectedOutput:
+        isHidden
+          ? null
+          : typeof t.expectedOutput === "string"
+            ? t.expectedOutput
+            : null,
+      isHidden,
+      points: typeof t.points === "number" ? t.points : null,
+      orderIndex: typeof t.orderIndex === "number" ? t.orderIndex : 0,
+    };
+  });
+}
+
 function normalizeAllowedLanguages(value: unknown): string | null {
   if (value == null) return null;
-
-  // si ya es string (guardado como texto JSON) lo regresamos tal cual
   if (typeof value === "string") return value;
 
-  // si prisma lo trae como Json (array/object), lo serializamos para que el FE haga JSON.parse sin romper
   try {
     return JSON.stringify(value);
   } catch {
@@ -65,7 +137,7 @@ function normalizeAllowedLanguages(value: unknown): string | null {
   }
 }
 
-function buildQuestionsPayload(questionsRaw: any[], meta: any | null) {
+function buildQuestionsPayload(questionsRaw: QuestionRow[], meta: FlagsMeta) {
   let questions = questionsRaw.map((q) => {
     const type = String(q?.type ?? "MULTIPLE_CHOICE").toUpperCase();
 
@@ -75,38 +147,50 @@ function buildQuestionsPayload(questionsRaw: any[], meta: any | null) {
     };
 
     if (type === "CODING") {
-      // ✅ Para CODING: enviar todos los testCases (incluidos hidden)
-      // El frontend decidirá cuáles mostrar
       return {
         ...base,
         options: sanitizeOptions(q.options),
-        testCases: Array.isArray(q.testCases) ? q.testCases : [],
+        testCases: sanitizeTestCases(q.testCases),
       };
     }
 
-    // MULTIPLE_CHOICE / OPEN_ENDED: mantenemos el saneado de options
     return {
       ...base,
       options: sanitizeOptions(q.options),
     };
   });
 
-  const questionOrder: string[] = Array.isArray(meta?.questionOrder) ? meta.questionOrder : [];
+  const questionOrder = Array.isArray(meta?.questionOrder)
+    ? meta.questionOrder
+    : [];
   if (questionOrder.length) {
     const map = new Map(questions.map((q) => [q.id, q]));
-    const ordered = questionOrder.map((id) => map.get(id)).filter(Boolean) as any[];
+    const ordered = questionOrder
+      .map((id) => map.get(id))
+      .filter(Boolean) as typeof questions;
     const leftovers = questions.filter((q) => !questionOrder.includes(q.id));
     questions = [...ordered, ...leftovers];
   }
 
   const optionOrderByQ = meta?.optionOrderByQuestion || {};
-  questions = questions.map((q: any) => {
+  questions = questions.map((q) => {
     const ord = optionOrderByQ[q.id];
     if (Array.isArray(ord) && Array.isArray(q.options)) {
-      const keyOf = (o: any) => o?.id ?? o?.value ?? JSON.stringify(o);
-      const optMap = new Map(q.options.map((o: any) => [keyOf(o), o]));
-      const ordered = ord.map((k: any) => optMap.get(k)).filter(Boolean);
-      const leftovers = q.options.filter((o: any) => !ord.includes(keyOf(o)));
+      const ordKeys = ord.map((k) => String(k));
+
+      const keyOf = (o: unknown) => {
+        if (o && typeof o === "object" && !Array.isArray(o)) {
+          const obj = o as Record<string, unknown>;
+          return String(obj.id ?? obj.value ?? JSON.stringify(o));
+        }
+        return String(JSON.stringify(o));
+      };
+
+      const optMap = new Map<string, unknown>(
+        q.options.map((o) => [keyOf(o), o])
+      );
+      const ordered = ordKeys.map((k) => optMap.get(k)).filter(Boolean);
+      const leftovers = q.options.filter((o) => !ordKeys.includes(keyOf(o)));
       return { ...q, options: [...ordered, ...leftovers] };
     }
     return q;
@@ -115,7 +199,10 @@ function buildQuestionsPayload(questionsRaw: any[], meta: any | null) {
   return questions;
 }
 
-async function ensureMeta(templateId: string, shuffleQuestions: boolean) {
+async function ensureMeta(
+  templateId: string,
+  shuffleQuestions: boolean
+): Promise<Prisma.InputJsonObject> {
   const base = await prisma.assessmentQuestion.findMany({
     where: { templateId, isActive: true },
     select: { id: true, options: true },
@@ -124,21 +211,29 @@ async function ensureMeta(templateId: string, shuffleQuestions: boolean) {
   let q = base.map((qq) => ({
     id: qq.id,
     options: sanitizeOptions(qq.options),
-  })) as any[];
+  }));
 
   if (shuffleQuestions) shuffleInPlace(q);
 
-  const optionOrderByQuestion: Record<string, any[]> = {};
-  q = q.map((qq: any) => {
+  const optionOrderByQuestion: Record<string, string[]> = {};
+  q = q.map((qq) => {
     const opts = Array.isArray(qq.options) ? [...qq.options] : [];
     shuffleInPlace(opts);
-    const keys = opts.map((o: any) => o?.id ?? o?.value ?? JSON.stringify(o));
+
+    const keys = opts.map((o) => {
+      if (o && typeof o === "object" && !Array.isArray(o)) {
+        const obj = o as Record<string, unknown>;
+        return String(obj.id ?? obj.value ?? JSON.stringify(o));
+      }
+      return String(JSON.stringify(o));
+    });
+
     optionOrderByQuestion[qq.id] = keys;
     return { ...qq, options: opts };
   });
 
   return {
-    questionOrder: q.map((qq: any) => qq.id),
+    questionOrder: q.map((qq) => qq.id),
     optionOrderByQuestion,
   };
 }
@@ -155,12 +250,12 @@ type DbClient = Prisma.TransactionClient;
 
 async function markInviteStartedTx(tx: DbClient, inviteId: string, now: Date) {
   await tx.assessmentInvite.updateMany({
-    where: { id: inviteId, status: "SENT" as any },
-    data: { status: "STARTED" as any, startedAt: now },
+    where: { id: inviteId, status: "SENT" },
+    data: { status: "STARTED", startedAt: now },
   });
 }
 
-function isAttemptFinal(status: any) {
+function isAttemptFinal(status: AttemptStatusLike) {
   const s = String(status ?? "").toUpperCase();
   return s === "SUBMITTED" || s === "EVALUATED" || s === "COMPLETED";
 }
@@ -179,21 +274,27 @@ async function buildSaved(attemptId: string) {
   const savedTimeSpent: Record<string, number> = {};
 
   for (const a of saved) {
-    savedAnswers[a.questionId] = (a.selectedOptions as any) ?? [];
+    savedAnswers[a.questionId] = Array.isArray(a.selectedOptions)
+      ? (a.selectedOptions as string[])
+      : [];
     if (typeof a.timeSpent === "number") savedTimeSpent[a.questionId] = a.timeSpent;
   }
 
   return { savedAnswers, savedTimeSpent };
 }
 
-export async function POST(request: Request, { params }: { params: { templateId: string } }) {
+export async function POST(
+  request: Request,
+  { params }: { params: { templateId: string } }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    const user = session.user as any;
-    const role = String(user?.role ?? "").toUpperCase();
+    const user = session.user as SessionUser;
+    const role = String(user.role ?? "").toUpperCase();
     if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
+    if (!user.id) return jsonNoStore({ error: "No autorizado" }, 401);
 
     const now = new Date();
 
@@ -201,19 +302,29 @@ export async function POST(request: Request, { params }: { params: { templateId:
     let token: string | null = null;
     let resumeAttemptId: string | null = null;
 
-    try {
-      const body = await request.json();
-      applicationId = body?.applicationId ? String(body.applicationId) : null;
-      token = body?.token ? String(body.token) : null;
-      resumeAttemptId = body?.attemptId ? String(body.attemptId) : null;
-    } catch {
-      applicationId = null;
-      token = null;
-      resumeAttemptId = null;
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      let body: StartBody;
+      try {
+        body = await request.json();
+      } catch {
+        return jsonNoStore({ error: "Cuerpo inválido (JSON requerido)" }, 400);
+      }
+
+      applicationId =
+        typeof body?.applicationId === "string"
+          ? String(body.applicationId)
+          : null;
+      token = typeof body?.token === "string" ? String(body.token) : null;
+      resumeAttemptId =
+        typeof body?.attemptId === "string" ? String(body.attemptId) : null;
     }
 
     if (!token && !applicationId && !resumeAttemptId) {
-      return jsonNoStore({ error: "Falta invitación o contexto (token/applicationId/attemptId)" }, 400);
+      return jsonNoStore(
+        { error: "Falta invitación o contexto (token/applicationId/attemptId)" },
+        400
+      );
     }
 
     const template = await prisma.assessmentTemplate.findUnique({
@@ -237,8 +348,6 @@ export async function POST(request: Request, { params }: { params: { templateId:
     const tmplAllowRetry = Boolean(template.allowRetry);
     const tmplMaxAttempts = template.maxAttempts ?? 1;
 
-    // ✅ CAMBIO IMPORTANTE: Traer TODOS los testCases (incluidos hidden)
-    // El frontend los necesita para ejecutar, pero solo mostrará detalles de los no-hidden
     const questionsRaw = await prisma.assessmentQuestion.findMany({
       where: { templateId: params.templateId, isActive: true },
       select: {
@@ -255,16 +364,15 @@ export async function POST(request: Request, { params }: { params: { templateId:
         starterCode: true,
         timesUsed: true,
         testCases: {
-          // ✅ TODOS los test cases (sin filtro de isHidden)
           select: {
             id: true,
             input: true,
             expectedOutput: true,
-            isHidden: true,  // ← Importante: incluir este flag
+            isHidden: true,
             points: true,
             orderIndex: true,
           },
-          orderBy: { orderIndex: 'asc' },
+          orderBy: { orderIndex: "asc" },
         },
       },
     });
@@ -272,7 +380,7 @@ export async function POST(request: Request, { params }: { params: { templateId:
     let invite:
       | {
           id: string;
-          status: any;
+          status: string;
           expiresAt: Date | null;
           applicationId: string;
           jobId: string;
@@ -296,16 +404,32 @@ export async function POST(request: Request, { params }: { params: { templateId:
       });
 
       if (!invite) return jsonNoStore({ error: "Invitación inválida" }, 400);
-      if (invite.candidateId !== user.id) return jsonNoStore({ error: "Invitación no autorizada" }, 403);
-      if (invite.templateId !== params.templateId) {
-        return jsonNoStore({ error: "Invitación no corresponde a este assessment" }, 400);
+      if (invite.candidateId !== user.id) {
+        return jsonNoStore({ error: "Invitación no autorizada" }, 403);
       }
-      if (invite.expiresAt && invite.expiresAt <= now) return jsonNoStore({ error: "Invitación expirada" }, 410);
+      if (invite.templateId !== params.templateId) {
+        return jsonNoStore(
+          { error: "Invitación no corresponde a este assessment" },
+          400
+        );
+      }
+      if (invite.expiresAt && invite.expiresAt <= now) {
+        return jsonNoStore({ error: "Invitación expirada" }, 410);
+      }
 
       const invStatus = String(invite.status ?? "").toUpperCase();
-      if (invStatus === "CANCELLED") return jsonNoStore({ error: "Invitación cancelada" }, 410);
-      if (invStatus === "SUBMITTED" || invStatus === "EVALUATED" || invStatus === "COMPLETED") {
-        return jsonNoStore({ error: "Esta invitación ya fue completada" }, 400);
+      if (invStatus === "CANCELLED") {
+        return jsonNoStore({ error: "Invitación cancelada" }, 410);
+      }
+      if (
+        invStatus === "SUBMITTED" ||
+        invStatus === "EVALUATED" ||
+        invStatus === "COMPLETED"
+      ) {
+        return jsonNoStore(
+          { error: "Esta invitación ya fue completada" },
+          400
+        );
       }
 
       applicationId = invite.applicationId;
@@ -333,11 +457,17 @@ export async function POST(request: Request, { params }: { params: { templateId:
       if (!app) return jsonNoStore({ error: "applicationId inválido" }, 400);
 
       if (!app.job.assessments.length) {
-        return jsonNoStore({ error: "Este assessment no está asignado a la vacante" }, 400);
+        return jsonNoStore(
+          { error: "Este assessment no está asignado a la vacante" },
+          400
+        );
       }
 
       if (invite && invite.jobId !== app.jobId) {
-        return jsonNoStore({ error: "Invitación no corresponde a esta postulación" }, 400);
+        return jsonNoStore(
+          { error: "Invitación no corresponde a esta postulación" },
+          400
+        );
       }
     }
 
@@ -345,7 +475,7 @@ export async function POST(request: Request, { params }: { params: { templateId:
       where: {
         candidateId: user.id,
         templateId: params.templateId,
-        status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] as any },
+        status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
       },
     });
 
@@ -353,12 +483,11 @@ export async function POST(request: Request, { params }: { params: { templateId:
       return jsonNoStore({ error: "Ya completaste esta evaluación" }, 400);
     }
 
-    const maxAttempts = tmplMaxAttempts;
-    if (attemptsUsed >= maxAttempts) {
+    if (attemptsUsed >= tmplMaxAttempts) {
       return jsonNoStore({ error: "Límite de intentos alcanzado" }, 400);
     }
 
-    async function createFreshAttempt(params2: {
+    async function createFreshAttempt(args: {
       oldAttemptId?: string | null;
       oldInviteId?: string | null;
       applicationIdToUse: string | null;
@@ -367,20 +496,20 @@ export async function POST(request: Request, { params }: { params: { templateId:
       const newExpiresAt = computeExpiresAt(now, tmplTimeLimit);
 
       const created = await prisma.$transaction(async (tx) => {
-        if (params2.oldAttemptId && params2.oldInviteId) {
+        if (args.oldAttemptId && args.oldInviteId) {
           await tx.assessmentAttempt.update({
-            where: { id: params2.oldAttemptId },
+            where: { id: args.oldAttemptId },
             data: { inviteId: null },
           });
         }
 
         const fresh = await tx.assessmentAttempt.create({
           data: {
-            candidateId: user.id,
+            candidateId: user.id!,
             templateId: params.templateId,
-            applicationId: params2.applicationIdToUse,
-            inviteId: params2.oldInviteId || (invite ? invite.id : null),
-            status: "IN_PROGRESS" as any,
+            applicationId: args.applicationIdToUse,
+            inviteId: args.oldInviteId || (invite ? invite.id : null),
+            status: "IN_PROGRESS",
             attemptNumber: attemptsUsed + 1,
             startedAt: now,
             expiresAt: newExpiresAt,
@@ -391,7 +520,7 @@ export async function POST(request: Request, { params }: { params: { templateId:
           select: { id: true },
         });
 
-        const inviteIdToMark = params2.oldInviteId || (invite ? invite.id : null);
+        const inviteIdToMark = args.oldInviteId || (invite ? invite.id : null);
         if (inviteIdToMark) {
           await markInviteStartedTx(tx, inviteIdToMark, now);
         }
@@ -399,7 +528,10 @@ export async function POST(request: Request, { params }: { params: { templateId:
         return { fresh, metaNew, newExpiresAt };
       });
 
-      const questions = buildQuestionsPayload(questionsRaw as any[], created.metaNew);
+      const questions = buildQuestionsPayload(
+        questionsRaw as unknown as QuestionRow[],
+        created.metaNew as FlagsMeta
+      );
       const { savedAnswers, savedTimeSpent } = await buildSaved(created.fresh.id);
 
       return jsonNoStore({
@@ -415,7 +547,11 @@ export async function POST(request: Request, { params }: { params: { templateId:
 
     if (invite) {
       const attemptByInvite = await prisma.assessmentAttempt.findFirst({
-        where: { inviteId: invite.id, candidateId: user.id, templateId: params.templateId },
+        where: {
+          inviteId: invite.id,
+          candidateId: user.id,
+          templateId: params.templateId,
+        },
         select: {
           id: true,
           status: true,
@@ -439,35 +575,63 @@ export async function POST(request: Request, { params }: { params: { templateId:
           });
         }
 
-        const finalExpiresAt = attemptByInvite.expiresAt ?? computeExpiresAt(now, tmplTimeLimit);
+        const finalExpiresAt =
+          attemptByInvite.expiresAt ?? computeExpiresAt(now, tmplTimeLimit);
 
-        let meta = (attemptByInvite.flagsJson as any) || null;
-        const hasMeta = Array.isArray(meta?.questionOrder) && meta.questionOrder.length > 0;
-        if (!hasMeta) meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
+        let meta = (attemptByInvite.flagsJson as FlagsMeta) || null;
+        const hasMeta =
+          Array.isArray(meta?.questionOrder) && meta.questionOrder.length > 0;
+        if (!hasMeta) {
+          meta = (await ensureMeta(
+            params.templateId,
+            tmplShuffleQuestions
+          )) as unknown as FlagsMeta;
+        }
 
         await prisma.$transaction(async (tx) => {
           const atStatus = String(attemptByInvite.status ?? "").toUpperCase();
 
-          const data: any = {};
-          if (applicationId && attemptByInvite.applicationId !== applicationId) data.applicationId = applicationId;
-          if (!attemptByInvite.expiresAt && finalExpiresAt) data.expiresAt = finalExpiresAt;
-          if (!hasMeta) data.flagsJson = meta;
+          const data: {
+            applicationId?: string | null;
+            expiresAt?: Date | null;
+            flagsJson?: Prisma.InputJsonObject;
+            status?: "IN_PROGRESS";
+            startedAt?: Date;
+            ipAddress?: string;
+            userAgent?: string;
+          } = {};
+
+          if (applicationId && attemptByInvite.applicationId !== applicationId) {
+            data.applicationId = applicationId;
+          }
+          if (!attemptByInvite.expiresAt && finalExpiresAt) {
+            data.expiresAt = finalExpiresAt;
+          }
+          if (!hasMeta && meta) {
+            data.flagsJson = meta as unknown as Prisma.InputJsonObject;
+          }
 
           if (atStatus === "NOT_STARTED") {
-            data.status = "IN_PROGRESS" as any;
+            data.status = "IN_PROGRESS";
             data.startedAt = now;
             data.ipAddress = getClientIp(request);
             data.userAgent = request.headers.get("user-agent") || "unknown";
           }
 
           if (Object.keys(data).length) {
-            await tx.assessmentAttempt.update({ where: { id: attemptByInvite.id }, data });
+            await tx.assessmentAttempt.update({
+              where: { id: attemptByInvite.id },
+              data,
+            });
           }
 
           await markInviteStartedTx(tx, invite.id, now);
         });
 
-        const questions = buildQuestionsPayload(questionsRaw as any[], meta);
+        const questions = buildQuestionsPayload(
+          questionsRaw as unknown as QuestionRow[],
+          meta
+        );
         const { savedAnswers, savedTimeSpent } = await buildSaved(attemptByInvite.id);
 
         return jsonNoStore({
@@ -499,9 +663,18 @@ export async function POST(request: Request, { params }: { params: { templateId:
       });
 
       if (!attempt) return jsonNoStore({ error: "Attempt no encontrado" }, 404);
-      if (attempt.candidateId !== user.id) return jsonNoStore({ error: "No autorizado" }, 403);
-      if (attempt.templateId !== params.templateId) return jsonNoStore({ error: "Attempt no corresponde a este template" }, 400);
-      if (isAttemptFinal(attempt.status)) return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+      if (attempt.candidateId !== user.id) {
+        return jsonNoStore({ error: "No autorizado" }, 403);
+      }
+      if (attempt.templateId !== params.templateId) {
+        return jsonNoStore(
+          { error: "Attempt no corresponde a este template" },
+          400
+        );
+      }
+      if (isAttemptFinal(attempt.status)) {
+        return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+      }
 
       if (isExpired(attempt.expiresAt, now)) {
         return createFreshAttempt({
@@ -513,25 +686,40 @@ export async function POST(request: Request, { params }: { params: { templateId:
 
       const finalExpiresAt = attempt.expiresAt ?? computeExpiresAt(now, tmplTimeLimit);
 
-      let meta = (attempt.flagsJson as any) || null;
-      const hasMeta = Array.isArray(meta?.questionOrder) && meta.questionOrder.length > 0;
-      if (!hasMeta) meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
+      let meta = (attempt.flagsJson as FlagsMeta) || null;
+      const hasMeta =
+        Array.isArray(meta?.questionOrder) && meta.questionOrder.length > 0;
+      if (!hasMeta) {
+        meta = (await ensureMeta(
+          params.templateId,
+          tmplShuffleQuestions
+        )) as unknown as FlagsMeta;
+      }
 
       const atStatus = String(attempt.status ?? "").toUpperCase();
 
       await prisma.$transaction(async (tx) => {
-        const upd: any = {};
+        const upd: {
+          status?: "IN_PROGRESS";
+          startedAt?: Date;
+          ipAddress?: string;
+          userAgent?: string;
+          flagsJson?: Prisma.InputJsonObject;
+          expiresAt?: Date | null;
+        } = {};
 
         if (atStatus === "NOT_STARTED") {
-          upd.status = "IN_PROGRESS" as any;
+          upd.status = "IN_PROGRESS";
           upd.startedAt = now;
           upd.ipAddress = getClientIp(request);
           upd.userAgent = request.headers.get("user-agent") || "unknown";
-          upd.flagsJson = meta;
+          if (meta) upd.flagsJson = meta as unknown as Prisma.InputJsonObject;
           if (!attempt.expiresAt && finalExpiresAt) upd.expiresAt = finalExpiresAt;
         } else {
           if (!attempt.expiresAt && finalExpiresAt) upd.expiresAt = finalExpiresAt;
-          if (!hasMeta) upd.flagsJson = meta;
+          if (!hasMeta && meta) {
+            upd.flagsJson = meta as unknown as Prisma.InputJsonObject;
+          }
         }
 
         if (Object.keys(upd).length) {
@@ -539,11 +727,14 @@ export async function POST(request: Request, { params }: { params: { templateId:
         }
 
         if (attempt.inviteId) {
-          await markInviteStartedTx(tx, attempt.inviteId as any, now);
+          await markInviteStartedTx(tx, attempt.inviteId, now);
         }
       });
 
-      const questions = buildQuestionsPayload(questionsRaw as any[], meta);
+      const questions = buildQuestionsPayload(
+        questionsRaw as unknown as QuestionRow[],
+        meta
+      );
       const { savedAnswers, savedTimeSpent } = await buildSaved(attempt.id);
 
       return jsonNoStore({
@@ -559,7 +750,10 @@ export async function POST(request: Request, { params }: { params: { templateId:
 
     const expiresAt = computeExpiresAt(now, tmplTimeLimit);
     const meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
-    const questions = buildQuestionsPayload(questionsRaw as any[], meta);
+    const questions = buildQuestionsPayload(
+      questionsRaw as unknown as QuestionRow[],
+      meta as unknown as FlagsMeta
+    );
 
     const created = await prisma.assessmentAttempt.create({
       data: {
@@ -567,7 +761,7 @@ export async function POST(request: Request, { params }: { params: { templateId:
         templateId: params.templateId,
         applicationId: applicationId || null,
         inviteId: invite ? invite.id : null,
-        status: "IN_PROGRESS" as any,
+        status: "IN_PROGRESS",
         attemptNumber: attemptsUsed + 1,
         startedAt: now,
         expiresAt,
@@ -595,8 +789,18 @@ export async function POST(request: Request, { params }: { params: { templateId:
       savedAnswers,
       savedTimeSpent,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error starting attempt:", error);
-    return jsonNoStore({ error: "Error al iniciar evaluación", detail: error?.message ?? String(error) }, 500);
+
+    const isDev = process.env.NODE_ENV !== "production";
+    return jsonNoStore(
+      {
+        error: "Error al iniciar evaluación",
+        ...(isDev
+          ? { detail: error instanceof Error ? error.message : String(error) }
+          : {}),
+      },
+      500
+    );
   }
 }

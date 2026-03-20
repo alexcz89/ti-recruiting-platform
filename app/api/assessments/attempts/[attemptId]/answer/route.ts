@@ -1,54 +1,95 @@
 // app/api/assessments/attempts/[attemptId]/answer/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
 
-function jsonNoStore(data: any, status = 200) {
-  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
+type SessionUser = {
+  id?: string | null;
+  role?: string | null;
+};
+
+type AnswerBody = {
+  questionId?: unknown;
+  selectedOptions?: unknown;
+  timeSpent?: unknown;
+};
+
+type AttemptFlags = {
+  questionOrder?: string[];
+} | null;
+
+type OptionShape = Record<string, unknown>;
+
+function jsonNoStore(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 function badRequest(msg: string) {
   return jsonNoStore({ error: msg }, 400);
 }
 
-function keyOfOption(o: any) {
-  // Preferimos keys estables si existen; JSON.stringify queda como último recurso
-  return String(o?.id ?? o?.value ?? JSON.stringify(o));
+function keyOfOption(o: unknown) {
+  if (o && typeof o === "object" && !Array.isArray(o)) {
+    const obj = o as OptionShape;
+    return String(obj.id ?? obj.value ?? JSON.stringify(o));
+  }
+  return String(JSON.stringify(o));
 }
 
 // POST /api/assessments/attempts/[attemptId]/answer
-export async function POST(request: Request, { params }: { params: { attemptId: string } }) {
+export async function POST(
+  request: Request,
+  { params }: { params: { attemptId: string } }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    const user = session.user as any;
-    const role = String(user?.role ?? "").toUpperCase();
+    const user = session.user as SessionUser;
+    const role = String(user.role ?? "").toUpperCase();
     if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
+    if (!user.id) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    let body: any;
+    let body: AnswerBody;
     try {
       body = await request.json();
     } catch {
       return badRequest("Body inválido");
     }
 
-    const questionId = String(body?.questionId || "");
-    const selectedOptionsRaw = body?.selectedOptions;
-    const timeSpentRaw = body?.timeSpent;
+    const questionId =
+      typeof body.questionId === "string" ? body.questionId.trim() : "";
+    const selectedOptionsRaw = body.selectedOptions;
+    const timeSpentRaw = body.timeSpent;
 
     if (!questionId) return badRequest("questionId requerido");
-    if (!Array.isArray(selectedOptionsRaw)) return badRequest("selectedOptions inválido");
+    if (!Array.isArray(selectedOptionsRaw)) {
+      return badRequest("selectedOptions inválido");
+    }
 
-    const selectedOptions = Array.from(new Set(selectedOptionsRaw.map((x: any) => String(x))))
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const selectedOptions = Array.from(
+      new Set(
+        selectedOptionsRaw
+          .filter(
+            (x): x is string | number =>
+              typeof x === "string" || typeof x === "number"
+          )
+          .map((x) => String(x).trim())
+          .filter(Boolean)
+      )
+    );
 
     const timeSpent =
-      typeof timeSpentRaw === "number" && Number.isFinite(timeSpentRaw) && timeSpentRaw >= 0
+      typeof timeSpentRaw === "number" &&
+      Number.isFinite(timeSpentRaw) &&
+      timeSpentRaw >= 0 &&
+      timeSpentRaw <= 60 * 60 * 12
         ? Math.floor(timeSpentRaw)
         : null;
 
@@ -72,21 +113,35 @@ export async function POST(request: Request, { params }: { params: { attemptId: 
         },
       });
 
-      if (!attempt) throw Object.assign(new Error("NOT_FOUND"), { code: "ATTEMPT_NOT_FOUND" });
-      if (attempt.candidateId !== user.id) throw Object.assign(new Error("FORBIDDEN"), { code: "FORBIDDEN" });
+      if (!attempt) {
+        throw Object.assign(new Error("NOT_FOUND"), {
+          code: "ATTEMPT_NOT_FOUND",
+        });
+      }
+      if (attempt.candidateId !== user.id) {
+        throw Object.assign(new Error("FORBIDDEN"), { code: "FORBIDDEN" });
+      }
 
       const st = String(attempt.status ?? "").toUpperCase();
-      if (st !== "IN_PROGRESS") throw Object.assign(new Error("INVALID_STATE"), { code: "INVALID_STATE" });
+      if (st !== "IN_PROGRESS") {
+        throw Object.assign(new Error("INVALID_STATE"), {
+          code: "INVALID_STATE",
+        });
+      }
 
       if (attempt.expiresAt && now > attempt.expiresAt) {
         throw Object.assign(new Error("EXPIRED"), { code: "EXPIRED" });
       }
 
-      // ✅ Anti-cheat: solo preguntas del meta (si existe)
-      const meta = (attempt.flagsJson as any) || null;
-      const order: string[] = Array.isArray(meta?.questionOrder) ? meta.questionOrder : [];
+      const meta = (attempt.flagsJson as AttemptFlags) || null;
+      const order: string[] = Array.isArray(meta?.questionOrder)
+        ? meta.questionOrder
+        : [];
+
       if (order.length && !order.includes(questionId)) {
-        throw Object.assign(new Error("QUESTION_NOT_IN_ATTEMPT"), { code: "QUESTION_NOT_IN_ATTEMPT" });
+        throw Object.assign(new Error("QUESTION_NOT_IN_ATTEMPT"), {
+          code: "QUESTION_NOT_IN_ATTEMPT",
+        });
       }
 
       const question = await tx.assessmentQuestion.findFirst({
@@ -102,22 +157,35 @@ export async function POST(request: Request, { params }: { params: { attemptId: 
         },
       });
 
-      if (!question) throw Object.assign(new Error("QUESTION_NOT_FOUND"), { code: "QUESTION_NOT_FOUND" });
-
-      if (!question.allowMultiple && selectedOptions.length > 1) {
-        throw Object.assign(new Error("SINGLE_CHOICE_ONLY"), { code: "SINGLE_CHOICE_ONLY" });
+      if (!question) {
+        throw Object.assign(new Error("QUESTION_NOT_FOUND"), {
+          code: "QUESTION_NOT_FOUND",
+        });
       }
 
-      const options = Array.isArray(question.options) ? (question.options as any[]) : [];
+      if (!question.allowMultiple && selectedOptions.length > 1) {
+        throw Object.assign(new Error("SINGLE_CHOICE_ONLY"), {
+          code: "SINGLE_CHOICE_ONLY",
+        });
+      }
+
+      const options = Array.isArray(question.options) ? question.options : [];
       const optionKeys = new Set(options.map((o) => keyOfOption(o)));
 
       for (const id of selectedOptions) {
         if (!optionKeys.has(id)) {
-          throw Object.assign(new Error("INVALID_OPTION"), { code: "INVALID_OPTION" });
+          throw Object.assign(new Error("INVALID_OPTION"), {
+            code: "INVALID_OPTION",
+          });
         }
       }
 
-      const correctOptions = options.filter((o) => o?.isCorrect).map((o) => keyOfOption(o));
+      const correctOptions = options
+        .filter((o) => {
+          if (!o || typeof o !== "object" || Array.isArray(o)) return false;
+          return Boolean((o as OptionShape).isCorrect);
+        })
+        .map((o) => keyOfOption(o));
 
       const isCorrect =
         correctOptions.length === selectedOptions.length &&
@@ -127,7 +195,6 @@ export async function POST(request: Request, { params }: { params: { attemptId: 
       if (isCorrect) pointsEarned = 1;
       else if (attempt.template.penalizeWrong) pointsEarned = -0.25;
 
-      // ✅ Evita race: create -> si P2002 entonces update, y timesUsed solo si creó
       let created = false;
       let answerId: string | null = null;
 
@@ -146,11 +213,23 @@ export async function POST(request: Request, { params }: { params: { attemptId: 
         });
         created = true;
         answerId = row.id;
-      } catch (e: any) {
-        if (String(e?.code || "") !== "P2002") throw e;
+      } catch (e: unknown) {
+        if (
+          typeof e !== "object" ||
+          e === null ||
+          !("code" in e) ||
+          String(e.code) !== "P2002"
+        ) {
+          throw e;
+        }
 
         const row = await tx.attemptAnswer.update({
-          where: { attemptId_questionId: { attemptId: params.attemptId, questionId } },
+          where: {
+            attemptId_questionId: {
+              attemptId: params.attemptId,
+              questionId,
+            },
+          },
           data: {
             selectedOptions,
             isCorrect,
@@ -174,17 +253,36 @@ export async function POST(request: Request, { params }: { params: { attemptId: 
     });
 
     return jsonNoStore({ success: true, answerId: result.answerId });
-  } catch (error: any) {
-    const code = String(error?.code || "");
+  } catch (error: unknown) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String(error.code || "")
+        : "";
 
-    if (code === "ATTEMPT_NOT_FOUND") return jsonNoStore({ error: "Intento no encontrado" }, 404);
-    if (code === "FORBIDDEN") return jsonNoStore({ error: "No autorizado" }, 403);
-    if (code === "INVALID_STATE") return badRequest("El intento ya fue completado");
-    if (code === "EXPIRED") return badRequest("El tiempo ha expirado");
-    if (code === "QUESTION_NOT_IN_ATTEMPT") return badRequest("Pregunta inválida para este intento");
-    if (code === "QUESTION_NOT_FOUND") return jsonNoStore({ error: "Pregunta no encontrada" }, 404);
-    if (code === "SINGLE_CHOICE_ONLY") return badRequest("Esta pregunta solo permite una opción");
-    if (code === "INVALID_OPTION") return badRequest("Opción inválida");
+    if (code === "ATTEMPT_NOT_FOUND") {
+      return jsonNoStore({ error: "Intento no encontrado" }, 404);
+    }
+    if (code === "FORBIDDEN") {
+      return jsonNoStore({ error: "No autorizado" }, 403);
+    }
+    if (code === "INVALID_STATE") {
+      return badRequest("El intento ya fue completado");
+    }
+    if (code === "EXPIRED") {
+      return badRequest("El tiempo ha expirado");
+    }
+    if (code === "QUESTION_NOT_IN_ATTEMPT") {
+      return badRequest("Pregunta inválida para este intento");
+    }
+    if (code === "QUESTION_NOT_FOUND") {
+      return jsonNoStore({ error: "Pregunta no encontrada" }, 404);
+    }
+    if (code === "SINGLE_CHOICE_ONLY") {
+      return badRequest("Esta pregunta solo permite una opción");
+    }
+    if (code === "INVALID_OPTION") {
+      return badRequest("Opción inválida");
+    }
 
     console.error("Error saving answer:", error);
     return jsonNoStore({ error: "Error al guardar respuesta" }, 500);

@@ -38,9 +38,31 @@ const EDUCATION_LEVEL_VALUES = [
   "OTHER",
 ] as const;
 
+const PUBLIC_CACHE_HEADERS = {
+  "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
+};
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+};
+
 /* -------------------------------------------------
    Helpers
 --------------------------------------------------*/
+function jsonPublic(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: PUBLIC_CACHE_HEADERS,
+  });
+}
+
+function jsonNoStore(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: NO_STORE_HEADERS,
+  });
+}
+
 function getFormString(fd: FormData, key: string): string {
   const v = fd.get(key);
   return (typeof v === "string" ? v : v?.toString() || "").trim();
@@ -65,13 +87,14 @@ function getFormBool(fd: FormData, key: string): boolean {
   );
 }
 
-function getFormJSON<T>(fd: FormData, key: string): T | null {
+function getFormJSON<T>(fd: FormData, key: string): { ok: true; value: T | null } | { ok: false } {
   const raw = getFormString(fd, key);
-  if (!raw) return null;
+  if (!raw) return { ok: true, value: null };
+
   try {
-    return JSON.parse(raw) as T;
+    return { ok: true, value: JSON.parse(raw) as T };
   } catch {
-    return null;
+    return { ok: false };
   }
 }
 
@@ -93,18 +116,18 @@ function isEducationLevel(value: string): value is EducationLevel {
   );
 }
 
-function normalizeEducationLevel(value: string): EducationLevel | null | undefined {
+function normalizeEducationLevel(
+  value: string
+): EducationLevel | null | undefined {
   const raw = value.trim();
   if (!raw) return null;
- 
-  // Normalizar: uppercase + quitar acentos para comparación robusta
+
   const normalized = raw
     .toUpperCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, ""); // elimina diacríticos
- 
+    .replace(/[\u0300-\u036f]/g, "");
+
   const aliases: Record<string, EducationLevel> = {
-    // Valores del enum directo
     NONE: "NONE",
     PRIMARY: "PRIMARY",
     SECONDARY: "SECONDARY",
@@ -121,24 +144,22 @@ function normalizeEducationLevel(value: string): EducationLevel | null | undefin
     DOCTORATES: "DOCTORATE",
     PHD: "DOCTORATE",
     OTHER: "OTHER",
- 
-    // Español sin acentos (resultado del normalize NFD)
+
     NINGUNO: "NONE",
     PRIMARIA: "PRIMARY",
     SECUNDARIA: "SECONDARY",
     BACHILLERATO: "HIGH_SCHOOL",
     TECNICO: "TECHNICAL",
     TECNICA: "TECHNICAL",
-    "LICENCIATURA / INGENIERIA": "BACHELOR",  // ← el bug: í → i después del normalize
-    "LICENCIATURA / INGENIERA": "BACHELOR",   // variante
+    "LICENCIATURA / INGENIERIA": "BACHELOR",
+    "LICENCIATURA / INGENIERA": "BACHELOR",
     LICENCIATURA: "BACHELOR",
     INGENIERIA: "BACHELOR",
     INGENIERO: "BACHELOR",
     MAESTRIA: "MASTER",
     DOCTORADO: "DOCTORATE",
     OTRO: "OTHER",
- 
-    // Por si el frontend manda solo el número o abreviatura
+
     "0": "NONE",
     "1": "PRIMARY",
     "2": "SECONDARY",
@@ -148,30 +169,52 @@ function normalizeEducationLevel(value: string): EducationLevel | null | undefin
     "6": "MASTER",
     "7": "DOCTORATE",
   };
- 
-  // Primero intentar con el valor normalizado (sin acentos, uppercase)
+
   if (aliases[normalized]) return aliases[normalized];
- 
-  // Si ya es un valor válido del enum, usarlo directamente
-  const EDUCATION_LEVEL_VALUES = [
-    "NONE", "PRIMARY", "SECONDARY", "HIGH_SCHOOL", "TECHNICAL",
-    "BACHELOR", "MASTER", "DOCTORATE", "OTHER",
-  ];
-  if (EDUCATION_LEVEL_VALUES.includes(normalized as EducationLevel)) {
-    return normalized as EducationLevel;
+
+  if (isEducationLevel(normalized)) {
+    return normalized;
   }
- 
-  // Fallback: buscar parcialmente (ej. "LICENCIATURA" dentro de "LICENCIATURA / INGENIERIA")
-  if (normalized.includes("LICENCIATURA") || normalized.includes("INGENIERIA")) return "BACHELOR";
+
+  if (normalized.includes("LICENCIATURA") || normalized.includes("INGENIERIA"))
+    return "BACHELOR";
   if (normalized.includes("MAESTRIA")) return "MASTER";
   if (normalized.includes("DOCTORADO")) return "DOCTORATE";
-  if (normalized.includes("BACHILLERATO") || normalized.includes("PREPARATORIA") || normalized.includes("PREPA")) return "HIGH_SCHOOL";
-  if (normalized.includes("TECNICO") || normalized.includes("TECNICA")) return "TECHNICAL";
+  if (
+    normalized.includes("BACHILLERATO") ||
+    normalized.includes("PREPARATORIA") ||
+    normalized.includes("PREPA")
+  )
+    return "HIGH_SCHOOL";
+  if (normalized.includes("TECNICO") || normalized.includes("TECNICA"))
+    return "TECHNICAL";
   if (normalized.includes("SECUNDARIA")) return "SECONDARY";
   if (normalized.includes("PRIMARIA")) return "PRIMARY";
- 
-  // Valor no reconocido → undefined activa el 400 (comportamiento correcto para valores basura)
+
   return undefined;
+}
+
+function parsePositiveLimit(raw: string | null, fallback = 10, max = 50) {
+  const n = Number(raw ?? fallback);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return Math.min(Math.max(Math.floor(n), 1), max);
+}
+
+function normalizeSort(raw: string | null): "recent" | "updated" {
+  return raw === "updated" ? "updated" : "recent";
+}
+
+function sanitizeCoordinate(
+  value: number | null,
+  type: "lat" | "lng"
+): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+
+  if (type === "lat") {
+    return value >= -90 && value <= 90 ? value : null;
+  }
+
+  return value >= -180 && value <= 180 ? value : null;
 }
 
 /* -------------------------------------------------
@@ -219,7 +262,7 @@ export async function GET(req: NextRequest) {
         },
       });
 
-      if (!job) return NextResponse.json({ job: null });
+      if (!job) return jsonPublic({ job: null });
 
       const companyObj = job.companyConfidential
         ? null
@@ -230,7 +273,7 @@ export async function GET(req: NextRequest) {
             }
           : null;
 
-      return NextResponse.json({
+      return jsonPublic({
         job: {
           id: job.id,
           title: job.title,
@@ -278,7 +321,7 @@ export async function GET(req: NextRequest) {
     }
 
     /* ---------- Listado ---------- */
-    const limit = Math.min(parseInt(searchParams.get("limit") || "10", 10), 50);
+    const limit = parsePositiveLimit(searchParams.get("limit"), 10, 50);
     const cursor = searchParams.get("cursor") ?? undefined;
 
     const q = (searchParams.get("q") || "").trim();
@@ -297,8 +340,7 @@ export async function GET(req: NextRequest) {
       ? employmentTypeParam
       : undefined;
 
-    const sort =
-      (searchParams.get("sort") as "recent" | "updated") || "recent";
+    const sort = normalizeSort(searchParams.get("sort"));
 
     const andFilters: Prisma.JobWhereInput[] = [{ status: JobStatus.OPEN }];
 
@@ -318,7 +360,6 @@ export async function GET(req: NextRequest) {
           { location: { contains: location, mode: "insensitive" } },
           { city: { contains: location, mode: "insensitive" } },
           { admin1: { contains: location, mode: "insensitive" } },
-          { country: { contains: location, mode: "insensitive" } },
         ],
       });
     }
@@ -385,9 +426,7 @@ export async function GET(req: NextRequest) {
         companyLogoUrl: j.companyConfidential
           ? null
           : companyObj?.logoUrl ?? null,
-        logoUrl: j.companyConfidential
-          ? null
-          : companyObj?.logoUrl ?? null,
+        logoUrl: j.companyConfidential ? null : companyObj?.logoUrl ?? null,
         location: j.location,
         locationType: j.locationType,
         country: j.country,
@@ -411,13 +450,10 @@ export async function GET(req: NextRequest) {
     let nextCursor: string | null = null;
     if (page.length > limit) nextCursor = page[limit].id;
 
-    return NextResponse.json({ items, nextCursor });
+    return jsonPublic({ items, nextCursor });
   } catch (err) {
     console.error("[GET /api/jobs]", err);
-    return NextResponse.json(
-      { error: "Internal Server Error" },
-      { status: 500 }
-    );
+    return jsonNoStore({ error: "Internal Server Error" }, 500);
   }
 }
 
@@ -428,36 +464,31 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSessionOrThrow();
 
-    const role = session.user?.role as
-      | "RECRUITER"
-      | "ADMIN"
-      | string
-      | undefined;
-
+    const role = session.user?.role;
     if (role !== "RECRUITER" && role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
     const companyId = await getSessionCompanyId();
     if (!companyId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonNoStore({ error: "Unauthorized" }, 401);
     }
 
-    const userId = (session.user?.id as string) || "";
+    const userId = session.user?.id;
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonNoStore({ error: "Unauthorized" }, 401);
     }
 
     const formData = await req.formData();
 
     const incomingJobId = getFormString(formData, "jobId");
     if (incomingJobId) {
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error:
             "Esta operación es de edición. Usa el endpoint de actualización.",
         },
-        { status: 409 }
+        409
       );
     }
 
@@ -467,28 +498,19 @@ export async function POST(req: NextRequest) {
     const descriptionHtml = getFormString(formData, "descriptionHtml");
 
     if (!title || !description) {
-      return NextResponse.json(
-        { error: "Faltan campos obligatorios" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "Faltan campos obligatorios" }, 400);
     }
 
     const rawLocationType = getFormString(formData, "locationType") || "ONSITE";
     if (!isLocationType(rawLocationType)) {
-      return NextResponse.json(
-        { error: "locationType inválido" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "locationType inválido" }, 400);
     }
     const locationType: LocationType = rawLocationType;
 
     const rawEmploymentType =
       getFormString(formData, "employmentType") || "FULL_TIME";
     if (!isEmploymentType(rawEmploymentType)) {
-      return NextResponse.json(
-        { error: "employmentType inválido" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "employmentType inválido" }, 400);
     }
     const employmentType: EmploymentType = rawEmploymentType;
 
@@ -496,10 +518,7 @@ export async function POST(req: NextRequest) {
     const normalizedMinDegree = normalizeEducationLevel(rawMinDegree);
 
     if (normalizedMinDegree === undefined) {
-      return NextResponse.json(
-        { error: "minDegree inválido" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "minDegree inválido" }, 400);
     }
 
     const minDegree = normalizedMinDegree;
@@ -513,12 +532,8 @@ export async function POST(req: NextRequest) {
     const locationLat = getFormNumber(formData, "locationLat");
     const locationLng = getFormNumber(formData, "locationLng");
 
-    const safeLat = Number.isFinite(locationLat as number)
-      ? (locationLat as number)
-      : null;
-    const safeLng = Number.isFinite(locationLng as number)
-      ? (locationLng as number)
-      : null;
+    const safeLat = sanitizeCoordinate(locationLat, "lat");
+    const safeLng = sanitizeCoordinate(locationLng, "lng");
 
     const remote = locationType === "REMOTE";
 
@@ -528,19 +543,38 @@ export async function POST(req: NextRequest) {
     const showSalary = getFormBool(formData, "showSalary");
 
     if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: "El sueldo mínimo no puede ser mayor que el sueldo máximo." },
-        { status: 400 }
+        400
       );
     }
 
     const schedule = getFormString(formData, "schedule") || null;
     const showBenefits = getFormBool(formData, "showBenefits");
-    const benefitsJson = getFormJSON<Prisma.JsonValue>(formData, "benefitsJson");
 
-    const educationJson = getFormJSON<Prisma.JsonValue>(formData, "educationJson");
-    const skillsJson = getFormJSON<JobSkillInput[]>(formData, "skillsJson");
-    const certsJson = getFormJSON<Prisma.JsonValue>(formData, "certsJson");
+    const benefitsJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "benefitsJson");
+    if (!benefitsJsonParsed.ok) {
+      return jsonNoStore({ error: "benefitsJson inválido" }, 400);
+    }
+    const benefitsJson = benefitsJsonParsed.value;
+
+    const educationJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "educationJson");
+    if (!educationJsonParsed.ok) {
+      return jsonNoStore({ error: "educationJson inválido" }, 400);
+    }
+    const educationJson = educationJsonParsed.value;
+
+    const skillsJsonParsed = getFormJSON<JobSkillInput[]>(formData, "skillsJson");
+    if (!skillsJsonParsed.ok) {
+      return jsonNoStore({ error: "skillsJson inválido" }, 400);
+    }
+    const skillsJson = skillsJsonParsed.value;
+
+    const certsJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "certsJson");
+    if (!certsJsonParsed.ok) {
+      return jsonNoStore({ error: "certsJson inválido" }, 400);
+    }
+    const certsJson = certsJsonParsed.value;
 
     const skillsList: string[] = Array.isArray(skillsJson)
       ? skillsJson
@@ -556,7 +590,7 @@ export async function POST(req: NextRequest) {
     const companyConfidential = companyMode === "confidential";
 
     /* -------------------------------------------------
-       🔁 ANTI-DUPLICADOS
+       🔁 ANTI-DUPLICADOS (best-effort)
     --------------------------------------------------*/
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
 
@@ -572,7 +606,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      return NextResponse.json({
+      return jsonNoStore({
         ok: true,
         id: existing.id,
         deduped: true,
@@ -601,7 +635,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (maxActiveJobs !== null && activeJobsCount >= maxActiveJobs) {
-      return NextResponse.json(
+      return jsonNoStore(
         {
           error: `Has alcanzado el límite de ${maxActiveJobs} vacantes activas para tu plan (${plan.name}).`,
           code: "PLAN_LIMIT_REACHED",
@@ -609,7 +643,7 @@ export async function POST(req: NextRequest) {
           currentActiveJobs: activeJobsCount,
           maxActiveJobs,
         },
-        { status: 402 }
+        402
       );
     }
 
@@ -724,12 +758,9 @@ export async function POST(req: NextRequest) {
       console.warn("[POST /api/jobs] JobTemplate save skipped:", tplErr);
     }
 
-    return NextResponse.json({ ok: true, id: job.id });
+    return jsonNoStore({ ok: true, id: job.id });
   } catch (err) {
     console.error("[POST /api/jobs]", err);
-    return NextResponse.json(
-      { error: "Error al crear la vacante" },
-      { status: 500 }
-    );
+    return jsonNoStore({ error: "Error al crear la vacante" }, 500);
   }
 }

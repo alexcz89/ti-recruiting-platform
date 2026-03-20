@@ -1,14 +1,41 @@
 // app/api/candidate/assessment-invites/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { prisma } from '@/lib/server/prisma';
+import { Prisma } from "@prisma/client";
+import { authOptions } from "@/lib/server/auth";
+import { prisma } from "@/lib/server/prisma";
 
 export const dynamic = "force-dynamic";
 
 type UiState = "COMPLETED" | "IN_PROGRESS" | "EXPIRED" | "CANCELLED" | "PENDING";
 
-function jsonNoStore(data: any, status = 200) {
+type SessionUser = {
+  id?: string | null;
+  role?: string | null;
+};
+
+type InviteRow = {
+  id: string;
+  status: string | null;
+  expiresAt: Date | null;
+  templateId: string | null;
+  applicationId: string | null;
+  sentAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type AttemptRow = {
+  id: string;
+  status: string | null;
+  applicationId: string | null;
+  templateId: string | null;
+  inviteId: string | null;
+  expiresAt: Date | null;
+  createdAt: Date;
+};
+
+function jsonNoStore(data: unknown, status = 200) {
   return NextResponse.json(data, {
     status,
     headers: {
@@ -19,20 +46,12 @@ function jsonNoStore(data: any, status = 200) {
   });
 }
 
-function isExpired(ts: any, now: Date) {
-  if (!ts) return false;
-  const d = ts instanceof Date ? ts : new Date(ts);
-  return d <= now;
-}
-
-function pickUiState(inv: any, attempt: any, now: Date): UiState {
-  const invStatus = String(inv?.status ?? "").toUpperCase();
+function pickUiState(inv: InviteRow, attempt: AttemptRow | null, now: Date): UiState {
+  const invStatus = String(inv.status ?? "").toUpperCase();
   const atStatus = String(attempt?.status ?? "").toUpperCase();
 
-  // ✅ si hay attempt y ya expiró, debe dominar (aunque diga IN_PROGRESS)
   if (attempt?.expiresAt && new Date(attempt.expiresAt) <= now) return "EXPIRED";
 
-  // Attempt manda (si existe)
   if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
   if (["IN_PROGRESS"].includes(atStatus)) return "IN_PROGRESS";
   if (["NOT_STARTED"].includes(atStatus)) {
@@ -40,9 +59,8 @@ function pickUiState(inv: any, attempt: any, now: Date): UiState {
     return "PENDING";
   }
 
-  // Sin attempt: usa invite
   if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
-  if (inv?.expiresAt && new Date(inv.expiresAt) <= now) return "EXPIRED";
+  if (inv.expiresAt && new Date(inv.expiresAt) <= now) return "EXPIRED";
   if (invStatus === "CANCELLED") return "CANCELLED";
   if (invStatus === "STARTED") return "IN_PROGRESS";
 
@@ -55,9 +73,9 @@ export async function GET(request: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    const user = session.user as any;
-    const userId = String(user?.id || "");
-    const role = String(user?.role ?? "").toUpperCase();
+    const user = session.user as SessionUser;
+    const userId = String(user.id || "");
+    const role = String(user.role ?? "").toUpperCase();
 
     if (!userId) return jsonNoStore({ error: "No autorizado" }, 401);
     if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
@@ -67,7 +85,7 @@ export async function GET(request: Request) {
     const mode = url.searchParams.get("mode");
 
     const invitesRaw = await prisma.assessmentInvite.findMany({
-      where: { candidateId: userId as any },
+      where: { candidateId: userId },
       select: {
         id: true,
         status: true,
@@ -91,47 +109,54 @@ export async function GET(request: Request) {
       return mode === "count" ? jsonNoStore({ badge: 0 }) : jsonNoStore(empty);
     }
 
-    const inviteByKey = new Map<string, any>();
+    const inviteByKey = new Map<string, InviteRow>();
     for (const inv of invitesRaw) {
       const appId = String(inv.applicationId || "");
       const tplId = String(inv.templateId || "");
       if (!appId || !tplId) continue;
-      const key = `${appId}::${tplId}`;
-      if (!inviteByKey.has(key)) inviteByKey.set(key, inv);
-    }
-    const invites = Array.from(inviteByKey.values());
 
+      const key = `${appId}::${tplId}`;
+      if (!inviteByKey.has(key)) {
+        inviteByKey.set(key, inv);
+      }
+    }
+
+    const invites = Array.from(inviteByKey.values());
     const inviteIds = invites.map((i) => i.id);
 
-    const pairOr = invites.map((i) => ({
-      applicationId: i.applicationId,
-      templateId: i.templateId,
-      candidateId: userId,
-    }));
+    const pairOr: Prisma.AssessmentAttemptWhereInput[] = invites
+      .filter(
+        (i): i is InviteRow & { applicationId: string; templateId: string } =>
+          typeof i.applicationId === "string" &&
+          i.applicationId.length > 0 &&
+          typeof i.templateId === "string" &&
+          i.templateId.length > 0
+      )
+      .map((i) => ({
+        applicationId: i.applicationId,
+        templateId: i.templateId,
+        candidateId: userId,
+      }));
+
+    const orClauses: Prisma.AssessmentAttemptWhereInput[] = [
+      ...(inviteIds.length ? [{ inviteId: { in: inviteIds } }] : []),
+      ...pairOr,
+    ];
 
     const attempts =
-      inviteIds.length || pairOr.length
+      orClauses.length > 0
         ? await prisma.assessmentAttempt.findMany({
             where: {
-              candidateId: userId as any,
-              OR: [
-                ...(inviteIds.length ? [{ inviteId: { in: inviteIds as any } }] : []),
-                ...(pairOr.length
-                  ? invites.map((i) => ({
-                      applicationId: i.applicationId,
-                      templateId: i.templateId,
-                    }))
-                  : []),
-              ] as any,
+              candidateId: userId,
+              OR: orClauses,
             },
-
             select: {
               id: true,
               status: true,
               applicationId: true,
               templateId: true,
               inviteId: true,
-              expiresAt: true, // ✅ NECESARIO para detectar expiración
+              expiresAt: true,
               createdAt: true,
             },
             orderBy: { updatedAt: "desc" },
@@ -139,15 +164,20 @@ export async function GET(request: Request) {
           })
         : [];
 
-    const attemptByInviteId = new Map<string, any>();
-    const attemptByKey = new Map<string, any>();
+    const attemptByInviteId = new Map<string, AttemptRow>();
+    const attemptByKey = new Map<string, AttemptRow>();
 
     for (const a of attempts) {
       if (a.inviteId && !attemptByInviteId.has(String(a.inviteId))) {
         attemptByInviteId.set(String(a.inviteId), a);
       }
-      const key = `${String(a.applicationId)}::${String(a.templateId)}`;
-      if (!attemptByKey.has(key)) attemptByKey.set(key, a);
+
+      if (a.applicationId && a.templateId) {
+        const key = `${String(a.applicationId)}::${String(a.templateId)}`;
+        if (!attemptByKey.has(key)) {
+          attemptByKey.set(key, a);
+        }
+      }
     }
 
     let pending = 0;
@@ -157,23 +187,25 @@ export async function GET(request: Request) {
 
     for (const inv of invites) {
       const key = `${String(inv.applicationId)}::${String(inv.templateId)}`;
-      const attempt = attemptByInviteId.get(String(inv.id)) || attemptByKey.get(key) || null;
+      const attempt =
+        attemptByInviteId.get(String(inv.id)) || attemptByKey.get(key) || null;
 
-      const attemptExpires = attempt?.expiresAt ? new Date(attempt.expiresAt) : null;
-      const attemptExpired = Boolean(attemptExpires && attemptExpires <= now);
+      if (process.env.NODE_ENV !== "production") {
+        const attemptExpires = attempt?.expiresAt ? new Date(attempt.expiresAt) : null;
+        const attemptExpired = Boolean(attemptExpires && attemptExpires <= now);
 
-      console.log("[INVITE_STATE]", {
-        key,
-        inviteId: inv.id,
-        invStatus: String(inv.status ?? "").toUpperCase(),
-        invExpiresAt: inv.expiresAt,
-        attemptId: attempt?.id ?? null,
-        atStatus: String(attempt?.status ?? "").toUpperCase(),
-        atExpiresAt: attempt?.expiresAt ?? null,
-        attemptExpired,
-        pickedState: pickUiState(inv, attempt, now),
-      });
-
+        console.log("[INVITE_STATE]", {
+          key,
+          inviteId: inv.id,
+          invStatus: String(inv.status ?? "").toUpperCase(),
+          invExpiresAt: inv.expiresAt,
+          attemptId: attempt?.id ?? null,
+          atStatus: String(attempt?.status ?? "").toUpperCase(),
+          atExpiresAt: attempt?.expiresAt ?? null,
+          attemptExpired,
+          pickedState: pickUiState(inv, attempt, now),
+        });
+      }
 
       const state = pickUiState(inv, attempt, now);
 

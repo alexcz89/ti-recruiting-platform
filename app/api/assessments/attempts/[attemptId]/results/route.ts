@@ -1,56 +1,50 @@
 // app/api/assessments/attempts/[attemptId]/results/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { getSessionCompanyId } from '@/lib/server/session';
+import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function jsonNoStore(data: any, status = 200) {
-  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
-}
+type SessionUser = {
+  id?: string | null;
+  role?: string | null;
+};
 
-function sanitizeOptions(raw: unknown) {
-  const arr = Array.isArray(raw) ? raw : [];
-  return arr.map((opt: any) => {
-    if (opt && typeof opt === "object" && !Array.isArray(opt)) {
-      const clean: Record<string, any> = {};
-      for (const [k, v] of Object.entries(opt)) {
-        const key = String(k).toLowerCase();
-        if (
-          key.includes("correct") ||
-          key.includes("iscorrect") ||
-          key.includes("answer") ||
-          key.includes("score") ||
-          key.includes("points")
-        ) {
-          continue;
-        }
-        clean[k] = v;
-      }
-      return clean;
-    }
-    return opt;
+type AttemptStatusLike =
+  | "NOT_STARTED"
+  | "IN_PROGRESS"
+  | "SUBMITTED"
+  | "EVALUATED"
+  | "COMPLETED"
+  | string;
+
+function jsonNoStore(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: { "Cache-Control": "no-store" },
   });
 }
 
-function isAttemptFinal(status: any) {
+function isAttemptFinal(status: AttemptStatusLike) {
   const s = String(status ?? "").toUpperCase();
   return s === "SUBMITTED" || s === "EVALUATED" || s === "COMPLETED";
 }
 
-export async function GET(_request: Request, { params }: { params: { attemptId: string } }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: { attemptId: string } }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    const user = session.user as any;
-    const role = String(user?.role ?? "").toUpperCase();
-    const userId = String(user?.id ?? "");
+    const user = session.user as SessionUser;
+    const role = String(user.role ?? "").toUpperCase();
+    const userId = String(user.id ?? "");
 
-    // 1) Cargar attempt MINIMO (para auth + resumen)
     const attemptBase = await prisma.assessmentAttempt.findUnique({
       where: { id: params.attemptId },
       select: {
@@ -98,18 +92,21 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
       },
     });
 
-    if (!attemptBase) return jsonNoStore({ error: "Intento no encontrado" }, 404);
+    if (!attemptBase) {
+      return jsonNoStore({ error: "Intento no encontrado" }, 404);
+    }
 
-    // Solo resultados cuando ya fue enviada/evaluada
     if (!isAttemptFinal(attemptBase.status)) {
-      return jsonNoStore({ error: "La evaluación aún no ha sido completada" }, 400);
+      return jsonNoStore(
+        { error: "La evaluación aún no ha sido completada" },
+        400
+      );
     }
 
     const isOwner = String(attemptBase.candidateId) === userId;
     const isAdmin = role === "ADMIN";
     const isRecruiter = role === "RECRUITER";
 
-    // job desde application o desde invite.application
     const jobFromApplication = attemptBase.application?.job ?? null;
     const jobFromInvite = attemptBase.invite?.application?.job ?? null;
     const job = jobFromApplication || jobFromInvite;
@@ -126,10 +123,9 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
       return jsonNoStore({ error: "No autorizado" }, 403);
     }
 
-    const canSeeSolutions = isAdmin || recruiterCanView; // recruiter/admin sí
-    const canSeeFlags = isAdmin || recruiterCanView; // solo recruiter/admin
+    const canSeeSolutions = isAdmin || recruiterCanView;
+    const canSeeFlags = isAdmin || recruiterCanView;
 
-    // Stats base (para ambos)
     const [answeredCount, totalQuestions] = await Promise.all([
       prisma.attemptAnswer.count({ where: { attemptId: attemptBase.id } }),
       prisma.assessmentQuestion.count({
@@ -137,7 +133,6 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
       }),
     ]);
 
-    // ✅ CANDIDATE: NO regresar preguntas/answers (para que no se muestren al final)
     if (!canSeeSolutions) {
       return jsonNoStore({
         attempt: {
@@ -150,26 +145,25 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
           totalScore: attemptBase.totalScore,
           sectionScores: attemptBase.sectionScores,
           passed: attemptBase.passed,
-          flagsJson: undefined, // candidato nunca
+          flagsJson: undefined,
         },
         template: attemptBase.template,
         candidate: undefined,
-        answers: [], // ✅ vacío para que el UI no renderice preguntas
+        answers: [],
         stats: {
           correctAnswers: undefined,
           answeredQuestions: answeredCount,
           totalQuestions,
           accuracy: undefined,
         },
-        summaryOnly: true, // ✅ útil si luego quieres condicionar UI
+        summaryOnly: true,
       });
     }
 
-    // ✅ recruiter/admin: traer answers + questions
     const answersFull = await prisma.attemptAnswer.findMany({
       where: { attemptId: attemptBase.id },
       select: {
-        id: true, // ✅ para ordenar estable
+        id: true,
         questionId: true,
         selectedOptions: true,
         isCorrect: true,
@@ -187,16 +181,15 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
           },
         },
       },
-      // ✅ FIX: AttemptAnswer no tiene createdAt en tu schema
       orderBy: { id: "asc" },
     });
 
     const correctCount = answersFull.filter((a) => Boolean(a.isCorrect)).length;
-    const accuracy = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+    const accuracy =
+      totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
 
-    // (Opcional) traer candidato solo para recruiter/admin
     const candidate = await prisma.user.findUnique({
-      where: { id: attemptBase.candidateId as any },
+      where: { id: attemptBase.candidateId },
       select: { id: true, name: true, email: true },
     });
 
@@ -221,7 +214,7 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
         difficulty: answer.question.difficulty,
         questionText: answer.question.questionText,
         codeSnippet: answer.question.codeSnippet,
-        options: answer.question.options, // recruiter/admin full
+        options: answer.question.options,
         selectedOptions: answer.selectedOptions,
         isCorrect: answer.isCorrect,
         pointsEarned: answer.pointsEarned,

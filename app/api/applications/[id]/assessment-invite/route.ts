@@ -1,17 +1,25 @@
 // app/api/applications/[id]/assessment-invite/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { getSessionCompanyId } from '@/lib/server/session';
 import crypto from "crypto";
-import { sendAssessmentInviteEmail } from '@/lib/server/mailer';
-import { NotificationService } from '@/lib/notifications/service'; // 🔔 NUEVO
+import { Prisma } from "@prisma/client";
+
+import { prisma } from "@/lib/server/prisma";
+import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
+import { sendAssessmentInviteEmail } from "@/lib/server/mailer";
+import { NotificationService } from "@/lib/notifications/service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function json(status: number, body: any) {
+type EmailStatus = "sent" | "skipped" | "failed";
+type SessionUser = {
+  id?: string | null;
+  role?: string | null;
+};
+
+function json(status: number, body: unknown) {
   return NextResponse.json(body, {
     status,
     headers: { "Cache-Control": "no-store" },
@@ -40,7 +48,10 @@ function buildBaseUrl(req: Request) {
   return "http://localhost:3000";
 }
 
-function isInviteReusable(inv: { status: any; expiresAt: Date | null }, now: Date) {
+function isInviteReusable(
+  inv: { status: string | null; expiresAt: Date | null },
+  now: Date
+) {
   const s = String(inv.status || "").toUpperCase();
   if (s !== "SENT" && s !== "STARTED") return false;
   if (inv.expiresAt && inv.expiresAt <= now) return false;
@@ -51,16 +62,12 @@ function computeExpiresAt(days: number) {
   return new Date(Date.now() + 1000 * 60 * 60 * 24 * days);
 }
 
-/**
- * Billing switch (scaffold)
- * - Default: FREE (no valida créditos)
- * - Si activas: ASSESSMENTS_REQUIRE_CREDITS=true => responderá 402 (hasta implementar consumo real)
- */
 function isCreditsEnforced() {
-  return String(process.env.ASSESSMENTS_REQUIRE_CREDITS || "").toLowerCase() === "true";
+  return (
+    String(process.env.ASSESSMENTS_REQUIRE_CREDITS || "").toLowerCase() ===
+    "true"
+  );
 }
-
-type EmailStatus = "sent" | "skipped" | "failed";
 
 const selectInvite = {
   id: true,
@@ -74,36 +81,51 @@ const selectInvite = {
 
 // POST /api/applications/[id]/assessment-invite
 // Body opcional: { templateId?: string, expiresInDays?: number }
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
   const t0 = Date.now();
 
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return json(401, { error: "No autorizado" });
 
-    const user = session.user as any;
-    const isAdmin = user?.role === "ADMIN";
-    const isRecruiter = user?.role === "RECRUITER";
-    if (!isAdmin && !isRecruiter) return json(403, { error: "No autorizado" });
+    const user = session.user as SessionUser;
+    const isAdmin = user.role === "ADMIN";
+    const isRecruiter = user.role === "RECRUITER";
+
+    if (!isAdmin && !isRecruiter) {
+      return json(403, { error: "No autorizado" });
+    }
 
     const sessionCompanyId = await getSessionCompanyId().catch(() => null);
-    if (!sessionCompanyId && !isAdmin) return json(403, { error: "Sin empresa asociada" });
+    if (!sessionCompanyId && !isAdmin) {
+      return json(403, { error: "Sin empresa asociada" });
+    }
 
-    // ===== Billing switch (scaffold) =====
     if (!isAdmin && isCreditsEnforced()) {
-      return json(402, { error: "Sin créditos para enviar assessments", code: "NO_CREDITS" });
+      return json(402, {
+        error: "Sin créditos para enviar assessments",
+        code: "NO_CREDITS",
+      });
     }
 
-    let body: any = {};
-    try {
-      body = await request.json();
-    } catch {
-      body = {};
+    let body: { templateId?: unknown; expiresInDays?: unknown } = {};
+    const contentType = request.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      try {
+        body = await request.json();
+      } catch {
+        return json(400, { error: "Cuerpo inválido (JSON requerido)" });
+      }
     }
 
-    const requestedTemplateId = body?.templateId ? String(body.templateId) : null;
-    const expiresInDaysRaw = body?.expiresInDays;
+    const requestedTemplateId =
+      typeof body.templateId === "string" ? body.templateId : null;
 
+    const expiresInDaysRaw = body.expiresInDays;
     const expiresInDays =
       typeof expiresInDaysRaw === "number" &&
       Number.isFinite(expiresInDaysRaw) &&
@@ -114,7 +136,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const now = new Date();
     const newExpiresAt = computeExpiresAt(expiresInDays);
 
-    // 1) Cargar application + validar scope
     const application = await prisma.application.findFirst({
       where: {
         id: params.id,
@@ -147,37 +168,49 @@ export async function POST(request: Request, { params }: { params: { id: string 
       },
     });
 
-    if (!application) return json(404, { error: "Postulación no encontrada" });
+    if (!application) {
+      return json(404, { error: "Postulación no encontrada" });
+    }
 
-    // scope extra para recruiter
     if (isRecruiter) {
-      const recruiterCompanyOk = sessionCompanyId && application.job.companyId === sessionCompanyId;
-      const recruiterOwnerOk = application.job.recruiterId && application.job.recruiterId === user.id;
+      const recruiterCompanyOk =
+        !!sessionCompanyId && application.job.companyId === sessionCompanyId;
+      const recruiterOwnerOk =
+        !!application.job.recruiterId && application.job.recruiterId === user.id;
 
       if (!recruiterCompanyOk && !recruiterOwnerOk) {
         return json(403, { error: "No autorizado (job fuera de tu scope)" });
       }
     }
 
-    // 2) Elegir template
     const jobAssessments = application.job.assessments ?? [];
     if (!jobAssessments.length) {
-      return json(400, { error: "Esta vacante no tiene assessments asignados" });
+      return json(400, {
+        error: "Esta vacante no tiene assessments asignados",
+      });
     }
 
     const defaultTemplateId =
-      jobAssessments.find((a) => a.isRequired)?.templateId ?? jobAssessments[0]?.templateId;
+      jobAssessments.find((a) => a.isRequired)?.templateId ??
+      jobAssessments[0]?.templateId;
 
     const chosenTemplateId =
       requestedTemplateId ?? (defaultTemplateId ? String(defaultTemplateId) : null);
 
     if (!chosenTemplateId) {
-      return json(400, { error: "Esta vacante no tiene assessments asignados" });
+      return json(400, {
+        error: "Esta vacante no tiene assessments asignados",
+      });
     }
 
-    const chosenJobAssessment = jobAssessments.find((a) => String(a.templateId) === chosenTemplateId);
+    const chosenJobAssessment = jobAssessments.find(
+      (a) => String(a.templateId) === chosenTemplateId
+    );
+
     if (!chosenJobAssessment) {
-      return json(400, { error: "El template solicitado no está asignado a esta vacante" });
+      return json(400, {
+        error: "El template solicitado no está asignado a esta vacante",
+      });
     }
 
     const template = await prisma.assessmentTemplate.findUnique({
@@ -187,7 +220,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     if (!template) return json(404, { error: "Template no encontrado" });
 
-    // 3) Crear/reusar invite por (applicationId, templateId)
     let invite = await prisma.assessmentInvite.findFirst({
       where: { applicationId: application.id, templateId: template.id },
       select: selectInvite,
@@ -199,6 +231,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     if (!invite) {
       const token = crypto.randomBytes(32).toString("hex");
+
       try {
         invite = await prisma.assessmentInvite.create({
           data: {
@@ -206,21 +239,26 @@ export async function POST(request: Request, { params }: { params: { id: string 
             job: { connect: { id: application.jobId } },
             candidate: { connect: { id: application.candidateId } },
             template: { connect: { id: template.id } },
-
             token,
-            status: "SENT" as any,
+            status: "SENT",
             expiresAt: newExpiresAt,
             sentAt: null,
-
-            invitedBy: user?.id ? { connect: { id: user.id } } : undefined,
-          } as any,
+            invitedBy: user.id ? { connect: { id: user.id } } : undefined,
+          },
           select: selectInvite,
         });
 
         createdInvite = true;
         reusedInvite = false;
-      } catch (e: any) {
-        if (String(e?.code || "") !== "P2002") throw e;
+      } catch (e: unknown) {
+        if (
+          typeof e !== "object" ||
+          e === null ||
+          !("code" in e) ||
+          String(e.code) !== "P2002"
+        ) {
+          throw e;
+        }
 
         invite = await prisma.assessmentInvite.findFirst({
           where: { applicationId: application.id, templateId: template.id },
@@ -231,61 +269,59 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }
     }
 
-    if (!invite) return json(500, { error: "No se pudo crear la invitación" });
+    if (!invite) {
+      return json(500, { error: "No se pudo crear la invitación" });
+    }
 
-    // 4) Si no es reusable => rotar token + reiniciar a SENT/expiresAt
-    //    y MUY IMPORTANTE: desligar attempts activos viejos (inviteId @unique)
     if (!isInviteReusable(invite, now)) {
       const rotatedToken = crypto.randomBytes(32).toString("hex");
       rotated = true;
 
       invite = await prisma.$transaction(async (tx) => {
-        // desligar attempts NO_FINALIZADOS para liberar el inviteId @unique
         await tx.assessmentAttempt.updateMany({
           where: {
             inviteId: invite!.id,
-            status: { in: ["NOT_STARTED", "IN_PROGRESS"] as any },
-          } as any,
-          data: { inviteId: null } as any,
+            status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
+          },
+          data: { inviteId: null },
         });
 
         return tx.assessmentInvite.update({
           where: { id: invite!.id },
           data: {
             token: rotatedToken,
-            status: "SENT" as any,
+            status: "SENT",
             expiresAt: newExpiresAt,
             sentAt: null,
-            invitedBy: user?.id ? { connect: { id: user.id } } : undefined,
-          } as any,
+            invitedBy: user.id ? { connect: { id: user.id } } : undefined,
+          },
           select: selectInvite,
         });
       });
     } else {
-      // Reusable: si aún está SENT o STARTED, puedes extender expiración
       const s = String(invite.status || "").toUpperCase();
       if (s === "SENT" || s === "STARTED") {
         invite = await prisma.assessmentInvite.update({
           where: { id: invite.id },
           data: {
             expiresAt: newExpiresAt,
-            invitedBy: user?.id ? { connect: { id: user.id } } : undefined,
-          } as any,
+            invitedBy: user.id ? { connect: { id: user.id } } : undefined,
+          },
           select: selectInvite,
         });
       }
     }
 
-    // 5) Link (solo token)
     const baseUrl = buildBaseUrl(request);
     const inviteUrl = new URL(`/assessments/${template.id}`, baseUrl);
     inviteUrl.searchParams.set("token", invite.token);
 
-    // 6) Enviar email (si hay email)
     let emailStatus: EmailStatus = "skipped";
     let emailError: string | null = null;
 
-    const candidateEmail = application.candidate?.email ? String(application.candidate.email) : "";
+    const candidateEmail = application.candidate?.email
+      ? String(application.candidate.email)
+      : "";
 
     if (candidateEmail) {
       try {
@@ -299,65 +335,83 @@ export async function POST(request: Request, { params }: { params: { id: string 
           expiresAt: invite.expiresAt ?? null,
           inviteUrl: inviteUrl.toString(),
           dedupeKey: invite.id,
-        } as any);
+        });
 
-        if ("ok" in r && (r as any).ok) emailStatus = "sent";
-        else if ("skipped" in r && (r as any).skipped) emailStatus = "skipped";
-        else if ("error" in r) {
+        if (
+          typeof r === "object" &&
+          r !== null &&
+          "ok" in r &&
+          r.ok === true
+        ) {
+          emailStatus = "sent";
+        } else if (
+          typeof r === "object" &&
+          r !== null &&
+          "skipped" in r &&
+          r.skipped === true
+        ) {
+          emailStatus = "skipped";
+        } else if (
+          typeof r === "object" &&
+          r !== null &&
+          "error" in r &&
+          typeof r.error === "string"
+        ) {
           emailStatus = "failed";
-          emailError = (r as any).error;
+          emailError = r.error;
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         emailStatus = "failed";
-        emailError = err?.message || "send_failed";
+        emailError = err instanceof Error ? err.message : "send_failed";
       }
     } else {
       emailStatus = "skipped";
       emailError = "candidate_email_missing";
     }
 
-    // sentAt = Último "intento de envío" (ok o skipped)
     if (emailStatus === "sent" || emailStatus === "skipped") {
       invite = await prisma.assessmentInvite.update({
         where: { id: invite.id },
-        data: { sentAt: now },
+        data: { sentAt: new Date() },
         select: selectInvite,
       });
     }
 
-    // 🔔 NUEVO: Notificar al candidato sobre la invitación
-    (async () => {
-      try {
-        await NotificationService.create({
-          userId: application.candidateId,
-          type: 'ASSESSMENT_INVITATION',
-          metadata: {
-            jobTitle: application.job.title,
-            jobId: application.jobId,
-            assessmentId: invite!.id,
-            templateId: template.id,
-            dueDate: invite!.expiresAt || newExpiresAt,
-          },
-        });
-      } catch (notifErr) {
-        console.warn("[POST /api/applications/assessment-invite] Notification failed:", notifErr);
-      }
-    })();
+    await NotificationService.create({
+      userId: application.candidateId,
+      type: "ASSESSMENT_INVITATION",
+      metadata: {
+        jobTitle: application.job.title,
+        jobId: application.jobId,
+        assessmentId: invite.id,
+        templateId: template.id,
+        dueDate: invite.expiresAt || newExpiresAt,
+      },
+    }).catch((notifErr) => {
+      console.warn(
+        "[POST /api/applications/assessment-invite] Notification failed:",
+        notifErr
+      );
+    });
 
-    // 7) Lookup opcional de attempt "reusable": SOLO si está NO_FINALIZADO y NO EXPIRADO
-    //    Si no hay uno activo, regresamos attempt: null (el candidato crea uno nuevo vía /start con token).
-    const activeNotExpiredWhere = {
-      status: { in: ["NOT_STARTED", "IN_PROGRESS"] as any },
+    const activeNotExpiredWhere: Prisma.AssessmentAttemptWhereInput = {
+      status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
       OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-    } as const;
+    };
 
     const existingAttemptByInvite = await prisma.assessmentAttempt.findFirst({
       where: {
         inviteId: invite.id,
-        ...(activeNotExpiredWhere as any),
-      } as any,
+        ...activeNotExpiredWhere,
+      },
       orderBy: { createdAt: "desc" },
-      select: { id: true, status: true, createdAt: true, startedAt: true, expiresAt: true },
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        startedAt: true,
+        expiresAt: true,
+      },
     });
 
     const existingAttempt =
@@ -367,10 +421,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
           applicationId: application.id,
           candidateId: application.candidateId,
           templateId: template.id,
-          ...(activeNotExpiredWhere as any),
-        } as any,
+          ...activeNotExpiredWhere,
+        },
         orderBy: { createdAt: "desc" },
-        select: { id: true, status: true, createdAt: true, startedAt: true, expiresAt: true },
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          startedAt: true,
+          expiresAt: true,
+        },
       }));
 
     if (process.env.NODE_ENV !== "production") {
@@ -384,7 +444,6 @@ export async function POST(request: Request, { params }: { params: { id: string 
         createdInvite,
         rotated,
         attemptId: existingAttempt?.id ?? null,
-        inviteUrl: inviteUrl.toString(),
         emailStatus,
         emailError,
         isRequired: Boolean(chosenJobAssessment.isRequired),
@@ -395,26 +454,39 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
     return json(200, {
       ok: true,
-      template: { id: template.id, title: template.title, timeLimit: template.timeLimit },
+      template: {
+        id: template.id,
+        title: template.title,
+        timeLimit: template.timeLimit,
+      },
       jobAssessment: {
         id: chosenJobAssessment.id,
         isRequired: Boolean(chosenJobAssessment.isRequired),
         minScore: chosenJobAssessment.minScore ?? null,
       },
       attempt: existingAttempt ?? null,
-      invite,
+      invite: {
+        id: invite.id,
+        status: invite.status,
+        sentAt: invite.sentAt,
+        expiresAt: invite.expiresAt,
+        createdAt: invite.createdAt,
+        updatedAt: invite.updatedAt,
+      },
       inviteUrl: inviteUrl.toString(),
       emailStatus,
       emailError,
       meta: { reusedInvite, createdInvite, rotated },
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("[ASSESSMENT INVITE] ERROR", e);
 
     const isDev = process.env.NODE_ENV !== "production";
     return json(500, {
       error: "Error al enviar invitación",
-      ...(isDev ? { detail: e?.message || String(e) } : {}),
+      ...(isDev
+        ? { detail: e instanceof Error ? e.message : String(e) }
+        : {}),
     });
   }
 }

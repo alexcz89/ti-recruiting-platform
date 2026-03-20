@@ -1,24 +1,47 @@
 // app/api/applications/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
-import { getSessionCompanyId, getSessionOrThrow } from '@/lib/server/session';
+import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import { ApplicationStatus } from "@prisma/client";
 
+function jsonNoStore(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
 // GET /api/applications/:id
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
+    const session = await getSessionOrThrow();
+    const role = session.user?.role;
+
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
+
     let companyId: string | null = null;
     try {
       companyId = await getSessionCompanyId();
-      if (!companyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
     } catch {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonNoStore({ error: "Unauthorized" }, 401);
     }
 
     const app = await prisma.application.findUnique({
       where: { id: params.id },
       include: {
-        job: true,
+        job: {
+          select: {
+            id: true,
+            title: true,
+            companyId: true,
+          },
+        },
         candidate: {
           select: {
             id: true,
@@ -28,32 +51,41 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
             resumeUrl: true,
           },
         },
-        messages: true,
+        messages: {
+          select: {
+            id: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
     if (!app || app.job.companyId !== companyId) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return jsonNoStore({ error: "Not found" }, 404);
     }
 
-    return NextResponse.json(app);
+    return jsonNoStore(app);
   } catch (err) {
     console.error("[GET /api/applications/:id] ", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonNoStore({ error: "Internal Server Error" }, 500);
   }
 }
 
 // PATCH /api/applications/:id
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await getSessionOrThrow();
-    // @ts-ignore
-    if (session.user.role !== "RECRUITER" && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const role = session.user?.role;
+
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
     const companyId = await getSessionCompanyId();
-    if (!companyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     const id = params.id;
 
@@ -61,7 +93,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     try {
       bodyRaw = await req.json();
     } catch {
-      return NextResponse.json({ error: "Cuerpo inválido (JSON requerido)" }, { status: 400 });
+      return jsonNoStore({ error: "Cuerpo inválido (JSON requerido)" }, 400);
     }
 
     const body = bodyRaw as Partial<{
@@ -74,14 +106,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       where: { id },
       include: { job: true },
     });
+
     if (!found || found.job.companyId !== companyId) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return jsonNoStore({ error: "Not found" }, 404);
     }
 
     if (typeof body.status !== "undefined") {
       const allowed = new Set(Object.values(ApplicationStatus));
       if (!allowed.has(body.status)) {
-        return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+        return jsonNoStore({ error: "Status inválido" }, 400);
       }
     }
 
@@ -89,43 +122,52 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       where: { id },
       data: {
         status: body.status ?? undefined,
-        resumeUrl: typeof body.resumeUrl !== "undefined" ? body.resumeUrl : undefined,
-        coverLetter: typeof body.coverLetter !== "undefined" ? body.coverLetter : undefined,
+        resumeUrl:
+          typeof body.resumeUrl !== "undefined" ? body.resumeUrl : undefined,
+        coverLetter:
+          typeof body.coverLetter !== "undefined"
+            ? body.coverLetter
+            : undefined,
       },
     });
 
-    return NextResponse.json(updated);
+    return jsonNoStore(updated);
   } catch (err) {
     console.error("[PATCH /api/applications/:id] ", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonNoStore({ error: "Internal Server Error" }, 500);
   }
 }
 
 // DELETE /api/applications/:id
-export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   try {
     const session = await getSessionOrThrow();
-    // @ts-ignore
-    if (session.user.role !== "RECRUITER" && session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const role = session.user?.role;
+
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
     const companyId = await getSessionCompanyId();
-    if (!companyId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     const app = await prisma.application.findFirst({
       where: { id: params.id, job: { companyId } },
       select: { id: true },
     });
+
     if (!app) {
-      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+      return jsonNoStore({ error: "Application not found" }, 404);
     }
 
     await prisma.application.delete({ where: { id: params.id } });
 
-    return NextResponse.json({ ok: true }, { status: 200 });
+    return jsonNoStore({ ok: true }, 200);
   } catch (err) {
     console.error("[DELETE /api/applications/:id] ", err);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return jsonNoStore({ error: "Internal Server Error" }, 500);
   }
 }

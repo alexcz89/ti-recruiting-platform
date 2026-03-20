@@ -1,13 +1,37 @@
 // app/api/assessments/attempts/[attemptId]/state/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
 
 export const dynamic = "force-dynamic";
 
-function jsonNoStore(data: any, status = 200) {
-  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
+type SessionUser = {
+  id?: string | null;
+  role?: string | null;
+};
+
+type AttemptFlags = {
+  questionOrder?: string[];
+} | null;
+
+type StatePayload = {
+  attemptId: string;
+  status: string;
+  expiresAt: Date | null;
+  expired: boolean;
+  answers: Record<string, string[]>;
+  timeSpent: Record<string, number>;
+  lastAnsweredQuestionId: string | null;
+  answeredCount: number;
+  currentIndex?: number;
+};
+
+function jsonNoStore(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 function answeredLen(v: unknown) {
@@ -15,14 +39,17 @@ function answeredLen(v: unknown) {
 }
 
 // GET /api/assessments/attempts/[attemptId]/state
-export async function GET(_request: Request, { params }: { params: { attemptId: string } }) {
+export async function GET(
+  _request: Request,
+  { params }: { params: { attemptId: string } }
+) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    const user = session.user as any;
-    const userId = String(user?.id || "");
-    const role = String(user?.role ?? "").toUpperCase();
+    const user = session.user as SessionUser;
+    const userId = String(user.id || "");
+    const role = String(user.role ?? "").toUpperCase();
 
     if (!userId) return jsonNoStore({ error: "No autorizado" }, 401);
     if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
@@ -43,9 +70,10 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
     });
 
     if (!attempt) return jsonNoStore({ error: "Attempt no encontrado" }, 404);
-    if (attempt.candidateId !== userId) return jsonNoStore({ error: "No autorizado" }, 403);
+    if (attempt.candidateId !== userId) {
+      return jsonNoStore({ error: "No autorizado" }, 403);
+    }
 
-    // Traer respuestas guardadas (AttemptAnswer)
     const rows = await prisma.attemptAnswer.findMany({
       where: { attemptId: attempt.id },
       select: {
@@ -61,37 +89,50 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
     const timeSpent: Record<string, number> = {};
 
     for (const r of rows) {
-      answers[r.questionId] = Array.isArray(r.selectedOptions) ? (r.selectedOptions as any) : [];
-      timeSpent[r.questionId] = typeof r.timeSpent === "number" ? r.timeSpent : 0;
+      answers[r.questionId] = Array.isArray(r.selectedOptions)
+        ? (r.selectedOptions as string[])
+        : [];
+
+      if (typeof r.timeSpent === "number") {
+        timeSpent[r.questionId] = r.timeSpent;
+      }
     }
 
     const lastAnsweredQuestionId = rows.length ? rows[0].questionId : null;
 
-    const meta = (attempt.flagsJson as any) || null;
-    const order: string[] = Array.isArray(meta?.questionOrder) ? meta.questionOrder : [];
+    const meta = (attempt.flagsJson as AttemptFlags) || null;
+    const order: string[] = Array.isArray(meta?.questionOrder)
+      ? meta.questionOrder
+      : [];
 
     const expired = Boolean(attempt.expiresAt && attempt.expiresAt <= now);
 
     const answeredCount = order.length
-      ? order.reduce((acc, qid) => acc + (answeredLen(answers[qid]) > 0 ? 1 : 0), 0)
-      : Object.values(answers).reduce((acc, arr) => acc + (answeredLen(arr) > 0 ? 1 : 0), 0);
+      ? order.reduce(
+          (acc, qid) => acc + (answeredLen(answers[qid]) > 0 ? 1 : 0),
+          0
+        )
+      : Object.values(answers).reduce(
+          (acc, arr) => acc + (answeredLen(arr) > 0 ? 1 : 0),
+          0
+        );
 
-    // ✅ currentIndex solo si hay questionOrder; si no, el frontend calcula firstUnansweredIndex()
     let currentIndex: number | undefined = undefined;
 
     if (order.length) {
-      const firstUnanswered = order.findIndex((qid) => answeredLen(answers[qid]) === 0);
+      const firstUnanswered = order.findIndex(
+        (qid) => answeredLen(answers[qid]) === 0
+      );
 
       if (firstUnanswered >= 0) currentIndex = firstUnanswered;
       else currentIndex = Math.max(0, order.length - 1);
 
-      // clamp defensivo
       currentIndex = Math.max(0, Math.min(currentIndex, order.length - 1));
     }
 
-    const payload: any = {
+    const payload: StatePayload = {
       attemptId: attempt.id,
-      status: attempt.status,
+      status: String(attempt.status),
       expiresAt: attempt.expiresAt,
       expired,
       answers,
@@ -100,7 +141,9 @@ export async function GET(_request: Request, { params }: { params: { attemptId: 
       answeredCount,
     };
 
-    if (typeof currentIndex === "number") payload.currentIndex = currentIndex;
+    if (typeof currentIndex === "number") {
+      payload.currentIndex = currentIndex;
+    }
 
     return jsonNoStore(payload);
   } catch (error) {

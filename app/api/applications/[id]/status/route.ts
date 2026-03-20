@@ -1,12 +1,14 @@
 // app/api/applications/[id]/status/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { prisma } from '@/lib/server/prisma';
-import { getSessionCompanyId } from '@/lib/server/session';
-import { NotificationService } from '@/lib/notifications/service'; // 🔔 NUEVO
+import { ApplicationStatus } from "@prisma/client";
 
-const ALLOWED = new Set([
+import { authOptions } from "@/lib/server/auth";
+import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyId } from "@/lib/server/session";
+import { NotificationService } from "@/lib/notifications/service";
+
+const ALLOWED = new Set<ApplicationStatus>([
   "SUBMITTED",
   "REVIEWING",
   "INTERVIEW",
@@ -15,27 +17,34 @@ const ALLOWED = new Set([
   "REJECTED",
 ]);
 
-async function updateStatus(id: string, status: string, req: NextRequest) {
-  // Validación de estado
-  const newStatus = String(status || "").toUpperCase();
-  if (!ALLOWED.has(newStatus)) {
-    return NextResponse.json({ error: "Status inválido" }, { status: 400 });
+function jsonNoStore(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+async function updateStatus(id: string, status: string) {
+  const normalized = String(status || "").toUpperCase();
+  if (!ALLOWED.has(normalized as ApplicationStatus)) {
+    return jsonNoStore({ error: "Status inválido" }, 400);
   }
 
-  // Auth básica
+  const newStatus = normalized as ApplicationStatus;
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-  }
-  const role = (session.user as any)?.role;
-  if (role !== "RECRUITER" && role !== "ADMIN") {
-    return NextResponse.json({ error: "Sin permisos" }, { status: 403 });
+    return jsonNoStore({ error: "No autenticado" }, 401);
   }
 
-  // Autorización por compañía (el recruiter debe pertenecer a la misma company del job)
+  const role = session.user?.role;
+  if (role !== "RECRUITER" && role !== "ADMIN") {
+    return jsonNoStore({ error: "Sin permisos" }, 403);
+  }
+
   const companyId = await getSessionCompanyId();
   if (!companyId && role !== "ADMIN") {
-    return NextResponse.json({ error: "Sin permisos" }, { status: 403 });
+    return jsonNoStore({ error: "Sin permisos" }, 403);
   }
 
   const app = await prisma.application.findUnique({
@@ -43,20 +52,33 @@ async function updateStatus(id: string, status: string, req: NextRequest) {
     select: {
       id: true,
       status: true,
-      job: { select: { id: true, title: true, companyId: true } },
-      candidate: { select: { id: true, email: true, name: true } },
+      job: {
+        select: {
+          id: true,
+          title: true,
+          companyId: true,
+        },
+      },
+      candidate: {
+        select: {
+          id: true,
+        },
+      },
     },
   });
+
   if (!app) {
-    return NextResponse.json({ error: "Application no encontrada" }, { status: 404 });
-  }
-  if (role !== "ADMIN" && app.job?.companyId !== companyId) {
-    return NextResponse.json({ error: "No autorizado para esta aplicación" }, { status: 403 });
+    return jsonNoStore({ error: "Application no encontrada" }, 404);
   }
 
-  // 🔔 GUARDAR EL STATUS ANTERIOR PARA LA NOTIFICACIÓN
+  if (role !== "ADMIN" && app.job.companyId !== companyId) {
+    return jsonNoStore(
+      { error: "No autorizado para esta aplicación" },
+      403
+    );
+  }
+
   const oldStatus = app.status;
-
   const isRejected = newStatus === "REJECTED";
 
   const updated = await prisma.application.update({
@@ -68,53 +90,78 @@ async function updateStatus(id: string, status: string, req: NextRequest) {
           rejectionEmailSent: false,
         }
       : {
-          status: newStatus as any,
+          status: newStatus,
           rejectedAt: null,
           rejectionEmailSent: false,
         },
-    include: { job: true, candidate: true },
+    select: {
+      id: true,
+      status: true,
+      rejectedAt: true,
+      rejectionEmailSent: true,
+      updatedAt: true,
+    },
   });
 
-  // 🔔 NUEVO: Notificar al candidato si el status cambió
   if (oldStatus !== newStatus) {
-    (async () => {
-      try {
-        await NotificationService.create({
-          userId: app.candidate.id,
-          type: 'APPLICATION_STATUS_CHANGE',
-          metadata: {
-            jobTitle: app.job.title,
-            jobId: app.job.id,
-            applicationId: app.id,
-            oldStatus: oldStatus,
-            newStatus: newStatus,
-          },
-        });
-      } catch (notifErr) {
-        console.warn("[PATCH /api/applications/status] Notification failed:", notifErr);
-      }
-    })();
+    await NotificationService.create({
+      userId: app.candidate.id,
+      type: "APPLICATION_STATUS_CHANGE",
+      metadata: {
+        jobTitle: app.job.title,
+        jobId: app.job.id,
+        applicationId: app.id,
+        oldStatus,
+        newStatus,
+      },
+    }).catch((notifErr) => {
+      console.warn(
+        "[PATCH /api/applications/status] Notification failed:",
+        notifErr
+      );
+    });
   }
 
-  return NextResponse.json({ ok: true, application: updated });
+  return jsonNoStore({ ok: true, application: updated });
 }
 
 // PATCH con JSON {status}
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const body = await req.json().catch(() => ({}));
-  return updateStatus(params.id, body?.status, req);
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  let body: { status?: unknown } | null = null;
+
+  try {
+    body = await req.json();
+  } catch {
+    return jsonNoStore({ error: "Cuerpo inválido (JSON requerido)" }, 400);
+  }
+
+  return updateStatus(
+    params.id,
+    typeof body?.status === "string" ? body.status : ""
+  );
 }
 
 // POST desde formulario <form method="post">
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
   const ctype = req.headers.get("content-type") || "";
   let status = "";
+
   if (ctype.includes("application/json")) {
-    const body = await req.json().catch(() => ({}));
-    status = body?.status || "";
+    const body = (await req.json().catch(() => null)) as
+      | { status?: unknown }
+      | null;
+
+    status = typeof body?.status === "string" ? body.status : "";
   } else {
     const form = await req.formData();
     status = String(form.get("status") || "");
   }
-  return updateStatus(params.id, status, req);
+
+  return updateStatus(params.id, status);
 }

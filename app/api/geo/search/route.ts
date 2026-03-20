@@ -5,6 +5,10 @@ import { searchPlaces } from "@/lib/geo";
 // El SDK de Mapbox usa Node, no Edge
 export const runtime = "nodejs";
 
+const CACHE_HEADERS = {
+  "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+};
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const searchParams = url.searchParams;
@@ -26,9 +30,14 @@ export async function GET(req: Request) {
   if (!q) {
     return NextResponse.json([], {
       status: 200,
-      headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-      },
+      headers: CACHE_HEADERS,
+    });
+  }
+
+  if (q.length > 100) {
+    return NextResponse.json([], {
+      status: 400,
+      headers: CACHE_HEADERS,
     });
   }
 
@@ -37,27 +46,32 @@ export async function GET(req: Request) {
       ? Math.min(Math.max(limitParam, 1), 10)
       : 5;
 
+  const lng = lngParam !== null ? Number(lngParam) : null;
+  const lat = latParam !== null ? Number(latParam) : null;
+
+  const proximity =
+    Number.isFinite(lng) && Number.isFinite(lat)
+      ? { lng: lng as number, lat: lat as number }
+      : undefined;
+
   try {
     const results = await searchPlaces(q, {
       limit,
       language: ["es"],
-      // 👇 nombre correcto en SearchPlacesOptions es `country`, no `countries`
       country: countries.length ? countries : undefined,
-      proximity:
-        lngParam && latParam
-          ? { lng: Number(lngParam), lat: Number(latParam) }
-          : undefined,
+      proximity,
     });
 
-    // Cache suave (1 min) + stale-while-revalidate
     return NextResponse.json(results, {
-      headers: {
-        "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
-      },
+      status: 200,
+      headers: CACHE_HEADERS,
     });
   } catch (e) {
     console.error("[/api/geo/search] error", e);
     // No rompemos UX: regresamos []
-    return NextResponse.json([], { status: 200 });
+    return NextResponse.json([], {
+      status: 200,
+      headers: CACHE_HEADERS,
+    });
   }
 }

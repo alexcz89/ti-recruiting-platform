@@ -1,10 +1,17 @@
 // app/api/applications/[id]/interest/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
-import { getSessionCompanyId } from '@/lib/server/session';
+import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyId } from "@/lib/server/session";
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const ALLOWED: InterestKey[] = ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"];
+
+function jsonNoStore(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 export async function PATCH(
   req: Request,
@@ -13,35 +20,45 @@ export async function PATCH(
   try {
     const companyId = await getSessionCompanyId().catch(() => null);
     if (!companyId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return jsonNoStore({ error: "Unauthorized" }, 401);
     }
 
-    const body = await req.json().catch(() => ({}));
-    const next: InterestKey = String(body?.recruiterInterest || "").toUpperCase() as InterestKey;
-
-    if (!ALLOWED.includes(next)) {
-      return NextResponse.json({ error: "Valor de estado inválido" }, { status: 400 });
+    let body: { recruiterInterest?: unknown } | null = null;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonNoStore({ error: "Cuerpo inválido (JSON requerido)" }, 400);
     }
 
-    // Verifica que la aplicación pertenezca a una vacante de esta empresa
+    const rawNext =
+      typeof body?.recruiterInterest === "string"
+        ? body.recruiterInterest.toUpperCase()
+        : "";
+
+    if (!ALLOWED.includes(rawNext as InterestKey)) {
+      return jsonNoStore({ error: "Valor de estado inválido" }, 400);
+    }
+
+    const next = rawNext as InterestKey;
+
     const app = await prisma.application.findFirst({
       where: { id: params.id, job: { companyId } },
       select: { id: true },
     });
+
     if (!app) {
-      return NextResponse.json({ error: "Application not found" }, { status: 404 });
+      return jsonNoStore({ error: "Application not found" }, 404);
     }
 
-    // Actualiza el estado del reclutador
     const updated = await prisma.application.update({
       where: { id: params.id },
       data: { recruiterInterest: next },
       select: { id: true, recruiterInterest: true },
     });
 
-    return NextResponse.json(updated, { status: 200 });
-  } catch (e: any) {
-    console.error(e);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return jsonNoStore(updated, 200);
+  } catch (e: unknown) {
+    console.error("[PATCH /api/applications/:id/interest]", e);
+    return jsonNoStore({ error: "Server error" }, 500);
   }
 }

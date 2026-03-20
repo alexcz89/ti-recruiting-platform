@@ -12,7 +12,7 @@ type CityPlace = {
   label: string;
   city: string | null;
   admin1: string | null;
-  country: string | null;      // ISO-2 (mx, us, etc.) o null
+  country: string | null; // ISO-2 (MX, US, etc.) o null
   cityNorm: string | null;
   admin1Norm: string | null;
   lat: number | null;
@@ -22,10 +22,25 @@ type CityPlace = {
 // helpers
 function stripDiacriticsLower(s: string | null | undefined) {
   if (!s) return null;
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
+  return s.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+}
+
+function jsonWithCache(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+    },
+  });
+}
+
+function jsonNoStore(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 /**
@@ -35,17 +50,17 @@ function stripDiacriticsLower(s: string | null | undefined) {
  * }
  *
  * Nota: country intenta ser ISO-2 si suggestCities la expone (countryCode),
- * si no, usamos el último fragmento de fullName como etiqueta país (no ISO).
+ * si no, queda null.
  */
 function mapToPlace(r: GeoFeature): CityPlace {
-  const id: string = String(r.id ?? "");
-  const name: string = String(r.name ?? "");
-  const fullName: string = String(r.fullName ?? name);
+  const id = String(r.id ?? "");
+  const name = String(r.name ?? "");
+  const fullName = String(r.fullName ?? name);
 
   // Heurística: "Ciudad, Estado/Región, País"
   const parts = fullName
     .split(",")
-    .map((s: string) => s.trim())
+    .map((s) => s.trim())
     .filter(Boolean);
 
   const city = parts[0] || name || null;
@@ -86,18 +101,27 @@ export async function GET(req: Request) {
 
   const q = (searchParams.get("q") || "").trim();
   const countries = searchParams.getAll("country").map((c) => c.toLowerCase());
-  const debug = searchParams.get("debug") === "1";
+  const debug =
+    process.env.NODE_ENV !== "production" &&
+    searchParams.get("debug") === "1";
 
   try {
     if (!q) {
       const empty: CityPlace[] = [];
       if (debug) {
-        return NextResponse.json(
-          { meta: { q, note: "empty query" }, items: empty },
-          { status: 200 }
+        return jsonNoStore({ meta: { q, note: "empty query" }, items: empty });
+      }
+      return jsonWithCache(empty);
+    }
+
+    if (q.length > 100) {
+      if (debug) {
+        return jsonNoStore(
+          { error: true, message: "Query too long", maxLength: 100 },
+          400
         );
       }
-      return NextResponse.json(empty, { status: 200 });
+      return jsonWithCache([], 400);
     }
 
     if (!geoIsEnabled) {
@@ -106,12 +130,12 @@ export async function GET(req: Request) {
       );
       const empty: CityPlace[] = [];
       if (debug) {
-        return NextResponse.json(
-          { meta: { q, geoIsEnabled: false }, items: empty },
-          { status: 200 }
+        return jsonNoStore(
+          { meta: { q, countries, geoIsEnabled: false }, items: empty },
+          200
         );
       }
-      return NextResponse.json(empty, { status: 200 });
+      return jsonWithCache(empty);
     }
 
     const results = await suggestCities(q, {
@@ -119,10 +143,8 @@ export async function GET(req: Request) {
       country: countries.length ? countries : undefined,
     });
 
-    // 👉 ahora devolvemos objetos con estructura completa
     const places: CityPlace[] = (results || []).map(mapToPlace);
 
-    // Log básico al server
     console.log(
       "[/api/geo/cities] q=%s country=%o -> %d resultados en %dms",
       q,
@@ -132,44 +154,35 @@ export async function GET(req: Request) {
     );
 
     if (debug) {
-      const sample = results[0];
-      return NextResponse.json(
+      return jsonNoStore(
         {
           meta: {
             q,
             countries,
             count: places.length,
             tookMs: Date.now() - t0,
-            geoIsEnabled: true,
-            sample: sample
-              ? {
-                  id: sample.id,
-                  name: sample.name,
-                  fullName: sample.fullName,
-                  type: sample.type,
-                  countryCode: sample.countryCode,
-                  coords: sample.coords,
-                  mapped: places[0],
-                }
-              : null,
           },
           items: places,
         },
-        { status: 200 }
+        200
       );
     }
 
-    // Sin debug devolvemos directamente el arreglo (más simple para el cliente)
-    return NextResponse.json(places, { status: 200 });
-  } catch (err: any) {
+    return jsonWithCache(places);
+  } catch (err: unknown) {
     console.error("[/api/geo/cities] ERROR:", err);
-    // No romper UX: responde arreglo vacío cuando falla
+
     if (debug) {
-      return NextResponse.json(
-        { error: true, message: String(err?.message || err) },
-        { status: 200 }
+      return jsonNoStore(
+        {
+          error: true,
+          message: err instanceof Error ? err.message : "Unknown error",
+        },
+        500
       );
     }
-    return NextResponse.json([], { status: 200 });
+
+    // No romper UX: responde arreglo vacío cuando falla
+    return jsonWithCache([]);
   }
 }
