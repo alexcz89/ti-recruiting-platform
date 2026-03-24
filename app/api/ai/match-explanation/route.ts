@@ -35,14 +35,6 @@ const LEVEL_LABEL: Record<string, string> = {
   BASIC: "Básico",
 };
 
-const SKILL_LEVEL_LABEL: Record<number, string> = {
-  1: "Básico",
-  2: "Junior",
-  3: "Intermedio",
-  4: "Avanzado",
-  5: "Experto",
-};
-
 function noStoreJson(body: unknown, status = 200) {
   return NextResponse.json(body, {
     status,
@@ -63,6 +55,17 @@ function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
   const lower = s.toLowerCase();
   if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
   return null;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((v) => String(v ?? "").trim())
+        .filter(Boolean)
+    )
+  );
 }
 
 function formatMonthYear(date: Date | string | null | undefined): string {
@@ -100,12 +103,18 @@ async function buildMatchExplanationInput(
         seniority: true,
         yearsExperience: true,
         certifications: true,
+        candidateAiProfile: {
+          select: {
+            parsedJson: true,
+            parserVersion: true,
+            parsedAt: true,
+          },
+        },
         candidateSkills: {
           select: {
             level: true,
             term: { select: { id: true, label: true } },
           },
-          orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
         },
         candidateLanguages: {
           select: {
@@ -114,8 +123,8 @@ async function buildMatchExplanationInput(
           },
         },
         experiences: {
-          orderBy: { startDate: "desc" },
-          take: 5,
+          orderBy: [{ endDate: "desc" }, { startDate: "desc" }],
+          take: 6,
           select: {
             role: true,
             company: true,
@@ -127,7 +136,10 @@ async function buildMatchExplanationInput(
       },
     }),
     prisma.job.findFirst({
-      where: { id: jobId, companyId },
+      where: {
+        id: jobId,
+        companyId,
+      },
       select: {
         id: true,
         title: true,
@@ -146,53 +158,64 @@ async function buildMatchExplanationInput(
 
   if (!candidate || !job) return null;
 
-  const candidateSkillsForEngine: CandidateSkillInput[] = candidate.candidateSkills
-    .filter((s) => s.term?.id && s.term?.label)
-    .map((s) => ({
-      termId: s.term.id,
-      label: s.term.label,
-      level: s.level ?? null,
-    }));
-
-  const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
+  const jobSkills: JobSkillInput[] = job.requiredSkills.map((rs) => ({
     termId: rs.term.id,
     label: rs.term.label,
     must: rs.must,
     weight: rs.weight,
   }));
 
+  const candidateSkillsInput: CandidateSkillInput[] = candidate.candidateSkills.map((cs) => ({
+    termId: cs.term.id,
+    label: cs.term.label,
+    level: cs.level,
+  }));
+
+  const parsed = candidate.candidateAiProfile?.parsedJson;
+  const parsedObj =
+    parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+
+  // Se conservan por si luego quieres reutilizarlos,
+  // pero no se envían a MatchExplanationInput porque hoy no forman parte del tipo.
+  const _candidateDomains = toStringArray(parsedObj?.domains);
+  const _candidateMethods = toStringArray(parsedObj?.methods);
+  const _candidateTools = toStringArray(parsedObj?.tools);
+  const _candidateImpactEvidence = toStringArray(parsedObj?.impactEvidence);
+  const _candidateExperienceHighlights = toStringArray(parsedObj?.experienceHighlights);
+
   const matchResult = computeMatchScore({
-    jobSkills: jobSkillsForEngine,
-    candidateSkills: candidateSkillsForEngine,
+    jobSkills,
+    candidateSkills: candidateSkillsInput,
     jobSeniority: toSeniorityLevel(job.seniority),
     candidateSeniority: toSeniorityLevel(candidate.seniority),
     jobMinYearsExperience: job.minYearsExperience ?? null,
     candidateYearsExperience: candidate.yearsExperience ?? null,
   });
 
-  const matchedSkills = matchResult.details.filter((d) => d.matched).map((d) => d.label);
-  const missingRequired = matchResult.details
+  const matchedSkills = (matchResult.details ?? [])
+    .filter((d) => d.matched)
+    .map((d) => d.label);
+
+  const missingRequired = (matchResult.details ?? [])
     .filter((d) => !d.matched && d.must)
     .map((d) => d.label);
-  const missingNice = matchResult.details
+
+  const missingNice = (matchResult.details ?? [])
     .filter((d) => !d.matched && !d.must)
     .map((d) => d.label);
 
-  const candidateSkills = candidate.candidateSkills
-    .filter((s) => s.term?.label)
-    .map((s) => {
-      const levelLabel = s.level != null ? SKILL_LEVEL_LABEL[s.level] : null;
-      return levelLabel ? `${s.term.label} (${levelLabel})` : s.term.label;
-    });
+  const languages = candidate.candidateLanguages.map((l) => {
+    const levelLabel =
+      l.level != null
+        ? LEVEL_LABEL[String(l.level)] ?? String(l.level)
+        : null;
 
-  const languages = candidate.candidateLanguages
-    .filter((l) => l.term?.label)
-    .map((l) => {
-      const levelLabel = LEVEL_LABEL[l.level ?? ""] ?? l.level ?? "";
-      return levelLabel ? `${l.term.label} · ${levelLabel}` : l.term.label;
-    });
+    return levelLabel ? `${l.term.label} (${levelLabel})` : l.term.label;
+  });
 
-  const experienceTitles = candidate.experiences.map((e) => {
+  const experienceTitles = (candidate.experiences ?? []).map((e) => {
     const start = formatMonthYear(e.startDate);
     const end = e.isCurrent ? "actualidad" : formatMonthYear(e.endDate);
     const period = start && end ? ` (${start}–${end})` : "";
@@ -208,7 +231,7 @@ async function buildMatchExplanationInput(
         : null,
       yearsExperience: candidate.yearsExperience ?? null,
       location: candidate.location ?? null,
-      skills: candidateSkills,
+      skills: candidateSkillsInput.map((s) => s.label),
       languages,
       experienceTitles,
       certifications: Array.isArray(candidate.certifications)
@@ -260,7 +283,7 @@ export async function GET(req: NextRequest) {
   const cacheKey = buildCacheKey(candidateId, jobId);
 
   if (!force) {
-    const cached = await prisma.matchExplanationCache.findUnique({
+    const cached = await prisma.matchExplanationCache.findFirst({
       where: { cacheKey },
     });
 
@@ -285,7 +308,7 @@ export async function GET(req: NextRequest) {
         const explanationJson = toPrismaJson(explanation);
 
         await prisma.matchExplanationCache.update({
-          where: { cacheKey },
+          where: { id: cached.id },
           data: {
             explanationJson,
             fingerprint: currentFingerprint,
@@ -312,23 +335,33 @@ export async function GET(req: NextRequest) {
   const explanationJson = toPrismaJson(explanation);
   const fingerprint = buildMatchExplanationFingerprint(input);
 
-  await prisma.matchExplanationCache.upsert({
+  const existingCache = await prisma.matchExplanationCache.findFirst({
     where: { cacheKey },
-    create: {
-      cacheKey,
-      candidateId,
-      jobId,
-      fingerprint,
-      version: MATCH_EXPLANATION_VERSION,
-      explanationJson,
-    },
-    update: {
-      explanationJson,
-      fingerprint,
-      version: MATCH_EXPLANATION_VERSION,
-      generatedAt: new Date(),
-    },
+    select: { id: true },
   });
+
+  if (existingCache) {
+    await prisma.matchExplanationCache.update({
+      where: { id: existingCache.id },
+      data: {
+        explanationJson,
+        fingerprint,
+        version: MATCH_EXPLANATION_VERSION,
+        generatedAt: new Date(),
+      },
+    });
+  } else {
+    await prisma.matchExplanationCache.create({
+      data: {
+        cacheKey,
+        candidateId,
+        jobId,
+        fingerprint,
+        version: MATCH_EXPLANATION_VERSION,
+        explanationJson,
+      },
+    });
+  }
 
   return noStoreJson({
     explanation,
@@ -362,23 +395,33 @@ export async function POST(req: NextRequest) {
   const fingerprint = buildMatchExplanationFingerprint(input);
   const cacheKey = buildCacheKey(candidateId, jobId);
 
-  await prisma.matchExplanationCache.upsert({
+  const existingCache = await prisma.matchExplanationCache.findFirst({
     where: { cacheKey },
-    create: {
-      cacheKey,
-      candidateId,
-      jobId,
-      fingerprint,
-      version: MATCH_EXPLANATION_VERSION,
-      explanationJson,
-    },
-    update: {
-      explanationJson,
-      fingerprint,
-      version: MATCH_EXPLANATION_VERSION,
-      generatedAt: new Date(),
-    },
+    select: { id: true },
   });
+
+  if (existingCache) {
+    await prisma.matchExplanationCache.update({
+      where: { id: existingCache.id },
+      data: {
+        explanationJson,
+        fingerprint,
+        version: MATCH_EXPLANATION_VERSION,
+        generatedAt: new Date(),
+      },
+    });
+  } else {
+    await prisma.matchExplanationCache.create({
+      data: {
+        cacheKey,
+        candidateId,
+        jobId,
+        fingerprint,
+        version: MATCH_EXPLANATION_VERSION,
+        explanationJson,
+      },
+    });
+  }
 
   return noStoreJson({
     explanation,
