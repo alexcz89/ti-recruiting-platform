@@ -433,6 +433,7 @@ model User {
   autoLoginTokens           AutoLoginToken[]
 
   // AI
+  aiProfile          CandidateAIProfile?
   candidateSummaries CandidateSummaryCache[]
   matchExplanations  MatchExplanationCache[]
 
@@ -570,10 +571,11 @@ model Job {
   recruiterId String?
   recruiter   User?   @relation("PostedJobs", fields: [recruiterId], references: [id], onDelete: SetNull)
 
-  applications      Application[]
-  assessments       JobAssessment[]
-  assessmentInvites AssessmentInvite[]
-  matchExplanations MatchExplanationCache[]
+  applications          Application[]
+  assessments           JobAssessment[]
+  assessmentInvites     AssessmentInvite[]
+  matchExplanations     MatchExplanationCache[]
+  CandidateSummaryCache CandidateSummaryCache[]
 
   @@index([companyId])
   @@index([title])
@@ -871,6 +873,27 @@ model CandidateCredential {
   @@index([userId, termId])
 }
 
+model CandidateAIProfile {
+  id          String @id @default(cuid())
+  candidateId String @unique
+  candidate   User   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  profileVersion    String @default("v1")
+  sourceFingerprint String
+  profileJson       Json
+
+  summaryText   String?  @db.Text
+  strengthsJson Json?
+  risksJson     Json?
+  tags          String[] @default([])
+
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([generatedAt])
+  @@index([sourceFingerprint])
+}
+
 model CandidateSummaryCache {
   id             String   @id @default(cuid())
   cacheKey       String   @unique
@@ -883,6 +906,7 @@ model CandidateSummaryCache {
   updatedAt      DateTime @updatedAt
 
   candidate User @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job       Job? @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   @@index([candidateId])
   @@index([candidateId, jobId])
@@ -903,7 +927,7 @@ model MatchExplanationCache {
   candidate User @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   job       Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
-  @@index([candidateId])
+  @@index([candidateId, jobId, version])
   @@index([jobId])
   @@index([candidateId, jobId])
   @@index([fingerprint])

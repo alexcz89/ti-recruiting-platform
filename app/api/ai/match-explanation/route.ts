@@ -103,12 +103,18 @@ async function buildMatchExplanationInput(
         seniority: true,
         yearsExperience: true,
         certifications: true,
-        candidateAiProfile: {
+        aiProfile: {
           select: {
-            parsedJson: true,
-            parserVersion: true,
-            parsedAt: true,
-          },
+            profileJson: true,
+            profileVersion: true,
+            sourceFingerprint: true,
+            summaryText: true,
+            strengthsJson: true,
+            risksJson: true,
+            tags: true,
+            generatedAt: true,
+            updatedAt: true,
+          }
         },
         candidateSkills: {
           select: {
@@ -171,7 +177,7 @@ async function buildMatchExplanationInput(
     level: cs.level,
   }));
 
-  const parsed = candidate.candidateAiProfile?.parsedJson;
+  const parsed = candidate.aiProfile?.profileJson;
   const parsedObj =
     parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)

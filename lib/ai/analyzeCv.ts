@@ -1,11 +1,12 @@
 // lib/ai/analyzeCv.ts
 
-import { openai } from "./openai";
-import { AI_MODEL_FAST } from "./config";
-import { AiCvSchema, type AiCvResponse, type AiCvResult } from "./schemas";
-import { prisma } from "@/lib/server/prisma";
-import type { Prisma } from "@prisma/client";
 import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
+
+import { prisma } from "@/lib/server/prisma";
+import { AI_MODEL_FAST } from "./config";
+import { openai } from "./openai";
+import { AiCvSchema, type AiCvResponse, type AiCvResult } from "./schemas";
 
 const MAX_CHARS = 12000;
 const MAX_RETRIES = 2;
@@ -100,7 +101,7 @@ function normalizePhone(raw: string): string | null {
     return `+52${digits.slice(3)}`;
   }
 
-  // Internacional sin + (válido pero incompleto para E.164): mejor descartarlo
+  // Internacional sin +: mejor descartarlo
   return null;
 }
 
@@ -170,7 +171,7 @@ Analiza este CV y devuelve ÚNICAMENTE JSON válido con esta estructura exacta:
   "phoneRaw": ["todos los teléfonos encontrados tal como aparecen o en formato local/internacional"],
   "languages": [{ "label": "idioma en español — ej: Inglés, Español", "level": "NATIVE | PROFESSIONAL | CONVERSATIONAL | BASIC" }],
   "experiences": [{ "role": "puesto", "company": "empresa", "startDate": "YYYY-MM o vacío", "endDate": "YYYY-MM o vacío", "isCurrent": true }],
-  "education": [{ "institution": "institución", "program": "carrera", "startDate": "YYYY-MM o vacío", "endDate": "YYYY-MM o vacío", "level": "BACHELOR | MASTER | ... | null" }]
+  "education": [{ "institution": "institución", "program": "carrera", "startDate": "YYYY-MM o vacío", "endDate": "YYYY-MM o vacío", "level": "BACHELOR | MASTER | DOCTORATE | BOOTCAMP | CERTIFICATION | OTHER | null" }]
 }
 
 Reglas:
@@ -181,34 +182,81 @@ Reglas:
 - El resumen debe ser máximo 3 líneas.
 - Si no encuentras linkedin/github devuelve cadena vacía.
 - Si no encuentras location devuelve cadena vacía.
-- phoneRaw: incluye todos los teléfonos encontrados. Si no hay, devuelve [].
-- No inventes códigos de país. Si el teléfono viene local, devuélvelo como aparece en el CV.
-- languages: devuelve el nombre del idioma en español (ej: Inglés, Español, Francés).
-- Si no encuentras languages/experiences/education devuelve [].
-- Fechas en formato YYYY-MM cuando sea posible; si no es claro, devuelve cadena vacía.
+- phoneRaw: incluye todos los teléfonos encontrados.
+- No inventes datos.
+- Usa español para summary, recommendedRoles y redFlags.
+- Los niveles de idioma deben respetar exactamente: NATIVE, PROFESSIONAL, CONVERSATIONAL, BASIC.
+- Si no hay experiencias o educación, devuelve [].
 
 CV:
-${cvText}
-`;
+"""${cvText}"""
+`.trim();
 }
 
-export async function analyzeCv(cvText: string): Promise<AiCvResponse> {
-  const trimmedText = cvText.slice(0, MAX_CHARS);
-  const cvHash = buildCacheKey(trimmedText);
+export async function analyzeCv(
+  rawText: string,
+  candidateId?: string
+): Promise<AiCvResponse> {
+  const cvText = rawText.slice(0, MAX_CHARS).trim();
+
+  if (!cvText) {
+    return withMeta(emptyCvResult(), {
+      model: AI_MODEL_FAST,
+      parsedAt: new Date().toISOString(),
+      error: "empty_text",
+    });
+  }
+
+  const cvHash = buildCacheKey(cvText);
 
   try {
     const cached = await prisma.cvParseCache.findUnique({
       where: { cvHash },
     });
 
-    if (cached && cached.parserVersion === CACHE_VERSION) {
+    if (cached?.parsedJson) {
       const safe = AiCvSchema.safeParse(cached.parsedJson);
 
       if (safe.success) {
-        return withMeta(normalizeCvResult(safe.data), {
-          model: cached.model,
-          parsedAt: cached.updatedAt.toISOString(),
-          warning: "from_cache",
+        const normalized = normalizeCvResult(safe.data);
+        const parsedJson = normalized as unknown as Prisma.InputJsonValue;
+
+        if (candidateId) {
+          void prisma.candidateAIProfile
+            .upsert({
+              where: { candidateId },
+              update: {
+                profileJson: parsedJson,
+                sourceFingerprint: cvHash,
+                profileVersion: CACHE_VERSION,
+                summaryText: normalized.summary,
+                strengthsJson:
+                  normalized.skills as unknown as Prisma.InputJsonValue,
+                risksJson:
+                  normalized.redFlags as unknown as Prisma.InputJsonValue,
+                tags: normalized.recommendedRoles,
+              },
+              create: {
+                candidateId,
+                profileJson: parsedJson,
+                sourceFingerprint: cvHash,
+                profileVersion: CACHE_VERSION,
+                summaryText: normalized.summary,
+                strengthsJson:
+                  normalized.skills as unknown as Prisma.InputJsonValue,
+                risksJson:
+                  normalized.redFlags as unknown as Prisma.InputJsonValue,
+                tags: normalized.recommendedRoles,
+              },
+            })
+            .catch((e) =>
+              console.warn("[analyzeCv] AI profile write error (cache hit):", e)
+            );
+        }
+
+        return withMeta(normalized, {
+          model: cached.model || AI_MODEL_FAST,
+          parsedAt: new Date().toISOString(),
         });
       }
     }
@@ -216,16 +264,26 @@ export async function analyzeCv(cvText: string): Promise<AiCvResponse> {
     console.warn("[analyzeCv] cache read error:", e);
   }
 
-  const prompt = buildPrompt(trimmedText);
+  const prompt = buildPrompt(cvText);
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       const response = await openai.chat.completions.create({
         model: AI_MODEL_FAST,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
         temperature: 0.2,
         max_tokens: MAX_TOKENS,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "Extrae información de CVs y responde únicamente JSON válido.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
       });
 
       const raw = response.choices[0]?.message?.content ?? "{}";
@@ -285,6 +343,39 @@ export async function analyzeCv(cvText: string): Promise<AiCvResponse> {
           },
         })
         .catch((e) => console.warn("[analyzeCv] cache write error:", e));
+
+      if (candidateId) {
+        void prisma.candidateAIProfile
+          .upsert({
+            where: { candidateId },
+            update: {
+              profileJson: parsedJson,
+              sourceFingerprint: cvHash,
+              profileVersion: CACHE_VERSION,
+              summaryText: normalized.summary,
+              strengthsJson:
+                normalized.skills as unknown as Prisma.InputJsonValue,
+              risksJson:
+                normalized.redFlags as unknown as Prisma.InputJsonValue,
+              tags: normalized.recommendedRoles,
+            },
+            create: {
+              candidateId,
+              profileJson: parsedJson,
+              sourceFingerprint: cvHash,
+              profileVersion: CACHE_VERSION,
+              summaryText: normalized.summary,
+              strengthsJson:
+                normalized.skills as unknown as Prisma.InputJsonValue,
+              risksJson:
+                normalized.redFlags as unknown as Prisma.InputJsonValue,
+              tags: normalized.recommendedRoles,
+            },
+          })
+          .catch((e) =>
+            console.warn("[analyzeCv] AI profile write error:", e)
+          );
+      }
 
       return withMeta(normalized, {
         model: AI_MODEL_FAST,
