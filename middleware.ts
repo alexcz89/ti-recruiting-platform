@@ -3,18 +3,20 @@ import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+type AuthToken = {
+  role?: string;
+  companyId?: string | null;
+};
+
 export default withAuth(
   function middleware(req: NextRequest) {
     const { pathname, search } = req.nextUrl;
-    const token = (req as any).nextauth?.token as
-      | { role?: string; companyId?: string | null }
-      | undefined;
+    const token = (req as any).nextauth?.token as AuthToken | undefined;
 
-    const role = token?.role;
+    const role = String(token?.role ?? "").toUpperCase();
     const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
     // ===== 🔐 DEBUG ENDPOINTS =====
-    // Bloquear endpoints de debug en producción
     if (pathname.startsWith("/api/debug-")) {
       if (process.env.NODE_ENV === "production") {
         console.warn(`🚨 [SECURITY] Blocked debug endpoint in production: ${pathname}`);
@@ -26,79 +28,104 @@ export default withAuth(
         return new Response("Not Found", { status: 404 });
       }
 
-      // Log de acceso en desarrollo
       console.log(`🔧 [DEBUG] Allowed access to: ${pathname}`);
+      return NextResponse.next();
+    }
+
+    // ===== /assessments =====
+    // FIX Bug #9:
+    // - Si no hay sesión, NO redirigimos manualmente aquí.
+    //   Dejamos que withAuth + pages.signIn resuelva a /signin
+    //   preservando callbackUrl automáticamente.
+    // - Si sí hay sesión pero es recruiter/admin, no debe entrar al flujo candidato.
+    if (pathname.startsWith("/assessments")) {
+      if (isRecruiterOrAdmin) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/dashboard";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
+
+      return NextResponse.next();
     }
 
     // ===== /jobs =====
     if (pathname.startsWith("/jobs")) {
-      // ✅ Permitir ver /jobs/[id] siempre
       const isJobDetail = /^\/jobs\/[^/]+$/.test(pathname);
-      if (isJobDetail) return NextResponse.next();
 
-      // ❌ Si es listado /jobs y el usuario es recruiter/admin → mandar a dashboard/jobs
+      if (isJobDetail) {
+        return NextResponse.next();
+      }
+
       if (isRecruiterOrAdmin) {
         const url = req.nextUrl.clone();
         url.pathname = "/dashboard/jobs";
+        url.search = "";
         url.searchParams.set("from", pathname + (search || ""));
         return NextResponse.redirect(url);
       }
 
-      // Público (candidatos / no logueados) pueden ver /jobs
       return NextResponse.next();
     }
 
     // ===== /dashboard =====
     if (pathname.startsWith("/dashboard")) {
-      // 🔔 Notificaciones: permitir a TODOS los usuarios autenticados
-      if (pathname.startsWith("/dashboard/notifications")) {
-        return NextResponse.next();
-      }
+      return NextResponse.next();
+    }
 
-      // Dashboard principal: solo recruiter/admin
+    // ===== /profile =====
+    if (pathname.startsWith("/profile")) {
       return NextResponse.next();
     }
 
     return NextResponse.next();
   },
   {
-    pages: { signIn: "/signin" },
+    pages: {
+      signIn: "/signin",
+    },
     callbacks: {
       authorized: ({ token, req }) => {
         const { pathname } = req.nextUrl;
+        const role = String((token as AuthToken | undefined)?.role ?? "").toUpperCase();
+        const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
-        // 🔔 Notificaciones: permitir a TODOS los usuarios autenticados
-        if (pathname.startsWith("/dashboard/notifications")) {
-          return !!token; // Solo requiere estar logueado
+        // /assessments requiere sesión.
+        // withAuth redirige a /signin?callbackUrl=... automáticamente.
+        if (pathname.startsWith("/assessments")) {
+          return !!token;
         }
 
-        // Dashboard: requiere auth + rol recruiter/admin
+        // Todo dashboard requiere sesión recruiter/admin
         if (pathname.startsWith("/dashboard")) {
-          if (!token) return false;
-          const role = (token as any)?.role;
-          return role === "RECRUITER" || role === "ADMIN";
+          return !!token && isRecruiterOrAdmin;
         }
 
-        // Perfil: requiere estar logueado
+        // Profile requiere cualquier sesión
         if (pathname.startsWith("/profile")) {
           return !!token;
         }
 
-        // /jobs es público; las redirecciones se manejan arriba
+        // Jobs públicos
         if (pathname.startsWith("/jobs")) {
           return true;
         }
 
-        // Resto de rutas del matcher
+        // Debug endpoints: mismos controles duros en middleware;
+        // aquí solo permitimos continuar para que el middleware los evalúe.
+        if (pathname.startsWith("/api/debug-")) {
+          return true;
+        }
+
         return true;
       },
     },
   }
 );
 
-// Limita el middleware a estas rutas
 export const config = {
   matcher: [
+    "/assessments/:path*",
     "/dashboard/:path*",
     "/profile/:path*",
     "/jobs/:path*",

@@ -66,7 +66,6 @@ export function NotificationDropdown({
       });
 
       if (response.ok) {
-        // Refresh notifications
         await fetchNotifications();
       }
     } catch (error) {
@@ -74,6 +73,27 @@ export function NotificationDropdown({
     } finally {
       setIsMarkingAllRead(false);
     }
+  };
+
+  // Compute action URL from notification type + metadata
+  const getActionUrl = (notification: Notification): string => {
+    const meta = notification.metadata as any;
+    switch (notification.type) {
+      case 'NEW_APPLICATION':
+        if (meta?.jobId) return `/dashboard/jobs/${meta.jobId}/applications`;
+        break;
+      case 'APPLICATION_STATUS_CHANGE':
+        return '/jobs?applied=1';
+      case 'ASSESSMENT_INVITATION':
+        return '/candidate/assessments';
+      case 'ASSESSMENT_COMPLETED':
+        if (meta?.attemptId) {
+          return `/dashboard/assessments/attempts/${meta.attemptId}/results`;
+        }
+        if (meta?.jobId) return `/dashboard/jobs/${meta.jobId}/applications`;
+        break;
+    }
+    return '/dashboard';
   };
 
   // Handle notification click
@@ -84,14 +104,14 @@ export function NotificationDropdown({
         await fetch(`/api/notifications/${notification.id}/read`, {
           method: 'PATCH',
         });
-        
+
         // Update local state
         setNotifications((prev) =>
           prev.map((n) =>
             n.id === notification.id ? { ...n, read: true } : n
           )
         );
-        
+
         // Update count
         onCountUpdate(Math.max(0, notifications.filter((n) => !n.read).length - 1));
       } catch (error) {
@@ -100,9 +120,8 @@ export function NotificationDropdown({
     }
 
     // Navigate to action URL
-    if (notification.actionUrl) {
-      window.location.href = notification.actionUrl;
-    }
+    const url = getActionUrl(notification);
+    window.location.href = url;
   };
 
   // Handle delete
@@ -113,10 +132,8 @@ export function NotificationDropdown({
       });
 
       if (response.ok) {
-        // Remove from local state
         setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
-        
-        // Update count
+
         const deletedNotification = notifications.find((n) => n.id === notificationId);
         if (deletedNotification && !deletedNotification.read) {
           onCountUpdate(Math.max(0, notifications.filter((n) => !n.read).length - 1));

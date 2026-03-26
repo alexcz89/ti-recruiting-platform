@@ -33,6 +33,10 @@ export const NOTIFICATION_PRIORITIES: Record<
 
 /**
  * Default channels for each notification type
+ *
+ * ASSESSMENT_INVITATION:
+ * el email transaccional se envía directamente desde el flujo de invite
+ * (assessment-invite route). Aquí dejamos solo IN_APP para evitar correos duplicados.
  */
 export const DEFAULT_CHANNELS: Record<
   NotificationType,
@@ -41,7 +45,7 @@ export const DEFAULT_CHANNELS: Record<
   NEW_APPLICATION: ['IN_APP', 'EMAIL'],
   APPLICATION_STATUS_CHANGE: ['IN_APP', 'EMAIL'],
   APPLICATION_COMMENT: ['IN_APP'],
-  ASSESSMENT_INVITATION: ['IN_APP', 'EMAIL'],
+  ASSESSMENT_INVITATION: ['IN_APP'],
   ASSESSMENT_REMINDER: ['IN_APP', 'EMAIL'],
   ASSESSMENT_COMPLETED: ['IN_APP', 'EMAIL'],
   ASSESSMENT_RESULTS: ['IN_APP', 'EMAIL'],
@@ -59,7 +63,7 @@ export const DEFAULT_CHANNELS: Record<
  * Limits for notifications
  */
 export const NOTIFICATION_LIMITS = {
-  MAX_UNREAD: 999, // Show "999+" for anything above
+  MAX_UNREAD: 999,
   MAX_PER_PAGE: 100,
   DEFAULT_PAGE_SIZE: 20,
   CACHE_TTL_SECONDS: 30,

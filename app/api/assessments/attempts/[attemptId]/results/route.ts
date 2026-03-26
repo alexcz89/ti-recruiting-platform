@@ -21,6 +21,18 @@ type AttemptStatusLike =
   | "COMPLETED"
   | string;
 
+type FlagsJsonShape = {
+  tooFast?: boolean;
+};
+
+type OptionLike = {
+  id?: string;
+  value?: string;
+  text?: string;
+  label?: string;
+  [key: string]: unknown;
+};
+
 function jsonNoStore(data: unknown, status = 200) {
   return NextResponse.json(data, {
     status,
@@ -31,6 +43,22 @@ function jsonNoStore(data: unknown, status = 200) {
 function isAttemptFinal(status: AttemptStatusLike) {
   const s = String(status ?? "").toUpperCase();
   return s === "SUBMITTED" || s === "EVALUATED" || s === "COMPLETED";
+}
+
+function sanitizeOptions(options: unknown): OptionLike[] {
+  if (!Array.isArray(options)) return [];
+
+  return options.map((opt) => {
+    if (!opt || typeof opt !== "object") return {};
+    const o = opt as Record<string, unknown>;
+
+    return {
+      id: typeof o.id === "string" ? o.id : undefined,
+      value: typeof o.value === "string" ? o.value : undefined,
+      text: typeof o.text === "string" ? o.text : undefined,
+      label: typeof o.label === "string" ? o.label : undefined,
+    };
+  });
 }
 
 export async function GET(
@@ -63,6 +91,16 @@ export async function GET(
         sectionScores: true,
         passed: true,
         flagsJson: true,
+        tabSwitches: true,
+        visibilityHidden: true,
+        copyAttempts: true,
+        pasteAttempts: true,
+        rightClicks: true,
+        focusLoss: true,
+        pageHides: true,
+        multiSession: true,
+        severity: true,
+        severityScore: true,
         template: {
           select: {
             id: true,
@@ -75,7 +113,13 @@ export async function GET(
         application: {
           select: {
             id: true,
-            job: { select: { id: true, companyId: true, recruiterId: true } },
+            job: {
+              select: {
+                id: true,
+                companyId: true,
+                recruiterId: true,
+              },
+            },
           },
         },
         invite: {
@@ -84,7 +128,13 @@ export async function GET(
             application: {
               select: {
                 id: true,
-                job: { select: { id: true, companyId: true, recruiterId: true } },
+                job: {
+                  select: {
+                    id: true,
+                    companyId: true,
+                    recruiterId: true,
+                  },
+                },
               },
             },
           },
@@ -133,6 +183,24 @@ export async function GET(
       }),
     ]);
 
+    const flags = (attemptBase.flagsJson ?? {}) as FlagsJsonShape;
+
+    const anticheat = canSeeFlags
+      ? {
+          tooFast: Boolean(flags.tooFast),
+          tabSwitches: attemptBase.tabSwitches ?? 0,
+          visibilityHidden: attemptBase.visibilityHidden ?? 0,
+          copyAttempts: attemptBase.copyAttempts ?? 0,
+          pasteAttempts: attemptBase.pasteAttempts ?? 0,
+          rightClicks: attemptBase.rightClicks ?? 0,
+          focusLoss: attemptBase.focusLoss ?? 0,
+          pageHides: attemptBase.pageHides ?? 0,
+          multiSession: attemptBase.multiSession ?? false,
+          severity: String(attemptBase.severity ?? "NORMAL").toUpperCase(),
+          severityScore: attemptBase.severityScore ?? 0,
+        }
+      : undefined;
+
     if (!canSeeSolutions) {
       return jsonNoStore({
         attempt: {
@@ -146,6 +214,7 @@ export async function GET(
           sectionScores: attemptBase.sectionScores,
           passed: attemptBase.passed,
           flagsJson: undefined,
+          anticheat: undefined,
         },
         template: attemptBase.template,
         candidate: undefined,
@@ -193,7 +262,7 @@ export async function GET(
       select: { id: true, name: true, email: true },
     });
 
-    const result = {
+    return jsonNoStore({
       attempt: {
         id: attemptBase.id,
         status: attemptBase.status,
@@ -205,6 +274,7 @@ export async function GET(
         sectionScores: attemptBase.sectionScores,
         passed: attemptBase.passed,
         flagsJson: canSeeFlags ? attemptBase.flagsJson : undefined,
+        anticheat,
       },
       template: attemptBase.template,
       candidate: candidate ?? undefined,
@@ -214,8 +284,10 @@ export async function GET(
         difficulty: answer.question.difficulty,
         questionText: answer.question.questionText,
         codeSnippet: answer.question.codeSnippet,
-        options: answer.question.options,
-        selectedOptions: answer.selectedOptions,
+        options: sanitizeOptions(answer.question.options),
+        selectedOptions: Array.isArray(answer.selectedOptions)
+          ? answer.selectedOptions
+          : [],
         isCorrect: answer.isCorrect,
         pointsEarned: answer.pointsEarned,
         timeSpent: answer.timeSpent,
@@ -228,9 +300,7 @@ export async function GET(
         accuracy,
       },
       summaryOnly: false,
-    };
-
-    return jsonNoStore(result);
+    });
   } catch (error) {
     console.error("Error fetching results:", error);
     return jsonNoStore({ error: "Error al cargar resultados" }, 500);

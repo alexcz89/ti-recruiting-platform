@@ -1,6 +1,6 @@
 // lib/server/auth.ts
 
-import 'server-only';
+import "server-only";
 import { PrismaClient, Role } from "@prisma/client";
 import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
@@ -9,7 +9,21 @@ import bcrypt from "bcryptjs";
 import { ensureUserCompanyByEmail } from "@/lib/company";
 
 const prisma = (globalThis as any).prisma || new PrismaClient();
-if (process.env.NODE_ENV !== "production") (globalThis as any).prisma = prisma;
+if (process.env.NODE_ENV !== "production") {
+  (globalThis as any).prisma = prisma;
+}
+
+const SESSION_MAX_AGE_DEFAULT = 60 * 60 * 8; // 8 horas
+const SESSION_MAX_AGE_REMEMBER = 60 * 60 * 24 * 30; // 30 días
+
+type AuthUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  companyId: string | null;
+  rememberMe?: boolean;
+};
 
 export const authOptions: AuthOptions = {
   providers: [
@@ -25,13 +39,13 @@ export const authOptions: AuthOptions = {
       },
     }),
 
-    // ✅ Provider normal con email/password
     CredentialsProvider({
       name: "Credentials",
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         role: { label: "Role", type: "text" },
+        rememberMe: { label: "Remember Me", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
@@ -85,11 +99,11 @@ export const authOptions: AuthOptions = {
           email: dbUser.email,
           role: dbUser.role,
           companyId,
-        } as any;
+          rememberMe: credentials.rememberMe === "true",
+        } as AuthUser;
       },
     }),
 
-    // ✅ Provider de auto-login con token de un solo uso (post-verificación de email)
     CredentialsProvider({
       id: "auto-login-token",
       name: "AutoLoginToken",
@@ -119,7 +133,6 @@ export const authOptions: AuthOptions = {
         if (record.usedAt) return null;
         if (record.expiresAt < new Date()) return null;
 
-        // Marcar como usado (one-time use)
         await prisma.autoLoginToken.update({
           where: { token: credentials.token },
           data: { usedAt: new Date() },
@@ -145,12 +158,20 @@ export const authOptions: AuthOptions = {
           email: user.email,
           role: user.role,
           companyId,
-        } as any;
+          rememberMe: false,
+        } as AuthUser;
       },
     }),
   ],
 
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: SESSION_MAX_AGE_DEFAULT,
+  },
+
+  jwt: {
+    maxAge: SESSION_MAX_AGE_REMEMBER,
+  },
 
   callbacks: {
     async signIn({ user, account }) {
@@ -181,12 +202,26 @@ export const authOptions: AuthOptions = {
       return true;
     },
 
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.email = (user as any).email;
-        (token as any).id = (user as any).id;
-        (token as any).role = (user as any).role;
-        (token as any).companyId = (user as any).companyId ?? null;
+        const authUser = user as AuthUser;
+        token.email = authUser.email;
+        (token as any).id = authUser.id;
+        (token as any).role = authUser.role;
+        (token as any).companyId = authUser.companyId ?? null;
+        (token as any).rememberMe = Boolean(authUser.rememberMe);
+
+        // Guardamos una referencia informativa; no tocamos exp manualmente.
+        (token as any).sessionMode = authUser.rememberMe ? "extended" : "default";
+      }
+
+      if (trigger === "update" && session) {
+        if (typeof (session as any).rememberMe === "boolean") {
+          (token as any).rememberMe = Boolean((session as any).rememberMe);
+          (token as any).sessionMode = (session as any).rememberMe
+            ? "extended"
+            : "default";
+        }
       }
 
       const email = token.email as string | undefined;
@@ -217,6 +252,8 @@ export const authOptions: AuthOptions = {
       (session.user as any).role = (token as any).role ?? "CANDIDATE";
       (session.user as any).companyId = (token as any).companyId ?? null;
       (session.user as any).emailVerified = (token as any).emailVerified ?? null;
+      (session as any).rememberMe = Boolean((token as any).rememberMe);
+      (session as any).sessionMode = (token as any).sessionMode ?? "default";
       return session;
     },
   },

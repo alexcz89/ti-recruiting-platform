@@ -50,17 +50,11 @@ const NO_STORE_HEADERS = {
    Helpers
 --------------------------------------------------*/
 function jsonPublic(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: PUBLIC_CACHE_HEADERS,
-  });
+  return NextResponse.json(body, { status, headers: PUBLIC_CACHE_HEADERS });
 }
 
 function jsonNoStore(body: unknown, status = 200) {
-  return NextResponse.json(body, {
-    status,
-    headers: NO_STORE_HEADERS,
-  });
+  return NextResponse.json(body, { status, headers: NO_STORE_HEADERS });
 }
 
 function getFormString(fd: FormData, key: string): string {
@@ -87,7 +81,10 @@ function getFormBool(fd: FormData, key: string): boolean {
   );
 }
 
-function getFormJSON<T>(fd: FormData, key: string): { ok: true; value: T | null } | { ok: false } {
+function getFormJSON<T>(
+  fd: FormData,
+  key: string
+): { ok: true; value: T | null } | { ok: false } {
   const raw = getFormString(fd, key);
   if (!raw) return { ok: true, value: null };
 
@@ -123,41 +120,45 @@ function normalizeEducationLevel(
   if (!raw) return null;
 
   const normalized = raw
-    .toUpperCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toUpperCase();
 
   const aliases: Record<string, EducationLevel> = {
     NONE: "NONE",
+    NINGUNO: "NONE",
+    NINGUNA: "NONE",
+    SIN_ESTUDIOS: "NONE",
+
     PRIMARY: "PRIMARY",
+    PRIMARIA: "PRIMARY",
+
     SECONDARY: "SECONDARY",
+    SECUNDARIA: "SECONDARY",
+
     HIGH_SCHOOL: "HIGH_SCHOOL",
     HIGHSCHOOL: "HIGH_SCHOOL",
-    TECHNICAL: "TECHNICAL",
-    TECH: "TECHNICAL",
-    ASSOCIATE: "TECHNICAL",
-    BACHELOR: "BACHELOR",
-    BACHELORS: "BACHELOR",
-    MASTER: "MASTER",
-    MASTERS: "MASTER",
-    DOCTORATE: "DOCTORATE",
-    DOCTORATES: "DOCTORATE",
-    PHD: "DOCTORATE",
-    OTHER: "OTHER",
-
-    NINGUNO: "NONE",
-    PRIMARIA: "PRIMARY",
-    SECUNDARIA: "SECONDARY",
     BACHILLERATO: "HIGH_SCHOOL",
+    PREPARATORIA: "HIGH_SCHOOL",
+    PREPA: "HIGH_SCHOOL",
+
+    TECHNICAL: "TECHNICAL",
     TECNICO: "TECHNICAL",
     TECNICA: "TECHNICAL",
-    "LICENCIATURA / INGENIERIA": "BACHELOR",
-    "LICENCIATURA / INGENIERA": "BACHELOR",
+
+    BACHELOR: "BACHELOR",
     LICENCIATURA: "BACHELOR",
     INGENIERIA: "BACHELOR",
-    INGENIERO: "BACHELOR",
+    UNIVERSIDAD: "BACHELOR",
+
+    MASTER: "MASTER",
     MAESTRIA: "MASTER",
+
+    DOCTORATE: "DOCTORATE",
     DOCTORADO: "DOCTORATE",
+
+    OTHER: "OTHER",
     OTRO: "OTHER",
 
     "0": "NONE",
@@ -171,23 +172,29 @@ function normalizeEducationLevel(
   };
 
   if (aliases[normalized]) return aliases[normalized];
+  if (isEducationLevel(normalized)) return normalized;
 
-  if (isEducationLevel(normalized)) {
-    return normalized;
-  }
-
-  if (normalized.includes("LICENCIATURA") || normalized.includes("INGENIERIA"))
+  if (
+    normalized.includes("LICENCIATURA") ||
+    normalized.includes("INGENIERIA")
+  ) {
     return "BACHELOR";
+  }
   if (normalized.includes("MAESTRIA")) return "MASTER";
   if (normalized.includes("DOCTORADO")) return "DOCTORATE";
   if (
     normalized.includes("BACHILLERATO") ||
     normalized.includes("PREPARATORIA") ||
     normalized.includes("PREPA")
-  )
+  ) {
     return "HIGH_SCHOOL";
-  if (normalized.includes("TECNICO") || normalized.includes("TECNICA"))
+  }
+  if (
+    normalized.includes("TECNICO") ||
+    normalized.includes("TECNICA")
+  ) {
     return "TECHNICAL";
+  }
   if (normalized.includes("SECUNDARIA")) return "SECONDARY";
   if (normalized.includes("PRIMARIA")) return "PRIMARY";
 
@@ -209,11 +216,7 @@ function sanitizeCoordinate(
   type: "lat" | "lng"
 ): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
-
-  if (type === "lat") {
-    return value >= -90 && value <= 90 ? value : null;
-  }
-
+  if (type === "lat") return value >= -90 && value <= 90 ? value : null;
   return value >= -180 && value <= 180 ? value : null;
 }
 
@@ -224,7 +227,6 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
 
-    /* ---------- Detalle por ID ---------- */
     const id = searchParams.get("id");
     if (id) {
       const job = await prisma.job.findFirst({
@@ -287,7 +289,6 @@ export async function GET(req: NextRequest) {
           logoUrl: job.companyConfidential
             ? null
             : companyObj?.logoUrl ?? null,
-
           location: job.location,
           locationType: job.locationType,
           locationLat: job.locationLat,
@@ -297,10 +298,8 @@ export async function GET(req: NextRequest) {
           city: job.city,
           remote: job.remote,
           employmentType: job.employmentType,
-
           description: job.description,
           descriptionHtml: job.descriptionHtml,
-
           skills: job.skills,
           skillsJson: job.skillsJson,
           educationJson: job.educationJson,
@@ -320,26 +319,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    /* ---------- Listado ---------- */
     const limit = parsePositiveLimit(searchParams.get("limit"), 10, 50);
     const cursor = searchParams.get("cursor") ?? undefined;
-
     const q = (searchParams.get("q") || "").trim();
     const location = (searchParams.get("location") || "").trim();
     const remoteParam = searchParams.get("remote");
-
     const remote =
       remoteParam === "true"
         ? true
         : remoteParam === "false"
           ? false
           : undefined;
-
-    const employmentTypeParam = (searchParams.get("employmentType") || "").trim();
+    const employmentTypeParam = (
+      searchParams.get("employmentType") || ""
+    ).trim();
     const employmentType = isEmploymentType(employmentTypeParam)
       ? employmentTypeParam
       : undefined;
-
     const sort = normalizeSort(searchParams.get("sort"));
 
     const andFilters: Prisma.JobWhereInput[] = [{ status: JobStatus.OPEN }];
@@ -364,13 +360,8 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    if (remote !== undefined) {
-      andFilters.push({ remote });
-    }
-
-    if (employmentType) {
-      andFilters.push({ employmentType });
-    }
+    if (remote !== undefined) andFilters.push({ remote });
+    if (employmentType) andFilters.push({ employmentType });
 
     const where: Prisma.JobWhereInput =
       andFilters.length === 1 ? andFilters[0] : { AND: andFilters };
@@ -470,14 +461,10 @@ export async function POST(req: NextRequest) {
     }
 
     const companyId = await getSessionCompanyId();
-    if (!companyId) {
-      return jsonNoStore({ error: "Unauthorized" }, 401);
-    }
+    if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     const userId = session.user?.id;
-    if (!userId) {
-      return jsonNoStore({ error: "Unauthorized" }, 401);
-    }
+    if (!userId) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     const formData = await req.formData();
 
@@ -485,14 +472,12 @@ export async function POST(req: NextRequest) {
     if (incomingJobId) {
       return jsonNoStore(
         {
-          error:
-            "Esta operación es de edición. Usa el endpoint de actualización.",
+          error: "Esta operación es de edición. Usa el endpoint de actualización.",
         },
         409
       );
     }
 
-    /* ---------- Campos ---------- */
     const title = getFormString(formData, "title");
     const description = getFormString(formData, "description");
     const descriptionHtml = getFormString(formData, "descriptionHtml");
@@ -516,11 +501,9 @@ export async function POST(req: NextRequest) {
 
     const rawMinDegree = getFormString(formData, "minDegree");
     const normalizedMinDegree = normalizeEducationLevel(rawMinDegree);
-
     if (normalizedMinDegree === undefined) {
       return jsonNoStore({ error: "minDegree inválido" }, 400);
     }
-
     const minDegree = normalizedMinDegree;
 
     const city = getFormString(formData, "city");
@@ -531,12 +514,10 @@ export async function POST(req: NextRequest) {
 
     const locationLat = getFormNumber(formData, "locationLat");
     const locationLng = getFormNumber(formData, "locationLng");
-
     const safeLat = sanitizeCoordinate(locationLat, "lat");
     const safeLng = sanitizeCoordinate(locationLng, "lng");
 
     const remote = locationType === "REMOTE";
-
     const currency = getFormString(formData, "currency") || "MXN";
     const salaryMin = getFormNumber(formData, "salaryMin");
     const salaryMax = getFormNumber(formData, "salaryMax");
@@ -544,7 +525,9 @@ export async function POST(req: NextRequest) {
 
     if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
       return jsonNoStore(
-        { error: "El sueldo mínimo no puede ser mayor que el sueldo máximo." },
+        {
+          error: "El sueldo mínimo no puede ser mayor que el sueldo máximo.",
+        },
         400
       );
     }
@@ -552,19 +535,28 @@ export async function POST(req: NextRequest) {
     const schedule = getFormString(formData, "schedule") || null;
     const showBenefits = getFormBool(formData, "showBenefits");
 
-    const benefitsJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "benefitsJson");
+    const benefitsJsonParsed = getFormJSON<Prisma.JsonValue>(
+      formData,
+      "benefitsJson"
+    );
     if (!benefitsJsonParsed.ok) {
       return jsonNoStore({ error: "benefitsJson inválido" }, 400);
     }
     const benefitsJson = benefitsJsonParsed.value;
 
-    const educationJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "educationJson");
+    const educationJsonParsed = getFormJSON<Prisma.JsonValue>(
+      formData,
+      "educationJson"
+    );
     if (!educationJsonParsed.ok) {
       return jsonNoStore({ error: "educationJson inválido" }, 400);
     }
     const educationJson = educationJsonParsed.value;
 
-    const skillsJsonParsed = getFormJSON<JobSkillInput[]>(formData, "skillsJson");
+    const skillsJsonParsed = getFormJSON<JobSkillInput[]>(
+      formData,
+      "skillsJson"
+    );
     if (!skillsJsonParsed.ok) {
       return jsonNoStore({ error: "skillsJson inválido" }, 400);
     }
@@ -589,6 +581,31 @@ export async function POST(req: NextRequest) {
     const companyMode = getFormString(formData, "companyMode");
     const companyConfidential = companyMode === "confidential";
 
+    // FIX: leer assessmentTemplateId del FormData
+    const rawAssessmentTemplateId = getFormString(
+      formData,
+      "assessmentTemplateId"
+    );
+    const assessmentTemplateId =
+      rawAssessmentTemplateId.length > 0 ? rawAssessmentTemplateId : null;
+
+    // Validar existencia del template.
+    // Nota: aquí no se valida ownership por company porque el schema compartido
+    // no muestra con certeza ese campo en AssessmentTemplate.
+    if (assessmentTemplateId) {
+      const templateExists = await prisma.assessmentTemplate.findUnique({
+        where: { id: assessmentTemplateId },
+        select: { id: true },
+      });
+
+      if (!templateExists) {
+        return jsonNoStore(
+          { error: "El assessment template no existe" },
+          400
+        );
+      }
+    }
+
     /* -------------------------------------------------
        🔁 ANTI-DUPLICADOS (best-effort)
     --------------------------------------------------*/
@@ -606,11 +623,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
-      return jsonNoStore({
-        ok: true,
-        id: existing.id,
-        deduped: true,
-      });
+      return jsonNoStore({ ok: true, id: existing.id, deduped: true });
     }
 
     /* -------------------------------------------------
@@ -622,7 +635,6 @@ export async function POST(req: NextRequest) {
     });
 
     const billingPlan = (company?.billingPlan as PlanId | undefined) ?? "FREE";
-
     const plan =
       PLANS.find((p) => p.id === billingPlan) ??
       PLANS.find((p) => p.id === "FREE") ??
@@ -648,7 +660,7 @@ export async function POST(req: NextRequest) {
     }
 
     /* -------------------------------------------------
-       Crear vacante + syncJobSkills en transacción
+       Crear vacante + syncJobSkills + JobAssessment en transacción
     --------------------------------------------------*/
     const job = await prisma.$transaction(async (tx) => {
       const createdJob = await tx.job.create({
@@ -656,7 +668,6 @@ export async function POST(req: NextRequest) {
           title,
           description,
           descriptionHtml: descriptionHtml || undefined,
-
           location: remote ? "Remoto" : city || "—",
           locationType,
           locationLat: safeLat ?? undefined,
@@ -666,28 +677,22 @@ export async function POST(req: NextRequest) {
           city: city ?? undefined,
           cityNorm: cityNorm ?? undefined,
           admin1Norm: admin1Norm ?? undefined,
-
           remote,
           employmentType,
           schedule,
           benefitsJson: benefitsJson ?? undefined,
           showBenefits,
-
           educationJson: educationJson ?? undefined,
           minDegree,
-
           skillsJson: skillsJson ?? undefined,
           certsJson: certsJson ?? undefined,
           skills: skillsList,
-
           salaryMin: salaryMin ?? undefined,
           salaryMax: salaryMax ?? undefined,
           currency,
           showSalary,
-
           companyConfidential,
           status: JobStatus.OPEN,
-
           companyId,
           recruiterId: userId,
         },
@@ -695,6 +700,22 @@ export async function POST(req: NextRequest) {
       });
 
       await syncJobSkills(tx, createdJob.id, skillsJson);
+
+      // FIX: persistir la relación del assessment seleccionado.
+      // Uso createMany + skipDuplicates para hacerlo más defensivo.
+      if (assessmentTemplateId) {
+        await tx.jobAssessment.createMany({
+          data: [
+            {
+              jobId: createdJob.id,
+              templateId: assessmentTemplateId,
+              isRequired: false,
+              minScore: null,
+            },
+          ],
+          skipDuplicates: true,
+        });
+      }
 
       return createdJob;
     });

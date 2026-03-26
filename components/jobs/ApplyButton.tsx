@@ -3,14 +3,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Send, CheckCircle2 } from "lucide-react";
+import { Loader2, Send, CheckCircle2, Eye } from "lucide-react";
 import { toastSuccess, toastError, toastInfo } from "@/lib/ui/toast";
 
 export type ApplyResult =
   | { ok: true; redirect: string }
   | { error: "AUTH"; signinUrl: string }
   | { error: "ROLE"; message: string }
-  | { error: "ALREADY_APPLIED"; message?: string }
+  | { error: "ALREADY_APPLIED"; message?: string; redirect?: string }
   | { error: "UNKNOWN"; message?: string };
 
 type Props = {
@@ -18,6 +18,9 @@ type Props = {
   label?: string;
   className?: string;
   jobKey?: string;
+  initialApplied?: boolean;
+  appliedLabel?: string;
+  appliedHref?: string;
 };
 
 export default function ApplyButton({
@@ -25,17 +28,29 @@ export default function ApplyButton({
   label = "Postularme",
   className = "",
   jobKey,
+  initialApplied = false,
+  appliedLabel = "Ya aplicaste",
+  appliedHref,
 }: Props) {
   const router = useRouter();
   const [pending, startTransition] = React.useTransition();
-  const [justApplied, setJustApplied] = React.useState(false);
+  const [justApplied, setJustApplied] = React.useState(initialApplied);
 
   React.useEffect(() => {
-    setJustApplied(false);
-  }, [jobKey]);
+    setJustApplied(initialApplied);
+  }, [initialApplied, jobKey]);
 
   const onClick = () => {
     if (pending) return;
+
+    if (justApplied) {
+      if (appliedHref) {
+        router.push(appliedHref);
+      } else {
+        toastInfo("Ya postulaste a esta vacante");
+      }
+      return;
+    }
 
     startTransition(async () => {
       const res = await applyAction();
@@ -53,15 +68,21 @@ export default function ApplyButton({
           window.location.href = res.signinUrl;
           return;
         }
+
         if (res.error === "ROLE") {
           toastError(res.message || "No autorizado");
           return;
         }
+
         if (res.error === "ALREADY_APPLIED") {
-          toastInfo(res.message || "Ya postulaste a esta vacante");
           setJustApplied(true);
+          toastInfo(res.message || "Ya postulaste a esta vacante");
+          if (res.redirect) {
+            router.push(res.redirect);
+          }
           return;
         }
+
         toastError(res.message || "No se pudo postular");
         return;
       }
@@ -79,8 +100,10 @@ export default function ApplyButton({
   const btnState = pending
     ? "cursor-not-allowed bg-emerald-600/85 text-white"
     : justApplied
-    ? "bg-emerald-700 text-white"
-    : "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95";
+      ? appliedHref
+        ? "bg-zinc-900 text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+        : "cursor-default bg-zinc-700 text-white dark:bg-zinc-200 dark:text-zinc-900"
+      : "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95";
 
   return (
     <button
@@ -95,13 +118,16 @@ export default function ApplyButton({
       {pending ? (
         <>
           <Loader2 className="h-4 w-4 animate-spin shrink-0" aria-hidden="true" />
-          {/* CAMBIO: oculto en móvil, visible en sm+ */}
           <span className="hidden sm:inline">Enviando…</span>
         </>
       ) : justApplied ? (
         <>
-          <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span className="hidden sm:inline">¡Listo!</span>
+          {appliedHref ? (
+            <Eye className="h-4 w-4 shrink-0" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          <span className="hidden sm:inline">{appliedLabel}</span>
         </>
       ) : (
         <>

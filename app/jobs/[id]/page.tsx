@@ -153,7 +153,9 @@ export default async function JobDetail({ params }: Params) {
   }
 
   const user = (session?.user as any) || null;
-  const role = (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
+  const role =
+    (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
+
   const isCandidate = role === "CANDIDATE";
   const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
@@ -266,20 +268,45 @@ export default async function JobDetail({ params }: Params) {
     });
 
     if (candidateRaw && hasJobMatchSignals) {
-      const candidateSkillsForEngine: CandidateSkillInput[] = candidateRaw.candidateSkills.map((cs) => ({
-        termId: cs.term.id,
-        label: cs.term.label,
-        level: cs.level,
-      }));
+      const candidateSkillsForEngine: CandidateSkillInput[] =
+        candidateRaw.candidateSkills.map((cs) => ({
+          termId: cs.term.id,
+          label: cs.term.label,
+          level: cs.level,
+        }));
 
       candidateMatchResult = computeMatchScore({
         jobSkills: jobSkillsForEngine,
         candidateSkills: candidateSkillsForEngine,
         jobSeniority: jobSeniorityForEngine,
-        candidateSeniority: toSeniorityLevel(candidateRaw.seniority as string | null),
+        candidateSeniority: toSeniorityLevel(
+          candidateRaw.seniority as string | null
+        ),
         jobMinYearsExperience: job.minYearsExperience ?? null,
         candidateYearsExperience: candidateRaw.yearsExperience ?? null,
       });
+    }
+  }
+
+  // FIX Bug #1: detectar desde SSR si el candidato ya aplicó
+  let alreadyApplied = false;
+  let applicationHref: string | undefined = undefined;
+
+  if (isCandidate && user?.id) {
+    const existingApplication = await prisma.application.findFirst({
+      where: {
+        candidateId: user.id,
+        jobId: job.id,
+      },
+      select: {
+        id: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingApplication) {
+      alreadyApplied = true;
+      applicationHref = "/jobs?applied=1";
     }
   }
 
@@ -321,7 +348,8 @@ export default async function JobDetail({ params }: Params) {
             },
           },
         ],
-    description: job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
+    description:
+      job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
     datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
     employmentType: job.employmentType,
     identifier: {
@@ -335,7 +363,7 @@ export default async function JobDetail({ params }: Params) {
   const hasJobSignalsForAnon = hasJobMatchSignals;
 
   return (
-    <main className="max-w-[1100px] xl:max-w-[1200px] mx-auto px-6 lg:px-10 py-8 space-y-6">
+    <main className="mx-auto max-w-[1100px] space-y-6 px-6 py-8 lg:px-10 xl:max-w-[1200px]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -365,13 +393,17 @@ export default async function JobDetail({ params }: Params) {
             </div>
             <div className="flex shrink-0 gap-2">
               <a
-                href={`/auth/signin?role=CANDIDATE&callbackUrl=${encodeURIComponent(`/jobs/${job.id}`)}`}
+                href={`/auth/signin?role=CANDIDATE&callbackUrl=${encodeURIComponent(
+                  `/jobs/${job.id}`
+                )}`}
                 className="inline-flex items-center rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600/50 dark:bg-transparent dark:text-emerald-300"
               >
                 Iniciar sesión
               </a>
               <a
-                href={`/auth/signup/candidate?callbackUrl=${encodeURIComponent(`/jobs/${job.id}`)}`}
+                href={`/auth/signup/candidate?callbackUrl=${encodeURIComponent(
+                  `/jobs/${job.id}`
+                )}`}
                 className="inline-flex items-center rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
               >
                 Crear cuenta gratis →
@@ -384,7 +416,11 @@ export default async function JobDetail({ params }: Params) {
       <JobDetailPanel
         job={panelJob as any}
         canApply={canApply}
+        isAuthed={Boolean(session)}
+        role={role}
         editHref={canEdit ? `/dashboard/jobs/${job.id}/edit` : undefined}
+        alreadyApplied={alreadyApplied}
+        applicationHref={applicationHref}
       />
     </main>
   );

@@ -73,9 +73,9 @@ export default function SignInUnified({
       email: data.email,
       password: data.password,
       role: activeRole,
+      rememberMe: rememberMe ? "true" : "false",
       callbackUrl:
         callbackUrl || (activeRole === "RECRUITER" ? "/dashboard/overview" : "/jobs"),
-      ...(rememberMe ? { remember: "true" } : {}),
     });
 
     if (res?.error) {

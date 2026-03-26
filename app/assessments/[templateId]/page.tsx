@@ -14,7 +14,7 @@ type Option = {
   id?: string;
   value?: string;
   text?: string;
-  label?: string; // por si algún template usa label
+  label?: string;
   [k: string]: any;
 };
 
@@ -26,7 +26,6 @@ type Question = {
   codeSnippet?: string;
   options: Option[];
   allowMultiple: boolean;
-  // 🆕 Campos para CODING
   type?: 'MULTIPLE_CHOICE' | 'OPEN_ENDED' | 'CODING';
   language?: string;
   allowedLanguages?: string[];
@@ -77,7 +76,6 @@ function normalizeQuestions(raw: any[]): Question[] {
         value: o?.value != null ? String(o.value) : undefined,
         text: o?.text != null ? String(o.text) : o?.label != null ? String(o.label) : undefined,
       })),
-      // 🆕 PRESERVAR campos de CODING
       type: q.type || 'MULTIPLE_CHOICE',
       language: q.language,
       allowedLanguages: q.allowedLanguages ? JSON.parse(q.allowedLanguages) : undefined,
@@ -151,6 +149,17 @@ export default function AssessmentPage() {
     async function loadTemplate() {
       try {
         const res = await fetch(`/api/assessments/${templateId}`, { cache: 'no-store' });
+
+        // FIX Bug #9: si el middleware no interceptó (navegación client-side),
+        // redirigir a signin preservando la URL con el token del invite
+        if (res.status === 401) {
+          const callbackUrl = encodeURIComponent(
+            window.location.pathname + window.location.search
+          );
+          window.location.href = `/signin?callbackUrl=${callbackUrl}`;
+          return;
+        }
+
         if (!res.ok) throw new Error('Error al cargar template');
         const data = await res.json();
         setTemplate(data.template);
@@ -239,7 +248,7 @@ export default function AssessmentPage() {
         body: JSON.stringify({
           token: inviteToken || undefined,
           applicationId: applicationIdQS || undefined,
-          attemptId: attemptIdQS || undefined, // reanudar exacto si viene de Mis Evaluaciones
+          attemptId: attemptIdQS || undefined,
         }),
       });
 
@@ -318,7 +327,6 @@ export default function AssessmentPage() {
   const handleAnswer = async (questionId: string, selectedOptions: string[]) => {
     if (!attemptId || expired) return;
 
-    // Guardamos en UI tal cual (keys)
     const unique = Array.from(new Set(selectedOptions.map((x) => String(x).trim()))).filter(Boolean);
     setAnswers((prev) => ({ ...prev, [questionId]: unique }));
 
@@ -350,7 +358,6 @@ export default function AssessmentPage() {
     if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   };
 
-  // ✅ CODING: marcar como respondida y avanzar
   const handleCodeSubmitted = (qid: string) => {
     setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
     handleNext();
@@ -420,18 +427,34 @@ export default function AssessmentPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto" />
           <p className="mt-4 text-muted">Cargando evaluación...</p>
         </div>
       </div>
     );
   }
 
+  // FIX Bug #9: estado de error más claro con opción de login
   if (!template) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <p className="text-red-600">Evaluación no encontrada</p>
+      <div className="flex items-center justify-center min-h-screen px-4">
+        <div className="text-center max-w-sm">
+          <p className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">
+            Evaluación no encontrada
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+            El link puede haber expirado o necesitas iniciar sesión para acceder.
+          </p>
+          <a
+            href={`/signin?callbackUrl=${encodeURIComponent(
+              typeof window !== 'undefined'
+                ? window.location.pathname + window.location.search
+                : '/assessments'
+            )}`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition"
+          >
+            Iniciar sesión
+          </a>
         </div>
       </div>
     );
@@ -447,7 +470,7 @@ export default function AssessmentPage() {
         <div className="mx-auto max-w-[1200px] px-6 lg:px-10 py-8">
           <div className="flex items-center justify-center py-16">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto"></div>
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-emerald-600 mx-auto" />
               <p className="mt-4 text-muted">Cargando pregunta...</p>
             </div>
           </div>
@@ -461,7 +484,8 @@ export default function AssessmentPage() {
   return (
     <main className="max-w-none p-0">
       <div className={`mx-auto px-6 lg:px-10 py-8 ${isCodingQuestion ? 'max-w-[1800px]' : 'max-w-[1200px]'}`}>
-        {/* Header - Solo mostrar en preguntas NO-CODING */}
+
+        {/* Header — preguntas NO-CODING */}
         {!isCodingQuestion && (
           <div className="sticky top-0 z-30 mb-6 pb-4 bg-white dark:bg-zinc-950">
             <div className="flex items-center justify-between">
@@ -471,7 +495,6 @@ export default function AssessmentPage() {
                   Pregunta {currentIndex + 1} de {total}
                 </p>
               </div>
-
               {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
             </div>
 
@@ -485,7 +508,7 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Header Simplificado para CODING */}
+        {/* Header — CODING */}
         {isCodingQuestion && (
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4">
@@ -506,7 +529,7 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Question Component */}
+        {/* Question */}
         <AssessmentQuestion
           question={{
             ...currentQuestion,
@@ -518,12 +541,11 @@ export default function AssessmentPage() {
           selectedOptions={currentAnswer}
           onAnswer={(optionKeys) => handleAnswer(currentQuestion.id, optionKeys)}
           disabled={expired}
-          // 🆕 Props para CODING
           attemptId={attemptId || undefined}
           onCodeSubmit={() => handleCodeSubmitted(currentQuestion.id)}
         />
 
-        {/* Navegación - SOLO para preguntas NO-CODING */}
+        {/* Navegación — NO-CODING */}
         {!isCodingQuestion && (
           <div className="mt-8 flex items-center justify-between gap-4">
             <button
@@ -548,12 +570,12 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Para CODING: Solo botón de finalizar si es última pregunta */}
+        {/* Finalizar — CODING última pregunta */}
         {isCodingQuestion && currentIndex === total - 1 && (
           <div className="mt-8 flex justify-center">
-            <button 
-              onClick={handleSubmit} 
-              disabled={submitting || expired} 
+            <button
+              onClick={handleSubmit}
+              disabled={submitting || expired}
               className="btn btn-primary px-8 text-lg"
             >
               {submitting ? 'Enviando...' : 'Finalizar evaluación ✓'}
@@ -561,7 +583,7 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Mapa de preguntas - SOLO para preguntas NO-CODING */}
+        {/* Mapa de preguntas — NO-CODING */}
         {!isCodingQuestion && (
           <div className="mt-8 p-6 rounded-2xl border glass-card">
             <h3 className="text-sm font-semibold mb-3">Mapa de preguntas</h3>

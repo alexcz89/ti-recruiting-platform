@@ -79,11 +79,13 @@ type Role = "CANDIDATE" | "RECRUITER" | "ADMIN";
 
 type Props = {
   job: Job | null;
-  canApply?: boolean; // normalmente solo true para CANDIDATE
-  isAuthed?: boolean; // 👈 NUEVO
-  role?: Role; // 👈 NUEVO
+  canApply?: boolean;
+  isAuthed?: boolean;
+  role?: Role;
   editHref?: string;
   hideToolbar?: boolean;
+  alreadyApplied?: boolean;
+  applicationHref?: string;
 };
 
 type MetaParsed = {
@@ -97,7 +99,9 @@ type MetaParsed = {
   certifications?: string[] | null;
 };
 
-function parseMeta(description: string | null | undefined): { meta: MetaParsed | null; mainDesc: string } {
+function parseMeta(
+  description: string | null | undefined
+): { meta: MetaParsed | null; mainDesc: string } {
   const raw = description ?? "";
   const match = raw.match(/---\s*\[Meta\]([\s\S]*)$/i);
   if (!match) return { meta: null, mainDesc: raw.trim() };
@@ -148,13 +152,17 @@ function Chip({
   outline?: boolean;
   className?: string;
 }) {
-  const base = "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium";
+  const base =
+    "inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium";
   const filled: Record<string, string> = {
     zinc: "bg-zinc-500/10 text-zinc-700 dark:text-zinc-300 border-zinc-300/50",
     blue: "bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-300/50",
-    emerald: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/50",
-    amber: "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300/50",
-    violet: "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300/50",
+    emerald:
+      "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/50",
+    amber:
+      "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300/50",
+    violet:
+      "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300/50",
   };
   const outlines: Record<string, string> = {
     zinc: "border-zinc-300 text-zinc-700 dark:text-zinc-300",
@@ -163,7 +171,13 @@ function Chip({
     amber: "border-amber-300 text-amber-700 dark:text-amber-300",
     violet: "border-violet-300 text-violet-700 dark:text-violet-300",
   };
-  return <span className={`${base} ${outline ? outlines[tone] : filled[tone]} ${className}`}>{children}</span>;
+  return (
+    <span
+      className={`${base} ${outline ? outlines[tone] : filled[tone]} ${className}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 function splitSkills(skills?: string[] | null) {
@@ -222,7 +236,10 @@ function formatBenefitLabel(key: string, value: any): string | null {
   const k = key.toString();
   const lower = k.toLowerCase();
   if (lower === "showbenefits") return null;
-  const base = BENEFIT_LABELS[k] ?? BENEFIT_LABELS[lower] ?? k.replace(/([A-Z])/g, " $1");
+  const base =
+    BENEFIT_LABELS[k] ??
+    BENEFIT_LABELS[lower] ??
+    k.replace(/([A-Z])/g, " $1");
   if (typeof value === "boolean") return value ? base : null;
   if (typeof value === "number") {
     if (lower === "primavacpct") return `${base}: ${value}%`;
@@ -242,6 +259,8 @@ export default function JobDetailPanel({
   role,
   editHref,
   hideToolbar = false,
+  alreadyApplied = false,
+  applicationHref,
 }: Props) {
   const jobId = job?.id ?? "";
   const rawDesc = job?.description ?? "";
@@ -260,14 +279,17 @@ export default function JobDetailPanel({
     () => (mainDesc || rawDesc).replace(/\n/g, "<br/>"),
     [mainDesc, rawDesc]
   );
+
   const descHtml = React.useMemo(
     () => (job as any)?.descriptionHtml || fallbackText || "",
     [job, fallbackText]
   );
+
   const companyNameRaw = React.useMemo(
     () => (job as any)?.company?.name ?? job?.company ?? "—",
     [job]
   );
+
   const companyLogoRaw = React.useMemo(
     () =>
       (job as any)?.company?.logoUrl ??
@@ -276,6 +298,7 @@ export default function JobDetailPanel({
       null,
     [job]
   );
+
   const confidential = React.useMemo(
     () =>
       (job as any)?.companyConfidential ??
@@ -407,14 +430,18 @@ export default function JobDetailPanel({
   );
   const haveAnySkills = reqSkills.length + niceSkills.length > 0;
 
-  const [minDegree, setMinDegree] = React.useState<DegreeLevel | null>(() => job?.minDegree ?? null);
+  const [minDegree, setMinDegree] = React.useState<DegreeLevel | null>(
+    () => job?.minDegree ?? null
+  );
   const [educationJson, setEducationJson] = React.useState<EduItem[]>(() =>
     Array.isArray(job?.educationJson) ? (job!.educationJson as EduItem[]) : []
   );
 
   React.useEffect(() => {
     setMinDegree(job?.minDegree ?? null);
-    setEducationJson(Array.isArray(job?.educationJson) ? (job!.educationJson as EduItem[]) : []);
+    setEducationJson(
+      Array.isArray(job?.educationJson) ? (job!.educationJson as EduItem[]) : []
+    );
   }, [jobId, job]);
 
   React.useEffect(() => {
@@ -431,8 +458,9 @@ export default function JobDetailPanel({
         const j = data?.job;
         if (!j || cancelled) return;
         if (!minDegree && j.minDegree) setMinDegree(j.minDegree as DegreeLevel);
-        if (educationJson.length === 0 && Array.isArray(j.educationJson))
+        if (educationJson.length === 0 && Array.isArray(j.educationJson)) {
           setEducationJson(j.educationJson as EduItem[]);
+        }
       } catch {}
     })();
 
@@ -446,10 +474,15 @@ export default function JobDetailPanel({
   const [copied, setCopied] = React.useState(false);
   const handleShare = React.useCallback(async () => {
     if (!jobId) return;
-    const url = typeof window !== "undefined" ? `${window.location.origin}/jobs/${jobId}` : "";
+    const url =
+      typeof window !== "undefined"
+        ? `${window.location.origin}/jobs/${jobId}`
+        : "";
     const shareData = {
       title: job?.title || "Vacante",
-      text: `${job?.title || "Vacante"}${showCompanyName ? ` — ${companyName}` : ""}`,
+      text: `${job?.title || "Vacante"}${
+        showCompanyName ? ` — ${companyName}` : ""
+      }`,
       url,
     };
     try {
@@ -465,6 +498,7 @@ export default function JobDetailPanel({
 
   const applyAction = React.useCallback(async (): Promise<ApplyResult> => {
     if (!jobId) return { error: "UNKNOWN", message: "Vacante inválida" };
+
     try {
       const res = await fetch("/api/applications", {
         method: "POST",
@@ -477,40 +511,56 @@ export default function JobDetailPanel({
           typeof window !== "undefined"
             ? encodeURIComponent(window.location.pathname + window.location.search)
             : encodeURIComponent(`/jobs/${jobId}`);
-        return { error: "AUTH", signinUrl: `/auth/signin?role=CANDIDATE&callbackUrl=${callback}` };
+        return {
+          error: "AUTH",
+          signinUrl: `/auth/signin?role=CANDIDATE&callbackUrl=${callback}`,
+        };
       }
+
       if (res.status === 403) {
         const data = await res.json().catch(() => null);
-        return { error: "ROLE", message: data?.error || "Solo candidatos pueden postular" };
+        return {
+          error: "ROLE",
+          message: data?.error || "Solo candidatos pueden postular",
+        };
       }
+
       if (res.status === 409) {
         const data = await res.json().catch(() => null);
-        return { error: "ALREADY_APPLIED", message: data?.error || "Ya postulaste a esta vacante" };
+        return {
+          error: "ALREADY_APPLIED",
+          message: data?.error || "Ya postulaste a esta vacante",
+          redirect: applicationHref,
+        };
       }
-      if (res.ok)
+
+      if (res.ok) {
         return {
           ok: true,
           redirect:
-            typeof window !== "undefined"
+            applicationHref ||
+            (typeof window !== "undefined"
               ? `${window.location.pathname}?applied=1`
-              : `/jobs/${jobId}`,
+              : `/jobs/${jobId}`),
         };
+      }
 
       const data = await res.json().catch(() => null);
       return { error: "UNKNOWN", message: data?.error || "Error al postular" };
     } catch (e) {
       console.error("[JobDetailPanel] applyAction error", e);
-      return { error: "UNKNOWN", message: "No se pudo conectar con el servidor" };
+      return {
+        error: "UNKNOWN",
+        message: "No se pudo conectar con el servidor",
+      };
     }
-  }, [jobId]);
+  }, [jobId, applicationHref]);
 
-  // sanitizar solo en browser, SSR devuelve el HTML directo
   const sanitizedHtml = React.useMemo(() => {
     if (!descHtml) return "";
     return sanitizeHtml(descHtml);
   }, [descHtml]);
 
-  // ✅ CTA URLs (login/registro) con regreso a esta vacante
   const callbackUrl = React.useMemo(() => {
     if (typeof window !== "undefined") {
       return encodeURIComponent(window.location.pathname + window.location.search);
@@ -528,8 +578,9 @@ export default function JobDetailPanel({
     [callbackUrl]
   );
 
-  // ✅ regla final: solo CANDIDATE logueado puede postular
-  const canApplyEffective = Boolean(isAuthed && (role ? role === "CANDIDATE" : canApply) && canApply);
+  const canApplyEffective = Boolean(
+    isAuthed && (role ? role === "CANDIDATE" : canApply) && canApply
+  );
 
   if (!job) {
     return (
@@ -540,11 +591,13 @@ export default function JobDetailPanel({
   }
 
   return (
-    <article className={hideToolbar ? "" : "relative rounded-2xl border glass-card overflow-hidden"}>
+    <article
+      className={hideToolbar ? "" : "relative overflow-hidden rounded-2xl border glass-card"}
+    >
       {!hideToolbar && (
         <div className="border-b glass-card px-4 py-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-            <h2 className="text-sm font-semibold text-default leading-snug line-clamp-2 sm:truncate sm:flex-1 sm:pr-2">
+            <h2 className="line-clamp-2 text-sm font-semibold leading-snug text-default sm:flex-1 sm:truncate sm:pr-2">
               {job.title}
             </h2>
 
@@ -553,43 +606,49 @@ export default function JobDetailPanel({
                 type="button"
                 onClick={handleShare}
                 title="Compartir"
-                className="inline-flex items-center gap-1.5 border rounded-lg px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800"
               >
-                <Share2 className="h-4 w-4 text-muted shrink-0" />
-                <span className="hidden sm:inline text-xs">Compartir</span>
+                <Share2 className="h-4 w-4 shrink-0 text-muted" />
+                <span className="hidden text-xs sm:inline">Compartir</span>
               </button>
 
               {copied && (
-                <span className="text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-300/50 rounded px-2 py-1 whitespace-nowrap">
+                <span className="whitespace-nowrap rounded border border-emerald-300/50 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300">
                   Link copiado
                 </span>
               )}
 
-              {/* ✅ CTA según tipo de usuario */}
               {!isAuthed ? (
                 <>
                   <Link
                     href={signinHref}
-                    className="inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-semibold text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-semibold text-default hover:bg-zinc-50 dark:hover:bg-zinc-800"
                   >
                     <LogIn className="h-4 w-4" />
                     Inicia sesión para postularte
                     <ArrowRight className="h-4 w-4" />
                   </Link>
+
                   <Link
                     href={signupHref}
-                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500 whitespace-nowrap"
+                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500"
                   >
                     <UserPlus className="h-4 w-4" />
                     Crear cuenta
                   </Link>
                 </>
               ) : canApplyEffective ? (
-                <ApplyButton applyAction={applyAction} jobKey={job.id} />
+                <ApplyButton
+                  applyAction={applyAction}
+                  jobKey={job.id}
+                  initialApplied={alreadyApplied}
+                  appliedLabel={applicationHref ? "Ver mi postulación" : "Ya aplicaste"}
+                  appliedHref={applicationHref}
+                />
               ) : editHref ? (
                 <Link
                   href={editHref}
-                  className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
+                  className="inline-flex items-center whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800"
                 >
                   Editar vacante
                 </Link>
@@ -599,11 +658,11 @@ export default function JobDetailPanel({
         </div>
       )}
 
-      <div className="px-6 py-5 space-y-6">
+      <div className="space-y-6 px-6 py-5">
         <header className="space-y-3">
           <div className="flex items-start gap-3">
             {companyLogo && (
-              <div className="h-12 w-12 shrink-0 rounded-xl border bg-zinc-200/60 dark:bg-zinc-700/50 overflow-hidden">
+              <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border bg-zinc-200/60 dark:bg-zinc-700/50">
                 <Image
                   src={companyLogo}
                   alt={companyName || "Logo"}
@@ -613,12 +672,16 @@ export default function JobDetailPanel({
                 />
               </div>
             )}
+
             <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl font-semibold leading-tight text-default break-words">
+              <h1 className="break-words text-xl font-semibold leading-tight text-default md:text-2xl">
                 {job.title}
               </h1>
+
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-muted">
-                {showCompanyName && <span className="font-medium text-default">{companyName}</span>}
+                {showCompanyName && (
+                  <span className="font-medium text-default">{companyName}</span>
+                )}
                 {locationDisplay && (
                   <span className="inline-flex items-center gap-1">
                     <MapPin className="h-3.5 w-3.5 shrink-0" />
@@ -645,19 +708,26 @@ export default function JobDetailPanel({
         </header>
 
         {hasEducation && (
-          <section className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-            <p className="text-sm font-medium text-default mb-1">Educación</p>
+          <section className="space-y-3 border-t border-zinc-100 pt-2 dark:border-zinc-800/60">
+            <p className="mb-1 text-sm font-medium text-default">Educación</p>
             {minDegree && (
-              <p className="text-sm text-muted mb-1">
-                <span className="font-medium text-default">Nivel mínimo:</span> {labelDegree(minDegree)}
+              <p className="mb-1 text-sm text-muted">
+                <span className="font-medium text-default">Nivel mínimo:</span>{" "}
+                {labelDegree(minDegree)}
               </p>
             )}
             {educationJson.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {educationJson.map((e) => (
-                  <Chip key={e.name} tone={e.required ? "emerald" : "zinc"} outline={!e.required}>
+                  <Chip
+                    key={e.name}
+                    tone={e.required ? "emerald" : "zinc"}
+                    outline={!e.required}
+                  >
                     {e.name}
-                    <span className="ml-1 opacity-80">({e.required ? "Obligatoria" : "Deseable"})</span>
+                    <span className="ml-1 opacity-80">
+                      ({e.required ? "Obligatoria" : "Deseable"})
+                    </span>
                   </Chip>
                 ))}
               </div>
@@ -666,10 +736,10 @@ export default function JobDetailPanel({
         )}
 
         {haveAnySkills && (
-          <section className="space-y-3 pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
+          <section className="space-y-3 border-t border-zinc-100 pt-2 dark:border-zinc-800/60">
             {reqSkills.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="mb-1 flex items-center gap-2">
                   <Wrench className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
                   <p className="text-sm font-medium text-default">Skills requeridos</p>
                 </div>
@@ -682,9 +752,10 @@ export default function JobDetailPanel({
                 </div>
               </div>
             )}
+
             {niceSkills.length > 0 && (
               <div>
-                <div className="flex items-center gap-2 mb-1">
+                <div className="mb-1 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-300" />
                   <p className="text-sm font-medium text-default">Skills deseables</p>
                 </div>
@@ -700,37 +771,44 @@ export default function JobDetailPanel({
           </section>
         )}
 
-        <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-          <h3 className="text-sm font-semibold text-default mb-2">Detalles de la vacante</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 rounded-xl border glass-card p-4 md:p-6">
-            <div className="flex items-center gap-2 min-w-0">
-              <Briefcase className="h-4 w-4 text-muted shrink-0" />
+        <section className="border-t border-zinc-100 pt-2 dark:border-zinc-800/60">
+          <h3 className="mb-2 text-sm font-semibold text-default">
+            Detalles de la vacante
+          </h3>
+
+          <div className="grid grid-cols-2 gap-3 rounded-xl border glass-card p-4 md:grid-cols-3 md:p-6">
+            <div className="flex min-w-0 items-center gap-2">
+              <Briefcase className="h-4 w-4 shrink-0 text-muted" />
               <div className="min-w-0">
                 <p className="text-[11px] text-muted">Tipo</p>
-                <p className="font-medium text-default text-sm truncate">
+                <p className="truncate text-sm font-medium text-default">
                   {meta?.employmentType || job.employmentType || "—"}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 min-w-0">
-              <Wallet className="h-4 w-4 text-muted shrink-0" />
+            <div className="flex min-w-0 items-center gap-2">
+              <Wallet className="h-4 w-4 shrink-0 text-muted" />
               <div className="min-w-0">
                 <p className="text-[11px] text-muted">Sueldo</p>
-                <p className="font-medium text-default text-sm truncate">
+                <p className="truncate text-sm font-medium text-default">
                   {showSalaryExplicit
-                    ? `${salaryMin?.toLocaleString() ?? "—"} – ${salaryMax?.toLocaleString() ?? "—"} ${currency}`
+                    ? `${salaryMin?.toLocaleString() ?? "—"} – ${
+                        salaryMax?.toLocaleString() ?? "—"
+                      } ${currency}`
                     : "Oculto"}
                 </p>
               </div>
             </div>
 
             {schedule && (
-              <div className="flex items-center gap-2 min-w-0">
-                <Clock3 className="h-4 w-4 text-muted shrink-0" />
+              <div className="flex min-w-0 items-center gap-2">
+                <Clock3 className="h-4 w-4 shrink-0 text-muted" />
                 <div className="min-w-0">
                   <p className="text-[11px] text-muted">Horario</p>
-                  <p className="font-medium text-default text-sm truncate">{schedule}</p>
+                  <p className="truncate text-sm font-medium text-default">
+                    {schedule}
+                  </p>
                 </div>
               </div>
             )}
@@ -738,7 +816,7 @@ export default function JobDetailPanel({
 
           {benefitItems && benefitItems.length > 0 && (
             <div className="mt-4 rounded-xl border glass-card p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="mb-2 flex items-center gap-2">
                 <Gift className="h-4 w-4 text-muted" />
                 <p className="text-[12px] font-medium text-muted">Prestaciones</p>
               </div>
@@ -754,18 +832,24 @@ export default function JobDetailPanel({
 
           {Array.isArray(meta?.certifications) && meta.certifications.length > 0 && (
             <div className="mt-3 rounded-xl border glass-card p-4 md:p-6">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="mb-2 flex items-center gap-2">
                 <BadgeCheck className="h-4 w-4 text-muted" />
-                <p className="text-[12px] font-medium text-muted">Certificaciones</p>
+                <p className="text-[12px] font-medium text-muted">
+                  Certificaciones
+                </p>
               </div>
-              <p className="text-sm text-default">{meta.certifications.join(", ")}</p>
+              <p className="text-sm text-default">
+                {meta.certifications.join(", ")}
+              </p>
             </div>
           )}
         </section>
 
         {sanitizedHtml && (
-          <section className="pt-2 border-t border-zinc-100 dark:border-zinc-800/60">
-            <h3 className="text-sm font-semibold text-default mb-1.5">Descripción</h3>
+          <section className="border-t border-zinc-100 pt-2 dark:border-zinc-800/60">
+            <h3 className="mb-1.5 text-sm font-semibold text-default">
+              Descripción
+            </h3>
             <div
               className="job-html prose prose-sm max-w-none text-sm leading-relaxed text-default/90 dark:prose-invert"
               dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
