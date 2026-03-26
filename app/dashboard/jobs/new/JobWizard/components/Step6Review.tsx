@@ -15,12 +15,15 @@ import {
 import { JobForm, PresetCompany } from "../types";
 import { BENEFITS } from "../constants";
 import {
-  labelEmployment,
-  labelDegree,
   labelLanguageLevel,
   sanitizeHtml,
   getJobQualitySummary,
 } from "../utils/helpers";
+import {
+  EMPLOYMENT_TYPE_OPTIONS,
+  LOCATION_TYPE_OPTIONS,
+  DEGREE_OPTIONS,
+} from "../lib/job-enums";
 import WizardWarningModal from "./WizardWarningModal";
 
 type Tab = "desc" | "skills" | "langs" | "edu";
@@ -33,6 +36,13 @@ type Props = {
   onEditStep: (step: number) => void;
   onEditTab: (tab: Tab) => void;
 };
+
+function getLabel(
+  options: Array<{ value: string; label: string }>,
+  value?: string | null
+) {
+  return options.find((o) => o.value === value)?.label || value || "—";
+}
 
 function EditBtn({ label, onClick }: { label?: string; onClick: () => void }) {
   return (
@@ -130,10 +140,14 @@ export default function Step6Review({
   const v = watch();
   const [showPublishWarningModal, setShowPublishWarningModal] = useState(false);
 
+  const locationLabel = getLabel(LOCATION_TYPE_OPTIONS, v.locationType);
+  const employmentLabel = getLabel(EMPLOYMENT_TYPE_OPTIONS, v.employmentType);
+  const degreeLabel = getLabel(DEGREE_OPTIONS, v.minDegree);
+
   const isRemote = v.locationType === "REMOTE";
   const locationText = isRemote
     ? "Remoto"
-    : `${v.locationType === "HYBRID" ? "Híbrido" : "Presencial"} • ${v.city || ""}`;
+    : `${locationLabel} • ${v.city || ""}`;
 
   const salaryMin = parseSalary(v.salaryMin);
   const salaryMax = parseSalary(v.salaryMax);
@@ -158,12 +172,28 @@ export default function Step6Review({
     });
 
   const safeDescHtml = sanitizeHtml(v.descriptionHtml || "");
-  const hasDescription = Boolean(v.descriptionPlain?.trim());
-  const degreeLabel = v.minDegree ? labelDegree(v.minDegree) : "Sin especificar";
+  const hasDescription = Boolean(v.descriptionPlain?.trim() || safeDescHtml.trim());
 
-  const quality = getJobQualitySummary(v);
-  const missingRecommended = quality.missingRecommended;
+  const quality = getJobQualitySummary({
+    title: v.title,
+    salaryMin,
+    salaryMax,
+    descriptionPlain: v.descriptionPlain,
+    requiredSkills: v.requiredSkills,
+    niceSkills: v.niceSkills,
+    eduRequired: v.eduRequired,
+    eduNice: v.eduNice,
+    certs: v.certs,
+    languages: v.languages,
+    assessmentTemplateId: v.assessmentTemplateId,
+  });
+
   const tone = qualityTone(quality.score);
+
+  const missingRecommended = [
+    ...(quality.missingRecommended ?? []),
+    ...(!v.showSalary ? ["Ocultaste el sueldo"] : []),
+  ];
 
   function handleSubmitWarning(
     e: React.MouseEvent<HTMLButtonElement, MouseEvent>
@@ -262,8 +292,8 @@ export default function Step6Review({
               <Row
                 label="Empresa"
                 value={
-                  v.companyMode === "confidential"
-                    ? "Confidencial"
+                  v.companyMode === "external"
+                    ? v.companyOtherName || "Empresa externa"
                     : presetCompany?.name || "Mi empresa"
                 }
               />
@@ -279,7 +309,7 @@ export default function Step6Review({
         >
           <div className="grid gap-4 sm:grid-cols-2">
             <Row label="Sueldo" value={salaryText} />
-            <Row label="Tipo de empleo" value={labelEmployment(v.employmentType)} />
+            <Row label="Tipo de empleo" value={employmentLabel} />
             {v.schedule && <Row label="Horario" value={v.schedule} />}
           </div>
         </ReviewCard>
@@ -356,7 +386,7 @@ export default function Step6Review({
             {(v.eduRequired?.length > 0 || v.eduNice?.length > 0) && (
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Educación · {degreeLabel} mínimo
+                  Educación · {v.minDegree ? `${degreeLabel} mínimo` : "Sin especificar"}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {v.eduRequired?.map((e) => (
@@ -397,13 +427,13 @@ export default function Step6Review({
               </div>
             )}
 
-            {v.languages?.length > 0 && (
+            {(v.languages?.length ?? 0) > 0 && (
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
                   Idiomas
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {v.languages.map((l, i) => (
+                  {(v.languages ?? []).map((l, i) => (
                     <span
                       key={i}
                       className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50/60 px-3 py-1 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-100"

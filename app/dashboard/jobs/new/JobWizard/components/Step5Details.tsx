@@ -14,6 +14,7 @@ import JobRichTextEditor from "@/components/jobs/JobRichTextEditor";
 import SkillBin from "./SkillBin";
 import WizardWarningModal from "./WizardWarningModal";
 import { toastError, toastSuccess } from "@/lib/ui/toast";
+import { DEGREE_OPTIONS, normalizeDegreeValue } from "../lib/job-enums";
 
 export type Step5Tab = "desc" | "skills" | "langs" | "edu";
 
@@ -519,8 +520,9 @@ export default function Step5Details({
         shouldValidate: true,
       });
 
-      if (draft.minDegree) {
-        setValue("minDegree", draft.minDegree, {
+      const normalizedAiDegree = normalizeDegreeValue(draft.minDegree);
+      if (normalizedAiDegree) {
+        setValue("minDegree", normalizedAiDegree, {
           shouldDirty: true,
           shouldValidate: true,
         });
@@ -598,8 +600,9 @@ export default function Step5Details({
         shouldValidate: true,
       });
 
-      if (draft.minDegree) {
-        setValue("minDegree", draft.minDegree, {
+      const normalizedAiDegree = normalizeDegreeValue(draft.minDegree);
+      if (normalizedAiDegree) {
+        setValue("minDegree", normalizedAiDegree, {
           shouldDirty: true,
           shouldValidate: true,
         });
@@ -642,8 +645,10 @@ export default function Step5Details({
       const currentLanguages = getValues("languages") || [];
       const currentMinDegree = getValues("minDegree");
 
-      if (draft.minDegree) {
-        setValue("minDegree", draft.minDegree, {
+      const normalizedAiDegree = normalizeDegreeValue(draft.minDegree);
+
+      if (normalizedAiDegree) {
+        setValue("minDegree", normalizedAiDegree, {
           shouldDirty: true,
           shouldValidate: true,
         });
@@ -1197,11 +1202,11 @@ export default function Step5Details({
                 {...register("minDegree")}
               >
                 <option value="">Sin especificar</option>
-                <option value="HIGHSCHOOL">Bachillerato</option>
-                <option value="TECH">Técnico</option>
-                <option value="BACHELOR">Licenciatura / Ingeniería</option>
-                <option value="MASTER">Maestría</option>
-                <option value="PHD">Doctorado</option>
+                {DEGREE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
 
               {!watch("minDegree") && (

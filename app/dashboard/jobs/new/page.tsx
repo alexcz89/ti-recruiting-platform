@@ -167,11 +167,16 @@ export default async function NewJobPage() {
     <main className="w-full">
       <JobWizard
         onSubmit={createAction}
-        // presetCompany: si el usuario tiene empresa, la pasamos; si no, null
-        presetCompany={{ id: userCompany?.id ?? null, name: userCompany?.name ?? null }}
+        presetCompany={
+          userCompany?.id && userCompany?.name
+            ? {
+                id: userCompany.id,
+                name: userCompany.name,
+              }
+            : null
+        }
         skillsOptions={skillsOptions}
         certOptions={certOptions}
-        // ➕ pasamos plantillas al wizard (JobTemplate o fallback de Jobs)
         templates={templates}
       />
     </main>

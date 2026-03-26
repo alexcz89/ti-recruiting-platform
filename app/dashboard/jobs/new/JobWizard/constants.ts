@@ -1,5 +1,5 @@
-// JobWizard/constants.ts
-import { EmploymentType } from "./types";
+// app/dashboard/jobs/new/JobWizard/constants.ts
+import type { EmploymentTypeValue } from "./lib/job-enums";
 
 export const EDUCATION_SUGGESTIONS = [
   "Ingeniería en Sistemas",
@@ -32,7 +32,7 @@ export const BENEFITS = [
 ];
 
 export const EMPLOYMENT_OPTIONS: {
-  value: EmploymentType;
+  value: EmploymentTypeValue;
   label: string;
   subtitle: string;
 }[] = [
@@ -48,8 +48,13 @@ export const EMPLOYMENT_OPTIONS: {
   },
   {
     value: "CONTRACT",
-    label: "Por periodo",
+    label: "Por contrato",
     subtitle: "Proyecto con fecha de inicio y fin.",
+  },
+  {
+    value: "TEMPORARY",
+    label: "Temporal",
+    subtitle: "Posición temporal por cobertura o demanda específica.",
   },
   {
     value: "INTERNSHIP",

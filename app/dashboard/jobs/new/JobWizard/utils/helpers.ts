@@ -1,14 +1,50 @@
 // app/dashboard/jobs/new/JobWizard/utils/helpers.ts
+
 import DOMPurify from "dompurify";
-import {
-  EmploymentType,
-  DegreeLevel,
-  LanguageProficiency,
-  JobForm,
-  PresetCompany,
-  JobWizardProps,
-} from "../types";
+import type { JobForm, PresetCompany } from "../types";
 import { BENEFITS } from "../constants";
+import {
+  DEGREE_OPTIONS,
+  EMPLOYMENT_TYPE_OPTIONS,
+} from "../lib/job-enums";
+
+type LanguageProficiency =
+  | "NATIVE"
+  | "PROFESSIONAL"
+  | "CONVERSATIONAL"
+  | "BASIC";
+
+type WizardEducationItem = {
+  name: string;
+  required: boolean;
+};
+
+type WizardSkillItem = {
+  name: string;
+  required: boolean;
+};
+
+type WizardLanguageItem = {
+  name: string;
+  level: LanguageProficiency;
+};
+
+type WizardInitialData = Partial<JobForm> & {
+  id?: string;
+  benefitsJson?: unknown;
+  description?: string | null;
+  education?: WizardEducationItem[] | null;
+  skills?: WizardSkillItem[] | null;
+  certs?: string[] | null;
+  languages?: WizardLanguageItem[] | null;
+};
+
+function getLabel(
+  options: Array<{ value: string; label: string }>,
+  value?: string | null
+) {
+  return options.find((o) => o.value === value)?.label || value || "—";
+}
 
 export function sanitizeHtml(html: string) {
   if (!html) return "";
@@ -28,32 +64,12 @@ export function htmlToPlain(html: string) {
   return (div.textContent || div.innerText || "").trim();
 }
 
-export function labelEmployment(e: EmploymentType) {
-  switch (e) {
-    case "FULL_TIME":
-      return "Tiempo completo";
-    case "PART_TIME":
-      return "Medio tiempo";
-    case "CONTRACT":
-      return "Por periodo";
-    case "INTERNSHIP":
-      return "Prácticas profesionales";
-  }
+export function labelEmployment(e?: JobForm["employmentType"]) {
+  return getLabel(EMPLOYMENT_TYPE_OPTIONS, e);
 }
 
-export function labelDegree(d: DegreeLevel) {
-  switch (d) {
-    case "HIGHSCHOOL":
-      return "Bachillerato";
-    case "TECH":
-      return "Técnico";
-    case "BACHELOR":
-      return "Licenciatura / Ingeniería";
-    case "MASTER":
-      return "Maestría";
-    case "PHD":
-      return "Doctorado";
-  }
+export function labelDegree(d?: JobForm["minDegree"]) {
+  return getLabel(DEGREE_OPTIONS, d);
 }
 
 export function labelLanguageLevel(l: LanguageProficiency) {
@@ -66,6 +82,8 @@ export function labelLanguageLevel(l: LanguageProficiency) {
       return "Conversacional (B1–B2)";
     case "BASIC":
       return "Básico (A1–A2)";
+    default:
+      return l;
   }
 }
 
@@ -86,8 +104,8 @@ export function makeDefaultValues({
   presetCompany,
   initial,
 }: {
-  presetCompany: PresetCompany;
-  initial?: JobWizardProps["initial"];
+  presetCompany?: PresetCompany;
+  initial?: WizardInitialData;
 }): JobForm {
   const benefitsBase = BENEFITS.reduce((acc, b) => {
     acc[b.key] = b.def;
@@ -103,54 +121,76 @@ export function makeDefaultValues({
   let primaVacPct = 25;
 
   if (initial?.benefitsJson && typeof initial.benefitsJson === "object") {
-    const b = initial.benefitsJson as any;
+    const b = initial.benefitsJson as Record<string, unknown>;
     const base = { ...benefitsBase };
+
     for (const k of Object.keys(base)) {
-      base[k] = typeof b[k] === "boolean" ? b[k] : base[k];
+      base[k] = typeof b[k] === "boolean" ? (b[k] as boolean) : base[k];
     }
+
     benefitsJson = base;
+
     if (typeof b.aguinaldoDias === "number") aguinaldoDias = b.aguinaldoDias;
-    if (typeof b.vacacionesDias === "number")
-      vacacionesDias = b.vacacionesDias;
+    if (typeof b.vacacionesDias === "number") vacacionesDias = b.vacacionesDias;
     if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
+  } else if (initial?.benefits && typeof initial.benefits === "object") {
+    benefitsJson = {
+      ...benefitsBase,
+      ...initial.benefits,
+    };
   }
 
-  const plainFromInitial = initial?.description || "";
+  const plainFromInitial = initial?.descriptionPlain || initial?.description || "";
   let rawHtml = initial?.descriptionHtml || "";
 
   if (!rawHtml && plainFromInitial) {
     const lines = plainFromInitial
       .split(/\r?\n/)
-      .map((l) => l.trim())
+      .map((line: string) => line.trim())
       .filter(Boolean);
-    if (lines.length) {
-      rawHtml = lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("\n");
-    } else {
-      rawHtml = "";
-    }
+
+    rawHtml = lines.length
+      ? lines.map((line: string) => `<p>${escapeHtml(line)}</p>`).join("\n")
+      : "";
   }
 
   const html = sanitizeHtml(rawHtml || "");
   const plain = plainFromInitial || (html ? htmlToPlain(html) : "");
 
-  const initEdu = Array.isArray(initial?.education) ? initial.education : [];
-  const eduReq = initEdu.filter((e) => e.required).map((e) => e.name);
-  const eduNice = initEdu.filter((e) => !e.required).map((e) => e.name);
+  const initEdu: WizardEducationItem[] = Array.isArray(initial?.education)
+    ? initial.education
+    : [];
 
-  const initSkills = Array.isArray(initial?.skills) ? initial.skills : [];
-  const skillsReq = initSkills.filter((s) => s.required).map((s) => s.name);
-  const skillsNice = initSkills.filter((s) => !s.required).map((s) => s.name);
+  const eduReq = initEdu
+    .filter((e: WizardEducationItem) => e.required)
+    .map((e: WizardEducationItem) => e.name);
 
-  const defaultCompanyModeRaw =
-    initial?.companyMode ?? (presetCompany?.id ? "own" : "confidential");
-  const companyMode =
-    defaultCompanyModeRaw === "other"
-      ? "own"
-      : (defaultCompanyModeRaw as "own" | "confidential");
+  const eduNice = initEdu
+    .filter((e: WizardEducationItem) => !e.required)
+    .map((e: WizardEducationItem) => e.name);
 
-  const languagesInit = Array.isArray(initial?.languages)
+  const initSkills: WizardSkillItem[] = Array.isArray(initial?.skills)
+    ? initial.skills
+    : [];
+
+  const skillsReq = initSkills
+    .filter((s: WizardSkillItem) => s.required)
+    .map((s: WizardSkillItem) => s.name);
+
+  const skillsNice = initSkills
+    .filter((s: WizardSkillItem) => !s.required)
+    .map((s: WizardSkillItem) => s.name);
+
+  const languagesInit: WizardLanguageItem[] = Array.isArray(initial?.languages)
     ? initial.languages
     : [];
+
+  const companyMode: JobForm["companyMode"] =
+    initial?.companyMode === "own"
+      ? "own"
+      : presetCompany?.id
+        ? "own"
+        : "external";
 
   return {
     title: initial?.title ?? "",
@@ -164,7 +204,7 @@ export function makeDefaultValues({
     admin1Norm: initial?.admin1Norm ?? "",
     locationLat: initial?.locationLat ?? null,
     locationLng: initial?.locationLng ?? null,
-    currency: initial?.currency ?? "MXN",
+    currency: initial?.currency === "USD" ? "USD" : "MXN",
     salaryMin:
       typeof initial?.salaryMin === "number"
         ? initial.salaryMin
@@ -185,14 +225,26 @@ export function makeDefaultValues({
     aguinaldoDias,
     vacacionesDias,
     primaVacPct,
-    assessmentTemplateId: initial?.assessmentTemplateId ?? null,
+    assessmentTemplateId: initial?.assessmentTemplateId ?? undefined,
     descriptionHtml: html,
     descriptionPlain: plain,
-    minDegree: initial?.minDegree ?? null,
-    eduRequired: eduReq,
-    eduNice,
-    requiredSkills: skillsReq,
-    niceSkills: skillsNice,
+    minDegree: initial?.minDegree ?? undefined,
+    eduRequired:
+      eduReq.length > 0 ? eduReq : Array.isArray(initial?.eduRequired) ? initial.eduRequired : [],
+    eduNice:
+      eduNice.length > 0 ? eduNice : Array.isArray(initial?.eduNice) ? initial.eduNice : [],
+    requiredSkills:
+      skillsReq.length > 0
+        ? skillsReq
+        : Array.isArray(initial?.requiredSkills)
+          ? initial.requiredSkills
+          : [],
+    niceSkills:
+      skillsNice.length > 0
+        ? skillsNice
+        : Array.isArray(initial?.niceSkills)
+          ? initial.niceSkills
+          : [],
     certs: Array.isArray(initial?.certs) ? initial.certs : [],
     languages: languagesInit,
   };
@@ -233,87 +285,90 @@ function hasBenefitsInfo(values: Partial<JobForm>) {
   return Object.values(values.benefits || {}).some(Boolean);
 }
 
-function hasLanguagesInfo(values: Partial<JobForm>) {
+function hasEducationInfo(values: Partial<JobForm>) {
+  return (
+    !!values.minDegree ||
+    (values.eduRequired?.length || 0) > 0 ||
+    (values.eduNice?.length || 0) > 0
+  );
+}
+
+function hasLanguageInfo(values: Partial<JobForm>) {
   return (values.languages?.length || 0) > 0;
 }
 
-function hasEducationInfo(values: Partial<JobForm>) {
-  return (values.eduRequired?.length || 0) + (values.eduNice?.length || 0) > 0;
+function hasAssessment(values: Partial<JobForm>) {
+  return !!values.assessmentTemplateId;
 }
 
-export function getJobQualitySummary(values: Partial<JobForm>): JobQualitySummary {
+export function getJobQualitySummary(
+  values: Partial<JobForm>
+): JobQualitySummary {
+  let score = 0;
   const missingRecommended: string[] = [];
   const strengths: string[] = [];
-  let score = 0;
 
-  const hasDescription = hasMeaningfulDescription(values);
+  if ((values.title || "").trim().length >= 4) {
+    score += 10;
+    strengths.push("Título claro");
+  } else {
+    missingRecommended.push("Título poco claro");
+  }
+
+  if (hasMeaningfulDescription(values)) {
+    score += 25;
+    strengths.push("Descripción completa");
+  } else {
+    missingRecommended.push("Descripción poco detallada");
+  }
+
   const totalSkills = getTotalSkills(values);
-  const hasSalary = hasSalaryInfo(values);
-  const hasMinDegree = !!values.minDegree;
-  const hasEducation = hasEducationInfo(values);
-  const hasAssessment = !!values.assessmentTemplateId;
-  const hasBenefits = hasBenefitsInfo(values);
-  const hasLanguages = hasLanguagesInfo(values);
-
-  if (hasDescription) {
-    score += 25;
-    strengths.push("Descripción suficiente");
+  if (totalSkills >= 5) {
+    score += 20;
+    strengths.push("Skills bien definidas");
+  } else if (totalSkills >= 1) {
+    score += 10;
   } else {
-    missingRecommended.push("Descripción robusta");
+    missingRecommended.push("Faltan skills");
   }
 
-  if (totalSkills > 0) {
-    score += 25;
-    strengths.push("Skills capturadas");
-  } else {
-    missingRecommended.push("Skills");
+  if ((values.requiredSkills?.length || 0) >= 1) {
+    score += 5;
+    strengths.push("Skills requeridas");
   }
 
-  if (hasSalary) {
-    score += 15;
+  if (hasSalaryInfo(values)) {
+    score += 10;
     strengths.push("Sueldo definido");
   } else {
-    missingRecommended.push("Sueldo");
+    missingRecommended.push("Sueldo no especificado");
   }
 
-  if (hasMinDegree) {
+  if (hasBenefitsInfo(values)) {
     score += 10;
-    strengths.push("Educación mínima definida");
+    strengths.push("Prestaciones configuradas");
   } else {
-    missingRecommended.push("Educación mínima");
+    missingRecommended.push("Prestaciones no configuradas");
   }
 
-  if (hasEducation) {
-    score += 10;
-    strengths.push("Carreras o programas sugeridos");
+  if (hasEducationInfo(values)) {
+    score += 8;
+    strengths.push("Educación definida");
   }
 
-  if (hasAssessment) {
-    score += 5;
-    strengths.push("Evaluación técnica");
+  if (hasLanguageInfo(values)) {
+    score += 4;
+    strengths.push("Idiomas definidos");
   }
 
-  if (hasBenefits) {
-    score += 5;
-    strengths.push("Prestaciones");
-  }
-
-  if (hasLanguages) {
-    score += 5;
-    strengths.push("Idiomas");
+  if (hasAssessment(values)) {
+    score += 8;
+    strengths.push("Evaluación técnica ligada");
   }
 
   return {
-    score: Math.min(score, 100),
+    score: Math.max(0, Math.min(100, score)),
     missingRecommended,
     strengths,
   };
-}
-
-export function getJobRecommendedMissing(values: Partial<JobForm>) {
-  return getJobQualitySummary(values).missingRecommended;
-}
-
-export function getJobQualityScore(values: Partial<JobForm>) {
-  return getJobQualitySummary(values).score;
 }

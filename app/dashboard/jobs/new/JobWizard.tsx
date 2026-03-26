@@ -9,10 +9,19 @@ import { Save, CheckCircle2 } from "lucide-react";
 
 import { JobForm, JobWizardProps, jobSchema } from "./JobWizard/types";
 import { BENEFITS } from "./JobWizard/constants";
-import { makeDefaultValues, sanitizeHtml, htmlToPlain } from "./JobWizard/utils/helpers";
+import {
+  makeDefaultValues,
+  sanitizeHtml,
+  htmlToPlain,
+} from "./JobWizard/utils/helpers";
 import { useAutosave } from "./JobWizard/hooks/useAutosave";
 import { useQualityScore } from "./JobWizard/hooks/useQualityScore";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import {
+  normalizeDegreeValue,
+  normalizeEmploymentTypeValue,
+  normalizeLocationTypeValue,
+} from "./JobWizard/lib/job-enums";
 
 import Stepper from "./JobWizard/components/Stepper";
 import QualityIndicator from "./JobWizard/components/QualityIndicator";
@@ -63,7 +72,7 @@ function plainToBasicHtml(plain: string): string {
       if (allBullets) {
         const items = paraLines
           .map((l) => {
-            const p = bulletPrefixes.find((p) => l.startsWith(p)) || "";
+            const p = bulletPrefixes.find((prefix) => l.startsWith(prefix)) || "";
             return escape(l.slice(p.length).trim());
           })
           .filter(Boolean);
@@ -77,58 +86,6 @@ function plainToBasicHtml(plain: string): string {
     })
     .filter(Boolean)
     .join("");
-}
-
-function normalizeDegreeClientValue(
-  value: string | null | undefined
-): "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD" | undefined {
-  const raw = String(value ?? "").trim();
-  if (!raw) return undefined;
-
-  const normalized = raw.toUpperCase();
-
-  const map: Record<string, "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD"> = {
-    HIGHSCHOOL: "HIGHSCHOOL",
-    HIGH_SCHOOL: "HIGHSCHOOL",
-    TECH: "TECH",
-    TECHNICAL: "TECH",
-    ASSOCIATE: "TECH",
-    BACHELOR: "BACHELOR",
-    BACHELORS: "BACHELOR",
-    MASTER: "MASTER",
-    MASTERS: "MASTER",
-    PHD: "PHD",
-    DOCTORATE: "PHD",
-    BACHILLERATO: "HIGHSCHOOL",
-    TÉCNICO: "TECH",
-    TECNICO: "TECH",
-    "LICENCIATURA / INGENIERÍA": "BACHELOR",
-    "LICENCIATURA / INGENIERIA": "BACHELOR",
-    MAESTRÍA: "MASTER",
-    MAESTRIA: "MASTER",
-    DOCTORADO: "PHD",
-  };
-
-  return map[normalized];
-}
-
-function toBackendDegreeValue(
-  value: string | null | undefined
-): "" | "HIGH_SCHOOL" | "TECHNICAL" | "BACHELORS" | "MASTERS" | "DOCTORATE" {
-  const normalized = normalizeDegreeClientValue(value);
-
-  const map: Record<
-    string,
-    "" | "HIGH_SCHOOL" | "TECHNICAL" | "BACHELORS" | "MASTERS" | "DOCTORATE"
-  > = {
-    HIGHSCHOOL: "HIGH_SCHOOL",
-    TECH: "TECHNICAL",
-    BACHELOR: "BACHELORS",
-    MASTER: "MASTERS",
-    PHD: "DOCTORATE",
-  };
-
-  return normalized ? map[normalized] ?? "" : "";
 }
 
 export default function JobWizard({
@@ -169,18 +126,20 @@ export default function JobWizard({
 
   useEffect(() => {
     if (hasRestoredRef.current || initial?.id) return;
+
     const draft = loadDraft();
-    if (draft) {
-      hasRestoredRef.current = true;
-      if (
-        window.confirm(
-          "¿Deseas continuar con el borrador guardado automáticamente?"
-        )
-      ) {
-        reset(draft);
-      } else {
-        clearDraft();
-      }
+    if (!draft) return;
+
+    hasRestoredRef.current = true;
+
+    if (
+      window.confirm(
+        "¿Deseas continuar con el borrador guardado automáticamente?"
+      )
+    ) {
+      reset(draft);
+    } else {
+      clearDraft();
     }
   }, [clearDraft, initial?.id, loadDraft, reset]);
 
@@ -199,13 +158,15 @@ export default function JobWizard({
     if (target <= maxStepVisited) {
       setStep(target);
       window.scrollTo({ top: 0, behavior: "smooth" });
-    } else {
-      toastError("Primero completa los pasos anteriores antes de avanzar.");
+      return;
     }
+
+    toastError("Primero completa los pasos anteriores antes de avanzar.");
   }
 
   function applyTemplateById(id: string) {
     if (!id) return;
+
     const tpl = templates.find((t) => t.id === id);
     if (!tpl) return;
 
@@ -232,11 +193,13 @@ export default function JobWizard({
     let showBenefits = true;
 
     if (tpl.benefitsJson && typeof tpl.benefitsJson === "object") {
-      const b = tpl.benefitsJson as any;
+      const b = tpl.benefitsJson as Record<string, unknown>;
       benefitsJson = { ...benefitsBase };
+
       for (const k of Object.keys(benefitsBase)) {
         benefitsJson[k] = Boolean(b[k] ?? benefitsBase[k]);
       }
+
       if (typeof b.aguinaldoDias === "number") aguinaldoDias = b.aguinaldoDias;
       if (typeof b.vacacionesDias === "number") vacacionesDias = b.vacacionesDias;
       if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
@@ -259,7 +222,7 @@ export default function JobWizard({
     reset({
       ...makeDefaultValues({ presetCompany, initial }),
       title: tpl.title ?? "",
-      locationType: tpl.locationType ?? "ONSITE",
+      locationType: normalizeLocationTypeValue(tpl.locationType) ?? "ONSITE",
       city: tpl.city ?? "",
       country: tpl.country ?? "",
       admin1: tpl.admin1 ?? "",
@@ -267,11 +230,12 @@ export default function JobWizard({
       admin1Norm: tpl.admin1Norm ?? "",
       locationLat: tpl.locationLat ?? null,
       locationLng: tpl.locationLng ?? null,
-      currency: tpl.currency ?? "MXN",
+      currency: tpl.currency === "USD" ? "USD" : "MXN",
       salaryMin: tpl.salaryMin ?? undefined,
       salaryMax: tpl.salaryMax ?? undefined,
       showSalary: Boolean(tpl.showSalary),
-      employmentType: tpl.employmentType ?? "FULL_TIME",
+      employmentType:
+        normalizeEmploymentTypeValue(tpl.employmentType) ?? "FULL_TIME",
       schedule: tpl.schedule ?? "",
       showBenefits,
       benefits: benefitsJson,
@@ -280,7 +244,7 @@ export default function JobWizard({
       primaVacPct,
       descriptionHtml: html,
       descriptionPlain: plain,
-      minDegree: normalizeDegreeClientValue(tpl.minDegree),
+      minDegree: normalizeDegreeValue(tpl.minDegree),
       eduRequired: eduReq,
       eduNice,
       requiredSkills: skillsReq,
@@ -296,31 +260,40 @@ export default function JobWizard({
     setBusy(true);
 
     try {
-      const normalizedMinDegree = toBackendDegreeValue(v.minDegree);
+      const normalizedMinDegree = normalizeDegreeValue(v.minDegree);
+      const normalizedLocationType =
+        normalizeLocationTypeValue(v.locationType) ?? "ONSITE";
+      const normalizedEmploymentType =
+        normalizeEmploymentTypeValue(v.employmentType) ?? "FULL_TIME";
+
       const fd = new FormData();
 
       fd.set("title", v.title.trim());
       fd.set("companyMode", v.companyMode);
       fd.set("companyOtherName", (v.companyOtherName || "").trim());
-      fd.set("locationType", v.locationType);
+      fd.set("locationType", normalizedLocationType);
       fd.set("city", (v.city || "").trim());
+
       if (v.country) fd.set("country", v.country);
       if (v.admin1) fd.set("admin1", v.admin1);
       if (v.cityNorm) fd.set("cityNorm", v.cityNorm);
       if (v.admin1Norm) fd.set("admin1Norm", v.admin1Norm);
       if (v.locationLat != null) fd.set("locationLat", String(v.locationLat));
       if (v.locationLng != null) fd.set("locationLng", String(v.locationLng));
+
       fd.set("currency", v.currency);
 
       if (v.salaryMin != null) {
         fd.set("salaryMin", String(Math.max(0, Number(v.salaryMin))));
       }
+
       if (v.salaryMax != null) {
         fd.set("salaryMax", String(Math.max(0, Number(v.salaryMax))));
       }
 
       fd.set("showSalary", String(v.showSalary));
-      fd.set("employmentType", v.employmentType);
+      fd.set("employmentType", normalizedEmploymentType);
+
       if (v.schedule) fd.set("schedule", v.schedule);
 
       const benefitsPayload = {
@@ -345,9 +318,10 @@ export default function JobWizard({
 
       fd.set("descriptionHtml", safeHtml);
       fd.set("description", v.descriptionPlain.trim() || htmlToPlain(safeHtml));
-      fd.set("minDegree", normalizedMinDegree);
 
-      if (!normalizedMinDegree) {
+      if (normalizedMinDegree) {
+        fd.set("minDegree", normalizedMinDegree);
+      } else {
         toastError("No especificaste nivel académico mínimo.", {
           description:
             "La vacante se publicará de todos modos, pero definirlo ayuda a filtrar mejor candidatos.",
@@ -380,12 +354,16 @@ export default function JobWizard({
 
       if (isEditing && initial?.id) {
         fd.set("jobId", initial.id);
+
         const result = await onSubmit(fd);
         if (result?.error) throw new Error(result.error);
+
         clearDraft();
         toastSuccess("Cambios guardados correctamente");
+
         if (result?.redirectTo) router.push(result.redirectTo);
         else router.refresh();
+
         return;
       }
 
@@ -405,6 +383,7 @@ export default function JobWizard({
           );
           return;
         }
+
         throw new Error(data?.error || "Error al publicar la vacante");
       }
 
@@ -433,6 +412,7 @@ export default function JobWizard({
                 <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 sm:text-3xl">
                   {isEditing ? "Editar vacante" : "Nueva vacante"}
                 </h2>
+
                 <div className="flex items-center gap-2 text-xs sm:text-sm">
                   {isSaving ? (
                     <div className="flex items-center gap-1.5 text-zinc-500">
@@ -466,7 +446,7 @@ export default function JobWizard({
 
                 {step === 1 && (
                   <Step1Basic
-                    presetCompany={presetCompany}
+                    presetCompany={presetCompany ?? null}
                     templates={templates}
                     onApplyTemplate={applyTemplateById}
                     onNext={() => goNextStep(2)}
@@ -507,27 +487,30 @@ export default function JobWizard({
 
                 {step === 6 && (
                   <Step6Review
-                    presetCompany={presetCompany}
+                    presetCompany={presetCompany ?? null}
                     busy={busy}
-                    isEditing={isEditing}
                     onBack={() => setStep(5)}
+                    isEditing={isEditing}
                     onEditStep={(targetStep) => {
                       setStep(targetStep);
-                      if (targetStep === 4) setStep5Tab("desc");
+                      setMaxStepVisited((prev) => Math.max(prev, targetStep));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                     onEditTab={(tab) => {
-                      setStep5Tab(tab);
                       setStep(4);
+                      setStep5Tab(tab);
+                      setMaxStepVisited((prev) => Math.max(prev, 4));
+                      window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                   />
                 )}
               </div>
 
-              <aside className="hidden lg:block">
-                <div className="sticky top-8">
+              <div className="hidden lg:block">
+                <div className="sticky top-6">
                   <QualityIndicator score={qualityScore} />
                 </div>
-              </aside>
+              </div>
             </div>
           </div>
         </div>

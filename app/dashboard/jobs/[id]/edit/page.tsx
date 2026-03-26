@@ -384,10 +384,14 @@ export default async function EditJobPage({ params }: PageProps) {
 
         <JobWizard
           onSubmit={updateAction}
-          presetCompany={{
-            id: userCompany?.id ?? null,
-            name: userCompany?.name ?? null,
-          }}
+          presetCompany={
+            userCompany?.id && userCompany?.name
+              ? {
+                  id: userCompany.id,
+                  name: userCompany.name,
+                }
+              : null
+          }
           skillsOptions={skillsOptions}
           certOptions={certOptions}
           initial={wizardInitial as any}

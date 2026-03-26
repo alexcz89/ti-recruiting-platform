@@ -1,21 +1,92 @@
 // app/dashboard/jobs/new/JobWizard/types.ts
+
 import { z } from "zod";
 
-export type LocationType = "REMOTE" | "HYBRID" | "ONSITE";
-export type EmploymentType = "FULL_TIME" | "PART_TIME" | "CONTRACT" | "INTERNSHIP";
-export type Currency = "MXN" | "USD";
-export type DegreeLevel = "HIGHSCHOOL" | "TECH" | "BACHELOR" | "MASTER" | "PHD";
-export type LanguageProficiency = "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+import {
+  EMPLOYMENT_TYPE_VALUES,
+  LOCATION_TYPE_VALUES,
+  DEGREE_VALUES,
+  type EmploymentTypeValue,
+  type LocationTypeValue,
+  type DegreeValue,
+} from "./lib/job-enums";
+
+export const jobSchema = z.object({
+  title: z.string().min(3, "El título debe tener al menos 3 caracteres"),
+
+  companyMode: z.enum(["own", "external"]),
+  companyOtherName: z.string().optional(),
+
+  locationType: z.enum(LOCATION_TYPE_VALUES),
+  city: z.string().min(1, "La ciudad es obligatoria"),
+
+  country: z.string().optional(),
+  admin1: z.string().optional(),
+  cityNorm: z.string().optional(),
+  admin1Norm: z.string().optional(),
+
+  locationLat: z.number().nullable().optional(),
+  locationLng: z.number().nullable().optional(),
+
+  currency: z.enum(["MXN", "USD"]),
+  salaryMin: z.number().nullable().optional(),
+  salaryMax: z.number().nullable().optional(),
+  showSalary: z.boolean(),
+
+  employmentType: z.enum(EMPLOYMENT_TYPE_VALUES),
+
+  schedule: z.string().optional(),
+
+  showBenefits: z.boolean(),
+  benefits: z.record(z.boolean()),
+  aguinaldoDias: z.number(),
+  vacacionesDias: z.number(),
+  primaVacPct: z.number(),
+
+  descriptionHtml: z.string(),
+  descriptionPlain: z.string(),
+
+  minDegree: z.enum(DEGREE_VALUES).optional(),
+
+  eduRequired: z.array(z.string()),
+  eduNice: z.array(z.string()),
+
+  requiredSkills: z.array(z.string()),
+  niceSkills: z.array(z.string()),
+
+  certs: z.array(z.string()),
+  languages: z
+    .array(
+      z.object({
+        name: z.string(),
+        level: z.enum([
+          "NATIVE",
+          "PROFESSIONAL",
+          "CONVERSATIONAL",
+          "BASIC",
+        ]),
+      })
+    )
+    .optional(),
+
+  assessmentTemplateId: z.string().optional(),
+});
+
+export type JobForm = z.infer<typeof jobSchema> & {
+  locationType: LocationTypeValue;
+  employmentType: EmploymentTypeValue;
+  minDegree?: DegreeValue;
+};
 
 export type PresetCompany = {
-  id: string | null;
-  name: string | null;
-};
+  id: string;
+  name: string;
+} | null;
 
 export type TemplateJob = {
   id: string;
-  title?: string;
-  locationType?: LocationType;
+  title?: string | null;
+  locationType?: string | null;
   city?: string | null;
   country?: string | null;
   admin1?: string | null;
@@ -23,141 +94,40 @@ export type TemplateJob = {
   admin1Norm?: string | null;
   locationLat?: number | null;
   locationLng?: number | null;
-  currency?: Currency;
+  currency?: string | null;
   salaryMin?: number | null;
   salaryMax?: number | null;
   showSalary?: boolean | null;
-  employmentType?: EmploymentType;
+  employmentType?: string | null;
   schedule?: string | null;
-  benefitsJson?: any | null;
+  benefitsJson?: unknown;
   description?: string | null;
   descriptionHtml?: string | null;
+  minDegree?: string | null;
   education?: Array<{ name: string; required: boolean }> | null;
-  minDegree?: DegreeLevel | null;
   skills?: Array<{ name: string; required: boolean }> | null;
   certs?: string[] | null;
-  languages?: Array<{ name: string; level: LanguageProficiency }> | null;
+  languages?:
+    | Array<{
+        name: string;
+        level: "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
+      }>
+    | null;
 };
 
 export type JobWizardProps = {
-  onSubmit: (fd: FormData) => Promise<any>;
-  presetCompany: PresetCompany;
+  onSubmit: (fd: FormData) => Promise<
+    | {
+        error?: string;
+        redirectTo?: string;
+      }
+    | void
+  >;
+  presetCompany?: PresetCompany;
   skillsOptions: string[];
   certOptions: string[];
   templates?: TemplateJob[];
-  initial?: {
+  initial?: Partial<JobForm> & {
     id?: string;
-    title?: string;
-    companyMode?: "own" | "other" | "confidential";
-    companyOtherName?: string;
-    locationType?: LocationType;
-    city?: string;
-    country?: string | null;
-    admin1?: string | null;
-    cityNorm?: string | null;
-    admin1Norm?: string | null;
-    locationLat?: number | null;
-    locationLng?: number | null;
-    currency?: Currency;
-    salaryMin?: number | string | null;
-    salaryMax?: number | string | null;
-    showSalary?: boolean;
-    employmentType?: EmploymentType;
-    schedule?: string;
-    showBenefits?: boolean;
-    benefitsJson?: Record<string, any>;
-    description?: string;
-    descriptionHtml?: string | null;
-    education?: Array<{ name: string; required: boolean }>;
-    minDegree?: DegreeLevel | null;
-    skills?: Array<{ name: string; required: boolean }>;
-    certs?: string[];
-    languages?: Array<{ name: string; level: LanguageProficiency }>;
-    assessmentTemplateId?: string | null;
   };
 };
-
-const salaryField = z.preprocess((val) => {
-  if (typeof val === "number") return val;
-  if (typeof val === "string") {
-    const digits = val.replace(/[^\d]/g, "");
-    if (!digits) return undefined;
-    const n = Number(digits);
-    return Number.isNaN(n) ? undefined : n;
-  }
-  return undefined;
-}, z.number().int().nonnegative().optional());
-
-// Zod schema
-export const jobSchema = z.object({
-  // Paso 1
-  title: z.string().min(3, "Mínimo 3 caracteres."),
-  companyMode: z.enum(["own", "confidential"]),
-  companyOtherName: z.string().optional(),
-  locationType: z.enum(["REMOTE", "HYBRID", "ONSITE"]),
-  city: z.string().optional(),
-  country: z.string().optional(),
-  admin1: z.string().optional(),
-  cityNorm: z.string().optional(),
-  admin1Norm: z.string().optional(),
-  locationLat: z.number().nullable().optional(),
-  locationLng: z.number().nullable().optional(),
-  currency: z.enum(["MXN", "USD"]),
-  salaryMin: salaryField,
-  salaryMax: salaryField,
-  showSalary: z.boolean(),
-  // Paso 2
-  employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"]),
-  schedule: z.string().optional(),
-  // Paso 3
-  showBenefits: z.boolean(),
-  benefits: z.record(z.boolean()),
-  aguinaldoDias: z.number().min(0),
-  vacacionesDias: z.number().min(0),
-  primaVacPct: z.number().min(0).max(100),
-  // Paso 4 - Evaluaciones
-  assessmentTemplateId: z.string().nullable().optional(),
-  // Paso 5
-  descriptionHtml: z.string().optional(),
-  descriptionPlain: z.string().min(50, "Mínimo 50 caracteres."),
-  minDegree: z
-    .enum(["HIGHSCHOOL", "TECH", "BACHELOR", "MASTER", "PHD"])
-    .nullable()
-    .optional(),
-  eduRequired: z.array(z.string()),
-  eduNice: z.array(z.string()),
-  requiredSkills: z.array(z.string()),
-  niceSkills: z.array(z.string()),
-  certs: z.array(z.string()),
-  languages: z.array(
-    z.object({
-      name: z.string(),
-      level: z.enum(["NATIVE", "PROFESSIONAL", "CONVERSATIONAL", "BASIC"]),
-    })
-  ),
-}).superRefine((data, ctx) => {
-  if (
-    (data.locationType === "HYBRID" || data.locationType === "ONSITE") &&
-    !data.city?.trim()
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Para híbrido/presencial, la ciudad es obligatoria.",
-      path: ["city"],
-    });
-  }
-
-  if (
-    data.salaryMin != null &&
-    data.salaryMax != null &&
-    data.salaryMax < data.salaryMin
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ["salaryMax"],
-      message: "El sueldo máximo debe ser mayor o igual al mínimo",
-    });
-  }
-});
-
-export type JobForm = z.infer<typeof jobSchema>;

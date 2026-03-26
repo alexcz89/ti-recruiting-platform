@@ -2,10 +2,12 @@
 "use client";
 
 import { useFormContext } from "react-hook-form";
-import { Briefcase, Clock3, Check } from "lucide-react";
 import clsx from "clsx";
 import { JobForm } from "../types";
-import { EMPLOYMENT_OPTIONS, SCHEDULE_PRESETS } from "../constants";
+import {
+  EMPLOYMENT_TYPE_OPTIONS,
+  LOCATION_TYPE_OPTIONS,
+} from "../lib/job-enums";
 
 type Props = {
   onNext: () => void;
@@ -13,122 +15,131 @@ type Props = {
 };
 
 export default function Step2Employment({ onNext, onBack }: Props) {
-  const { watch, setValue, register } = useFormContext<JobForm>();
+  const {
+    register,
+    watch,
+    formState: { errors },
+  } = useFormContext<JobForm>();
+
+  const locationType = watch("locationType");
+  const employmentType = watch("employmentType");
+  const city = watch("city");
+
+  const canNext =
+    !!locationType &&
+    !!employmentType &&
+    !!city &&
+    city.trim().length > 0;
 
   return (
-    <div className="space-y-5 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h3 className="text-lg sm:text-xl font-bold flex items-center gap-2 text-zinc-900 dark:text-zinc-100">
-          <Briefcase className="h-5 w-5 text-emerald-500" />
-          <span>2) Tipo de empleo</span>
-        </h3>
-        <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
-          Elige el tipo de contrato y un horario de referencia.
-        </p>
-      </div>
+    <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Location Type */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Tipo de ubicación *
+          </label>
 
-      {/* Tipo de contrato */}
-      <div className="grid gap-3">
-        <label className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
-          Tipo de contrato *
-        </label>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {EMPLOYMENT_OPTIONS.map((opt) => {
-            const active = watch("employmentType") === opt.value;
-            return (
-              <button
-                key={opt.value}
-                type="button"
-                onClick={() =>
-                  setValue("employmentType", opt.value, { shouldDirty: true })
-                }
-                className={clsx(
-                  "group relative flex h-full min-h-[140px] flex-col items-start rounded-xl border p-4 text-left text-xs sm:text-sm transition",
-                  active
-                    ? "border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm ring-1 ring-emerald-500/30 dark:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-100"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:border-emerald-400 hover:bg-emerald-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/10"
-                )}
-              >
-                {active && (
-                  <Check className="absolute right-3 top-3 h-4 w-4 text-emerald-600" />
-                )}
-                <div className="flex items-center gap-2">
-                  <span
-                    className={clsx(
-                      "flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold",
-                      active
-                        ? "border-emerald-500 bg-emerald-600 text-white"
-                        : "border-zinc-300 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
-                    )}
-                  >
-                    {opt.label[0]}
-                  </span>
-                  <span className="font-semibold whitespace-normal break-words leading-tight hyphens-none line-clamp-2 min-h-[2.5rem]">
-                    {opt.label}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400 whitespace-normal break-words hyphens-none">
-                  {opt.subtitle}
-                </p>
-              </button>
-            );
-          })}
+          <select
+            {...register("locationType")}
+            className={clsx(
+              "w-full rounded-md border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60",
+              errors.locationType
+                ? "border-red-500"
+                : "border-zinc-300 dark:border-zinc-700",
+              "bg-white dark:bg-zinc-900"
+            )}
+          >
+            {LOCATION_TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          {errors.locationType && (
+            <p className="text-xs text-red-600">
+              {errors.locationType.message}
+            </p>
+          )}
+        </div>
+
+        {/* Employment Type */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium">
+            Tipo de empleo *
+          </label>
+
+          <select
+            {...register("employmentType")}
+            className={clsx(
+              "w-full rounded-md border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60",
+              errors.employmentType
+                ? "border-red-500"
+                : "border-zinc-300 dark:border-zinc-700",
+              "bg-white dark:bg-zinc-900"
+            )}
+          >
+            {EMPLOYMENT_TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          {errors.employmentType && (
+            <p className="text-xs text-red-600">
+              {errors.employmentType.message}
+            </p>
+          )}
         </div>
       </div>
 
-      {/* Horario */}
-      <div className="grid gap-2">
-        <label className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
-          <Clock3 className="h-4 w-4 text-emerald-500" />
-          Horario de referencia (opcional)
+      {/* City */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">
+          Ciudad *
         </label>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Ej. L-V 9:00-18:00 (hora local)
-        </p>
+
         <input
-          className="h-11 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60 dark:border-zinc-700 dark:bg-zinc-900"
-          placeholder="Ej. L-V 9:00-18:00 (hora local)"
-          {...register("schedule")}
+          type="text"
+          {...register("city")}
+          placeholder="Ej. Monterrey"
+          className={clsx(
+            "w-full rounded-md border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/60",
+            errors.city
+              ? "border-red-500"
+              : "border-zinc-300 dark:border-zinc-700",
+            "bg-white dark:bg-zinc-900"
+          )}
         />
-        <div className="flex flex-wrap gap-2 text-[11px]">
-          {SCHEDULE_PRESETS.map((p) => {
-            const active = watch("schedule") === p.value;
-            return (
-              <button
-                key={p.value}
-                type="button"
-                className={clsx(
-                  "cursor-pointer rounded-full border px-3 py-1.5 text-xs transition-colors hover:bg-zinc-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/50 dark:hover:bg-zinc-800",
-                  active
-                    ? "bg-emerald-50 border-emerald-500 text-emerald-900 dark:bg-emerald-950/20 dark:border-emerald-400 dark:text-emerald-100"
-                    : "bg-white border-zinc-200 text-zinc-700 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-200"
-                )}
-                onClick={() =>
-                  setValue("schedule", p.value, { shouldDirty: true })
-                }
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-          Este campo es informativo. No afecta filtros ni validaciones.
-        </p>
+
+        {errors.city && (
+          <p className="text-xs text-red-600">
+            {errors.city.message}
+          </p>
+        )}
       </div>
 
-      {/* Navegación */}
-      <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
+      {/* Actions */}
+      <div className="flex flex-col-reverse gap-3 border-t border-zinc-200 pt-6 sm:flex-row sm:justify-between dark:border-zinc-800">
         <button
           type="button"
-          className="rounded-md border border-zinc-300 dark:border-zinc-700 px-6 py-2.5 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+          className="w-full rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 sm:w-auto dark:border-zinc-700 dark:hover:bg-zinc-800"
           onClick={onBack}
         >
           Atrás
         </button>
+
         <button
           type="button"
-          className="rounded-md bg-emerald-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition"
+          disabled={!canNext}
+          className={clsx(
+            "w-full rounded-md px-6 py-2.5 text-sm font-medium text-white transition sm:w-auto",
+            canNext
+              ? "bg-emerald-600 hover:bg-emerald-500"
+              : "cursor-not-allowed bg-emerald-300"
+          )}
           onClick={onNext}
         >
           Siguiente

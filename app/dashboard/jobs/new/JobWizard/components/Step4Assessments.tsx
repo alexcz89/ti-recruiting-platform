@@ -215,7 +215,7 @@ export default function Step4Assessments({
                 </div>
                 <button
                   type="button"
-                  onClick={() => setValue("assessmentTemplateId", null)}
+                  onClick={() => setValue("assessmentTemplateId", undefined)}
                   className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium"
                 >
                   Remover
