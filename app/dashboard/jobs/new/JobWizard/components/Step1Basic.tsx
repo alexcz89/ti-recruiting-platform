@@ -3,11 +3,19 @@
 
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
-import { MapPin, DollarSign, Building2, Check } from "lucide-react";
+import { MapPin, DollarSign, Building2, Briefcase, Check } from "lucide-react";
 import clsx from "clsx";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { JobForm, PresetCompany, TemplateJob } from "../types";
 import TemplateSelector from "./TemplateSelector";
+import { EMPLOYMENT_TYPE_OPTIONS } from "../lib/job-enums";
+
+const SCHEDULE_SUGGESTIONS = [
+  "L-V 9:00–18:00",
+  "L-V 8:00–17:00",
+  "L-S 9:00–18:00",
+  "L-V 13:00–22:00",
+];
 
 type Step1BasicProps = {
   presetCompany: PresetCompany;
@@ -61,6 +69,7 @@ export default function Step1Basic({
   const title = watch("title");
   const salaryMin = watch("salaryMin");
   const salaryMax = watch("salaryMax");
+  const employmentType = watch("employmentType");
 
   const [salaryMinFocused, setSalaryMinFocused] = useState(false);
   const [salaryMaxFocused, setSalaryMaxFocused] = useState(false);
@@ -74,6 +83,7 @@ export default function Step1Basic({
 
   const canNext =
     !!title?.trim() &&
+    !!employmentType &&
     !(
       (locationType === "HYBRID" || locationType === "ONSITE") &&
       !city?.trim()
@@ -83,9 +93,11 @@ export default function Step1Basic({
   const disabledMessage = !canNext
     ? !title?.trim()
       ? "Falta nombre de vacante"
-      : (locationType === "HYBRID" || locationType === "ONSITE") && !city?.trim()
-        ? "Falta ciudad"
-        : null
+      : !employmentType
+        ? "Falta tipo de empleo"
+        : (locationType === "HYBRID" || locationType === "ONSITE") && !city?.trim()
+          ? "Falta ciudad"
+          : null
     : null;
 
   return (
@@ -123,13 +135,9 @@ export default function Step1Basic({
               placeholder="Ej: Desarrollador Full Stack Senior"
               {...register("title")}
               aria-invalid={errors.title ? "true" : "false"}
-              aria-describedby={errors.title ? "title-error" : undefined}
             />
             {errors.title && (
-              <p
-                id="title-error"
-                className="text-xs text-red-600 flex items-center gap-1"
-              >
+              <p className="text-xs text-red-600 flex items-center gap-1">
                 <span>⚠️</span>
                 {errors.title.message}
               </p>
@@ -181,10 +189,52 @@ export default function Step1Basic({
             </div>
           </div>
 
+          {/* Tipo de empleo + Horario */}
+          <div className="grid gap-4 sm:grid-cols-2 py-2">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Briefcase className="h-4 w-4 text-emerald-500" />
+                <span>Tipo de empleo</span>
+                <span className="text-red-500">*</span>
+              </label>
+              <select
+                className={inputCls(errors.employmentType, "h-11 px-3 py-2")}
+                {...register("employmentType")}
+              >
+                {EMPLOYMENT_TYPE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              {errors.employmentType && (
+                <p className="text-xs text-red-600">{errors.employmentType.message}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Horario (opcional)
+              </label>
+              <input
+                type="text"
+                list="schedule-suggestions"
+                placeholder="Ej. L-V 9:00–18:00"
+                className={inputCls(undefined, "h-11 px-3 py-2")}
+                {...register("schedule")}
+              />
+              <datalist id="schedule-suggestions">
+                {SCHEDULE_SUGGESTIONS.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
+            </div>
+          </div>
+
           {/* Ubicación y Sueldo en grid */}
-          <div className="grid gap-4 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] items-start">
+          <div className="grid gap-4 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] items-start py-2">
             {/* Ubicación */}
-            <div className="space-y-2 py-2 min-w-0 overflow-hidden">
+            <div className="space-y-2 min-w-0 overflow-hidden">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <MapPin className="h-4 w-4 text-emerald-500" />
                 <span>Ubicación</span>
@@ -261,7 +311,7 @@ export default function Step1Basic({
             </div>
 
             {/* Sueldo */}
-            <div className="space-y-2 py-2 min-w-0 relative z-10">
+            <div className="space-y-2 min-w-0 relative z-10">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <DollarSign className="h-4 w-4 text-emerald-500" />
                 <span>Sueldo (opcional)</span>
@@ -269,10 +319,7 @@ export default function Step1Basic({
 
               <div className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,170px)_minmax(0,170px)] gap-2 items-center min-w-0">
                 <select
-                  className={inputCls(
-                    undefined,
-                    "h-11 w-[112px] min-w-[112px] px-3 py-2 pr-10"
-                  )}
+                  className={inputCls(undefined, "h-11 w-[112px] min-w-[112px] px-3 py-2 pr-10")}
                   {...register("currency")}
                 >
                   <option value="MXN">MXN</option>
@@ -287,10 +334,7 @@ export default function Step1Basic({
                       typeof field.value === "number" || typeof field.value === "string"
                         ? String(field.value)
                         : "";
-                    const displayValue = salaryMinFocused
-                      ? rawValue
-                      : formatSalary(rawValue);
-
+                    const displayValue = salaryMinFocused ? rawValue : formatSalary(rawValue);
                     return (
                       <input
                         type="text"
@@ -320,10 +364,7 @@ export default function Step1Basic({
                       typeof field.value === "number" || typeof field.value === "string"
                         ? String(field.value)
                         : "";
-                    const displayValue = salaryMaxFocused
-                      ? rawValue
-                      : formatSalary(rawValue);
-
+                    const displayValue = salaryMaxFocused ? rawValue : formatSalary(rawValue);
                     return (
                       <input
                         type="text"
@@ -346,26 +387,19 @@ export default function Step1Basic({
                 />
               </div>
 
-              {/* MOVIDO AQUÍ para no afectar alineación */}
               <p className="text-xs text-muted-foreground">
                 Recomendado: mejora el match y la visibilidad.
               </p>
 
               {salaryNeedsSwap && (
                 <div className="flex items-center gap-2 text-xs text-amber-700">
-                  <span>Intercambiar valores?</span>
+                  <span>¿Intercambiar valores?</span>
                   <button
                     type="button"
                     className="text-emerald-700 hover:text-emerald-600 font-medium"
                     onClick={() => {
-                      setValue("salaryMin", salaryMax ?? undefined, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
-                      setValue("salaryMax", salaryMin ?? undefined, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
+                      setValue("salaryMin", salaryMax ?? undefined, { shouldDirty: true, shouldValidate: true });
+                      setValue("salaryMax", salaryMin ?? undefined, { shouldDirty: true, shouldValidate: true });
                     }}
                   >
                     Intercambiar
@@ -376,8 +410,7 @@ export default function Step1Basic({
               {(errors.salaryMin || errors.salaryMax) && (
                 <p className="text-xs text-red-600 flex items-center gap-1">
                   <span>⚠️</span>
-                  {(errors.salaryMin?.message as string) ||
-                    (errors.salaryMax?.message as string)}
+                  {(errors.salaryMin?.message as string) || (errors.salaryMax?.message as string)}
                 </p>
               )}
 

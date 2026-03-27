@@ -14,7 +14,6 @@ type StepperProps = {
 
 const STEP_LABELS = [
   "Básicos",
-  "Empleo",
   "Prestaciones",
   "Detalles",
   "Evaluaciones",
@@ -23,7 +22,7 @@ const STEP_LABELS = [
 
 export default function Stepper({
   step,
-  total = 6,
+  total = 5,
   maxStepVisited,
   stepCompletion,
   onJump,

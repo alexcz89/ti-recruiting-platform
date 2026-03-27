@@ -26,11 +26,12 @@ import {
 import Stepper from "./JobWizard/components/Stepper";
 import QualityIndicator from "./JobWizard/components/QualityIndicator";
 import Step1Basic from "./JobWizard/components/Step1Basic";
-import Step2Employment from "./JobWizard/components/Step2Employment";
 import Step3Benefits from "./JobWizard/components/Step3Benefits";
 import Step4Assessments from "./JobWizard/components/Step4Assessments";
 import Step5Details, { type Step5Tab } from "./JobWizard/components/Step5Details";
 import Step6Review from "./JobWizard/components/Step6Review";
+
+// Pasos: 1=Básicos, 2=Prestaciones, 3=Detalles, 4=Evaluaciones, 5=Revisión
 
 function getTimeAgo(date: Date): string {
   const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
@@ -99,8 +100,8 @@ export default function JobWizard({
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [maxStepVisited, setMaxStepVisited] = useState(1);
+  // FIX Bug #14: 5 pasos en lugar de 6
   const [stepCompletion, setStepCompletion] = useState<boolean[]>([
-    false,
     false,
     false,
     false,
@@ -108,7 +109,7 @@ export default function JobWizard({
     false,
   ]);
   const [busy, setBusy] = useState(false);
-  const [step5Tab, setStep5Tab] = useState<Step5Tab>("desc");
+  const [step3Tab, setStep3Tab] = useState<Step5Tab>("desc");
 
   const methods = useForm<JobForm>({
     resolver: zodResolver(jobSchema),
@@ -257,7 +258,6 @@ export default function JobWizard({
   }
 
   async function onValidSubmit(v: JobForm) {
-    console.log("✅ onValidSubmit called", v);
     setBusy(true);
 
     try {
@@ -439,12 +439,14 @@ export default function JobWizard({
                 <div className="mb-0">
                   <Stepper
                     step={step}
+                    total={5}
                     maxStepVisited={maxStepVisited}
                     stepCompletion={stepCompletion}
                     onJump={handleStepClick}
                   />
                 </div>
 
+                {/* 1 — Básicos: título, empresa, tipo empleo, horario, ubicación, sueldo */}
                 {step === 1 && (
                   <Step1Basic
                     presetCompany={presetCompany ?? null}
@@ -454,43 +456,40 @@ export default function JobWizard({
                   />
                 )}
 
+                {/* 2 — Prestaciones */}
                 {step === 2 && (
-                  <Step2Employment
+                  <Step3Benefits
                     onNext={() => goNextStep(3)}
                     onBack={() => setStep(1)}
                   />
                 )}
 
+                {/* 3 — Detalles: descripción, skills, idiomas, educación */}
                 {step === 3 && (
-                  <Step3Benefits
-                    onNext={() => goNextStep(4)}
-                    onBack={() => setStep(2)}
-                  />
-                )}
-
-                {step === 4 && (
                   <Step5Details
                     skillsOptions={skillsOptions}
                     certOptions={certOptions}
+                    onNext={() => goNextStep(4)}
+                    onBack={() => setStep(2)}
+                    activeTab={step3Tab}
+                    onTabChange={setStep3Tab}
+                  />
+                )}
+
+                {/* 4 — Evaluaciones */}
+                {step === 4 && (
+                  <Step4Assessments
                     onNext={() => goNextStep(5)}
                     onBack={() => setStep(3)}
-                    activeTab={step5Tab}
-                    onTabChange={setStep5Tab}
                   />
                 )}
 
+                {/* 5 — Revisión y publicación */}
                 {step === 5 && (
-                  <Step4Assessments
-                    onNext={() => goNextStep(6)}
-                    onBack={() => setStep(4)}
-                  />
-                )}
-
-                {step === 6 && (
                   <Step6Review
                     presetCompany={presetCompany ?? null}
                     busy={busy}
-                    onBack={() => setStep(5)}
+                    onBack={() => setStep(4)}
                     isEditing={isEditing}
                     onEditStep={(targetStep) => {
                       setStep(targetStep);
@@ -498,9 +497,9 @@ export default function JobWizard({
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                     onEditTab={(tab) => {
-                      setStep(4);
-                      setStep5Tab(tab);
-                      setMaxStepVisited((prev) => Math.max(prev, 4));
+                      setStep(3);
+                      setStep3Tab(tab);
+                      setMaxStepVisited((prev) => Math.max(prev, 3));
                       window.scrollTo({ top: 0, behavior: "smooth" });
                     }}
                   />
