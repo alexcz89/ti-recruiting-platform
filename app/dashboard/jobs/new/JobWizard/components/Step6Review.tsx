@@ -1,7 +1,7 @@
 // app/dashboard/jobs/new/JobWizard/components/Step6Review.tsx
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import {
   Briefcase,
@@ -101,7 +101,6 @@ function qualityTone(score: number) {
       label: "Alta",
     };
   }
-
   if (score >= 55) {
     return {
       badge:
@@ -110,7 +109,6 @@ function qualityTone(score: number) {
       label: "Media",
     };
   }
-
   return {
     badge:
       "border-red-200 bg-red-50 text-red-800 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-300",
@@ -139,6 +137,9 @@ export default function Step6Review({
   const { watch } = useFormContext<JobForm>();
   const v = watch();
   const [showPublishWarningModal, setShowPublishWarningModal] = useState(false);
+
+  // FIX Bug publish: ref al botón de submit real para dispararlo desde el modal
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   const locationLabel = getLabel(LOCATION_TYPE_OPTIONS, v.locationType);
   const employmentLabel = getLabel(EMPLOYMENT_TYPE_OPTIONS, v.employmentType);
@@ -190,8 +191,12 @@ export default function Step6Review({
 
   const tone = qualityTone(quality.score);
 
+  // Bug #13 fix: no mostrar "Prestaciones no configuradas" si hay beneficios activos
+  const hasBenefits = benefitsList.length > 0;
   const missingRecommended = [
-    ...(quality.missingRecommended ?? []),
+    ...(quality.missingRecommended ?? []).filter(
+      (m) => !(hasBenefits && m === "Prestaciones no configuradas")
+    ),
     ...(!v.showSalary ? ["Ocultaste el sueldo"] : []),
   ];
 
@@ -199,11 +204,12 @@ export default function Step6Review({
     e: React.MouseEvent<HTMLButtonElement, MouseEvent>
   ) {
     if (busy) return;
-
+    // Si hay advertencias, mostrar modal en lugar de submitear
     if (missingRecommended.length > 0) {
       e.preventDefault();
       setShowPublishWarningModal(true);
     }
+    // Si no hay advertencias, el type="submit" se encarga solo
   }
 
   return (
@@ -222,7 +228,6 @@ export default function Step6Review({
               Basada en descripción, skills, sueldo, educación y otros elementos clave.
             </p>
           </div>
-
           <div
             className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${tone.badge}`}
           >
@@ -487,7 +492,10 @@ export default function Step6Review({
           >
             Atrás
           </button>
+
+          {/* FIX: botón real de submit — siempre en el DOM, visible o hidden */}
           <button
+            ref={submitBtnRef}
             type="submit"
             disabled={busy}
             onClick={handleSubmitWarning}
@@ -514,8 +522,8 @@ export default function Step6Review({
         onCancel={() => setShowPublishWarningModal(false)}
         onConfirm={() => {
           setShowPublishWarningModal(false);
-          const form = document.querySelector("form");
-          form?.requestSubmit();
+          // FIX: disparar el botón submit real via ref en lugar de querySelector
+          submitBtnRef.current?.click();
         }}
       />
     </div>
