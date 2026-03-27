@@ -304,7 +304,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                         </Link>
                       </th>
                       <th className="py-3 px-4">Estatus</th>
-                      <th className="py-3 px-4 text-right">Acciones</th>
+                      <th className="py-3 px-4 text-right whitespace-nowrap">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">

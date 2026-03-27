@@ -142,7 +142,7 @@ export default function JobActionsMenu({ jobId, currentStatus }: Props) {
       }
 
       toastSuccess("Vacante eliminada correctamente");
-      router.push("/dashboard/jobs"); // solo push, sin refresh (evita doble toast)
+      router.refresh();
     } catch (error: any) {
       toastError(error?.message || "Error al eliminar la vacante");
     } finally {

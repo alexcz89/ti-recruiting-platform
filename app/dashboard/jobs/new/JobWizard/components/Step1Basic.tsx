@@ -3,19 +3,13 @@
 
 import { useEffect, useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
-import { MapPin, DollarSign, Building2, Briefcase, Check } from "lucide-react";
+import { MapPin, DollarSign, Building2, Briefcase, Check, Clock } from "lucide-react";
 import clsx from "clsx";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { JobForm, PresetCompany, TemplateJob } from "../types";
 import TemplateSelector from "./TemplateSelector";
+import SchedulePicker from "./SchedulePicker";
 import { EMPLOYMENT_TYPE_OPTIONS } from "../lib/job-enums";
-
-const SCHEDULE_SUGGESTIONS = [
-  "L-V 9:00–18:00",
-  "L-V 8:00–17:00",
-  "L-S 9:00–18:00",
-  "L-V 13:00–22:00",
-];
 
 type Step1BasicProps = {
   presetCompany: PresetCompany;
@@ -70,6 +64,7 @@ export default function Step1Basic({
   const salaryMin = watch("salaryMin");
   const salaryMax = watch("salaryMax");
   const employmentType = watch("employmentType");
+  const schedule = watch("schedule") || "";
 
   const [salaryMinFocused, setSalaryMinFocused] = useState(false);
   const [salaryMaxFocused, setSalaryMaxFocused] = useState(false);
@@ -81,14 +76,8 @@ export default function Step1Basic({
       setValue("admin1", "", { shouldDirty: true, shouldValidate: false });
       setValue("cityNorm", "", { shouldDirty: true, shouldValidate: false });
       setValue("admin1Norm", "", { shouldDirty: true, shouldValidate: false });
-      setValue("locationLat", null, {
-        shouldDirty: true,
-        shouldValidate: false,
-      });
-      setValue("locationLng", null, {
-        shouldDirty: true,
-        shouldValidate: false,
-      });
+      setValue("locationLat", null, { shouldDirty: true, shouldValidate: false });
+      setValue("locationLng", null, { shouldDirty: true, shouldValidate: false });
     }
   }, [locationType, setValue]);
 
@@ -120,6 +109,7 @@ export default function Step1Basic({
   return (
     <section className="p-4 sm:p-6 lg:p-8">
       <div className="space-y-6">
+        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/20">
             <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -139,6 +129,7 @@ export default function Step1Basic({
         )}
 
         <div className="grid gap-6">
+          {/* Título */}
           <div className="space-y-2 py-2">
             <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <span>Nombre de la vacante</span>
@@ -163,6 +154,7 @@ export default function Step1Basic({
             )}
           </div>
 
+          {/* Empresa */}
           <div className="space-y-2 py-2">
             <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <span>Empresa</span>
@@ -204,7 +196,8 @@ export default function Step1Basic({
             </div>
           </div>
 
-          <div className="grid gap-4 py-2 sm:grid-cols-2">
+          {/* Tipo de empleo + Horario */}
+          <div className="grid gap-6 py-2 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <Briefcase className="h-4 w-4 text-emerald-500" />
@@ -229,25 +222,20 @@ export default function Step1Basic({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">
-                Horario (opcional)
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground">
+                <Clock className="h-4 w-4 text-emerald-500" />
+                <span>Horario (opcional)</span>
               </label>
-              <input
-                type="text"
-                list="schedule-suggestions"
-                placeholder="Ej. L-V 9:00–18:00"
-                className={inputCls(undefined, "h-11 px-3 py-2")}
-                {...register("schedule")}
+              <SchedulePicker
+                value={schedule}
+                onChange={(val) => setValue("schedule", val, { shouldDirty: true })}
               />
-              <datalist id="schedule-suggestions">
-                {SCHEDULE_SUGGESTIONS.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
             </div>
           </div>
 
+          {/* Ubicación y Sueldo */}
           <div className="grid items-start gap-6 py-2 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            {/* Ubicación */}
             <div className="min-w-0 space-y-2 overflow-hidden">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <MapPin className="h-4 w-4 text-emerald-500" />
@@ -280,7 +268,6 @@ export default function Step1Basic({
                             onChange(next);
                             return;
                           }
-
                           if (next && typeof next === "object") {
                             const place = next as {
                               label?: string;
@@ -292,7 +279,6 @@ export default function Step1Basic({
                               lat?: number;
                               lng?: number;
                             };
-
                             onChange(place.label || place.city || "");
                             setValue("country", place.country || "");
                             setValue("admin1", place.admin1 || "");
@@ -300,21 +286,18 @@ export default function Step1Basic({
                             setValue("admin1Norm", place.admin1Norm || "");
                             setValue(
                               "locationLat",
-                              typeof place.lat === "number" &&
-                                Number.isFinite(place.lat)
+                              typeof place.lat === "number" && Number.isFinite(place.lat)
                                 ? place.lat
                                 : null
                             );
                             setValue(
                               "locationLng",
-                              typeof place.lng === "number" &&
-                                Number.isFinite(place.lng)
+                              typeof place.lng === "number" && Number.isFinite(place.lng)
                                 ? place.lng
                                 : null
                             );
                             return;
                           }
-
                           onChange("");
                           setValue("country", "");
                           setValue("admin1", "");
@@ -343,6 +326,7 @@ export default function Step1Basic({
               )}
             </div>
 
+            {/* Sueldo */}
             <div className="relative z-10 min-w-0 space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <DollarSign className="h-4 w-4 text-emerald-500" />
@@ -366,30 +350,21 @@ export default function Step1Basic({
                   control={control}
                   render={({ field }) => {
                     const rawValue =
-                      typeof field.value === "number" ||
-                      typeof field.value === "string"
+                      typeof field.value === "number" || typeof field.value === "string"
                         ? String(field.value)
                         : "";
-                    const displayValue = salaryMinFocused
-                      ? rawValue
-                      : formatSalary(rawValue);
-
+                    const displayValue = salaryMinFocused ? rawValue : formatSalary(rawValue);
                     return (
                       <input
                         type="text"
                         inputMode="numeric"
                         name={field.name}
                         ref={field.ref}
-                        className={inputCls(
-                          errors.salaryMin,
-                          "h-11 w-full min-w-0 px-3 py-2"
-                        )}
+                        className={inputCls(errors.salaryMin, "h-11 w-full min-w-0 px-3 py-2")}
                         placeholder="Desde"
                         value={displayValue}
                         onFocus={() => setSalaryMinFocused(true)}
-                        onChange={(e) =>
-                          field.onChange(parseSalaryInput(e.target.value))
-                        }
+                        onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
                         onBlur={(e) => {
                           setSalaryMinFocused(false);
                           field.onChange(parseSalaryInput(e.target.value));
@@ -405,30 +380,21 @@ export default function Step1Basic({
                   control={control}
                   render={({ field }) => {
                     const rawValue =
-                      typeof field.value === "number" ||
-                      typeof field.value === "string"
+                      typeof field.value === "number" || typeof field.value === "string"
                         ? String(field.value)
                         : "";
-                    const displayValue = salaryMaxFocused
-                      ? rawValue
-                      : formatSalary(rawValue);
-
+                    const displayValue = salaryMaxFocused ? rawValue : formatSalary(rawValue);
                     return (
                       <input
                         type="text"
                         inputMode="numeric"
                         name={field.name}
                         ref={field.ref}
-                        className={inputCls(
-                          errors.salaryMax,
-                          "h-11 w-full min-w-0 px-3 py-2"
-                        )}
+                        className={inputCls(errors.salaryMax, "h-11 w-full min-w-0 px-3 py-2")}
                         placeholder="Hasta"
                         value={displayValue}
                         onFocus={() => setSalaryMaxFocused(true)}
-                        onChange={(e) =>
-                          field.onChange(parseSalaryInput(e.target.value))
-                        }
+                        onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
                         onBlur={(e) => {
                           setSalaryMaxFocused(false);
                           field.onChange(parseSalaryInput(e.target.value));
@@ -451,14 +417,8 @@ export default function Step1Basic({
                     type="button"
                     className="font-medium text-emerald-700 hover:text-emerald-600"
                     onClick={() => {
-                      setValue("salaryMin", salaryMax ?? undefined, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
-                      setValue("salaryMax", salaryMin ?? undefined, {
-                        shouldDirty: true,
-                        shouldValidate: true,
-                      });
+                      setValue("salaryMin", salaryMax ?? undefined, { shouldDirty: true, shouldValidate: true });
+                      setValue("salaryMax", salaryMin ?? undefined, { shouldDirty: true, shouldValidate: true });
                     }}
                   >
                     Intercambiar
@@ -486,6 +446,7 @@ export default function Step1Basic({
           </div>
         </div>
 
+        {/* Navigation */}
         <div className="mt-6 flex flex-col items-stretch gap-2 border-t border-zinc-200 pt-4 sm:items-end dark:border-zinc-800">
           {disabledMessage && (
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
