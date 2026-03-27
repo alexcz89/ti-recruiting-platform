@@ -11,66 +11,79 @@ import {
   type DegreeValue,
 } from "./lib/job-enums";
 
-export const jobSchema = z.object({
-  title: z.string().min(3, "El título debe tener al menos 3 caracteres"),
+export const jobSchema = z
+  .object({
+    title: z.string().min(3, "El título debe tener al menos 3 caracteres"),
 
-  companyMode: z.enum(["own", "external"]),
-  companyOtherName: z.string().optional(),
+    companyMode: z.enum(["own", "external"]),
+    companyOtherName: z.string().optional(),
 
-  locationType: z.enum(LOCATION_TYPE_VALUES),
-  city: z.string().min(1, "La ciudad es obligatoria"),
+    locationType: z.enum(LOCATION_TYPE_VALUES),
+    city: z.string().default(""),
 
-  country: z.string().optional(),
-  admin1: z.string().optional(),
-  cityNorm: z.string().optional(),
-  admin1Norm: z.string().optional(),
+    country: z.string().optional(),
+    admin1: z.string().optional(),
+    cityNorm: z.string().optional(),
+    admin1Norm: z.string().optional(),
 
-  locationLat: z.number().nullable().optional(),
-  locationLng: z.number().nullable().optional(),
+    locationLat: z.number().nullable().optional(),
+    locationLng: z.number().nullable().optional(),
 
-  currency: z.enum(["MXN", "USD"]),
-  salaryMin: z.coerce.number().nullable().optional(),
-  salaryMax: z.coerce.number().nullable().optional(),
-  showSalary: z.boolean(),
+    currency: z.enum(["MXN", "USD"]),
+    salaryMin: z.coerce.number().nullable().optional(),
+    salaryMax: z.coerce.number().nullable().optional(),
+    showSalary: z.boolean(),
 
-  employmentType: z.enum(EMPLOYMENT_TYPE_VALUES),
+    employmentType: z.enum(EMPLOYMENT_TYPE_VALUES),
 
-  schedule: z.string().optional(),
+    schedule: z.string().optional(),
 
-  showBenefits: z.boolean(),
-  benefits: z.record(z.boolean()),
-  aguinaldoDias: z.number(),
-  vacacionesDias: z.number(),
-  primaVacPct: z.number(),
+    showBenefits: z.boolean(),
+    benefits: z.record(z.boolean()),
+    aguinaldoDias: z.number(),
+    vacacionesDias: z.number(),
+    primaVacPct: z.number(),
 
-  descriptionHtml: z.string(),
-  descriptionPlain: z.string(),
+    descriptionHtml: z.string(),
+    descriptionPlain: z.string(),
 
-  minDegree: z.enum(DEGREE_VALUES).optional(),
+    minDegree: z.enum(DEGREE_VALUES).optional(),
 
-  eduRequired: z.array(z.string()),
-  eduNice: z.array(z.string()),
+    eduRequired: z.array(z.string()),
+    eduNice: z.array(z.string()),
 
-  requiredSkills: z.array(z.string()),
-  niceSkills: z.array(z.string()),
+    requiredSkills: z.array(z.string()),
+    niceSkills: z.array(z.string()),
 
-  certs: z.array(z.string()),
-  languages: z
-    .array(
-      z.object({
-        name: z.string(),
-        level: z.enum([
-          "NATIVE",
-          "PROFESSIONAL",
-          "CONVERSATIONAL",
-          "BASIC",
-        ]),
-      })
-    )
-    .optional(),
+    certs: z.array(z.string()),
+    languages: z
+      .array(
+        z.object({
+          name: z.string(),
+          level: z.enum([
+            "NATIVE",
+            "PROFESSIONAL",
+            "CONVERSATIONAL",
+            "BASIC",
+          ]),
+        })
+      )
+      .optional(),
 
-  assessmentTemplateId: z.string().optional(),
-});
+    assessmentTemplateId: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const needsCity =
+      data.locationType === "HYBRID" || data.locationType === "ONSITE";
+
+    if (needsCity && !data.city.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["city"],
+        message: "La ciudad es obligatoria",
+      });
+    }
+  });
 
 export type JobForm = z.infer<typeof jobSchema> & {
   locationType: LocationTypeValue;
