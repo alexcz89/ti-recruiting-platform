@@ -6,7 +6,7 @@ import { AI_MODEL_SMART } from "./config";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export const MATCH_EXPLANATION_VERSION = "v1";
+export const MATCH_EXPLANATION_VERSION = "v2";
 
 export interface MatchExplanationInput {
   candidate: {
@@ -41,6 +41,13 @@ export interface MatchExplanationInput {
     missingNice: string[];
     seniorityFit?: "exact" | "close" | "below" | "unknown";
     experienceFit?: "meets" | "close" | "below" | "unknown";
+  };
+
+  ai?: {
+    summary?: string | null;
+    strengths?: string[];
+    risks?: string[];
+    tags?: string[];
   };
 }
 
@@ -101,6 +108,12 @@ export function buildMatchExplanationFingerprint(input: MatchExplanationInput): 
       missingNice: uniqClean(input.match.missingNice).sort(),
       seniorityFit: input.match.seniorityFit ?? "unknown",
       experienceFit: input.match.experienceFit ?? "unknown",
+    },
+    ai: {
+      summary: input.ai?.summary?.trim() ?? null,
+      strengths: uniqClean(input.ai?.strengths).sort().slice(0, 6),
+      risks: uniqClean(input.ai?.risks).sort().slice(0, 6),
+      tags: uniqClean(input.ai?.tags).sort().slice(0, 8),
     },
   };
 
@@ -169,6 +182,21 @@ function buildPrompt(input: MatchExplanationInput): string {
     .filter(Boolean)
     .join("\n");
 
+  const aiBlock = [
+    input.ai?.summary ? `Resumen AI del candidato: ${input.ai.summary}` : null,
+    input.ai?.strengths?.length
+      ? `Fortalezas AI detectadas: ${uniqClean(input.ai.strengths, 5).join(", ")}`
+      : null,
+    input.ai?.risks?.length
+      ? `Riesgos AI detectados: ${uniqClean(input.ai.risks, 5).join(", ")}`
+      : null,
+    input.ai?.tags?.length
+      ? `Tags sugeridos por AI: ${uniqClean(input.ai.tags, 6).join(", ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
   return `
 Eres un recruiter técnico senior.
 
@@ -185,11 +213,13 @@ Devuelve ÚNICAMENTE JSON válido con esta forma exacta:
 Reglas:
 - Responde en español
 - No inventes datos
-- Usa el score y los gaps reales del match determinístico
+- Usa el score y los gaps reales del match determinístico como base principal
+- Usa el contexto AI solo para enriquecer, no para contradecir el match determinístico
 - Sé útil para un recruiter, no genérico
 - Si el candidato encaja bien, dilo claramente
 - Si faltan skills críticas, dilo claramente
 - interviewFocus debe servir para validar dudas reales
+- Prioriza skills requeridas faltantes, seniority y experiencia cuando existan brechas
 
 CANDIDATO:
 ${candidateBlock}
@@ -199,6 +229,9 @@ ${jobBlock}
 
 MATCH DETERMINÍSTICO:
 ${matchBlock}
+
+CONTEXTO AI:
+${aiBlock || "Sin contexto AI adicional."}
 `.trim();
 }
 
@@ -227,6 +260,10 @@ export function fallbackMatchExplanation(input: MatchExplanationInput): MatchExp
     strengths.push("La experiencia está cerca del mínimo esperado.");
   }
 
+  if (input.ai?.strengths?.length) {
+    strengths.push(...uniqClean(input.ai.strengths, 2));
+  }
+
   if (input.match.missingRequired.length > 0) {
     gaps.push(`Faltan skills requeridas: ${uniqClean(input.match.missingRequired).join(", ")}.`);
   }
@@ -243,6 +280,10 @@ export function fallbackMatchExplanation(input: MatchExplanationInput): MatchExp
     gaps.push("La experiencia está por debajo del mínimo requerido.");
   }
 
+  if (input.ai?.risks?.length) {
+    gaps.push(...uniqClean(input.ai.risks, 2));
+  }
+
   interviewFocus.push("Validar profundidad real en las skills principales.");
 
   if (input.match.missingRequired.length > 0) {
@@ -257,6 +298,10 @@ export function fallbackMatchExplanation(input: MatchExplanationInput): MatchExp
     interviewFocus.push("Validar alcance real de experiencia reciente.");
   }
 
+  if (input.ai?.risks?.length) {
+    interviewFocus.push(`Profundizar en: ${uniqClean(input.ai.risks, 2).join(" y ")}.`);
+  }
+
   const recommendation: MatchExplanation["recommendation"] =
     input.match.score >= 85
       ? "STRONG_MATCH"
@@ -264,13 +309,16 @@ export function fallbackMatchExplanation(input: MatchExplanationInput): MatchExp
       ? "REVIEW"
       : "WEAK_MATCH";
 
+  const summary =
+    input.ai?.summary?.trim() ||
+    (input.match.score >= 85
+      ? "Buen ajuste general para la vacante. El perfil cubre gran parte de los requisitos clave y merece revisión prioritaria."
+      : input.match.score >= 55
+      ? "Ajuste parcial con señales positivas, pero conviene validar brechas antes de avanzar."
+      : "El ajuste es limitado y presenta brechas importantes frente a la vacante.");
+
   return {
-    summary:
-      input.match.score >= 85
-        ? "Buen ajuste general para la vacante. El perfil cubre gran parte de los requisitos clave y merece revisión prioritaria."
-        : input.match.score >= 55
-        ? "Ajuste parcial con señales positivas, pero conviene validar brechas antes de avanzar."
-        : "El ajuste es limitado y presenta brechas importantes frente a la vacante.",
+    summary,
     strengths: uniqClean(strengths, 3),
     gaps: uniqClean(gaps, 3),
     interviewFocus: uniqClean(interviewFocus, 5),

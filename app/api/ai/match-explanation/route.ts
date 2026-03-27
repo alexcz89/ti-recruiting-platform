@@ -114,7 +114,7 @@ async function buildMatchExplanationInput(
             tags: true,
             generatedAt: true,
             updatedAt: true,
-          }
+          },
         },
         candidateSkills: {
           select: {
@@ -176,20 +176,6 @@ async function buildMatchExplanationInput(
     label: cs.term.label,
     level: cs.level,
   }));
-
-  const parsed = candidate.aiProfile?.profileJson;
-  const parsedObj =
-    parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-
-  // Se conservan por si luego quieres reutilizarlos,
-  // pero no se envían a MatchExplanationInput porque hoy no forman parte del tipo.
-  const _candidateDomains = toStringArray(parsedObj?.domains);
-  const _candidateMethods = toStringArray(parsedObj?.methods);
-  const _candidateTools = toStringArray(parsedObj?.tools);
-  const _candidateImpactEvidence = toStringArray(parsedObj?.impactEvidence);
-  const _candidateExperienceHighlights = toStringArray(parsedObj?.experienceHighlights);
 
   const matchResult = computeMatchScore({
     jobSkills,
@@ -267,7 +253,52 @@ async function buildMatchExplanationInput(
       seniorityFit: matchResult.seniorityFit,
       experienceFit: matchResult.experienceFit,
     },
+    ai: {
+      summary: candidate.aiProfile?.summaryText ?? null,
+      strengths: toStringArray(candidate.aiProfile?.strengthsJson),
+      risks: toStringArray(candidate.aiProfile?.risksJson),
+      tags: Array.isArray(candidate.aiProfile?.tags) ? candidate.aiProfile.tags : [],
+    },
   };
+}
+
+async function saveMatchExplanationCache(
+  candidateId: string,
+  jobId: string,
+  explanation: unknown,
+  fingerprint: string
+) {
+  const cacheKey = buildCacheKey(candidateId, jobId);
+  const explanationJson = toPrismaJson(explanation);
+
+  const existingCache = await prisma.matchExplanationCache.findFirst({
+    where: { cacheKey },
+    select: { id: true },
+  });
+
+  if (existingCache) {
+    await prisma.matchExplanationCache.update({
+      where: { id: existingCache.id },
+      data: {
+        explanationJson,
+        fingerprint,
+        version: MATCH_EXPLANATION_VERSION,
+        generatedAt: new Date(),
+      },
+    });
+    return;
+  }
+
+  await prisma.matchExplanationCache.create({
+    data: {
+      cacheKey,
+      candidateId,
+      jobId,
+      fingerprint,
+      version: MATCH_EXPLANATION_VERSION,
+      explanationJson,
+    },
+  });
 }
 
 export async function GET(req: NextRequest) {
@@ -311,17 +342,13 @@ export async function GET(req: NextRequest) {
         }
 
         const explanation = await generateMatchExplanation(input);
-        const explanationJson = toPrismaJson(explanation);
 
-        await prisma.matchExplanationCache.update({
-          where: { id: cached.id },
-          data: {
-            explanationJson,
-            fingerprint: currentFingerprint,
-            version: MATCH_EXPLANATION_VERSION,
-            generatedAt: new Date(),
-          },
-        });
+        await saveMatchExplanationCache(
+          candidateId,
+          jobId,
+          explanation,
+          currentFingerprint
+        );
 
         return noStoreJson({
           explanation,
@@ -338,36 +365,9 @@ export async function GET(req: NextRequest) {
   }
 
   const explanation = await generateMatchExplanation(input);
-  const explanationJson = toPrismaJson(explanation);
   const fingerprint = buildMatchExplanationFingerprint(input);
 
-  const existingCache = await prisma.matchExplanationCache.findFirst({
-    where: { cacheKey },
-    select: { id: true },
-  });
-
-  if (existingCache) {
-    await prisma.matchExplanationCache.update({
-      where: { id: existingCache.id },
-      data: {
-        explanationJson,
-        fingerprint,
-        version: MATCH_EXPLANATION_VERSION,
-        generatedAt: new Date(),
-      },
-    });
-  } else {
-    await prisma.matchExplanationCache.create({
-      data: {
-        cacheKey,
-        candidateId,
-        jobId,
-        fingerprint,
-        version: MATCH_EXPLANATION_VERSION,
-        explanationJson,
-      },
-    });
-  }
+  await saveMatchExplanationCache(candidateId, jobId, explanation, fingerprint);
 
   return noStoreJson({
     explanation,
@@ -397,37 +397,9 @@ export async function POST(req: NextRequest) {
   }
 
   const explanation = await generateMatchExplanation(input);
-  const explanationJson = toPrismaJson(explanation);
   const fingerprint = buildMatchExplanationFingerprint(input);
-  const cacheKey = buildCacheKey(candidateId, jobId);
 
-  const existingCache = await prisma.matchExplanationCache.findFirst({
-    where: { cacheKey },
-    select: { id: true },
-  });
-
-  if (existingCache) {
-    await prisma.matchExplanationCache.update({
-      where: { id: existingCache.id },
-      data: {
-        explanationJson,
-        fingerprint,
-        version: MATCH_EXPLANATION_VERSION,
-        generatedAt: new Date(),
-      },
-    });
-  } else {
-    await prisma.matchExplanationCache.create({
-      data: {
-        cacheKey,
-        candidateId,
-        jobId,
-        fingerprint,
-        version: MATCH_EXPLANATION_VERSION,
-        explanationJson,
-      },
-    });
-  }
+  await saveMatchExplanationCache(candidateId, jobId, explanation, fingerprint);
 
   return noStoreJson({
     explanation,
