@@ -138,17 +138,17 @@ export default function Step6Review({
   const v = watch();
   const [showPublishWarningModal, setShowPublishWarningModal] = useState(false);
 
-  // FIX Bug publish: ref al botón de submit real para dispararlo desde el modal
+  // FIX: ref al botón submit real
   const submitBtnRef = useRef<HTMLButtonElement>(null);
+  // FIX: flag para que handleSubmitWarning no interrumpa cuando el usuario ya confirmó
+  const bypassWarningRef = useRef(false);
 
   const locationLabel = getLabel(LOCATION_TYPE_OPTIONS, v.locationType);
   const employmentLabel = getLabel(EMPLOYMENT_TYPE_OPTIONS, v.employmentType);
   const degreeLabel = getLabel(DEGREE_OPTIONS, v.minDegree);
 
   const isRemote = v.locationType === "REMOTE";
-  const locationText = isRemote
-    ? "Remoto"
-    : `${locationLabel} • ${v.city || ""}`;
+  const locationText = isRemote ? "Remoto" : `${locationLabel} • ${v.city || ""}`;
 
   const salaryMin = parseSalary(v.salaryMin);
   const salaryMax = parseSalary(v.salaryMax);
@@ -204,12 +204,17 @@ export default function Step6Review({
     e: React.MouseEvent<HTMLButtonElement, MouseEvent>
   ) {
     if (busy) return;
-    // Si hay advertencias, mostrar modal en lugar de submitear
+
+    // FIX: si el usuario ya confirmó en el modal, dejar pasar el submit sin interrumpir
+    if (bypassWarningRef.current) {
+      bypassWarningRef.current = false;
+      return;
+    }
+
     if (missingRecommended.length > 0) {
       e.preventDefault();
       setShowPublishWarningModal(true);
     }
-    // Si no hay advertencias, el type="submit" se encarga solo
   }
 
   return (
@@ -228,9 +233,7 @@ export default function Step6Review({
               Basada en descripción, skills, sueldo, educación y otros elementos clave.
             </p>
           </div>
-          <div
-            className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${tone.badge}`}
-          >
+          <div className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold ${tone.badge}`}>
             {quality.score}/100 · {tone.label}
           </div>
         </div>
@@ -493,7 +496,6 @@ export default function Step6Review({
             Atrás
           </button>
 
-          {/* FIX: botón real de submit — siempre en el DOM, visible o hidden */}
           <button
             ref={submitBtnRef}
             type="submit"
@@ -502,12 +504,8 @@ export default function Step6Review({
             className="rounded-md bg-emerald-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 hover:shadow-md disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
             {busy
-              ? isEditing
-                ? "Guardando..."
-                : "Publicando..."
-              : isEditing
-                ? "Guardar cambios"
-                : "Publicar vacante"}
+              ? isEditing ? "Guardando..." : "Publicando..."
+              : isEditing ? "Guardar cambios" : "Publicar vacante"}
           </button>
         </div>
       </div>
@@ -522,7 +520,8 @@ export default function Step6Review({
         onCancel={() => setShowPublishWarningModal(false)}
         onConfirm={() => {
           setShowPublishWarningModal(false);
-          // FIX: disparar el botón submit real via ref en lugar de querySelector
+          // FIX: marcar bypass para que handleSubmitWarning no intercepte el click
+          bypassWarningRef.current = true;
           submitBtnRef.current?.click();
         }}
       />

@@ -35,8 +35,11 @@ function formatSalary(value?: string | number | null): string {
   );
 }
 
-function parseSalaryInput(raw: string): string {
-  return raw.replace(/[^\d]/g, "");
+function parseSalaryInput(raw: string): number | undefined {
+  const digits = raw.replace(/[^\d]/g, "");
+  if (!digits) return undefined;
+  const n = Number(digits);
+  return Number.isFinite(n) ? n : undefined;
 }
 
 export default function Step1Basic({
