@@ -405,7 +405,10 @@ export default function JobWizard({
 
   return (
     <FormProvider {...methods}>
-      <form onSubmit={handleSubmit(onValidSubmit)}>
+      <form onSubmit={handleSubmit(onValidSubmit, (errors) => {
+        console.error("❌ RHF validation errors:", JSON.stringify(errors, null, 2));
+        toastError("Error de validación — revisa la consola");
+      })}>
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
           <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
             <div className="mb-0 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
