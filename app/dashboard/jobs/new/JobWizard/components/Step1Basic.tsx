@@ -1,7 +1,7 @@
 // app/dashboard/jobs/new/JobWizard/components/Step1Basic.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { MapPin, DollarSign, Building2, Briefcase, Check } from "lucide-react";
 import clsx from "clsx";
@@ -24,7 +24,7 @@ type Step1BasicProps = {
   onNext: () => void;
 };
 
-const inputCls = (err?: any, extra?: string) =>
+const inputCls = (err?: unknown, extra?: string) =>
   clsx(
     "w-full rounded-lg border bg-white p-4 text-sm transition-all focus:outline-none focus:ring-2 focus:ring-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
     err ? "border-red-500 dark:border-red-500" : "border-zinc-300",
@@ -74,6 +74,24 @@ export default function Step1Basic({
   const [salaryMinFocused, setSalaryMinFocused] = useState(false);
   const [salaryMaxFocused, setSalaryMaxFocused] = useState(false);
 
+  useEffect(() => {
+    if (locationType === "REMOTE") {
+      setValue("city", "", { shouldDirty: true, shouldValidate: true });
+      setValue("country", "", { shouldDirty: true, shouldValidate: false });
+      setValue("admin1", "", { shouldDirty: true, shouldValidate: false });
+      setValue("cityNorm", "", { shouldDirty: true, shouldValidate: false });
+      setValue("admin1Norm", "", { shouldDirty: true, shouldValidate: false });
+      setValue("locationLat", null, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+      setValue("locationLng", null, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [locationType, setValue]);
+
   const salaryNeedsSwap =
     salaryMin &&
     salaryMax &&
@@ -81,13 +99,12 @@ export default function Step1Basic({
     !Number.isNaN(Number(salaryMax)) &&
     Number(salaryMin) > Number(salaryMax);
 
+  const cityRequired = locationType === "HYBRID" || locationType === "ONSITE";
+
   const canNext =
     !!title?.trim() &&
     !!employmentType &&
-    !(
-      (locationType === "HYBRID" || locationType === "ONSITE") &&
-      !city?.trim()
-    ) &&
+    !(cityRequired && !city?.trim()) &&
     !salaryNeedsSwap;
 
   const disabledMessage = !canNext
@@ -95,15 +112,14 @@ export default function Step1Basic({
       ? "Falta nombre de vacante"
       : !employmentType
         ? "Falta tipo de empleo"
-        : (locationType === "HYBRID" || locationType === "ONSITE") && !city?.trim()
+        : cityRequired && !city?.trim()
           ? "Falta ciudad"
           : null
     : null;
 
   return (
-    <section className="p-6 lg:p-8">
+    <section className="p-4 sm:p-6 lg:p-8">
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/20">
             <Building2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -116,7 +132,6 @@ export default function Step1Basic({
           </div>
         </div>
 
-        {/* Template Selector */}
         {templates.length > 0 && (
           <div className="mb-6">
             <TemplateSelector templates={templates} onApply={onApplyTemplate} />
@@ -124,7 +139,6 @@ export default function Step1Basic({
         )}
 
         <div className="grid gap-6">
-          {/* Título */}
           <div className="space-y-2 py-2">
             <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <span>Nombre de la vacante</span>
@@ -137,7 +151,7 @@ export default function Step1Basic({
               aria-invalid={errors.title ? "true" : "false"}
             />
             {errors.title && (
-              <p className="text-xs text-red-600 flex items-center gap-1">
+              <p className="flex items-center gap-1 text-xs text-red-600">
                 <span>⚠️</span>
                 {errors.title.message}
               </p>
@@ -149,48 +163,48 @@ export default function Step1Basic({
             )}
           </div>
 
-          {/* Empresa */}
           <div className="space-y-2 py-2">
             <label className="flex items-center gap-2 text-sm font-medium text-foreground">
               <span>Empresa</span>
               <span className="text-red-500">*</span>
             </label>
-            <div className="grid gap-6 sm:grid-cols-2">
-              <label className="relative flex cursor-pointer items-center gap-3 rounded-lg border-2 border-zinc-200 bg-white min-h-[120px] p-6 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20">
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-6">
+              <label className="relative flex min-h-[110px] cursor-pointer items-center gap-3 rounded-lg border-2 border-zinc-200 bg-white p-5 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20 sm:min-h-[120px] sm:p-6">
                 <Check className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-emerald-600 opacity-0 transition-opacity has-[:checked]:opacity-100" />
                 <input
                   type="radio"
                   value="own"
-                  className="h-4 w-4 text-emerald-600"
+                  className="h-4 w-4 shrink-0 text-emerald-600"
                   {...register("companyMode")}
                   disabled={!presetCompany?.id}
                 />
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <div className="font-medium text-foreground">Mi empresa</div>
-                  <div className="text-xs text-muted-foreground">
+                  <div className="truncate text-xs text-muted-foreground">
                     {presetCompany?.name || "(no asignada)"}
                   </div>
                 </div>
               </label>
 
-              <label className="relative flex cursor-pointer items-center gap-3 rounded-lg border-2 border-zinc-200 bg-white min-h-[120px] p-6 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20">
+              <label className="relative flex min-h-[110px] cursor-pointer items-center gap-3 rounded-lg border-2 border-zinc-200 bg-white p-5 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20 sm:min-h-[120px] sm:p-6">
                 <Check className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-emerald-600 opacity-0 transition-opacity has-[:checked]:opacity-100" />
                 <input
                   type="radio"
-                  value="confidential"
-                  className="h-4 w-4 text-emerald-600"
+                  value="external"
+                  className="h-4 w-4 shrink-0 text-emerald-600"
                   {...register("companyMode")}
                 />
-                <div className="flex-1">
-                  <div className="font-medium text-foreground">Confidencial</div>
-                  <div className="text-xs text-muted-foreground">Ocultar nombre</div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium text-foreground">Empresa externa</div>
+                  <div className="text-xs text-muted-foreground">
+                    Publicar para otra empresa
+                  </div>
                 </div>
               </label>
             </div>
           </div>
 
-          {/* Tipo de empleo + Horario */}
-          <div className="grid gap-4 sm:grid-cols-2 py-2">
+          <div className="grid gap-4 py-2 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <Briefcase className="h-4 w-4 text-emerald-500" />
@@ -208,7 +222,9 @@ export default function Step1Basic({
                 ))}
               </select>
               {errors.employmentType && (
-                <p className="text-xs text-red-600">{errors.employmentType.message}</p>
+                <p className="text-xs text-red-600">
+                  {errors.employmentType.message}
+                </p>
               )}
             </div>
 
@@ -231,10 +247,8 @@ export default function Step1Basic({
             </div>
           </div>
 
-          {/* Ubicación y Sueldo en grid */}
-          <div className="grid gap-4 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)] items-start py-2">
-            {/* Ubicación */}
-            <div className="space-y-2 min-w-0 overflow-hidden">
+          <div className="grid items-start gap-6 py-2 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="min-w-0 space-y-2 overflow-hidden">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <MapPin className="h-4 w-4 text-emerald-500" />
                 <span>Ubicación</span>
@@ -250,8 +264,8 @@ export default function Step1Basic({
                 <option value="ONSITE">🏛️ Presencial</option>
               </select>
 
-              {(locationType === "HYBRID" || locationType === "ONSITE") && (
-                <div className="mt-3 relative min-w-0 overflow-hidden">
+              {cityRequired ? (
+                <div className="relative mt-3 min-w-0 overflow-hidden">
                   <p className="mb-2 text-xs text-muted-foreground">
                     Escribe ciudad y selecciona una sugerencia.
                   </p>
@@ -261,31 +275,46 @@ export default function Step1Basic({
                     render={({ field: { value, onChange } }) => (
                       <LocationAutocomplete
                         value={value || ""}
-                        onChange={(next: any) => {
+                        onChange={(next: unknown) => {
                           if (typeof next === "string") {
                             onChange(next);
                             return;
                           }
+
                           if (next && typeof next === "object") {
-                            onChange(next.label || next.city || "");
-                            setValue("country", next.country || "");
-                            setValue("admin1", next.admin1 || "");
-                            setValue("cityNorm", next.cityNorm || "");
-                            setValue("admin1Norm", next.admin1Norm || "");
+                            const place = next as {
+                              label?: string;
+                              city?: string;
+                              country?: string;
+                              admin1?: string;
+                              cityNorm?: string;
+                              admin1Norm?: string;
+                              lat?: number;
+                              lng?: number;
+                            };
+
+                            onChange(place.label || place.city || "");
+                            setValue("country", place.country || "");
+                            setValue("admin1", place.admin1 || "");
+                            setValue("cityNorm", place.cityNorm || "");
+                            setValue("admin1Norm", place.admin1Norm || "");
                             setValue(
                               "locationLat",
-                              typeof next.lat === "number" && Number.isFinite(next.lat)
-                                ? next.lat
+                              typeof place.lat === "number" &&
+                                Number.isFinite(place.lat)
+                                ? place.lat
                                 : null
                             );
                             setValue(
                               "locationLng",
-                              typeof next.lng === "number" && Number.isFinite(next.lng)
-                                ? next.lng
+                              typeof place.lng === "number" &&
+                                Number.isFinite(place.lng)
+                                ? place.lng
                                 : null
                             );
                             return;
                           }
+
                           onChange("");
                           setValue("country", "");
                           setValue("admin1", "");
@@ -301,25 +330,31 @@ export default function Step1Basic({
                     )}
                   />
                   {errors.city && (
-                    <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+                    <p className="mt-1 flex items-center gap-1 text-xs text-red-600">
                       <span>⚠️</span>
                       {errors.city.message as string}
                     </p>
                   )}
                 </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Para vacantes remotas no es obligatorio capturar ciudad.
+                </p>
               )}
             </div>
 
-            {/* Sueldo */}
-            <div className="space-y-2 min-w-0 relative z-10">
+            <div className="relative z-10 min-w-0 space-y-2">
               <label className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <DollarSign className="h-4 w-4 text-emerald-500" />
                 <span>Sueldo (opcional)</span>
               </label>
 
-              <div className="grid grid-cols-1 sm:grid-cols-[112px_minmax(0,170px)_minmax(0,170px)] gap-2 items-center min-w-0">
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[112px_minmax(0,1fr)_minmax(0,1fr)]">
                 <select
-                  className={inputCls(undefined, "h-11 w-[112px] min-w-[112px] px-3 py-2 pr-10")}
+                  className={inputCls(
+                    undefined,
+                    "h-11 w-full sm:w-[112px] sm:min-w-[112px] px-3 py-2 pr-10"
+                  )}
                   {...register("currency")}
                 >
                   <option value="MXN">MXN</option>
@@ -331,21 +366,30 @@ export default function Step1Basic({
                   control={control}
                   render={({ field }) => {
                     const rawValue =
-                      typeof field.value === "number" || typeof field.value === "string"
+                      typeof field.value === "number" ||
+                      typeof field.value === "string"
                         ? String(field.value)
                         : "";
-                    const displayValue = salaryMinFocused ? rawValue : formatSalary(rawValue);
+                    const displayValue = salaryMinFocused
+                      ? rawValue
+                      : formatSalary(rawValue);
+
                     return (
                       <input
                         type="text"
                         inputMode="numeric"
                         name={field.name}
                         ref={field.ref}
-                        className={inputCls(errors.salaryMin, "h-11 w-full min-w-0 px-3 py-2")}
-                        placeholder="Ej. 80,000"
+                        className={inputCls(
+                          errors.salaryMin,
+                          "h-11 w-full min-w-0 px-3 py-2"
+                        )}
+                        placeholder="Desde"
                         value={displayValue}
                         onFocus={() => setSalaryMinFocused(true)}
-                        onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
+                        onChange={(e) =>
+                          field.onChange(parseSalaryInput(e.target.value))
+                        }
                         onBlur={(e) => {
                           setSalaryMinFocused(false);
                           field.onChange(parseSalaryInput(e.target.value));
@@ -361,21 +405,30 @@ export default function Step1Basic({
                   control={control}
                   render={({ field }) => {
                     const rawValue =
-                      typeof field.value === "number" || typeof field.value === "string"
+                      typeof field.value === "number" ||
+                      typeof field.value === "string"
                         ? String(field.value)
                         : "";
-                    const displayValue = salaryMaxFocused ? rawValue : formatSalary(rawValue);
+                    const displayValue = salaryMaxFocused
+                      ? rawValue
+                      : formatSalary(rawValue);
+
                     return (
                       <input
                         type="text"
                         inputMode="numeric"
                         name={field.name}
                         ref={field.ref}
-                        className={inputCls(errors.salaryMax, "h-11 w-full min-w-0 px-3 py-2")}
-                        placeholder="Ej. 120,000"
+                        className={inputCls(
+                          errors.salaryMax,
+                          "h-11 w-full min-w-0 px-3 py-2"
+                        )}
+                        placeholder="Hasta"
                         value={displayValue}
                         onFocus={() => setSalaryMaxFocused(true)}
-                        onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
+                        onChange={(e) =>
+                          field.onChange(parseSalaryInput(e.target.value))
+                        }
                         onBlur={(e) => {
                           setSalaryMaxFocused(false);
                           field.onChange(parseSalaryInput(e.target.value));
@@ -392,14 +445,20 @@ export default function Step1Basic({
               </p>
 
               {salaryNeedsSwap && (
-                <div className="flex items-center gap-2 text-xs text-amber-700">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-amber-700">
                   <span>¿Intercambiar valores?</span>
                   <button
                     type="button"
-                    className="text-emerald-700 hover:text-emerald-600 font-medium"
+                    className="font-medium text-emerald-700 hover:text-emerald-600"
                     onClick={() => {
-                      setValue("salaryMin", salaryMax ?? undefined, { shouldDirty: true, shouldValidate: true });
-                      setValue("salaryMax", salaryMin ?? undefined, { shouldDirty: true, shouldValidate: true });
+                      setValue("salaryMin", salaryMax ?? undefined, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                      setValue("salaryMax", salaryMin ?? undefined, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
                     }}
                   >
                     Intercambiar
@@ -408,13 +467,14 @@ export default function Step1Basic({
               )}
 
               {(errors.salaryMin || errors.salaryMax) && (
-                <p className="text-xs text-red-600 flex items-center gap-1">
+                <p className="flex items-center gap-1 text-xs text-red-600">
                   <span>⚠️</span>
-                  {(errors.salaryMin?.message as string) || (errors.salaryMax?.message as string)}
+                  {(errors.salaryMin?.message as string) ||
+                    (errors.salaryMax?.message as string)}
                 </p>
               )}
 
-              <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground">
                 <input
                   type="checkbox"
                   className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-2 focus:ring-emerald-500/50"
@@ -426,18 +486,19 @@ export default function Step1Basic({
           </div>
         </div>
 
-        {/* Navigation */}
-        <div className="flex flex-col items-end gap-2 pt-4 mt-6 border-t border-zinc-200 dark:border-zinc-800">
+        <div className="mt-6 flex flex-col items-stretch gap-2 border-t border-zinc-200 pt-4 sm:items-end dark:border-zinc-800">
           {disabledMessage && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{disabledMessage}</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              {disabledMessage}
+            </p>
           )}
           <button
             type="button"
             className={clsx(
-              "rounded-lg px-6 py-3 font-semibold transition-all",
+              "w-full rounded-lg px-6 py-3 font-semibold transition-all sm:w-auto",
               canNext
-                ? "bg-emerald-600 text-white hover:bg-emerald-500 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0"
-                : "bg-emerald-300 text-white cursor-not-allowed"
+                ? "bg-emerald-600 text-white hover:-translate-y-0.5 hover:bg-emerald-500 hover:shadow-lg active:translate-y-0"
+                : "cursor-not-allowed bg-emerald-300 text-white"
             )}
             disabled={!canNext}
             onClick={onNext}

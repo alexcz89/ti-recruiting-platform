@@ -273,14 +273,21 @@ export default function JobWizard({
       fd.set("companyMode", v.companyMode);
       fd.set("companyOtherName", (v.companyOtherName || "").trim());
       fd.set("locationType", normalizedLocationType);
-      fd.set("city", (v.city || "").trim());
 
-      if (v.country) fd.set("country", v.country);
-      if (v.admin1) fd.set("admin1", v.admin1);
-      if (v.cityNorm) fd.set("cityNorm", v.cityNorm);
-      if (v.admin1Norm) fd.set("admin1Norm", v.admin1Norm);
-      if (v.locationLat != null) fd.set("locationLat", String(v.locationLat));
-      if (v.locationLng != null) fd.set("locationLng", String(v.locationLng));
+      const isRemote = normalizedLocationType === "REMOTE";
+
+      if (isRemote) {
+        fd.set("city", "");
+      } else {
+        fd.set("city", (v.city || "").trim());
+
+        if (v.country) fd.set("country", v.country);
+        if (v.admin1) fd.set("admin1", v.admin1);
+        if (v.cityNorm) fd.set("cityNorm", v.cityNorm);
+        if (v.admin1Norm) fd.set("admin1Norm", v.admin1Norm);
+        if (v.locationLat != null) fd.set("locationLat", String(v.locationLat));
+        if (v.locationLng != null) fd.set("locationLng", String(v.locationLng));
+}
 
       fd.set("currency", v.currency);
 
@@ -405,10 +412,7 @@ export default function JobWizard({
 
   return (
     <FormProvider {...methods}>
-      <form onSubmit={handleSubmit(onValidSubmit, (errors) => {
-        console.error("❌ RHF validation errors:", JSON.stringify(errors, null, 2));
-        toastError("Error de validación — revisa la consola");
-      })}>
+      <form onSubmit={handleSubmit(onValidSubmit)}>
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
           <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
             <div className="mb-0 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
