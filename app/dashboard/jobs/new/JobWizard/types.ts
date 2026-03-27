@@ -29,8 +29,8 @@ export const jobSchema = z.object({
   locationLng: z.number().nullable().optional(),
 
   currency: z.enum(["MXN", "USD"]),
-  salaryMin: z.number().nullable().optional(),
-  salaryMax: z.number().nullable().optional(),
+  salaryMin: z.coerce.number().nullable().optional(),
+  salaryMax: z.coerce.number().nullable().optional(),
   showSalary: z.boolean(),
 
   employmentType: z.enum(EMPLOYMENT_TYPE_VALUES),
