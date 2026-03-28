@@ -7,7 +7,7 @@ import { AI_MODEL_SMART } from "./config";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-export const SUMMARY_VERSION = "v1";
+export const SUMMARY_VERSION = "v2";
 
 export interface CandidateSummaryInput {
   name: string;
@@ -59,9 +59,47 @@ function uniqClean(values: string[] | undefined | null, limit?: number): string[
   return typeof limit === "number" ? out.slice(0, limit) : out;
 }
 
+function normalizeText(value: string | null | undefined): string {
+  return String(value ?? "").trim();
+}
+
+function includesAny(text: string, needles: string[]): boolean {
+  return needles.some((needle) => text.includes(needle));
+}
+
+function inferProfileShape(input: CandidateSummaryInput) {
+  const exp = input.experienceTitles.join(" ").toLowerCase();
+  const skillText = input.skills.join(" ").toLowerCase();
+  const combined = `${exp} ${skillText}`;
+
+  const recruitingKeywords = [
+    "recruit", "reclut", "headhunt", "talent", "hiring", "candidate", "staffing", "sourcing"
+  ];
+
+  const businessKeywords = [
+    "founder", "product", "consultant", "consultor", "operations", "operaciones",
+    "planning", "forecast", "sales", "ventas", "business"
+  ];
+
+  const techKeywords = [
+    "developer", "desarrollador", "engineer", "ingeniero", "software", "frontend",
+    "backend", "fullstack", "full stack", "architect", "devops"
+  ];
+
+  const modernWebSignals = [
+    "next.js", "nextjs", "typescript", "react", "postgresql", "prisma", "node", "javascript"
+  ];
+
+  return {
+    recruitingDominant: includesAny(combined, recruitingKeywords),
+    businessDominant: includesAny(combined, businessKeywords),
+    techDominant: includesAny(combined, techKeywords),
+    hasModernWebSignals: includesAny(skillText, modernWebSignals),
+  };
+}
+
 /**
  * Fingerprint con datos estables, no con strings decoradas de UI.
- * Así evitamos invalidar caché por cambios cosméticos.
  */
 export function buildFingerprint(input: CandidateSummaryInput): string {
   const stable = {
@@ -100,14 +138,14 @@ function buildPrompt(input: CandidateSummaryInput): string {
     `Nombre: ${input.name}`,
     input.seniority ? `Seniority: ${input.seniority}` : null,
     input.yearsExperience != null
-      ? `Años de experiencia: ${input.yearsExperience}`
+      ? `Años de experiencia profesional total: ${input.yearsExperience}`
       : null,
     input.location ? `Ubicación: ${input.location}` : null,
-    input.skills.length ? `Skills: ${input.skills.slice(0, 12).join(", ")}` : null,
+    input.skills.length ? `Skills detectadas: ${input.skills.slice(0, 12).join(", ")}` : null,
     input.languages.length ? `Idiomas: ${input.languages.join(", ")}` : null,
     input.experienceTitles.length
       ? `Experiencia reciente:\n${input.experienceTitles
-          .slice(0, 3)
+          .slice(0, 4)
           .map((e) => `- ${e}`)
           .join("\n")}`
       : null,
@@ -127,9 +165,7 @@ function buildPrompt(input: CandidateSummaryInput): string {
           ? `Años mínimos: ${input.job.minYearsExperience}`
           : null,
         input.job.requiredSkills.length
-          ? `Skills requeridos/deseables: ${input.job.requiredSkills
-              .slice(0, 10)
-              .join(", ")}`
+          ? `Skills requeridos/deseables: ${input.job.requiredSkills.slice(0, 10).join(", ")}`
           : null,
         input.job.missingRequired.length
           ? `Skills requeridos faltantes: ${input.job.missingRequired.join(", ")}`
@@ -151,8 +187,8 @@ Eres un recruiter técnico senior.
 Devuelve ÚNICAMENTE JSON válido con esta forma exacta:
 
 {
-  "headline": "máx 18 palabras",
-  "summary": "2-3 oraciones ejecutivas",
+  "headline": "máx 12 palabras",
+  "summary": "2-3 oraciones ejecutivas, honestas y precisas",
   "strengths": ["máx 3 bullets concretos"],
   "risks": ["máx 2 bullets reales, array vacío si no hay"],
   "suggestedQuestions": ["3-5 preguntas útiles para entrevista"],
@@ -160,11 +196,16 @@ Devuelve ÚNICAMENTE JSON válido con esta forma exacta:
   "missingSkillsNote": "1 línea sobre gaps críticos — solo si hay gaps importantes"
 }
 
-Reglas:
-- Responde en español
-- No inventes datos que no estén en el perfil
-- Si no hay vacante, omite jobFitNotes y missingSkillsNote
-- Sé directo y útil para un reclutador, no poético
+Reglas críticas:
+- Responde en español.
+- No inventes datos.
+- No exageres seniority técnico.
+- No conviertas experiencia profesional total en experiencia especializada por stack.
+- Si el perfil es híbrido o su trayectoria principal no es técnica, dilo explícitamente.
+- Si hay experiencia técnica reciente pero no dominante, descríbela como reciente, práctica o complementaria.
+- Si el candidato no se alinea bien con la vacante, menciónalo claramente en risks o jobFitNotes.
+- No uses lenguaje promocional como "experto", "especializado", "extensa experiencia", salvo evidencia muy clara.
+- Sé útil para reclutador, no poético.
 
 PERFIL:
 ${profileBlock}
@@ -173,20 +214,63 @@ ${jobBlock}
 `.trim();
 }
 
+function sanitizeSummaryText(text: string): string {
+  return normalizeText(text)
+    .replace(/\s+/g, " ")
+    .replace(/especializad[oa] en/gi, "con experiencia en")
+    .replace(/experto en/gi, "con experiencia en")
+    .replace(/extensa experiencia en/gi, "experiencia en")
+    .replace(/ha trabajado extensamente con/gi, "ha trabajado con")
+    .trim();
+}
+
 function fallbackSummary(input: CandidateSummaryInput): CandidateSummary {
+  const shape = inferProfileShape(input);
+
+  const summary = shape.recruitingDominant || shape.businessDominant
+    ? [
+        "Perfil híbrido con trayectoria principal en reclutamiento, negocio u operación.",
+        shape.hasModernWebSignals
+          ? "También muestra experiencia técnica reciente o práctica en desarrollo de producto."
+          : "Su experiencia principal no parece centrarse en desarrollo de software puro.",
+      ]
+        .filter(Boolean)
+        .join(" ")
+    : "Perfil generado con información estructurada del candidato.";
+
+  const strengths = shape.recruitingDominant || shape.businessDominant
+    ? [
+        input.experienceTitles[0] ? `Trayectoria reciente en: ${input.experienceTitles[0]}` : "",
+        input.skills.length ? `Exposición práctica a: ${uniqClean(input.skills, 3).join(", ")}` : "",
+        input.languages.length ? `Idiomas: ${uniqClean(input.languages, 2).join(", ")}` : "",
+      ].filter(Boolean)
+    : uniqClean(input.skills, 3);
+
+  const risks = [
+    ...(input.job?.missingRequired?.length
+      ? [`Faltan skills requeridos: ${uniqClean(input.job.missingRequired).join(", ")}`]
+      : []),
+    ...((shape.recruitingDominant || shape.businessDominant) && input.job
+      ? ["La trayectoria principal del candidato no parece estar totalmente alineada con una vacante técnica especializada."]
+      : []),
+  ];
+
   return {
     headline: `${input.name}${input.seniority ? ` · ${input.seniority}` : ""}`,
-    summary: "Perfil generado con información estructurada del candidato.",
-    strengths: uniqClean(input.skills, 3),
-    risks: input.job?.missingRequired?.length
-      ? [`Faltan skills requeridos: ${uniqClean(input.job.missingRequired).join(", ")}`]
-      : [],
+    summary,
+    strengths: uniqClean(strengths, 3),
+    risks: uniqClean(risks, 2),
     suggestedQuestions: [
-      "¿Cuál ha sido tu proyecto más relevante recientemente?",
-      "¿Qué herramientas o tecnologías dominas mejor hoy?",
+      "¿Cuál ha sido tu responsabilidad principal en tus experiencias más recientes?",
+      "¿Qué parte de tu experiencia técnica ha sido práctica y reciente?",
       "¿Qué tipo de rol estás buscando actualmente?",
-    ],
-    jobFitNotes: input.job ? `Evaluado contra: ${input.job.title}` : undefined,
+      ...(input.job
+        ? ["¿Qué tan alineado te consideras con esta vacante y por qué?"]
+        : []),
+    ].slice(0, 5),
+    jobFitNotes: input.job
+      ? "Conviene validar si la experiencia principal del candidato realmente se alinea con el rol."
+      : undefined,
     missingSkillsNote: input.job?.missingRequired?.length
       ? `Faltan skills clave: ${uniqClean(input.job.missingRequired).join(", ")}`
       : undefined,
@@ -202,7 +286,7 @@ export async function generateCandidateSummary(
       model: AI_MODEL_SMART,
       messages: [{ role: "user", content: buildPrompt(input) }],
       response_format: { type: "json_object" },
-      temperature: 0.3,
+      temperature: 0.2,
       max_tokens: 700,
     });
 
@@ -216,6 +300,7 @@ export async function generateCandidateSummary(
 
     return {
       ...safe.data,
+      summary: sanitizeSummaryText(safe.data.summary),
       strengths: uniqClean(safe.data.strengths, 3),
       risks: uniqClean(safe.data.risks, 2),
       suggestedQuestions: uniqClean(safe.data.suggestedQuestions, 5),

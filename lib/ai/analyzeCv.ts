@@ -13,7 +13,7 @@ const MAX_RETRIES = 2;
 const MAX_TOKENS = 1200;
 
 // Incrementar cuando cambie el prompt, schema o lógica de normalización
-const CACHE_VERSION = "cv-v4";
+const CACHE_VERSION = "cv-v5";
 
 function hashText(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex");
@@ -71,11 +71,9 @@ function normalizePhone(raw: string): string | null {
 
   if (!cleanedLabel) return null;
 
-  // Caso internacional explícito
   if (cleanedLabel.startsWith("+")) {
     const intl = `+${cleanedLabel.slice(1).replace(/\D+/g, "")}`;
 
-    // WhatsApp viejo de MX: +521XXXXXXXXXX -> +52XXXXXXXXXX
     if (/^\+521\d{10}$/.test(intl)) {
       return `+52${intl.slice(4)}`;
     }
@@ -86,23 +84,197 @@ function normalizePhone(raw: string): string | null {
   const digits = cleanedLabel.replace(/\D+/g, "");
   if (!digits) return null;
 
-  // MX local 10 dígitos
   if (/^\d{10}$/.test(digits)) {
     return `+52${digits}`;
   }
 
-  // MX con 52 sin +
   if (/^52\d{10}$/.test(digits)) {
     return `+${digits}`;
   }
 
-  // WhatsApp viejo 521 sin +
   if (/^521\d{10}$/.test(digits)) {
     return `+52${digits.slice(3)}`;
   }
 
-  // Internacional sin +: mejor descartarlo
   return null;
+}
+
+function normalizeText(value: string | null | undefined): string {
+  return String(value ?? "").trim();
+}
+
+function includesAny(text: string, needles: string[]): boolean {
+  return needles.some((needle) => text.includes(needle));
+}
+
+function sanitizeGeneratedSummary(text: string): string {
+  let out = normalizeText(text);
+
+  if (!out) return out;
+
+  out = out
+    .replace(/\s+/g, " ")
+    .replace(/especializad[oa] en/gi, "con experiencia en")
+    .replace(/experto en/gi, "con experiencia en")
+    .replace(/extensa experiencia en/gi, "experiencia en")
+    .replace(/ha trabajado extensamente con/gi, "ha trabajado con")
+    .replace(/una década de experiencia en/gi, "experiencia en")
+    .replace(/m[aá]s de \d+\s*años de experiencia en/gi, "experiencia en");
+
+  return out.trim();
+}
+
+function buildStackLabel(skills: string[]): string {
+  const preferred = skills.filter(Boolean).slice(0, 4);
+  if (!preferred.length) return "tecnologías web modernas";
+  return preferred.join(", ");
+}
+
+function inferProfileSignals(data: AiCvResult) {
+  const experienceText = (data.experiences || [])
+    .map((e) => `${e.role} ${e.company}`.toLowerCase())
+    .join(" | ");
+
+  const summaryText = normalizeText(data.summary).toLowerCase();
+  const combined = `${experienceText} | ${summaryText}`;
+
+  const recruitingKeywords = [
+    "recruit",
+    "reclut",
+    "talent",
+    "headhunt",
+    "staffing",
+    "selección",
+    "seleccion",
+    "rh",
+    "human resources",
+    "interview",
+    "sourcing",
+    "candidate",
+    "hiring",
+  ];
+
+  const businessKeywords = [
+    "sales",
+    "ventas",
+    "commercial",
+    "negocio",
+    "business",
+    "consultant",
+    "consultor",
+    "operations",
+    "operaciones",
+    "planning",
+    "forecast",
+    "supply chain",
+    "product",
+    "founder",
+  ];
+
+  const techRoleKeywords = [
+    "developer",
+    "desarrollador",
+    "engineer",
+    "ingeniero",
+    "software",
+    "frontend",
+    "backend",
+    "full stack",
+    "fullstack",
+    "architect",
+    "devops",
+    "data engineer",
+    "data scientist",
+  ];
+
+  const recruitingDominant = includesAny(combined, recruitingKeywords);
+  const businessDominant = includesAny(combined, businessKeywords);
+  const technicalDominant = includesAny(combined, techRoleKeywords);
+
+  const hasModernWebStack =
+    cleanupStringArray(data.skills || [])
+      .map((s) => s.toLowerCase())
+      .filter((s) =>
+        [
+          "next.js",
+          "nextjs",
+          "typescript",
+          "javascript",
+          "react",
+          "node.js",
+          "node",
+          "postgresql",
+          "prisma",
+        ].includes(s)
+      ).length >= 2;
+
+  const hasFounderSignal = combined.includes("founder") || combined.includes("product builder");
+
+  return {
+    recruitingDominant,
+    businessDominant,
+    technicalDominant,
+    hasModernWebStack,
+    hasFounderSignal,
+  };
+}
+
+function buildGroundedSummary(data: AiCvResult): string {
+  const cleaned = sanitizeGeneratedSummary(data.summary);
+  const signals = inferProfileSignals(data);
+  const stackLabel = buildStackLabel(data.skills);
+
+  if (
+    (signals.recruitingDominant || signals.businessDominant) &&
+    signals.hasModernWebStack
+  ) {
+    return [
+      "Perfil híbrido con trayectoria principal en reclutamiento, negocio u operación.",
+      `Cuenta con experiencia reciente construyendo o iterando productos digitales con ${stackLabel}.`,
+      "Su experiencia técnica parece práctica y reciente, no una especialización técnica de largo plazo exclusivamente en desarrollo de software.",
+    ].join(" ");
+  }
+
+  if (signals.recruitingDominant) {
+    return [
+      "Perfil con trayectoria principal en reclutamiento y atracción de talento.",
+      signals.hasFounderSignal
+        ? "También muestra experiencia emprendedora o de construcción de producto."
+        : "Su experiencia principal no está centrada en desarrollo de software puro.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  if (signals.businessDominant && signals.hasModernWebStack) {
+    return [
+      "Perfil híbrido con base en negocio/producto y exposición técnica reciente.",
+      `Ha trabajado con ${stackLabel} en un contexto práctico de construcción de producto.`,
+      "El CV no sustenta una trayectoria larga exclusivamente como desarrollador.",
+    ].join(" ");
+  }
+
+  if (signals.technicalDominant) {
+    return cleaned || `Perfil técnico con experiencia en ${stackLabel}.`;
+  }
+
+  return cleaned;
+}
+
+function augmentRedFlags(data: AiCvResult): string[] {
+  const signals = inferProfileSignals(data);
+  const current = cleanupStringArray(data.redFlags || []);
+
+  if (
+    (signals.recruitingDominant || signals.businessDominant) &&
+    signals.hasModernWebStack
+  ) {
+    current.push(
+      "La trayectoria principal parece estar más orientada a reclutamiento/negocio que a desarrollo de software puro."
+    );
+  }
+
+  return cleanupStringArray(current);
 }
 
 function normalizeCvResult(data: AiCvResult): AiCvResult {
@@ -114,47 +286,53 @@ function normalizeCvResult(data: AiCvResult): AiCvResult {
 
   const primary = phones[0] ?? null;
 
-  return {
+  const normalizedBase: AiCvResult = {
     ...data,
-    summary: data.summary.trim(),
-    linkedin: data.linkedin.trim(),
-    github: data.github.trim(),
-    location: (data.location || "").trim(),
+    summary: normalizeText(data.summary),
+    linkedin: normalizeText(data.linkedin),
+    github: normalizeText(data.github),
+    location: normalizeText(data.location),
     phoneRaw: phones,
     phonePrimary: primary,
-    skills: cleanupStringArray(data.skills),
-    recommendedRoles: cleanupStringArray(data.recommendedRoles),
-    redFlags: cleanupStringArray(data.redFlags),
-    languages: data.languages
+    skills: cleanupStringArray(data.skills || []),
+    recommendedRoles: cleanupStringArray(data.recommendedRoles || []),
+    redFlags: cleanupStringArray(data.redFlags || []),
+    languages: (data.languages || [])
       .map((l) => ({
-        label: l.label.trim(),
+        label: normalizeText(l.label),
         level: l.level,
       }))
       .filter((l) => l.label),
-    experiences: data.experiences
+    experiences: (data.experiences || [])
       .map((e) => ({
-        role: e.role.trim(),
-        company: e.company.trim(),
-        startDate: e.startDate.trim(),
-        endDate: e.endDate.trim(),
+        role: normalizeText(e.role),
+        company: normalizeText(e.company),
+        startDate: normalizeText(e.startDate),
+        endDate: normalizeText(e.endDate),
         isCurrent: e.isCurrent,
       }))
       .filter((e) => e.role || e.company),
-    education: data.education
+    education: (data.education || [])
       .map((e) => ({
-        institution: e.institution.trim(),
-        program: e.program.trim(),
-        startDate: e.startDate.trim(),
-        endDate: e.endDate.trim(),
+        institution: normalizeText(e.institution),
+        program: normalizeText(e.program),
+        startDate: normalizeText(e.startDate),
+        endDate: normalizeText(e.endDate),
         level: e.level,
       }))
       .filter((e) => e.institution || e.program),
+  };
+
+  return {
+    ...normalizedBase,
+    summary: buildGroundedSummary(normalizedBase),
+    redFlags: augmentRedFlags(normalizedBase),
   };
 }
 
 function buildPrompt(cvText: string): string {
   return `
-Eres un reclutador técnico senior especializado en perfiles de tecnología.
+Eres un reclutador técnico senior y analista de CVs.
 
 Analiza este CV y devuelve ÚNICAMENTE JSON válido con esta estructura exacta:
 
@@ -177,7 +355,7 @@ Analiza este CV y devuelve ÚNICAMENTE JSON válido con esta estructura exacta:
 Reglas:
 - No escribas nada fuera del JSON.
 - "skills": lenguajes, frameworks, cloud, bases de datos, herramientas.
-- "yearsExperience": número entero estimado.
+- "yearsExperience": número entero estimado de experiencia profesional total, no por tecnología.
 - Si no hay red flags devuelve [].
 - El resumen debe ser máximo 3 líneas.
 - Si no encuentras linkedin/github devuelve cadena vacía.
@@ -187,6 +365,15 @@ Reglas:
 - Usa español para summary, recommendedRoles y redFlags.
 - Los niveles de idioma deben respetar exactamente: NATIVE, PROFESSIONAL, CONVERSATIONAL, BASIC.
 - Si no hay experiencias o educación, devuelve [].
+
+Reglas críticas de interpretación:
+- No conviertas experiencia profesional total en años de experiencia por stack o tecnología.
+- No asumas que una tecnología reciente define el perfil principal del candidato.
+- Si el CV mezcla negocio, reclutamiento, operaciones o producto con algo técnico, refléjalo como perfil híbrido.
+- Si el candidato construyó un producto o startup con un stack técnico, descríbelo como experiencia práctica o reciente, no como carrera técnica de largo plazo salvo evidencia clara.
+- Si la trayectoria principal parece no alinearse con un rol técnico puro, inclúyelo como redFlag de forma prudente.
+- Evita lenguaje promocional o inflado como "experto", "especializado", "extensa experiencia", salvo evidencia explícita en el CV.
+- El summary debe priorizar el rol principal real del candidato y después su contexto técnico reciente.
 
 CV:
 """${cvText}"""
