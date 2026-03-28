@@ -238,14 +238,17 @@ export default function MatchScorePopover({
     () => matchResult.details.filter((d) => d.matched),
     [matchResult.details]
   );
+
   const missing = useMemo(
     () => matchResult.details.filter((d) => !d.matched),
     [matchResult.details]
   );
+
   const missingRequired = useMemo(
     () => missing.filter((d) => d.must),
     [missing]
   );
+
   const missingNice = useMemo(
     () => missing.filter((d) => !d.must),
     [missing]
@@ -308,17 +311,18 @@ export default function MatchScorePopover({
   const seniorityBadge = () => {
     const f = matchResult.seniorityFit;
     if (!f || f === "unknown") return null;
+
     const cfg = {
       exact: {
-        label: "Seniority ✓",
+        label: "Sen =",
         cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300",
       },
       close: {
-        label: "Seniority ~",
+        label: "Sen ~",
         cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-600/40 dark:bg-amber-900/20 dark:text-amber-300",
       },
       below: {
-        label: "Seniority ↓",
+        label: "Sen ↓",
         cls: "border-red-200 bg-red-50 text-red-600 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-400",
       },
     }[f];
@@ -333,9 +337,10 @@ export default function MatchScorePopover({
   const expBadge = () => {
     const f = matchResult.experienceFit;
     if (!f || f === "unknown") return null;
+
     const cfg = {
       meets: {
-        label: "Exp ✓",
+        label: "Exp =",
         cls: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300",
       },
       close: {
@@ -358,6 +363,7 @@ export default function MatchScorePopover({
   return (
     <div ref={ref} className="relative inline-block">
       <button
+        type="button"
         onClick={() => setOpen((v) => !v)}
         className="group flex min-w-[120px] flex-col gap-1 rounded-lg px-1.5 py-1 text-left transition hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
       >
@@ -408,7 +414,7 @@ export default function MatchScorePopover({
             <span className={`text-xl font-black ${scoreTextColor}`}>{score}</span>
           </div>
 
-          <div className="max-h-[460px] overflow-y-auto space-y-4 p-3">
+          <div className="max-h-[460px] space-y-4 overflow-y-auto p-3">
             <div className="rounded-lg border border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-700 dark:bg-zinc-800/40">
               <div className="mb-2 flex items-center gap-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
@@ -416,9 +422,11 @@ export default function MatchScorePopover({
                   Explicación determinística
                 </p>
               </div>
+
               <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
                 {getRecommendation(score)}
               </p>
+
               <ul className="mt-2 space-y-1.5">
                 {explanationLines.map((line, idx) => (
                   <li key={`${line}-${idx}`} className="text-xs text-zinc-600 dark:text-zinc-300">
@@ -443,9 +451,12 @@ export default function MatchScorePopover({
                 </div>
 
                 {aiLoading ? (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Generando explicación AI…
-                  </p>
+                  <div className="space-y-2">
+                    <div className="h-3 w-24 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+                    <div className="h-3 w-full animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+                    <div className="h-3 w-11/12 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+                    <div className="h-3 w-9/12 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+                  </div>
                 ) : aiExplanation ? (
                   <div className="space-y-3">
                     <div className="flex items-center gap-2">
@@ -463,7 +474,10 @@ export default function MatchScorePopover({
                         </p>
                         <ul className="space-y-1">
                           {aiExplanation.strengths.map((item, idx) => (
-                            <li key={`${item}-${idx}`} className="text-xs text-zinc-600 dark:text-zinc-300">
+                            <li
+                              key={`${item}-${idx}`}
+                              className="text-xs text-zinc-600 dark:text-zinc-300"
+                            >
                               • {item}
                             </li>
                           ))}
@@ -478,7 +492,10 @@ export default function MatchScorePopover({
                         </p>
                         <ul className="space-y-1">
                           {aiExplanation.gaps.map((item, idx) => (
-                            <li key={`${item}-${idx}`} className="text-xs text-zinc-600 dark:text-zinc-300">
+                            <li
+                              key={`${item}-${idx}`}
+                              className="text-xs text-zinc-600 dark:text-zinc-300"
+                            >
                               • {item}
                             </li>
                           ))}
@@ -493,13 +510,20 @@ export default function MatchScorePopover({
                         </p>
                         <ul className="space-y-1">
                           {aiExplanation.interviewFocus.map((item, idx) => (
-                            <li key={`${item}-${idx}`} className="text-xs text-zinc-600 dark:text-zinc-300">
+                            <li
+                              key={`${item}-${idx}`}
+                              className="text-xs text-zinc-600 dark:text-zinc-300"
+                            >
                               • {item}
                             </li>
                           ))}
                         </ul>
                       </div>
                     )}
+
+                    <p className="text-[10px] text-zinc-400">
+                      Generado {new Date(aiExplanation.generatedAt).toLocaleString("es-MX")}
+                    </p>
                   </div>
                 ) : aiError ? (
                   <div className="space-y-2">
@@ -526,154 +550,151 @@ export default function MatchScorePopover({
             )}
 
             {jobSkillCount > 0 && (
-              <div>
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                  Breakdown
-                </p>
-                <div className="space-y-2">
-                  <div>
-                    <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">
-                      <span>Skills globales</span>
-                      <span>{matchResult.skillScore}%</span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-700/60">
-                      <div
-                        className="h-1.5 rounded-full bg-emerald-500"
-                        style={{ width: `${matchResult.skillScore}%` }}
-                      />
-                    </div>
-                  </div>
+              <>
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                    Breakdown
+                  </p>
 
-                  {matchResult.totalRequired > 0 && (
+                  <div className="space-y-2">
                     <div>
                       <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">
-                        <span>Requeridas</span>
-                        <span>{matchResult.mustScore}%</span>
+                        <span>Skills globales</span>
+                        <span>{matchResult.skillScore}%</span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-700/60">
                         <div
                           className="h-1.5 rounded-full bg-emerald-500"
-                          style={{ width: `${matchResult.mustScore}%` }}
+                          style={{ width: `${matchResult.skillScore}%` }}
                         />
                       </div>
                     </div>
-                  )}
 
-                  {matchResult.totalNice > 0 && (
-                    <div>
-                      <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">
-                        <span>Deseables</span>
-                        <span>{matchResult.niceScore}%</span>
+                    {matchResult.totalRequired > 0 && (
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">
+                          <span>Requeridas</span>
+                          <span>{matchResult.mustScore}%</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-700/60">
+                          <div
+                            className="h-1.5 rounded-full bg-violet-500"
+                            style={{ width: `${matchResult.mustScore}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-700/60">
+                    )}
+
+                    {matchResult.totalNice > 0 && (
+                      <div>
+                        <div className="mb-1 flex items-center justify-between text-[11px] text-zinc-500">
+                          <span>Deseables</span>
+                          <span>{matchResult.niceScore}%</span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-700/60">
+                          <div
+                            className="h-1.5 rounded-full bg-sky-500"
+                            style={{ width: `${matchResult.niceScore}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {matched.length > 0 && (
+                  <div>
+                    <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                      Skills alineadas
+                    </p>
+                    <div className="space-y-1.5">
+                      {matched.slice(0, 8).map((item) => (
                         <div
-                          className="h-1.5 rounded-full bg-sky-400"
-                          style={{ width: `${matchResult.niceScore}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {(matchResult.seniorityFit !== "unknown" ||
-              matchResult.experienceFit !== "unknown") && (
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                  Perfil
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {seniorityBadge()}
-                  {expBadge()}
-                </div>
-              </div>
-            )}
-
-            {matched.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                  Tiene ({matched.length})
-                </p>
-                <div className="space-y-1">
-                  {matched.map((d) => (
-                    <div key={d.termId} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-                        <span className="truncate text-xs text-zinc-700 dark:text-zinc-200">
-                          {d.label}
-                        </span>
-                        {d.must && (
-                          <span className="shrink-0 rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                            REQ
+                          key={item.termId}
+                          className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50/70 px-2 py-1.5 dark:border-emerald-700/30 dark:bg-emerald-950/20"
+                        >
+                          <div>
+                            <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                              {item.label}
+                            </p>
+                            {item.candidateLevel != null && (
+                              <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                {SKILL_LEVEL_LABEL[item.candidateLevel] ?? `Nivel ${item.candidateLevel}`}
+                              </p>
+                            )}
+                          </div>
+                          <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
+                            +{item.contribution}
                           </span>
-                        )}
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-2">
-                        {d.candidateLevel != null && (
-                          <span className="text-[10px] text-zinc-400">
-                            {SKILL_LEVEL_LABEL[d.candidateLevel] ?? `L${d.candidateLevel}`}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-zinc-400">
-                          +{d.contribution.toFixed(1)}
-                        </span>
-                      </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                )}
 
-            {missingRequired.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                  Falta — Requeridas ({missingRequired.length})
-                </p>
-                <div className="space-y-1">
-                  {missingRequired.map((d) => (
-                    <div key={d.termId} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex items-center gap-1.5">
-                        <XCircle className="h-3.5 w-3.5 shrink-0 text-red-400" />
-                        <span className="truncate text-xs text-zinc-600 dark:text-zinc-300">
-                          {d.label}
-                        </span>
+                {(missingRequired.length > 0 || missingNice.length > 0) && (
+                  <div className="space-y-3">
+                    {missingRequired.length > 0 && (
+                      <div>
+                        <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                          <XCircle className="h-3.5 w-3.5 text-red-500" />
+                          Faltantes requeridas
+                        </p>
+                        <div className="space-y-1.5">
+                          {missingRequired.slice(0, 8).map((item) => (
+                            <div
+                              key={item.termId}
+                              className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50/70 px-2 py-1.5 dark:border-red-700/30 dark:bg-red-950/20"
+                            >
+                              <div>
+                                <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                                  {item.label}
+                                </p>
+                                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                  Requerida
+                                </p>
+                              </div>
+                              <span className="text-[10px] font-semibold text-red-700 dark:text-red-300">
+                                {item.weight} pts
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="shrink-0 text-[10px] text-zinc-400">
-                        peso {d.weight}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                    )}
 
-            {missingNice.length > 0 && (
-              <div>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
-                  Falta — Deseables ({missingNice.length})
-                </p>
-                <div className="space-y-1">
-                  {missingNice.map((d) => (
-                    <div key={d.termId} className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 flex items-center gap-1.5">
-                        <MinusCircle className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-600" />
-                        <span className="truncate text-xs text-zinc-400 dark:text-zinc-500">
-                          {d.label}
-                        </span>
+                    {missingNice.length > 0 && (
+                      <div>
+                        <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                          <MinusCircle className="h-3.5 w-3.5 text-amber-500" />
+                          Faltantes deseables
+                        </p>
+                        <div className="space-y-1.5">
+                          {missingNice.slice(0, 8).map((item) => (
+                            <div
+                              key={item.termId}
+                              className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/70 px-2 py-1.5 dark:border-amber-700/30 dark:bg-amber-950/20"
+                            >
+                              <div>
+                                <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
+                                  {item.label}
+                                </p>
+                                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                                  Deseable
+                                </p>
+                              </div>
+                              <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                                {item.weight} pts
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                      <span className="shrink-0 text-[10px] text-zinc-400">
-                        peso {d.weight}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {matched.length === 0 && missing.length === 0 && (
-              <p className="text-xs text-zinc-400">Sin detalle de skills disponible.</p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

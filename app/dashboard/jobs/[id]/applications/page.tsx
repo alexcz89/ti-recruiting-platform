@@ -10,6 +10,7 @@ import { Phone, FileText as FileTextIcon, Search, Lock, SlidersHorizontal } from
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import MatchScorePopover from "@/components/dashboard/MatchScorePopover";
 import MatchBreakdownMini from "@/components/jobs/MatchBreakdownMini";
+import { computeTagBoost } from "@/lib/ai/tagBoost";
 import {
   computeMatchScore,
   applyPlanGate,
@@ -83,8 +84,8 @@ export default async function JobApplicationsPage({
   if (!companyId) {
     return (
       <main className="max-w-none p-0">
-        <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-10">
-          <div className="glass-card rounded-2xl border border-dashed p-4 md:p-6 text-center">
+        <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 py-10 lg:px-10">
+          <div className="glass-card rounded-2xl border border-dashed p-4 text-center md:p-6">
             <p className="mb-1 text-base font-medium text-zinc-800">No hay empresa asociada a tu sesión.</p>
             <p className="text-sm text-zinc-600">Pide al administrador que asigne tu usuario a una empresa.</p>
           </div>
@@ -160,6 +161,11 @@ export default async function JobApplicationsPage({
           certifications: true,
           seniority: true,
           yearsExperience: true,
+          aiProfile: {
+            select: {
+              tags: true,
+            },
+          },
           candidateSkills: {
             select: {
               level: true,
@@ -333,8 +339,8 @@ export default async function JobApplicationsPage({
   const chosenInterest: InterestKey | undefined = !interestParam
     ? "REVIEW"
     : interestParam === "ALL"
-    ? undefined
-    : (interestParam as InterestKey);
+      ? undefined
+      : (interestParam as InterestKey);
 
   const qParam = (searchParams?.q ?? "").toString();
   const q = qParam.trim().toLowerCase();
@@ -361,6 +367,16 @@ export default async function JobApplicationsPage({
       candidateYearsExperience: (a.candidate as any)?.yearsExperience ?? null,
     });
 
+    const baseScore = matchResult?.score ?? 0;
+
+    const tagBoost = computeTagBoost({
+      candidateTags: Array.isArray(a.candidate?.aiProfile?.tags) ? a.candidate.aiProfile.tags : [],
+      jobTitle: job.title,
+      jobSkills: job.requiredSkills.map((s) => s.term.label),
+    });
+
+    const finalScore = Math.min(baseScore + tagBoost, 100);
+
     const fullName =
       a.candidate?.name ||
       [(a.candidate as any)?.firstName, (a.candidate as any)?.lastName].filter(Boolean).join(" ") ||
@@ -369,7 +385,9 @@ export default async function JobApplicationsPage({
     return {
       ...a,
       _matchResult: matchResult,
-      _score: matchResult?.score ?? 0,
+      _score: baseScore,
+      _finalScore: finalScore,
+      _tagBoost: tagBoost,
       _fullName: fullName,
       _lastActivity: a.createdAt,
       _hasCV: Boolean(a.candidate?.resumeUrl),
@@ -393,12 +411,18 @@ export default async function JobApplicationsPage({
   const sorted = [...enriched].sort((a, b) => {
     if (sortKey === "recent") return new Date(b._lastActivity).getTime() - new Date(a._lastActivity).getTime();
     if (sortKey === "name") return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
-    return (b._score ?? 0) - (a._score ?? 0);
+    return (b._finalScore ?? 0) - (a._finalScore ?? 0);
   });
 
   const withGate = sorted.map((a, idx) => {
     const gatedScore = applyPlanGate(a._score, idx, plan);
-    return { ...a, _gatedScore: gatedScore, _locked: gatedScore === null };
+    const gatedFinalScore = applyPlanGate(a._finalScore, idx, plan);
+    return {
+      ...a,
+      _gatedScore: gatedScore,
+      _gatedFinalScore: gatedFinalScore,
+      _locked: gatedScore === null,
+    };
   });
 
   const apps = withGate.filter((a) => {
@@ -488,7 +512,7 @@ export default async function JobApplicationsPage({
             </div>
             <Link
               href="/dashboard/billing"
-              className="self-start rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white hover:bg-amber-700 transition-colors sm:self-auto sm:shrink-0"
+              className="self-start rounded-xl bg-amber-600 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-amber-700 sm:self-auto sm:shrink-0"
             >
               Mejorar plan →
             </Link>
@@ -539,20 +563,20 @@ export default async function JobApplicationsPage({
                             ? f === "HIGH"
                               ? "border-emerald-500 bg-emerald-600 text-white"
                               : f === "MED"
-                              ? "border-amber-500 bg-amber-500 text-white"
-                              : f === "LOW"
-                              ? "border-red-400 bg-red-500 text-white"
-                              : "border-zinc-500 bg-zinc-700 text-white dark:border-zinc-400 dark:bg-zinc-600"
+                                ? "border-amber-500 bg-amber-500 text-white"
+                                : f === "LOW"
+                                  ? "border-red-400 bg-red-500 text-white"
+                                  : "border-zinc-500 bg-zinc-700 text-white dark:border-zinc-400 dark:bg-zinc-600"
                             : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
                         }`}
                       >
                         {f === "ALL"
                           ? `Todos (${matchCounts.ALL})`
                           : f === "HIGH"
-                          ? `Alto (${matchCounts.HIGH})`
-                          : f === "MED"
-                          ? `Medio (${matchCounts.MED})`
-                          : `Bajo (${matchCounts.LOW})`}
+                            ? `Alto (${matchCounts.HIGH})`
+                            : f === "MED"
+                              ? `Medio (${matchCounts.MED})`
+                              : `Bajo (${matchCounts.LOW})`}
                       </Link>
                     ))}
                   </div>
@@ -587,8 +611,8 @@ export default async function JobApplicationsPage({
               {activeFiltersCount > 0
                 ? "Ningún candidato coincide con los filtros."
                 : chosenInterest
-                ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
-                : "Aún no hay postulaciones."}
+                  ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
+                  : "Aún no hay postulaciones."}
             </p>
             {activeFiltersCount > 0 && (
               <Link href={buildHref({ match: undefined, cv: undefined })} className="mt-2 inline-block text-sm text-emerald-600 underline hover:no-underline">
@@ -644,11 +668,11 @@ export default async function JobApplicationsPage({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         {candidateHref ? (
-                          <Link href={candidateHref} className="block truncate font-semibold text-sm hover:underline">
+                          <Link href={candidateHref} className="block truncate text-sm font-semibold hover:underline">
                             {a._fullName}
                           </Link>
                         ) : (
-                          <span className="font-semibold text-sm">{a._fullName}</span>
+                          <span className="text-sm font-semibold">{a._fullName}</span>
                         )}
                         <p className="truncate text-xs text-zinc-500">{a.candidate?.location ?? "—"}</p>
                       </div>
@@ -753,19 +777,19 @@ export default async function JobApplicationsPage({
                           assessMeta.state === "COMPLETED"
                             ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
                             : assessMeta.state === "STARTED"
-                            ? "border-sky-200 bg-sky-50 text-sky-700"
-                            : assessMeta.state === "EXPIRED"
-                            ? "border-amber-200 bg-amber-50 text-amber-800"
-                            : "border-violet-200 bg-violet-50 text-violet-700",
+                              ? "border-sky-200 bg-sky-50 text-sky-700"
+                              : assessMeta.state === "EXPIRED"
+                                ? "border-amber-200 bg-amber-50 text-amber-800"
+                                : "border-violet-200 bg-violet-50 text-violet-700",
                         ].join(" ")}
                       >
                         {assessMeta.state === "COMPLETED"
                           ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}`
                           : assessMeta.state === "STARTED"
-                          ? "Assessment: iniciado"
-                          : assessMeta.state === "EXPIRED"
-                          ? "Assessment: expirado"
-                          : "Assessment: enviado"}
+                            ? "Assessment: iniciado"
+                            : assessMeta.state === "EXPIRED"
+                              ? "Assessment: expirado"
+                              : "Assessment: enviado"}
                       </span>
                     )}
                   </div>
@@ -860,19 +884,19 @@ export default async function JobApplicationsPage({
                                   assessMeta.state === "COMPLETED"
                                     ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
                                     : assessMeta.state === "STARTED"
-                                    ? "border-sky-200 bg-sky-50 text-sky-700"
-                                    : assessMeta.state === "EXPIRED"
-                                    ? "border-amber-200 bg-amber-50 text-amber-800"
-                                    : "border-violet-200 bg-violet-50 text-violet-700",
+                                      ? "border-sky-200 bg-sky-50 text-sky-700"
+                                      : assessMeta.state === "EXPIRED"
+                                        ? "border-amber-200 bg-amber-50 text-amber-800"
+                                        : "border-violet-200 bg-violet-50 text-violet-700",
                                 ].join(" ")}
                               >
                                 {assessMeta.state === "COMPLETED"
                                   ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}`
                                   : assessMeta.state === "STARTED"
-                                  ? "Iniciado"
-                                  : assessMeta.state === "EXPIRED"
-                                  ? "Expirado"
-                                  : "Enviado"}
+                                    ? "Iniciado"
+                                    : assessMeta.state === "EXPIRED"
+                                      ? "Expirado"
+                                      : "Enviado"}
                               </span>
                             )}
                           </div>
