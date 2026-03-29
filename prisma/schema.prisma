@@ -883,6 +883,7 @@ model CandidateAIProfile {
   sourceFingerprint String
   profileJson       Json
 
+  profileType   String?
   summaryText   String?  @db.Text
   strengthsJson Json?
   risksJson     Json?
@@ -893,6 +894,7 @@ model CandidateAIProfile {
 
   @@index([generatedAt])
   @@index([sourceFingerprint])
+  @@index([profileType])
 }
 
 model CandidateSummaryCache {

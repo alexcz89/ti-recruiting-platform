@@ -208,7 +208,8 @@ function inferProfileSignals(data: AiCvResult) {
         ].includes(s)
       ).length >= 2;
 
-  const hasFounderSignal = combined.includes("founder") || combined.includes("product builder");
+  const hasFounderSignal =
+    combined.includes("founder") || combined.includes("product builder");
 
   return {
     recruitingDominant,
@@ -217,6 +218,26 @@ function inferProfileSignals(data: AiCvResult) {
     hasModernWebStack,
     hasFounderSignal,
   };
+}
+
+function detectProfileType(data: AiCvResult): string {
+  const signals = inferProfileSignals(data);
+
+  if (signals.recruitingDominant) {
+    if (signals.hasModernWebStack) return "HYBRID";
+    return "RECRUITING";
+  }
+
+  if (signals.businessDominant) {
+    if (signals.hasModernWebStack) return "HYBRID";
+    return "BUSINESS";
+  }
+
+  if (signals.technicalDominant) {
+    return "ENGINEERING";
+  }
+
+  return "HYBRID";
 }
 
 function buildGroundedSummary(data: AiCvResult): string {
@@ -407,6 +428,7 @@ export async function analyzeCv(
       if (safe.success) {
         const normalized = normalizeCvResult(safe.data);
         const parsedJson = normalized as unknown as Prisma.InputJsonValue;
+        const profileType = detectProfileType(normalized);
 
         if (candidateId) {
           void prisma.candidateAIProfile
@@ -416,6 +438,7 @@ export async function analyzeCv(
                 profileJson: parsedJson,
                 sourceFingerprint: cvHash,
                 profileVersion: CACHE_VERSION,
+                profileType,
                 summaryText: normalized.summary,
                 strengthsJson:
                   normalized.skills as unknown as Prisma.InputJsonValue,
@@ -428,6 +451,7 @@ export async function analyzeCv(
                 profileJson: parsedJson,
                 sourceFingerprint: cvHash,
                 profileVersion: CACHE_VERSION,
+                profileType,
                 summaryText: normalized.summary,
                 strengthsJson:
                   normalized.skills as unknown as Prisma.InputJsonValue,
@@ -513,6 +537,7 @@ export async function analyzeCv(
 
       const normalized = normalizeCvResult(safe.data);
       const parsedJson = normalized as unknown as Prisma.InputJsonValue;
+      const profileType = detectProfileType(normalized);
 
       void prisma.cvParseCache
         .upsert({
@@ -539,6 +564,7 @@ export async function analyzeCv(
               profileJson: parsedJson,
               sourceFingerprint: cvHash,
               profileVersion: CACHE_VERSION,
+              profileType,
               summaryText: normalized.summary,
               strengthsJson:
                 normalized.skills as unknown as Prisma.InputJsonValue,
@@ -551,6 +577,7 @@ export async function analyzeCv(
               profileJson: parsedJson,
               sourceFingerprint: cvHash,
               profileVersion: CACHE_VERSION,
+              profileType,
               summaryText: normalized.summary,
               strengthsJson:
                 normalized.skills as unknown as Prisma.InputJsonValue,

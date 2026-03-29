@@ -30,6 +30,18 @@ const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
   BASIC: "Básico",
 };
 
+const PROFILE_TYPE_LABEL: Record<string, string> = {
+  ENGINEERING: "Engineering",
+  DATA: "Data",
+  DEVOPS: "DevOps",
+  PRODUCT: "Product",
+  DESIGN: "Design",
+  QA: "QA",
+  RECRUITING: "Recruiting",
+  BUSINESS: "Business",
+  HYBRID: "Hybrid",
+};
+
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const INTEREST_LABEL: Record<InterestKey, string> = {
   REVIEW: "En revisión",
@@ -43,12 +55,6 @@ function getAppInterest(a: any): InterestKey {
   if (raw === "MAYBE" || raw === "ACCEPTED" || raw === "REJECTED") return raw;
   return "REVIEW";
 }
-
-const PLAN_LABELS: Record<BillingPlan, string> = {
-  FREE: "Gratis",
-  STARTER: "Starter",
-  PRO: "Pro",
-};
 
 type SortKey = "match" | "recent" | "name";
 type MatchFilter = "ALL" | "HIGH" | "MED" | "LOW";
@@ -65,6 +71,31 @@ function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
   const lower = s.toLowerCase();
   if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
   return null;
+}
+
+function adjustScoreByProfileType(params: {
+  baseScore: number;
+  profileType: string | null | undefined;
+  jobIsTech: boolean;
+}): number {
+  const { baseScore, profileType, jobIsTech } = params;
+
+  let score = baseScore;
+  const normalizedProfile = String(profileType ?? "").toUpperCase();
+
+  if (!jobIsTech || !normalizedProfile) {
+    return Math.max(0, Math.min(100, score));
+  }
+
+  if (normalizedProfile === "RECRUITING" || normalizedProfile === "BUSINESS") {
+    score -= 15;
+  } else if (normalizedProfile === "HYBRID") {
+    score -= 5;
+  } else if (normalizedProfile === "ENGINEERING") {
+    score += 5;
+  }
+
+  return Math.max(0, Math.min(100, score));
 }
 
 export default async function JobApplicationsPage({
@@ -164,6 +195,7 @@ export default async function JobApplicationsPage({
           aiProfile: {
             select: {
               tags: true,
+              profileType: true,
             },
           },
           candidateSkills: {
@@ -368,6 +400,7 @@ export default async function JobApplicationsPage({
     });
 
     const baseScore = matchResult?.score ?? 0;
+    const profileType = a.candidate?.aiProfile?.profileType ?? null;
 
     const tagBoost = computeTagBoost({
       candidateTags: Array.isArray(a.candidate?.aiProfile?.tags) ? a.candidate.aiProfile.tags : [],
@@ -375,7 +408,13 @@ export default async function JobApplicationsPage({
       jobSkills: job.requiredSkills.map((s) => s.term.label),
     });
 
-    const finalScore = Math.min(baseScore + tagBoost, 100);
+    const scoreAfterProfile = adjustScoreByProfileType({
+      baseScore,
+      profileType,
+      jobIsTech: hasJobSkills,
+    });
+
+    const finalScore = Math.max(0, Math.min(100, scoreAfterProfile + tagBoost));
 
     const fullName =
       a.candidate?.name ||
@@ -386,6 +425,8 @@ export default async function JobApplicationsPage({
       ...a,
       _matchResult: matchResult,
       _score: baseScore,
+      _profileType: profileType,
+      _profileAdjustedScore: scoreAfterProfile,
       _finalScore: finalScore,
       _tagBoost: tagBoost,
       _fullName: fullName,
@@ -401,7 +442,8 @@ export default async function JobApplicationsPage({
   if (q) {
     enriched = enriched.filter((a) => {
       const skills = (a.candidate?.candidateSkills ?? []).map((cs: any) => cs.term.label).join(" ");
-      const haystack = [a._fullName, a.candidate?.email ?? "", a.candidate?.location ?? "", skills]
+      const profileTypeLabel = PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? "";
+      const haystack = [a._fullName, a.candidate?.email ?? "", a.candidate?.location ?? "", skills, profileTypeLabel]
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
@@ -427,7 +469,7 @@ export default async function JobApplicationsPage({
 
   const apps = withGate.filter((a) => {
     if (matchFilter !== "ALL" && hasMatchSignals && !a._locked) {
-      if (scoreToRange(a._gatedScore ?? 0) !== matchFilter) return false;
+      if (scoreToRange(a._gatedFinalScore ?? 0) !== matchFilter) return false;
     }
     if (cvFilter === "YES" && !a._hasCV) return false;
     if (cvFilter === "NO" && a._hasCV) return false;
@@ -440,7 +482,7 @@ export default async function JobApplicationsPage({
   for (const a of withGate) {
     matchCounts.ALL++;
     if (!a._locked && hasMatchSignals) {
-      matchCounts[scoreToRange(a._gatedScore ?? 0)]++;
+      matchCounts[scoreToRange(a._gatedFinalScore ?? 0)]++;
     }
   }
 
@@ -633,7 +675,7 @@ export default async function JobApplicationsPage({
                   name="q"
                   defaultValue={qParam}
                   className="w-full rounded-full border border-zinc-200 bg-white/70 py-1.5 pl-8 pr-3 text-xs text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/60 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-                  placeholder="Nombre, email, ciudad o skill…"
+                  placeholder="Nombre, email, ciudad, skill o perfil…"
                 />
               </form>
 
@@ -654,8 +696,10 @@ export default async function JobApplicationsPage({
             <div className="block divide-y divide-zinc-100 dark:divide-zinc-800 sm:hidden">
               {apps.map((a: any) => {
                 const matchResult = a._matchResult;
-                const gatedScore: number | null = a._gatedScore;
+                const gatedFinalScore: number | null = a._gatedFinalScore;
                 const locked: boolean = a._locked;
+                const profileTypeLabel =
+                  PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? null;
                 const candidateHref = a.candidate?.id
                   ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
                   : undefined;
@@ -675,6 +719,13 @@ export default async function JobApplicationsPage({
                           <span className="text-sm font-semibold">{a._fullName}</span>
                         )}
                         <p className="truncate text-xs text-zinc-500">{a.candidate?.location ?? "—"}</p>
+                        {profileTypeLabel && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">
+                              {profileTypeLabel}
+                            </span>
+                          </div>
+                        )}
                       </div>
 
                       {hasMatchSignals && (
@@ -685,16 +736,16 @@ export default async function JobApplicationsPage({
                           </div>
                         ) : (
                           <div className="shrink-0 text-right">
-                            <span className={`text-lg font-black leading-none ${scoreToTextColor(gatedScore!)}`}>{gatedScore}%</span>
-                            <p className="text-[10px] text-zinc-400">{scoreToLabel(gatedScore!)}</p>
+                            <span className={`text-lg font-black leading-none ${scoreToTextColor(gatedFinalScore!)}`}>{gatedFinalScore}%</span>
+                            <p className="text-[10px] text-zinc-400">{scoreToLabel(gatedFinalScore!)}</p>
                           </div>
                         )
                       )}
                     </div>
 
-                    {hasMatchSignals && !locked && gatedScore !== null && (
+                    {hasMatchSignals && !locked && gatedFinalScore !== null && (
                       <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
-                        <div className={`h-1.5 rounded ${scoreToColor(gatedScore)}`} style={{ width: `${gatedScore}%` }} />
+                        <div className={`h-1.5 rounded ${scoreToColor(gatedFinalScore)}`} style={{ width: `${gatedFinalScore}%` }} />
                       </div>
                     )}
 
@@ -814,7 +865,7 @@ export default async function JobApplicationsPage({
                 <tbody>
                   {apps.map((a: any) => {
                     const matchResult = a._matchResult;
-                    const gatedScore: number | null = a._gatedScore;
+                    const gatedFinalScore: number | null = a._gatedFinalScore;
                     const locked: boolean = a._locked;
                     const matchedDetails = (matchResult?.details ?? []).filter((d: any) => d.matched).slice(0, 4);
                     const hiddenCount = Math.max(0, (matchResult?.matchedCount ?? 0) - matchedDetails.length);
@@ -826,6 +877,8 @@ export default async function JobApplicationsPage({
                     const hasWhatsApp = phone?.trim().startsWith("+52");
                     const assessMeta = assessmentEnabled && chosenTemplateId ? assessmentByAppId.get(a.id) ?? null : null;
                     const languages = a.candidate?.candidateLanguages ?? [];
+                    const profileTypeLabel =
+                      PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? null;
 
                     return (
                       <tr key={a.id} className="align-top border-t border-zinc-100 transition-colors hover:bg-zinc-50/40 dark:border-zinc-800 dark:hover:bg-zinc-900/20">
@@ -838,6 +891,14 @@ export default async function JobApplicationsPage({
                             )}
 
                             <span className="text-xs text-zinc-500">{a.candidate?.location ?? "—"}</span>
+
+                            {profileTypeLabel && (
+                              <div className="mt-0.5">
+                                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">
+                                  {profileTypeLabel}
+                                </span>
+                              </div>
+                            )}
 
                             {languages.length > 0 && (
                               <div className="mt-0.5 flex flex-wrap gap-1">
@@ -927,12 +988,12 @@ export default async function JobApplicationsPage({
                           ) : (
                             <div className="space-y-1.5">
                               <MatchScorePopover
-                                score={gatedScore!}
+                                score={gatedFinalScore!}
                                 matchResult={matchResult}
                                 jobSkillCount={jobSkillsForEngine.length}
-                                scoreColor={scoreToColor(gatedScore!)}
-                                scoreTextColor={scoreToTextColor(gatedScore!)}
-                                scoreLabel={scoreToLabel(gatedScore!)}
+                                scoreColor={scoreToColor(gatedFinalScore!)}
+                                scoreTextColor={scoreToTextColor(gatedFinalScore!)}
+                                scoreLabel={scoreToLabel(gatedFinalScore!)}
                                 candidateId={a.candidate?.id}
                                 jobId={job.id}
                               />
