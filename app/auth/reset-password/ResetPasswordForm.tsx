@@ -5,9 +5,19 @@ import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Lock, Eye, EyeOff, CheckCircle2, XCircle, Sparkles, Loader2 } from "lucide-react";
-// CAMBIO: Importar directamente desde el archivo
-import { resetPasswordSchema, type ResetPasswordInput } from "@/lib/shared/validation/password-reset";
+import {
+  Lock,
+  Eye,
+  EyeOff,
+  CheckCircle2,
+  XCircle,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
+import {
+  resetPasswordSchema,
+  type ResetPasswordInput,
+} from "@/lib/shared/validation/password-reset";
 import { verifyResetToken, resetPassword } from "../signin/password-reset-actions";
 
 type PageStatus = "loading" | "valid" | "invalid" | "success" | "error";
@@ -30,7 +40,6 @@ export default function ResetPasswordForm() {
     resolver: zodResolver(resetPasswordSchema),
   });
 
-  // Verificar el token al cargar
   useEffect(() => {
     const verifyToken = async () => {
       if (!token) {
@@ -39,14 +48,19 @@ export default function ResetPasswordForm() {
         return;
       }
 
-      const result = await verifyResetToken(token);
-      
-      if (result.valid) {
-        setPageStatus("valid");
-        setErrorMessage(""); // Limpiar cualquier error previo
-      } else {
+      try {
+        const result = await verifyResetToken(token);
+
+        if (result.valid) {
+          setPageStatus("valid");
+          setErrorMessage("");
+        } else {
+          setPageStatus("invalid");
+          setErrorMessage(result.message || "El enlace es inválido o ha expirado.");
+        }
+      } catch {
         setPageStatus("invalid");
-        setErrorMessage(result.message || "El enlace es inválido o ha expirado.");
+        setErrorMessage("No fue posible verificar el enlace. Intenta solicitar uno nuevo.");
       }
     };
 
@@ -64,16 +78,13 @@ export default function ResetPasswordForm() {
 
       if (result.success) {
         setPageStatus("success");
-        // Redirigir al login después de 3 segundos
         setTimeout(() => {
           router.push("/auth/signin");
         }, 3000);
       } else {
-        // Mantener en valid pero mostrar error
         setErrorMessage(result.message || "No se pudo restablecer la contraseña.");
       }
-    } catch (error) {
-      // Mantener en valid pero mostrar error
+    } catch {
       setErrorMessage("Ocurrió un error inesperado. Intenta nuevamente.");
     }
   };
@@ -83,26 +94,27 @@ export default function ResetPasswordForm() {
       {/* Decoraciones de fondo */}
       <div className="pointer-events-none absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-gradient-to-br from-violet-400/10 to-blue-400/10 blur-3xl dark:from-violet-600/10 dark:to-blue-600/10" />
       <div className="pointer-events-none absolute -bottom-40 -right-40 h-[600px] w-[600px] rounded-full bg-gradient-to-br from-emerald-400/10 to-teal-400/10 blur-3xl dark:from-emerald-600/10 dark:to-teal-600/10" />
-      
+
       {/* Grid pattern */}
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:32px_32px]" />
 
-      <div className="relative flex min-h-screen items-center justify-center px-6 py-12">
+      <div className="relative flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
         <div className="w-full max-w-md">
-          {/* Logo */}
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 inline-flex items-center gap-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 shadow-xl shadow-violet-500/30">
-                <Sparkles className="h-7 w-7 text-white" />
-              </div>
-              <span className="text-3xl font-black text-zinc-900 dark:text-zinc-50">
-                TASK<span className="text-emerald-500">IT</span>
-              </span>
+          {/* Header */}
+          <div className="mb-6 text-center sm:mb-8">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 shadow-xl shadow-violet-500/30">
+              <ShieldCheck className="h-7 w-7 text-white" />
             </div>
+            <h1 className="text-2xl font-black text-zinc-900 dark:text-zinc-50">
+              Restablecer contraseña
+            </h1>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Actualiza tu acceso de forma segura
+            </p>
           </div>
 
           {/* Card */}
-          <div className="rounded-3xl border-2 border-zinc-200 bg-white/95 p-8 shadow-2xl backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/95">
+          <div className="rounded-3xl border-2 border-zinc-200 bg-white/95 p-6 shadow-2xl backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/95 sm:p-8">
             {/* Loading State */}
             {pageStatus === "loading" && (
               <div className="text-center">
@@ -147,7 +159,8 @@ export default function ResetPasswordForm() {
                   ¡Contraseña actualizada!
                 </h2>
                 <p className="mb-6 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  Tu contraseña ha sido restablecida exitosamente. Serás redirigido al inicio de sesión...
+                  Tu contraseña ha sido restablecida exitosamente. Serás redirigido al
+                  inicio de sesión...
                 </p>
                 <div className="flex items-center justify-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -186,8 +199,13 @@ export default function ResetPasswordForm() {
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+                        aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                       >
-                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
                       </button>
                     </div>
                     {errors.password && (
@@ -214,8 +232,17 @@ export default function ResetPasswordForm() {
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+                        aria-label={
+                          showConfirmPassword
+                            ? "Ocultar confirmación de contraseña"
+                            : "Mostrar confirmación de contraseña"
+                        }
                       >
-                        {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                        {showConfirmPassword ? (
+                          <EyeOff className="h-5 w-5" />
+                        ) : (
+                          <Eye className="h-5 w-5" />
+                        )}
                       </button>
                     </div>
                     {errors.confirmPassword && (
