@@ -11,7 +11,7 @@ export type SeedQuestion = {
   tags: string[]
   questionText: string
   allowMultiple: boolean
-  difficulty: "EASY" | "MEDIUM"
+  difficulty: "JUNIOR" | "MID" | "SENIOR"
   explanation?: string
   options: SeedOption[]
 }
@@ -21,8 +21,8 @@ export type SeedAssessmentTemplate = {
   title: string
   description: string
   instructions: string
-  type: string
-  difficulty: "EASY" | "MEDIUM"
+  type: "MCQ" | "CODING" | "MIXED"
+  difficulty: "JUNIOR" | "MID" | "SENIOR"
   timeLimit: number
   passingScore: number
   maxAttempts: number
@@ -45,7 +45,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
     instructions:
       "Lee cada pregunta con atención. Algunas preguntas son de opción única y otras de opción múltiple. El puntaje mínimo aprobatorio es 50%.",
     type: "MCQ",
-    difficulty: "EASY",
+    difficulty: "JUNIOR",
     timeLimit: 30,
     passingScore: 50,
     maxAttempts: 1,
@@ -66,7 +66,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "java8", "lambda"],
         questionText: "¿Cuál es el propósito principal de las expresiones lambda en Java 8?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         explanation:
           "Las lambdas permiten expresar comportamiento de forma más compacta, especialmente con interfaces funcionales.",
         options: [
@@ -85,7 +85,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "java8", "optional"],
         questionText: "¿Qué método se utiliza para obtener un Optional vacío en Java 8?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "empty()", isCorrect: true },
           { id: "b", text: "null()", isCorrect: false },
@@ -98,7 +98,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "java8", "optional"],
         questionText: "¿Cuál de las siguientes afirmaciones sobre Optional en Java 8 es verdadera?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Puede contener valores null como valor interno válido", isCorrect: false },
           { id: "b", text: "Es una clase final y no se puede extender", isCorrect: true },
@@ -111,7 +111,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "java8", "predicate"],
         questionText: "¿Cuál es el propósito principal de la interfaz Predicate en Java 8?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Representar una función que transforma un valor", isCorrect: false },
           { id: "b", text: "Representar una operación sin valor de retorno", isCorrect: false },
@@ -124,7 +124,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "basics", "char"],
         questionText: "¿Cuál es el tamaño de una variable char en Java?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "8 bits", isCorrect: false },
           { id: "b", text: "16 bits", isCorrect: true },
@@ -137,7 +137,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "basics", "string"],
         questionText: "¿Cuál es el valor por defecto de una variable de instancia String no inicializada?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "null", isCorrect: true },
           { id: "b", text: "\"\"", isCorrect: false },
@@ -150,7 +150,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "streams", "distinct", "count"],
         questionText: "¿Qué hace la operación stream.distinct().count()?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Devuelve el primer elemento del Stream", isCorrect: false },
           { id: "b", text: "Cuenta cuántos elementos distintos hay en el Stream", isCorrect: true },
@@ -163,7 +163,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "collections", "set"],
         questionText: "¿Cuál de las siguientes características describe mejor a Set en Java?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           {
             id: "a",
@@ -180,7 +180,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "java8", "features"],
         questionText: "¿Cuál de las siguientes NO fue introducida en Java 8?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Streams", isCorrect: false },
           { id: "b", text: "Lambdas", isCorrect: false },
@@ -193,7 +193,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "basics", "types"],
         questionText: "¿Cuál de estas asignaciones es válida en Java?",
         allowMultiple: true,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         explanation:
           "double puede recibir enteros; char puede recibir un literal entero compatible; long acepta sufijo l/L.",
         options: [
@@ -209,7 +209,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "streams", "findfirst"],
         questionText: "¿Qué método se utiliza para obtener el primer elemento de un Stream en Java 8?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "first()", isCorrect: false },
           { id: "b", text: "getFirst()", isCorrect: false },
@@ -222,7 +222,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "oop", "inheritance"],
         questionText: "Respecto a una superclase en Java, ¿cuáles afirmaciones son correctas?",
         allowMultiple: true,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           {
             id: "a",
@@ -247,7 +247,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "streams", "reduce"],
         questionText: "¿Cuál afirmación sobre reduce() en Java 8 es correcta?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Solo puede usarse con Streams de números", isCorrect: false },
           { id: "b", text: "Siempre devuelve Optional", isCorrect: false },
@@ -260,7 +260,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "streams", "foreach"],
         questionText: "¿Qué método de Stream se utiliza para ejecutar una acción por cada elemento?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "iterate()", isCorrect: false },
           { id: "b", text: "forEach()", isCorrect: true },
@@ -273,7 +273,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "lambda", "scope"],
         questionText: "¿Cuál afirmación sobre las expresiones lambda en Java 8 es verdadera?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Siempre es obligatorio declarar el tipo de los parámetros", isCorrect: false },
           {
@@ -294,7 +294,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "exceptions", "throwable"],
         questionText: "¿Cuál es la superclase común de Error y Exception en Java?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "RuntimeException", isCorrect: false },
           { id: "b", text: "Thread", isCorrect: false },
@@ -307,7 +307,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "streams", "maptoint", "sum"],
         questionText: "¿Cuál es el resultado de stream.mapToInt(x -> x * 2).sum() sobre una colección de enteros?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Cuenta cuántos elementos hay en el Stream", isCorrect: false },
           {
@@ -324,7 +324,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "streams", "basics"],
         questionText: "¿Cuál es el propósito principal de la clase Stream en Java 8?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Realizar operaciones de entrada y salida", isCorrect: false },
           { id: "b", text: "Implementar concurrencia", isCorrect: false },
@@ -342,7 +342,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         questionText:
           "¿Qué imprime este código?\n\nint[] a = {1, 2, 3, 4, 5, 6};\nint i = a.length - 1;\nwhile (i >= 0) {\n  System.out.print(a[i]);\n  i--;\n}",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "123456", isCorrect: false },
           { id: "b", text: "654321", isCorrect: true },
@@ -355,7 +355,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["java", "lambda", "exceptions"],
         questionText: "¿Cuál afirmación sobre excepciones en expresiones lambda es correcta?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Las lambdas no pueden lanzar excepciones", isCorrect: false },
           {
@@ -372,7 +372,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "branch"],
         questionText: "¿En qué caso se utiliza git branch?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Para listar ramas locales", isCorrect: true },
           { id: "b", text: "Para ver archivos modificados", isCorrect: false },
@@ -385,7 +385,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "status"],
         questionText: "¿Qué comando muestra archivos modificados en Git?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git clone", isCorrect: false },
           { id: "b", text: "git status", isCorrect: true },
@@ -398,7 +398,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "clone"],
         questionText: "¿Qué comando descarga un repositorio remoto?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git clone", isCorrect: true },
           { id: "b", text: "git download", isCorrect: false },
@@ -411,7 +411,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "checkout", "branch"],
         questionText: "¿Qué comando crea una rama y cambia a ella en un solo paso?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git branch nueva-rama", isCorrect: false },
           { id: "b", text: "git checkout -b nueva-rama", isCorrect: true },
@@ -424,7 +424,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "pull"],
         questionText: "¿Qué comando actualiza tu repositorio local con cambios del remoto?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git update", isCorrect: false },
           { id: "b", text: "git checkout", isCorrect: false },
@@ -437,7 +437,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "404"],
         questionText: "¿Qué código HTTP indica que un recurso no fue encontrado?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "201", isCorrect: false },
           { id: "b", text: "204", isCorrect: false },
@@ -450,7 +450,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "204"],
         questionText: "¿Qué código HTTP indica que la solicitud fue exitosa pero no hay contenido en la respuesta?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "200", isCorrect: false },
           { id: "b", text: "201", isCorrect: false },
@@ -467,8 +467,8 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
       "Evaluación diagnóstica junior enfocada en fundamentos de REST, HTTP, media types, idempotencia y diseño básico de endpoints.",
     instructions:
       "Lee cada pregunta con atención. Algunas preguntas son de opción única y otras de opción múltiple. El puntaje mínimo aprobatorio es 50%.",
-    type: "TECHNICAL",
-    difficulty: "EASY",
+    type: "MCQ",
+    difficulty: "JUNIOR",
     timeLimit: 20,
     passingScore: 50,
     maxAttempts: 1,
@@ -489,7 +489,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["api", "rest", "path-param"],
         questionText: "¿Para qué sirve un URI param (path param)?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Para recibir los datos del response", isCorrect: false },
           {
@@ -506,7 +506,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["api", "raml"],
         questionText: "¿Qué es RAML?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Un lenguaje de definición de APIs", isCorrect: true },
           { id: "b", text: "Una arquitectura", isCorrect: false },
@@ -519,7 +519,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["api", "rest"],
         questionText: "¿Qué es REST?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Un formato de transferencia", isCorrect: false },
           { id: "b", text: "Una arquitectura", isCorrect: false },
@@ -532,7 +532,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "404"],
         questionText: "¿Qué código de estado representa un recurso no encontrado?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "201", isCorrect: false },
           { id: "b", text: "400", isCorrect: false },
@@ -545,7 +545,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "400"],
         questionText: "¿Qué significa HTTP 400?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Bad Request", isCorrect: true },
           { id: "b", text: "Request exitosa", isCorrect: false },
@@ -558,7 +558,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["api", "rest", "principles"],
         questionText: "¿Cuál opción contiene principios de REST?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Analógico, estructuración, lineal", isCorrect: false },
           { id: "b", text: "Basado en Java, uso de Web Services, microservicios", isCorrect: false },
@@ -571,7 +571,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "post", "create"],
         questionText: "¿Qué método HTTP se utiliza normalmente para crear un nuevo recurso?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "HEAD", isCorrect: false },
           { id: "b", text: "POST", isCorrect: true },
@@ -584,7 +584,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "delete"],
         questionText: "¿Qué método HTTP elimina un recurso?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "DEL", isCorrect: false },
           { id: "b", text: "DELETE", isCorrect: true },
@@ -597,7 +597,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "patch", "partial-update"],
         questionText: "¿Qué método HTTP se utiliza para actualizar parcialmente un recurso?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "GET", isCorrect: false },
           { id: "b", text: "PATCH", isCorrect: true },
@@ -610,7 +610,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "media-type", "content-type"],
         questionText: "¿Qué es un media type?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           {
             id: "a",
@@ -627,7 +627,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "idempotency"],
         questionText: "Selecciona los métodos HTTP idempotentes",
         allowMultiple: true,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "GET", isCorrect: true },
           { id: "b", text: "PUT", isCorrect: true },
@@ -640,7 +640,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["api", "rest", "http"],
         questionText: "¿Qué protocolo de comunicación utiliza comúnmente una API REST?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "SOAP", isCorrect: false },
           { id: "b", text: "HTTP", isCorrect: true },
@@ -653,7 +653,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "204"],
         questionText: "¿Qué código HTTP indica éxito sin body en la respuesta?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "200", isCorrect: false },
           { id: "b", text: "201", isCorrect: false },
@@ -666,7 +666,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["soap", "xml", "rest", "json"],
         questionText: "SOAP es a XML como...",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "REST es a JSON", isCorrect: true },
           { id: "b", text: "JSON es a Java", isCorrect: false },
@@ -679,7 +679,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["rest", "antipattern", "endpoints"],
         questionText: "¿Cuál de las siguientes rutas representa un antipatrón en un diseño REST?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "POST /customers", isCorrect: false },
           { id: "b", text: "GET /update_customers/12345", isCorrect: true },
@@ -692,7 +692,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "204"],
         questionText: "¿Qué significa HTTP 204?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "Éxito con body", isCorrect: false },
           { id: "b", text: "Éxito sin body", isCorrect: true },
@@ -705,7 +705,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["http", "4xx", "5xx"],
         questionText: "¿Cuál es la diferencia entre los códigos 4xx y 5xx?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "4xx son errores del cliente y 5xx son errores del servidor", isCorrect: true },
           { id: "b", text: "5xx son errores del cliente y 4xx son errores del servidor", isCorrect: false },
@@ -718,7 +718,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "branch"],
         questionText: "¿Qué comando de Git lista todas las ramas locales?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git branch", isCorrect: true },
           { id: "b", text: "git branch +add", isCorrect: false },
@@ -731,7 +731,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "add", "staging"],
         questionText: "¿Qué comando envía archivos al staging area en Git?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git add .", isCorrect: true },
           { id: "b", text: "git branch", isCorrect: false },
@@ -744,7 +744,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "status"],
         questionText: "¿Qué comando de Git muestra archivos modificados?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git status", isCorrect: true },
           { id: "b", text: "git clone", isCorrect: false },
@@ -757,7 +757,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "pull"],
         questionText: "¿Qué comando actualiza tu repositorio local con cambios del remoto?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git checkout", isCorrect: false },
           { id: "b", text: "git pull", isCorrect: true },
@@ -770,7 +770,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "clone"],
         questionText: "¿Qué comando descarga un repositorio remoto?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git clone", isCorrect: true },
           { id: "b", text: "git status", isCorrect: false },
@@ -783,7 +783,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         tags: ["git", "checkout", "branch"],
         questionText: "¿Qué comando crea una rama y se mueve a ella?",
         allowMultiple: false,
-        difficulty: "EASY",
+        difficulty: "JUNIOR",
         options: [
           { id: "a", text: "git create rama", isCorrect: false },
           { id: "b", text: "git checkout -b rama", isCorrect: true },
@@ -797,7 +797,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         questionText:
           "¿Cuál de las siguientes rutas representa correctamente la creación de un crédito para un carro desde una perspectiva REST simple?",
         allowMultiple: false,
-        difficulty: "MEDIUM",
+        difficulty: "JUNIOR",
         explanation:
           "En REST conviene modelar recursos con sustantivos y usar POST para creación.",
         options: [
