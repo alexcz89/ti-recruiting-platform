@@ -149,7 +149,7 @@ export default function SignInUnified({
           <div className="flex w-full items-start">
             <div className="w-full space-y-5 sm:space-y-6 lg:space-y-8">
               <div>
-                <h1 className="max-w-[10ch] text-4xl font-black leading-[0.92] tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-5xl lg:max-w-[9.5ch] lg:text-[68px] xl:max-w-[9.5ch] xl:text-[74px]">
+                <h1 className="max-w-[12ch] text-4xl font-black leading-[0.95] tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-5xl lg:max-w-[11.5ch] lg:text-[68px] xl:max-w-[11.5ch] xl:text-[74px]">
                   Conectamos talento con oportunidades
                 </h1>
               </div>
@@ -236,7 +236,7 @@ export default function SignInUnified({
             </div>
 
             {/* Área reservada para que no se mueva el resto */}
-            <div className="mb-6 min-h-[92px]">
+            <div className={`mb-6 transition-all duration-200 ${activeRole === "CANDIDATE" ? "min-h-[92px]" : "min-h-0"}`}>
               {activeRole === "CANDIDATE" && (
                 <div className="space-y-3">
                   <button
