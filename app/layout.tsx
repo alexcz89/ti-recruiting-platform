@@ -13,12 +13,13 @@ const inter = Inter({ subsets: ["latin"] });
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(APP_URL), // ✅ CRÍTICO: normaliza todas las URLs de OG tags
+  metadataBase: new URL(APP_URL),
   title: {
     default: "TaskIO — Bolsa de trabajo TI en México",
     template: "%s | TaskIO",
   },
-  description: "Encuentra las mejores vacantes de tecnología en México. Conectamos talento TI con empresas líderes.",
+  description:
+    "Encuentra las mejores vacantes de tecnología en México. Conectamos talento TI con empresas líderes.",
   openGraph: {
     siteName: "TaskIO",
     locale: "es_MX",
@@ -40,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           <main
             id="main-content"
-            className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-4 pb-10"
+            className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pb-10"
           >
             {children}
           </main>
