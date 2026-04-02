@@ -222,7 +222,7 @@ export default function SignInUnified({
                 </div>
               </button>
             </div>
-
+            
             {/* Header fijo para evitar saltos */}
             <div className="mb-6 min-h-[84px] sm:mb-8">
               <h2 className="text-3xl font-black text-zinc-900 dark:text-zinc-50">
@@ -235,8 +235,14 @@ export default function SignInUnified({
               </p>
             </div>
 
-            {/* Área reservada para que no se mueva el resto */}
-            <div className={`mb-6 transition-all duration-200 ${activeRole === "CANDIDATE" ? "min-h-[92px]" : "min-h-0"}`}>
+            {/* Área dinámica SIN espacio muerto */}
+            <div
+              className={`mb-6 overflow-hidden transition-all duration-300 ${
+                activeRole === "CANDIDATE"
+                  ? "max-h-[200px] opacity-100"
+                  : "max-h-0 opacity-0"
+              }`}
+            >
               {activeRole === "CANDIDATE" && (
                 <div className="space-y-3">
                   <button
