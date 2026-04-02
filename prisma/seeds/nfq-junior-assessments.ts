@@ -44,7 +44,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
       "Evaluación diagnóstica junior de Java enfocada en fundamentos, Java 8, Streams, Optional, Git y conceptos básicos de HTTP.",
     instructions:
       "Lee cada pregunta con atención. Algunas preguntas son de opción única y otras de opción múltiple. El puntaje mínimo aprobatorio es 50%.",
-    type: "TECHNICAL",
+    type: "MCQ",
     difficulty: "EASY",
     timeLimit: 30,
     passingScore: 50,
