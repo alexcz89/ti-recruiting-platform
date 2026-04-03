@@ -148,7 +148,18 @@ export class Judge0Service {
   }
 
   /**
-   * Execute a single test case
+   * Execute a single test case.
+   * 
+   * ✅ FIX: El campo `input` del test case es código runner (no stdin).
+   * Se concatena al código del candidato: `${candidateCode}\n\n${runnerCode}`
+   * Esto permite que el candidato escriba solo su función (e.g. twoSum)
+   * y el runner la invoque con console.log para producir el output esperado.
+   * 
+   * Ejemplo de flujo:
+   *   candidateCode = "function twoSum(nums, target) { ... }"
+   *   testCase.input = "console.log(JSON.stringify(twoSum([2,7,11,15], 9)));"
+   *   expectedOutput = "[0,1]"
+   *   → judge0 ejecuta el código completo y compara stdout con expectedOutput
    */
   private async executeTestCase(
     code: string,
@@ -165,13 +176,16 @@ export class Judge0Service {
     memoryUsedMb?: number;
   }> {
     try {
+      // ✅ CAMBIO CLAVE: concatenar código del candidato + runner del test case
+      const fullCode = `${code}\n\n${input}`;
+
       // Create submission
       const submissionResponse = await this.createSubmission({
-        source_code: code,
+        source_code: fullCode,
         language_id: languageId,
-        stdin: input,
+        stdin: '',                          // stdin vacío — el runner está en el código
         expected_output: expectedOutput,
-        cpu_time_limit: timeoutMs / 1000, // Convert to seconds
+        cpu_time_limit: timeoutMs / 1000,   // Convert to seconds
         memory_limit: memoryLimitMb * 1024, // Convert to KB
       });
 
@@ -187,11 +201,17 @@ export class Judge0Service {
       
       return {
         passed: result.status.id === 3,
-        output: result.stdout ? Buffer.from(result.stdout, 'base64').toString('utf-8') : (result.stderr ? Buffer.from(result.stderr, 'base64').toString('utf-8') : ''),
-        error: result.compile_output ? Buffer.from(result.compile_output, 'base64').toString('utf-8') : (result.stderr ? Buffer.from(result.stderr, 'base64').toString('utf-8') : (result.status.id !== 3 ? result.status.description : undefined)),
+        output: result.stdout
+          ? Buffer.from(result.stdout, 'base64').toString('utf-8')
+          : (result.stderr ? Buffer.from(result.stderr, 'base64').toString('utf-8') : ''),
+        error: result.compile_output
+          ? Buffer.from(result.compile_output, 'base64').toString('utf-8')
+          : (result.stderr
+            ? Buffer.from(result.stderr, 'base64').toString('utf-8')
+            : (result.status.id !== 3 ? result.status.description : undefined)),
         executionTimeMs: result.time ? parseFloat(result.time) * 1000 : undefined,
         memoryUsedMb: result.memory ? result.memory / 1024 : undefined,
-        };
+      };
 
     } catch (error) {
       console.error('[Judge0Service] Test case execution error:', error);
@@ -216,7 +236,7 @@ export class Judge0Service {
       headers['X-RapidAPI-Host'] = this.rapidApiHost;
     }
 
-      // 🔍 DEBUG - agregar estos logs
+    // 🔍 DEBUG - agregar estos logs
     console.log('[Judge0] Creating submission with data:', JSON.stringify(data, null, 2));
     console.log('[Judge0] API URL:', `${this.apiUrl}/submissions?wait=false`);
     console.log('[Judge0] Headers:', headers);
@@ -228,44 +248,43 @@ export class Judge0Service {
     });
   }
 
-    /**
-     * Poll for submission result
-     */
-    private async pollSubmissionResult(token: string, maxAttempts = 20): Promise<any> {
+  /**
+   * Poll for submission result
+   */
+  private async pollSubmissionResult(token: string, maxAttempts = 20): Promise<any> {
     const headers: HeadersInit = {};
 
     if (this.apiKey && this.rapidApiHost) {
-        headers['X-RapidAPI-Key'] = this.apiKey;
-        headers['X-RapidAPI-Host'] = this.rapidApiHost;
+      headers['X-RapidAPI-Key'] = this.apiKey;
+      headers['X-RapidAPI-Host'] = this.rapidApiHost;
     }
 
     for (let i = 0; i < maxAttempts; i++) {
-        // CRITICAL: Must include base64_encoded=false for RapidAPI
-        const url = `${this.apiUrl}/submissions/${token}?base64_encoded=true&fields=*`;
-        console.log('[Judge0] Polling attempt', i + 1, 'URL:', url);
-        
-        const response = await fetch(url, { headers });
+      const url = `${this.apiUrl}/submissions/${token}?base64_encoded=true&fields=*`;
+      console.log('[Judge0] Polling attempt', i + 1, 'URL:', url);
+      
+      const response = await fetch(url, { headers });
 
-        if (!response.ok) {
+      if (!response.ok) {
         const errorText = await response.text();
         console.error('[Judge0] Poll failed:', response.status, errorText);
         throw new Error(`Failed to get submission result: ${response.statusText}`);
-        }
+      }
 
-        const result = await response.json();
-        console.log('[Judge0] Got result, status:', result.status);
+      const result = await response.json();
+      console.log('[Judge0] Got result, status:', result.status);
 
-        // Status 1 = In Queue, 2 = Processing
-        if (result.status.id > 2) {
+      // Status 1 = In Queue, 2 = Processing
+      if (result.status.id > 2) {
         return result;
-        }
+      }
 
-        // Wait before polling again
-        await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait before polling again
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     throw new Error('Execution timeout - polling exceeded max attempts');
-    }
+  }
 
   /**
    * Get supported languages
