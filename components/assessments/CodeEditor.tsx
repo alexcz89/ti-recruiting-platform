@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
+import ReactMarkdown from 'react-markdown';
 import {
   Play,
   Send,
@@ -78,6 +79,67 @@ interface CodeEditorProps {
 
 function isNonEmptyString(v: any): v is string {
   return typeof v === 'string' && v.trim().length > 0;
+}
+
+// ✅ Componente Markdown con estilos para el editor de código
+function MarkdownContent({ content, isDark }: { content: string; isDark: boolean }) {
+  return (
+    <ReactMarkdown
+      components={{
+        h1: ({ children }) => (
+          <h1 className="mb-2 text-base font-bold text-gray-900 dark:text-white">{children}</h1>
+        ),
+        h2: ({ children }) => (
+          <h2 className="mb-2 text-base font-bold text-gray-900 dark:text-white">{children}</h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-white">{children}</h3>
+        ),
+        p: ({ children }) => (
+          <p className="mb-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300">{children}</p>
+        ),
+        strong: ({ children }) => (
+          <strong className="font-semibold text-gray-900 dark:text-white">{children}</strong>
+        ),
+        code: ({ children, className }) => {
+          const isBlock = className?.includes('language-');
+          if (isBlock) {
+            return (
+              <code className="block overflow-x-auto whitespace-pre text-xs font-mono text-gray-900 dark:text-slate-100">
+                {children}
+              </code>
+            );
+          }
+          return (
+            <code className="rounded bg-violet-500/10 px-1.5 py-0.5 text-xs font-mono text-violet-700 dark:text-violet-400">
+              {children}
+            </code>
+          );
+        },
+        pre: ({ children }) => (
+          <pre className="mb-3 overflow-x-auto rounded-lg bg-gray-100 p-3 text-xs dark:bg-slate-800/80">
+            {children}
+          </pre>
+        ),
+        ul: ({ children }) => (
+          <ul className="mb-2 list-disc space-y-1 pl-4 text-sm text-gray-700 dark:text-slate-300">{children}</ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="mb-2 list-decimal space-y-1 pl-4 text-sm text-gray-700 dark:text-slate-300">{children}</ol>
+        ),
+        li: ({ children }) => (
+          <li className="leading-relaxed">{children}</li>
+        ),
+        blockquote: ({ children }) => (
+          <blockquote className="mb-2 border-l-4 border-violet-400 pl-3 text-sm italic text-gray-500 dark:text-slate-400">
+            {children}
+          </blockquote>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
 }
 
 export default function CodeEditor({
@@ -415,12 +477,9 @@ export default function CodeEditor({
       <div className="flex flex-1 flex-col overflow-hidden">
         {activeTab === 'problem' ? (
           <>
-            {/* Problem Description */}
+            {/* ✅ Problem Description — ahora con react-markdown */}
             <div className="max-h-48 overflow-y-auto border-b border-gray-200 bg-white px-6 py-5 dark:border-slate-800/50 dark:bg-slate-900/30">
-              <div
-                className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-strong:text-gray-900 prose-code:rounded prose-code:bg-violet-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-violet-700 dark:prose-invert dark:prose-headings:text-white dark:prose-p:text-slate-300 dark:prose-strong:text-white dark:prose-code:text-violet-400"
-                dangerouslySetInnerHTML={{ __html: questionText }}
-              />
+              <MarkdownContent content={questionText} isDark={isDark} />
             </div>
 
             {/* Monaco Editor */}

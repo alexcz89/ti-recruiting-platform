@@ -3,6 +3,7 @@
 
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 // Lazy load CodeEditor para mejor performance
 const CodeEditor = dynamic(() => import('@/components/assessments/CodeEditor'), {
@@ -76,6 +77,67 @@ function normalizeOptions(options?: Option[]): Option[] {
   return Array.isArray(options) ? options : [];
 }
 
+// Componente para renderizar markdown con estilos consistentes
+function MarkdownContent({ content }: { content: string }) {
+  return (
+    <ReactMarkdown
+      components={{
+        h1: ({ children }) => (
+          <h1 className="mb-3 text-xl font-bold text-zinc-900 dark:text-slate-100">{children}</h1>
+        ),
+        h2: ({ children }) => (
+          <h2 className="mb-3 text-lg font-bold text-zinc-900 dark:text-slate-100">{children}</h2>
+        ),
+        h3: ({ children }) => (
+          <h3 className="mb-2 text-base font-semibold text-zinc-900 dark:text-slate-100">{children}</h3>
+        ),
+        p: ({ children }) => (
+          <p className="mb-3 leading-relaxed text-zinc-800 dark:text-slate-200">{children}</p>
+        ),
+        strong: ({ children }) => (
+          <strong className="font-semibold text-zinc-900 dark:text-slate-100">{children}</strong>
+        ),
+        code: ({ children, className }) => {
+          const isBlock = className?.includes('language-');
+          if (isBlock) {
+            return (
+              <code className="block overflow-x-auto rounded-lg bg-zinc-100 p-4 text-sm font-mono text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100">
+                {children}
+              </code>
+            );
+          }
+          return (
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono text-violet-700 dark:bg-zinc-800 dark:text-violet-400">
+              {children}
+            </code>
+          );
+        },
+        pre: ({ children }) => (
+          <pre className="mb-4 overflow-x-auto rounded-lg bg-zinc-100 p-4 text-sm dark:bg-zinc-900">
+            {children}
+          </pre>
+        ),
+        ul: ({ children }) => (
+          <ul className="mb-3 list-disc space-y-1 pl-5 text-zinc-800 dark:text-slate-200">{children}</ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="mb-3 list-decimal space-y-1 pl-5 text-zinc-800 dark:text-slate-200">{children}</ol>
+        ),
+        li: ({ children }) => (
+          <li className="leading-relaxed">{children}</li>
+        ),
+        blockquote: ({ children }) => (
+          <blockquote className="mb-3 border-l-4 border-violet-400 pl-4 italic text-zinc-600 dark:text-slate-400">
+            {children}
+          </blockquote>
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+  );
+}
+
 export default function AssessmentQuestion({
   question,
   selectedOptions,
@@ -144,10 +206,11 @@ export default function AssessmentQuestion({
         </span>
       </div>
 
+      {/* ✅ Markdown rendering para MCQ */}
       <div className="mb-6">
-        <h2 className="text-default mb-4 whitespace-pre-wrap text-xl font-semibold">
-          {question.questionText}
-        </h2>
+        <div className="prose prose-sm max-w-none dark:prose-invert">
+          <MarkdownContent content={question.questionText} />
+        </div>
 
         {question.codeSnippet && (
           <pre className="mb-4 overflow-x-auto rounded-lg bg-zinc-100 p-4 text-sm text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
