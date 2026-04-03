@@ -81,6 +81,18 @@ function isNonEmptyString(v: any): v is string {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
+// ✅ NUEVO: limpiar el input del test case para mostrarlo legible
+// El input es código runner (ej: "console.log(JSON.stringify(twoSum([2,7,11,15], 9)));")
+// Extraemos solo los argumentos para mostrar algo limpio al candidato
+function formatInputDisplay(input: string): string {
+  if (!input) return input;
+  // Intentar extraer argumentos del último llamado a función
+  const match = input.match(/\(([^)]+(?:\[[^\]]*\][^)]*)?)\)\s*[;)]?\s*$/);
+  if (match) return match[1];
+  // Si no matchea, devolver el input original truncado
+  return input.length > 80 ? input.slice(0, 80) + '…' : input;
+}
+
 // ✅ Componente Markdown con estilos para el editor de código
 function MarkdownContent({ content, isDark }: { content: string; isDark: boolean }) {
   return (
@@ -168,6 +180,8 @@ export default function CodeEditor({
   const [fontSize, setFontSize] = useState(14);
   const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<'problem' | 'results'>('problem');
+  // ✅ NUEVO: trackear si ejecutó tests antes de enviar
+  const [hasRunTests, setHasRunTests] = useState(false);
 
   const editorRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -236,6 +250,7 @@ export default function CodeEditor({
 
       const results = (data as any)?.result?.testResults;
       setTestResults(Array.isArray(results) ? results : []);
+      setHasRunTests(true); // ✅ marcar que ejecutó tests
     } catch (err) {
       console.error('Error running tests:', err);
       setError('Error de conexión. Intenta de nuevo.');
@@ -248,8 +263,15 @@ export default function CodeEditor({
     if (isSubmitting || isRunning || readOnly) return;
     if (!code.trim()) return;
 
-    if (!confirm('¿Estás seguro de enviar tu solución? No podrás modificarla después.')) return;
-
+    // ✅ Advertir si no ha ejecutado tests
+    if (!hasRunTests) {
+      const proceed = confirm(
+        '⚠️ No has ejecutado los tests todavía.\n¿Seguro que quieres enviar sin probar tu solución?'
+      );
+      if (!proceed) return;
+    } else {
+      if (!confirm('¿Estás seguro de enviar tu solución? No podrás modificarla después.')) return;
+    }
     setIsSubmitting(true);
     setError(null);
     setTestResults(null);
@@ -644,7 +666,7 @@ export default function CodeEditor({
                                     Input:{' '}
                                   </span>
                                   <code className="rounded-lg bg-gray-200 px-2 py-1 font-mono text-xs text-gray-800 dark:bg-slate-800/80 dark:text-slate-200">
-                                    {result.input}
+                                    {formatInputDisplay(result.input || '')}
                                   </code>
                                 </div>
                                 <div>

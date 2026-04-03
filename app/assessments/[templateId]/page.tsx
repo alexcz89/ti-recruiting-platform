@@ -113,6 +113,9 @@ export default function AssessmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [expired, setExpired] = useState(false);
 
+  // ✅ NUEVO: trackear qué preguntas CODING fueron enviadas con solución
+  const [codingSubmitted, setCodingSubmitted] = useState<Record<string, boolean>>({});
+
   const lastIndexHydratedAttemptIdRef = useRef<string | null>(null);
   const autoStartOnceRef = useRef(false);
 
@@ -150,8 +153,6 @@ export default function AssessmentPage() {
       try {
         const res = await fetch(`/api/assessments/${templateId}`, { cache: 'no-store' });
 
-        // FIX Bug #9: si el middleware no interceptó (navegación client-side),
-        // redirigir a signin preservando la URL con el token del invite
         if (res.status === 401) {
           const callbackUrl = encodeURIComponent(
             window.location.pathname + window.location.search
@@ -187,7 +188,7 @@ export default function AssessmentPage() {
     return idx === -1 ? 0 : idx;
   }
 
-  // Restore currentIndex desde localStorage (solo una vez por attempt)
+  // Restore currentIndex desde localStorage
   useEffect(() => {
     if (!attemptId || total === 0) return;
     if (lastIndexHydratedAttemptIdRef.current === attemptId) return;
@@ -228,6 +229,15 @@ export default function AssessmentPage() {
 
     if (st.expiresAt) setExpiresAt(new Date(st.expiresAt));
     if (st.expired) handleExpire();
+
+    // ✅ Restaurar codingSubmitted desde savedAnswers
+    const submitted: Record<string, boolean> = {};
+    for (const [qid, opts] of Object.entries(savedAnswers)) {
+      if (Array.isArray(opts) && opts.includes(CODE_SENTINEL)) {
+        submitted[qid] = true;
+      }
+    }
+    setCodingSubmitted(submitted);
 
     if (typeof st.currentIndex === 'number') {
       const clamped = Math.max(0, Math.min(st.currentIndex, Math.max(0, qs.length - 1)));
@@ -271,7 +281,6 @@ export default function AssessmentPage() {
 
       if (data.expiresAt) setExpiresAt(new Date(data.expiresAt));
 
-      // Persist attemptId en URL para refresh
       const next = new URLSearchParams(searchParams.toString());
       next.set('attemptId', newAttemptId);
       router.replace(`/assessments/${templateId}?${next.toString()}`);
@@ -288,6 +297,15 @@ export default function AssessmentPage() {
         setAnswers(savedAnswers!);
         setTimeSpent(savedTimeSpent || {});
         setCurrentIndex(firstUnansweredIndex(qs, savedAnswers!));
+
+        // Restaurar codingSubmitted
+        const submitted: Record<string, boolean> = {};
+        for (const [qid, opts] of Object.entries(savedAnswers!)) {
+          if (Array.isArray(opts) && opts.includes(CODE_SENTINEL)) {
+            submitted[qid] = true;
+          }
+        }
+        setCodingSubmitted(submitted);
       } else {
         try {
           await hydrateFromState(newAttemptId, qs);
@@ -360,19 +378,35 @@ export default function AssessmentPage() {
 
   const handleCodeSubmitted = (qid: string) => {
     setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
-    handleNext();
+    setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
+    // ✅ No auto-avanzar — dejar que el candidato navegue manualmente
+    if (currentIndex < total - 1) {
+      toastSuccess('✓ Solución enviada. Puedes continuar con la siguiente pregunta.');
+    }
   };
 
   const handleSubmit = async () => {
     if (!attemptId || submitting) return;
 
     if (!expired) {
-      const unansweredCount = questions.filter((q) => !isAnsweredId(q.id)).length;
-      if (unansweredCount > 0) {
+      // ✅ Advertir si hay preguntas CODING sin enviar solución
+      const codingQuestions = questions.filter((q) => q.type === 'CODING');
+      const unsubmittedCoding = codingQuestions.filter((q) => !codingSubmitted[q.id]);
+
+      if (unsubmittedCoding.length > 0) {
+        const names = unsubmittedCoding.map((q, i) => `Pregunta ${questions.indexOf(q) + 1}`).join(', ');
         const confirmed = confirm(
-          `Tienes ${unansweredCount} pregunta(s) sin responder. ¿Deseas enviar de todos modos?`
+          `⚠️ Tienes ${unsubmittedCoding.length} pregunta(s) de código sin enviar solución:\n${names}\n\n¿Deseas finalizar de todos modos? Las preguntas sin solución quedarán en 0 puntos.`
         );
         if (!confirmed) return;
+      } else {
+        const unansweredCount = questions.filter((q) => !isAnsweredId(q.id)).length;
+        if (unansweredCount > 0) {
+          const confirmed = confirm(
+            `Tienes ${unansweredCount} pregunta(s) sin responder. ¿Deseas enviar de todos modos?`
+          );
+          if (!confirmed) return;
+        }
       }
     }
 
@@ -434,7 +468,6 @@ export default function AssessmentPage() {
     );
   }
 
-  // FIX Bug #9: estado de error más claro con opción de login
   if (!template) {
     return (
       <div className="flex items-center justify-center min-h-screen px-4">
@@ -485,7 +518,7 @@ export default function AssessmentPage() {
     <main className="max-w-none p-0">
       <div className={`mx-auto px-6 lg:px-10 py-8 ${isCodingQuestion ? 'max-w-[1800px]' : 'max-w-[1200px]'}`}>
 
-        {/* Header — preguntas NO-CODING */}
+        {/* Header — NO-CODING */}
         {!isCodingQuestion && (
           <div className="sticky top-0 z-30 mb-6 pb-4 bg-white dark:bg-zinc-950">
             <div className="flex items-center justify-between">
@@ -510,8 +543,8 @@ export default function AssessmentPage() {
 
         {/* Header — CODING */}
         {isCodingQuestion && (
-          <div className="mb-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div>
                 <h1 className="text-2xl font-bold text-default">{template.title}</h1>
                 <p className="text-sm text-muted">
@@ -521,8 +554,59 @@ export default function AssessmentPage() {
               {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
             </div>
 
+            {/* ✅ NUEVO: Mapa de navegación para preguntas CODING */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {questions.map((q, idx) => {
+                const isSubmitted = codingSubmitted[q.id];
+                const isCurrent = idx === currentIndex;
+                const isCoding = q.type === 'CODING';
+
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => !expired && setCurrentIndex(idx)}
+                    disabled={expired}
+                    title={
+                      isCoding
+                        ? isSubmitted
+                          ? `Pregunta ${idx + 1} — Solución enviada ✓`
+                          : `Pregunta ${idx + 1} — Sin enviar`
+                        : `Pregunta ${idx + 1}`
+                    }
+                    className={[
+                      'relative h-9 min-w-[2.25rem] px-3 rounded-lg text-sm font-medium transition-all border-2',
+                      isCurrent
+                        ? 'bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-500/30'
+                        : isSubmitted
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
+                        : 'bg-white border-zinc-300 text-zinc-600 hover:border-violet-400 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400',
+                      expired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                    ].join(' ')}
+                  >
+                    {idx + 1}
+                    {/* Dot indicator si fue enviada */}
+                    {isSubmitted && !isCurrent && (
+                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
+                    )}
+                  </button>
+                );
+              })}
+
+              {/* Leyenda */}
+              <div className="ml-2 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
+                  Enviada
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600 inline-block" />
+                  Pendiente
+                </span>
+              </div>
+            </div>
+
             {expired && (
-              <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
+              <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
                 ⏰ Tiempo expirado. La evaluación quedó bloqueada.
               </div>
             )}
@@ -570,16 +654,39 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Finalizar — CODING última pregunta */}
-        {isCodingQuestion && currentIndex === total - 1 && (
-          <div className="mt-8 flex justify-center">
+        {/* ✅ Navegación CODING — anterior/siguiente + finalizar */}
+        {isCodingQuestion && (
+          <div className="mt-6 flex items-center justify-between gap-4">
             <button
-              onClick={handleSubmit}
-              disabled={submitting || expired}
-              className="btn btn-primary px-8 text-lg"
+              onClick={handlePrevious}
+              disabled={currentIndex === 0 || expired}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-700 hover:border-violet-400 hover:text-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
             >
-              {submitting ? 'Enviando...' : 'Finalizar evaluación ✓'}
+              ← Anterior
             </button>
+
+            <div className="flex items-center gap-3">
+              {currentIndex < total - 1 && (
+                <button
+                  onClick={handleNext}
+                  disabled={expired}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-700 hover:border-violet-400 hover:text-violet-700 disabled:opacity-40 transition-all dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                >
+                  Siguiente →
+                </button>
+              )}
+
+              {/* Mostrar Finalizar solo si es la última pregunta O si todas las coding fueron enviadas */}
+              {(currentIndex === total - 1 || Object.keys(codingSubmitted).length === questions.filter(q => q.type === 'CODING').length) && (
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting || expired}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-sm font-bold text-white shadow-lg shadow-violet-500/30 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all"
+                >
+                  {submitting ? 'Enviando...' : 'Finalizar evaluación ✓'}
+                </button>
+              )}
+            </div>
           </div>
         )}
 

@@ -63,20 +63,38 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     message: (data) =>
       `Has sido invitado a completar una evaluación para ${data.jobTitle}`,
     actionText: () => 'Iniciar',
+    // ✅ FIX: prioridad de URL:
+    // 1. inviteUrl completa (con token) si viene en metadata
+    // 2. templateId + token si están disponibles
+    // 3. templateId + attemptId como fallback
+    // 4. /assessments como último recurso
     actionUrl: (data) => {
-      if (!data?.templateId || !data?.attemptId) {
-        return '/dashboard';
+      // Opción 1: URL completa preconstruida (la más confiable)
+      if (data?.inviteUrl && typeof data.inviteUrl === 'string') {
+        return data.inviteUrl;
       }
 
-      const params = new URLSearchParams({
-        attemptId: String(data.attemptId),
-      });
-
-      if (data?.token) {
-        params.set('token', String(data.token));
+      // Opción 2: templateId + token
+      if (data?.templateId && data?.token) {
+        const params = new URLSearchParams({ token: String(data.token) });
+        return `/assessments/${data.templateId}?${params.toString()}`;
       }
 
-      return `/assessments/${data.templateId}?${params.toString()}`;
+      // Opción 3: templateId + attemptId
+      if (data?.templateId && data?.attemptId) {
+        const params = new URLSearchParams({
+          attemptId: String(data.attemptId),
+        });
+        return `/assessments/${data.templateId}?${params.toString()}`;
+      }
+
+      // Opción 4: solo templateId
+      if (data?.templateId) {
+        return `/assessments/${data.templateId}`;
+      }
+
+      // Fallback
+      return '/assessments';
     },
     priority: 'HIGH',
     defaultChannels: ['IN_APP', 'EMAIL'],

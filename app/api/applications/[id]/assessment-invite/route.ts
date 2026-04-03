@@ -312,9 +312,11 @@ export async function POST(
       }
     }
 
+    // URL de la invitación (con token)
     const baseUrl = buildBaseUrl(request);
     const inviteUrl = new URL(`/assessments/${template.id}`, baseUrl);
     inviteUrl.searchParams.set("token", invite.token);
+    const inviteUrlString = inviteUrl.toString();
 
     let emailStatus: EmailStatus = "skipped";
     let emailError: string | null = null;
@@ -333,7 +335,7 @@ export async function POST(
           templateTitle: template.title,
           timeLimit: template.timeLimit ?? null,
           expiresAt: invite.expiresAt ?? null,
-          inviteUrl: inviteUrl.toString(),
+          inviteUrl: inviteUrlString,
           dedupeKey: invite.id,
         });
 
@@ -377,6 +379,8 @@ export async function POST(
       });
     }
 
+    // ✅ FIX: agregar actionUrl para que el click en la notificación
+    // lleve directamente a la evaluación en vez de al signin
     await NotificationService.create({
       userId: application.candidateId,
       type: "ASSESSMENT_INVITATION",
@@ -386,6 +390,7 @@ export async function POST(
         assessmentId: invite.id,
         templateId: template.id,
         dueDate: invite.expiresAt || newExpiresAt,
+        inviteUrl: inviteUrlString,
       },
     }).catch((notifErr) => {
       console.warn(
@@ -444,6 +449,7 @@ export async function POST(
         createdInvite,
         rotated,
         attemptId: existingAttempt?.id ?? null,
+        inviteUrl: inviteUrlString,
         emailStatus,
         emailError,
         isRequired: Boolean(chosenJobAssessment.isRequired),
@@ -473,7 +479,7 @@ export async function POST(
         createdAt: invite.createdAt,
         updatedAt: invite.updatedAt,
       },
-      inviteUrl: inviteUrl.toString(),
+      inviteUrl: inviteUrlString,
       emailStatus,
       emailError,
       meta: { reusedInvite, createdInvite, rotated },
