@@ -50,7 +50,7 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     actionUrl: (data) => `/dashboard/jobs/${data.jobId}/applications`,
     priority: 'LOW',
     defaultChannels: ['IN_APP'],
-    emailSubject: (data) => `Nuevo comentario`,
+    emailSubject: () => `Nuevo comentario`,
     emailTemplate: 'application-comment',
   },
 
@@ -63,7 +63,21 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     message: (data) =>
       `Has sido invitado a completar una evaluación para ${data.jobTitle}`,
     actionText: () => 'Iniciar',
-    actionUrl: (data) => `/assessments/${data.templateId}`,
+    actionUrl: (data) => {
+      if (!data?.templateId || !data?.attemptId) {
+        return '/dashboard';
+      }
+
+      const params = new URLSearchParams({
+        attemptId: String(data.attemptId),
+      });
+
+      if (data?.token) {
+        params.set('token', String(data.token));
+      }
+
+      return `/assessments/${data.templateId}?${params.toString()}`;
+    },
     priority: 'HIGH',
     defaultChannels: ['IN_APP', 'EMAIL'],
     emailSubject: () => 'Invitación a evaluación técnica',
@@ -75,7 +89,21 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     message: (data) =>
       `Tu evaluación para ${data.jobTitle} vence en ${data.hoursLeft} horas`,
     actionText: () => 'Completar',
-    actionUrl: (data) => `/assessments/${data.templateId}`,
+    actionUrl: (data) => {
+      if (!data?.templateId || !data?.attemptId) {
+        return '/dashboard';
+      }
+
+      const params = new URLSearchParams({
+        attemptId: String(data.attemptId),
+      });
+
+      if (data?.token) {
+        params.set('token', String(data.token));
+      }
+
+      return `/assessments/${data.templateId}?${params.toString()}`;
+    },
     priority: 'URGENT',
     defaultChannels: ['IN_APP', 'EMAIL'],
     emailSubject: () => 'Tu evaluación vence pronto',
@@ -154,7 +182,7 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     title: (data) => 'Te mencionaron',
     message: (data) => `${data.mentionedByName} te mencionó`,
     actionText: () => 'Ver',
-    actionUrl: (data) => `/dashboard`,
+    actionUrl: () => '/dashboard',
     priority: 'MEDIUM',
     defaultChannels: ['IN_APP', 'EMAIL'],
     emailSubject: (data) => `${data.mentionedByName} te mencionó`,

@@ -1,6 +1,7 @@
 // app/api/assessments/code/execute/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
@@ -16,111 +17,101 @@ interface ExecuteCodeRequest {
   isSubmission?: boolean; // true = final submission, false = test run
 }
 
-function jsonNoStore(data: any, status = 200) {
+type DbTestCase = {
+  id: string;
+  input: string;
+  expectedOutput: string;
+  isHidden: boolean;
+  points: number;
+  timeoutMs: number;
+  memoryLimitMb: number;
+  orderIndex: number;
+};
+
+type SafeExecutionTestResult = {
+  testCaseId: string;
+  passed: boolean;
+  hidden: boolean;
+  input?: string;
+  expectedOutput?: string;
+  actualOutput?: string;
+  error?: string;
+  executionTimeMs?: number | null;
+};
+
+function jsonNoStore(data: unknown, status = 200) {
   return NextResponse.json(data, {
     status,
     headers: { "Cache-Control": "no-store" },
   });
 }
 
-function truncateText(v: unknown, max = 8000): string | undefined {
-  if (v == null) return undefined;
-  const s = typeof v === "string" ? v : String(v);
-  if (s.length <= max) return s;
-  return s.slice(0, max) + "\n…[truncated]";
+function truncateText(value: unknown, max = 8000): string | undefined {
+  if (value == null) return undefined;
+  const text = typeof value === "string" ? value : String(value);
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n…[truncated]`;
 }
 
-function parseStringArrayLoose(v: any): string[] | null {
-  if (!v) return null;
-  if (Array.isArray(v)) return v.map((x) => String(x));
-  if (typeof v === "string") {
+function parseStringArrayLoose(value: unknown): string[] | null {
+  if (!value) return null;
+
+  if (Array.isArray(value)) {
+    const cleaned = value.map((item) => String(item).trim()).filter(Boolean);
+    return cleaned.length ? cleaned : null;
+  }
+
+  if (typeof value === "string") {
     try {
-      const parsed = JSON.parse(v);
-      if (Array.isArray(parsed)) return parsed.map((x) => String(x));
+      const parsed = JSON.parse(value);
+      if (Array.isArray(parsed)) {
+        const cleaned = parsed.map((item) => String(item).trim()).filter(Boolean);
+        return cleaned.length ? cleaned : null;
+      }
       return null;
     } catch {
-      if (v.includes(",")) return v.split(",").map((x) => x.trim()).filter(Boolean);
+      if (value.includes(",")) {
+        const cleaned = value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        return cleaned.length ? cleaned : null;
+      }
       return null;
     }
   }
+
   return null;
 }
 
-type DbTestCase = {
-  id: string;
-  input: string;
-  expectedOutput: string;
-  isHidden?: boolean | null;
-  points?: number | null;
-  timeoutMs?: number | null;
-  memoryLimitMb?: number | null;
-  orderIndex?: number | null;
-};
-
-/**
- * Best-effort: tus testcases NO están en question.testCases, así que los buscamos
- * en modelos comunes. Ajusta la lista si tu modelo se llama diferente.
- */
-async function loadTestCasesBestEffort(args: {
+async function loadTestCases(args: {
   questionId: string;
   includeHidden: boolean;
 }): Promise<DbTestCase[]> {
-  const prismaAny = prisma as any;
-
-  const candidateModels = [
-    "codeTestCase",
-    "assessmentTestCase",
-    "codingTestCase",
-    "assessmentCodingTestCase",
-    "assessmentQuestionTestCase",
-    "testCase",
-    "testCases",
-  ] as const;
-
-  for (const modelName of candidateModels) {
-    const model = prismaAny?.[modelName];
-    if (!model?.findMany) continue;
-
-    try {
-      const rows = await model.findMany({
-        where: args.includeHidden ? { questionId: args.questionId } : { questionId: args.questionId, isHidden: false },
-        orderBy: { orderIndex: "asc" },
-        select: {
-          id: true,
-          input: true,
-          expectedOutput: true,
-          isHidden: true,
-          points: true,
-          timeoutMs: true,
-          memoryLimitMb: true,
-          orderIndex: true,
-        },
-      });
-
-      if (Array.isArray(rows)) return rows as DbTestCase[];
-    } catch {
-      // si ese modelo existe pero no tiene esos campos, probamos el siguiente
-      continue;
-    }
-  }
-
-  return [];
+  return prisma.codeTestCase.findMany({
+    where: args.includeHidden
+      ? { questionId: args.questionId }
+      : { questionId: args.questionId, isHidden: false },
+    orderBy: { orderIndex: "asc" },
+    select: {
+      id: true,
+      input: true,
+      expectedOutput: true,
+      isHidden: true,
+      points: true,
+      timeoutMs: true,
+      memoryLimitMb: true,
+      orderIndex: true,
+    },
+  });
 }
 
-/**
- * Best-effort rate limit usando un modelo tipo CodeExecution si existe.
- * Si no existe, NO bloquea el endpoint.
- */
-async function enforceRateLimitBestEffort(args: {
+async function enforceRateLimit(args: {
   candidateId: string;
   attemptId: string;
   questionId: string;
   isSubmission: boolean;
 }) {
-  const prismaAny = prisma as any;
-  const model = prismaAny?.codeExecution;
-  if (!model?.count) return; // tu schema actual no lo tiene
-
   const now = Date.now();
   const limits = args.isSubmission
     ? { windowMs: 5 * 60 * 1000, max: 5 }
@@ -129,8 +120,7 @@ async function enforceRateLimitBestEffort(args: {
   const since = new Date(now - limits.windowMs);
 
   try {
-    // Si tu modelo NO tiene createdAt, esto puede fallar: lo ignoramos.
-    const count = await model.count({
+    const count = await prisma.codeExecution.count({
       where: {
         candidateId: args.candidateId,
         attemptId: args.attemptId,
@@ -143,38 +133,50 @@ async function enforceRateLimitBestEffort(args: {
       const seconds = Math.ceil(limits.windowMs / 1000);
       throw new Error(`Rate limit: demasiadas ejecuciones. Intenta de nuevo en ${seconds}s.`);
     }
-  } catch (err: any) {
-    const msg = String(err?.message ?? "");
-    const looksLikeNoCreatedAt = msg.includes("Unknown argument") && msg.includes("createdAt");
-    if (looksLikeNoCreatedAt) return;
+  } catch (error: any) {
+    const message = String(error?.message ?? "");
 
-    if (msg.toLowerCase().includes("rate limit")) throw err;
+    if (message.toLowerCase().includes("rate limit")) {
+      throw error;
+    }
 
-    console.warn("[Code Execution] Rate limit check skipped:", msg);
+    console.warn("[Code Execution] Rate limit check skipped:", message);
   }
 }
 
 export async function POST(request: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
+    if (!session?.user) {
+      return jsonNoStore({ error: "No autorizado" }, 401);
+    }
 
-    const user = session.user as any;
+    const user = session.user as { id?: string; role?: string };
     const role = String(user?.role ?? "").toUpperCase();
-    if (role !== "CANDIDATE") return jsonNoStore({ error: "Forbidden" }, 403);
 
-    const body: ExecuteCodeRequest = await request.json();
-    const { attemptId, questionId, code, language, isSubmission = false } = body;
+    if (role !== "CANDIDATE") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
+
+    const body = (await request.json()) as Partial<ExecuteCodeRequest>;
+    const attemptId = String(body.attemptId ?? "").trim();
+    const questionId = String(body.questionId ?? "").trim();
+    const code = typeof body.code === "string" ? body.code : "";
+    const language = String(body.language ?? "").trim();
+    const isSubmission = Boolean(body.isSubmission);
 
     if (!attemptId || !questionId || !code || !language) {
       return jsonNoStore({ error: "Faltan campos requeridos" }, 400);
     }
 
-    if (String(code).length > 200_000) {
+    if (!user.id) {
+      return jsonNoStore({ error: "Usuario inválido" }, 401);
+    }
+
+    if (code.length > 200_000) {
       return jsonNoStore({ error: "Código demasiado largo" }, 400);
     }
 
-    // Verify attempt ownership
     const attempt = await prisma.assessmentAttempt.findUnique({
       where: { id: attemptId },
       select: {
@@ -186,8 +188,13 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!attempt) return jsonNoStore({ error: "Intento no encontrado" }, 404);
-    if (attempt.candidateId !== user.id) return jsonNoStore({ error: "No autorizado" }, 403);
+    if (!attempt) {
+      return jsonNoStore({ error: "Intento no encontrado" }, 404);
+    }
+
+    if (attempt.candidateId !== user.id) {
+      return jsonNoStore({ error: "No autorizado" }, 403);
+    }
 
     const attemptStatus = String(attempt.status ?? "").toUpperCase();
     if (attemptStatus !== "IN_PROGRESS") {
@@ -208,15 +215,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Rate limit (best-effort, no rompe si no existe codeExecution)
-    await enforceRateLimitBestEffort({
+    await enforceRateLimit({
       candidateId: user.id,
       attemptId,
       questionId,
       isSubmission,
     });
 
-    // Get question (SIN testCases relation, porque tu modelo no la tiene)
     const question = await prisma.assessmentQuestion.findUnique({
       where: { id: questionId },
       select: {
@@ -227,7 +232,9 @@ export async function POST(request: Request) {
       },
     });
 
-    if (!question) return jsonNoStore({ error: "Pregunta no encontrada" }, 404);
+    if (!question) {
+      return jsonNoStore({ error: "Pregunta no encontrada" }, 404);
+    }
 
     if (String(question.type ?? "").toUpperCase() !== "CODING") {
       return jsonNoStore({ error: "Esta pregunta no es de tipo CODING" }, 400);
@@ -237,8 +244,7 @@ export async function POST(request: Request) {
       return jsonNoStore({ error: "La pregunta no pertenece a este template" }, 400);
     }
 
-    // Allowed languages (defensive)
-    const allowedLanguages = parseStringArrayLoose(question.allowedLanguages as any);
+    const allowedLanguages = parseStringArrayLoose(question.allowedLanguages);
     if (allowedLanguages && !allowedLanguages.includes(language)) {
       return jsonNoStore(
         {
@@ -249,22 +255,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Load test cases best-effort (incluye hidden solo si esSubmission)
-    const dbTestCases = await loadTestCasesBestEffort({
+    const dbTestCases = await loadTestCases({
       questionId,
       includeHidden: isSubmission,
     });
 
     if (!dbTestCases.length) {
-      return jsonNoStore({ error: "Esta pregunta no tiene test cases configurados" }, 400);
+      return jsonNoStore(
+        { error: "Esta pregunta no tiene test cases configurados" },
+        400
+      );
     }
 
-    const testCases = dbTestCases.map((tc) => ({
-      id: tc.id,
-      input: tc.input,
-      expectedOutput: tc.expectedOutput,
-      timeoutMs: tc.timeoutMs ?? undefined,
-      memoryLimitMb: tc.memoryLimitMb ?? undefined,
+    const testCases = dbTestCases.map((testCase) => ({
+      id: testCase.id,
+      input: testCase.input,
+      expectedOutput: testCase.expectedOutput,
+      timeoutMs: testCase.timeoutMs ?? undefined,
+      memoryLimitMb: testCase.memoryLimitMb ?? undefined,
     }));
 
     console.log(
@@ -277,130 +285,130 @@ export async function POST(request: Request) {
       testCases,
     });
 
-    // Calculate points earned
-    const tcById = new Map(dbTestCases.map((t) => [t.id, t]));
+    const testResults = Array.isArray(executionResult.testResults)
+      ? executionResult.testResults
+      : [];
+
+    const passedTests = testResults.filter((result) => result.passed).length;
+    const totalTests = testResults.length;
+    const executionResultsJson = JSON.parse(
+      JSON.stringify(testResults)
+    ) as Prisma.InputJsonValue;
+
+    const testCaseById = new Map(dbTestCases.map((testCase) => [testCase.id, testCase]));
+
     let pointsEarned = 0;
-    if (executionResult.testResults) {
-      for (const tr of executionResult.testResults) {
-        if (tr.passed) {
-          const tc = tcById.get(tr.testCaseId);
-          pointsEarned += tc?.points ? Number(tc.points) : 0;
-        }
+    for (const testResult of testResults) {
+      if (testResult?.passed) {
+        const matchedTestCase = testCaseById.get(testResult.testCaseId);
+        pointsEarned += matchedTestCase?.points ? Number(matchedTestCase.points) : 0;
       }
     }
 
-    // Best-effort: guardar ejecución si existe modelo codeExecution
-    const prismaAny = prisma as any;
     let executionId: string | null = null;
 
     try {
-      if (prismaAny?.codeExecution?.create) {
-        const storedOutput = truncateText(executionResult.output, 12000);
-        const storedError = truncateText(executionResult.error, 12000);
+      const created = await prisma.codeExecution.create({
+        data: {
+          attemptId,
+          questionId,
+          candidateId: user.id,
+          code,
+          language,
+          status: executionResult.status,
+          output: truncateText(executionResult.output, 12000),
+          error: truncateText(executionResult.error, 12000),
+          executionTimeMs: executionResult.executionTimeMs,
+          memoryUsedMb: executionResult.memoryUsedMb,
+          testResults: executionResultsJson,
+          isSubmission,
+        },
+        select: { id: true },
+      });
 
-        const created = await prismaAny.codeExecution.create({
-          data: {
-            attemptId,
-            questionId,
-            candidateId: user.id,
-            code,
-            language,
-            status: executionResult.status,
-            output: storedOutput,
-            error: storedError,
-            executionTimeMs: executionResult.executionTimeMs,
-            memoryUsedMb: executionResult.memoryUsedMb,
-            testResults: executionResult.testResults,
-            isSubmission,
-          },
-          select: { id: true },
-        });
-
-        executionId = created?.id ?? null;
-      }
-    } catch (e) {
-      console.warn("[Code Execution] Skipped saving codeExecution:", (e as any)?.message ?? e);
+      executionId = created.id;
+    } catch (error: any) {
+      console.warn(
+        "[Code Execution] Failed saving codeExecution:",
+        error?.message ?? error
+      );
     }
 
-    // Si es submission: marca AttemptAnswer como respondida (sin usar campos inexistentes como codeSubmission)
     if (isSubmission) {
-      // Upsert mínimo: solo selectedOptions (tu schema lo requiere)
       await prisma.attemptAnswer.upsert({
-        where: { attemptId_questionId: { attemptId, questionId } },
+        where: {
+          attemptId_questionId: { attemptId, questionId },
+        },
         create: {
           attemptId,
           questionId,
-          selectedOptions: ["__CODE_SUBMITTED__"], // sentinel para UI/submit
+          selectedOptions: ["__CODE_SUBMITTED__"],
+          codeSubmission: code,
+          language,
+          executionResults: executionResultsJson,
+          passedTests,
+          totalTests,
+          pointsEarned,
+          isCorrect: Boolean(executionResult.success),
+          executionTime: executionResult.executionTimeMs ?? null,
+          memoryUsed: executionResult.memoryUsedMb ?? null,
         },
         update: {
           selectedOptions: ["__CODE_SUBMITTED__"],
+          codeSubmission: code,
+          language,
+          executionResults: executionResultsJson,
+          passedTests,
+          totalTests,
+          pointsEarned,
+          isCorrect: Boolean(executionResult.success),
+          executionTime: executionResult.executionTimeMs ?? null,
+          memoryUsed: executionResult.memoryUsedMb ?? null,
         },
       });
-
-      // Best-effort: si tu AttemptAnswer SÍ tiene estos campos (en tu schema futuro),
-      // intentamos guardarlos sin romper si no existen.
-      try {
-        await (prisma as any).attemptAnswer.update({
-          where: { attemptId_questionId: { attemptId, questionId } },
-          data: {
-            pointsEarned,
-            isCorrect: Boolean(executionResult.success),
-            executionResults: executionResult.testResults,
-            language,
-            // codeSubmission: code, // <- NO existe en tu schema actual (por eso lo quitamos)
-          },
-        });
-      } catch (e) {
-        // si esos campos no existen, lo ignoramos
-      }
     }
 
-    // Response: no leak de hidden; y en submission no regresamos input/expected/actual
-    const responseTestResults =
-      executionResult.testResults?.map((tr) => {
-        const tc = tcById.get(tr.testCaseId);
-        const isHidden = Boolean(tc?.isHidden);
+    const responseTestResults: SafeExecutionTestResult[] = testResults.map((testResult) => {
+      const matchedTestCase = testCaseById.get(testResult.testCaseId);
+      const isHidden = Boolean(matchedTestCase?.isHidden);
 
-        if (isHidden) {
-          return {
-            testCaseId: tr.testCaseId,
-            passed: tr.passed,
-            hidden: true,
-            error: truncateText(tr.error, 2000),
-            executionTimeMs: tr.executionTimeMs,
-          };
-        }
-
-        if (isSubmission) {
-          return {
-            testCaseId: tr.testCaseId,
-            passed: tr.passed,
-            hidden: false,
-            error: truncateText(tr.error, 2000),
-            executionTimeMs: tr.executionTimeMs,
-          };
-        }
-
+      if (isHidden) {
         return {
-          testCaseId: tr.testCaseId,
-          passed: tr.passed,
-          hidden: false,
-          input: truncateText(tr.input, 2000),
-          expectedOutput: truncateText(tr.expectedOutput, 2000),
-          actualOutput: truncateText(tr.actualOutput, 2000),
-          error: truncateText(tr.error, 2000),
-          executionTimeMs: tr.executionTimeMs,
+          testCaseId: testResult.testCaseId,
+          passed: testResult.passed,
+          hidden: true,
+          error: truncateText(testResult.error, 2000),
+          executionTimeMs: testResult.executionTimeMs,
         };
-      }) ?? [];
+      }
 
-    const passed = executionResult.testResults?.filter((r) => r.passed).length || 0;
-    const total = executionResult.testResults?.length || 0;
+      if (isSubmission) {
+        return {
+          testCaseId: testResult.testCaseId,
+          passed: testResult.passed,
+          hidden: false,
+          error: truncateText(testResult.error, 2000),
+          executionTimeMs: testResult.executionTimeMs,
+        };
+      }
+
+      return {
+        testCaseId: testResult.testCaseId,
+        passed: testResult.passed,
+        hidden: false,
+        input: truncateText(testResult.input, 2000),
+        expectedOutput: truncateText(testResult.expectedOutput, 2000),
+        actualOutput: truncateText(testResult.actualOutput, 2000),
+        error: truncateText(testResult.error, 2000),
+        executionTimeMs: testResult.executionTimeMs,
+      };
+    });
 
     return jsonNoStore({
       success: true,
       executionId,
       result: {
-        success: executionResult.success,
+        success: Boolean(executionResult.success),
         status: executionResult.status,
         output: truncateText(executionResult.output, 8000),
         error: truncateText(executionResult.error, 8000),
@@ -408,22 +416,22 @@ export async function POST(request: Request) {
         memoryUsedMb: executionResult.memoryUsedMb,
         testResults: responseTestResults,
         pointsEarned: isSubmission ? pointsEarned : undefined,
-        passedTests: passed,
-        totalTests: total,
+        passedTests,
+        totalTests,
       },
     });
   } catch (error: any) {
     console.error("[POST /api/assessments/code/execute] Error:", error);
 
-    const msg = String(error?.message ?? "Unknown error");
-    if (msg.toLowerCase().includes("rate limit")) {
-      return jsonNoStore({ error: msg }, 429);
+    const message = String(error?.message ?? "Unknown error");
+    if (message.toLowerCase().includes("rate limit")) {
+      return jsonNoStore({ error: message }, 429);
     }
 
     return jsonNoStore(
       {
         error: "Error al ejecutar el código",
-        details: msg,
+        details: message,
       },
       500
     );

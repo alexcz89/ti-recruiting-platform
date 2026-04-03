@@ -8,27 +8,55 @@ import { judge0Service } from '@/lib/code-execution/judge0-service';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-function jsonNoStore(data: any, status = 200) {
-  return NextResponse.json(data, { 
-    status, 
-    headers: { 'Cache-Control': 'no-store' } 
+function jsonNoStore(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: { 'Cache-Control': 'no-store' },
   });
 }
 
+function parseAllowedLanguages(raw: unknown): string[] {
+  if (!raw) return judge0Service.getSupportedLanguages();
+
+  if (Array.isArray(raw)) {
+    return raw.filter((lang): lang is string => typeof lang === 'string' && lang.trim().length > 0);
+  }
+
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const languages = parsed.filter(
+          (lang): lang is string => typeof lang === 'string' && lang.trim().length > 0
+        );
+        return languages.length > 0 ? languages : judge0Service.getSupportedLanguages();
+      }
+    } catch {
+      return judge0Service.getSupportedLanguages();
+    }
+  }
+
+  return judge0Service.getSupportedLanguages();
+}
+
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: { questionId: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
+
     if (!session?.user) {
       return jsonNoStore({ error: 'No autorizado' }, 401);
     }
 
-    const user = session.user as any;
-    const { questionId } = params;
+    const user = session.user as { role?: string } | undefined;
+    const questionId = params?.questionId;
 
-    // Get question with test cases
+    if (!questionId || typeof questionId !== 'string') {
+      return jsonNoStore({ error: 'questionId inválido' }, 400);
+    }
+
     const question = await prisma.assessmentQuestion.findUnique({
       where: { id: questionId },
       include: {
@@ -55,10 +83,9 @@ export async function GET(
     const role = String(user?.role ?? '').toUpperCase();
     const isRecruiter = role === 'RECRUITER' || role === 'ADMIN';
 
-    // Candidates can only see public test cases
-    const testCases = question.testCases
-      .filter(tc => isRecruiter || !tc.isHidden)
-      .map(tc => ({
+    const visibleTestCases = question.testCases
+      .filter((tc) => isRecruiter || !tc.isHidden)
+      .map((tc) => ({
         id: tc.id,
         input: tc.input,
         expectedOutput: tc.expectedOutput,
@@ -67,41 +94,40 @@ export async function GET(
         orderIndex: tc.orderIndex,
       }));
 
-    // Parse allowed languages
-    const allowedLanguages = question.allowedLanguages 
-      ? JSON.parse(question.allowedLanguages as any)
-      : judge0Service.getSupportedLanguages();
+    const allowedLanguages = parseAllowedLanguages(question.allowedLanguages);
+    const defaultLanguage =
+      (typeof question.language === 'string' && question.language.trim().length > 0
+        ? question.language
+        : allowedLanguages[0]) || 'javascript';
 
-    // Default language
-    const defaultLanguage = question.language || allowedLanguages[0] || 'javascript';
-
-    // Get starter code
-    const starterCode = question.starterCode || 
-      judge0Service.getStarterCode(defaultLanguage);
+    const starterCode =
+      (typeof question.starterCode === 'string' && question.starterCode.length > 0
+        ? question.starterCode
+        : judge0Service.getStarterCode(defaultLanguage));
 
     return jsonNoStore({
       success: true,
       question: {
         id: question.id,
+        template: question.template,
         text: question.questionText,
-        points: question.timesUsed, // NOTA: Parece que tu schema usa timesUsed en lugar de points
+        points: typeof (question as any).points === 'number' ? (question as any).points : 0,
         language: defaultLanguage,
         allowedLanguages,
         starterCode,
-        // Only show solution to recruiters/creators
         solutionCode: isRecruiter ? question.solutionCode : undefined,
-        testCases,
-        config: question.codingConfig as any,
+        testCases: visibleTestCases,
+        config: question.codingConfig ?? null,
       },
     });
-
   } catch (error) {
-    console.error('[GET /api/assessments/code/question] Error:', error);
+    console.error('[GET /api/assessments/code/question/[questionId]] Error:', error);
+
     return jsonNoStore(
-      { 
+      {
         error: 'Error al obtener la pregunta',
         details: error instanceof Error ? error.message : 'Unknown error',
-      }, 
+      },
       500
     );
   }

@@ -8,16 +8,20 @@ import { Loader2 } from 'lucide-react';
 const CodeEditor = dynamic(() => import('@/components/assessments/CodeEditor'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[700px] items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 rounded-2xl border border-slate-800/50">
+    <div className="flex h-[700px] items-center justify-center rounded-2xl border border-zinc-200 bg-white dark:border-slate-800/50 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950">
       <div className="text-center">
         <div className="relative mb-4">
           <div className="absolute inset-0 animate-ping">
-            <Loader2 className="h-12 w-12 text-violet-500/30 mx-auto" />
+            <Loader2 className="mx-auto h-12 w-12 text-violet-500/30" />
           </div>
-          <Loader2 className="relative h-12 w-12 animate-spin text-violet-500 mx-auto" />
+          <Loader2 className="relative mx-auto h-12 w-12 animate-spin text-violet-500" />
         </div>
-        <p className="text-sm font-medium text-slate-300">Cargando editor de código...</p>
-        <p className="text-xs text-slate-500 mt-1">Preparando el entorno</p>
+        <p className="text-sm font-medium text-zinc-700 dark:text-slate-300">
+          Cargando editor de código...
+        </p>
+        <p className="mt-1 text-xs text-zinc-500 dark:text-slate-500">
+          Preparando el entorno
+        </p>
       </div>
     </div>
   ),
@@ -37,6 +41,8 @@ type TestCase = {
   points: number;
 };
 
+type QuestionType = 'MULTIPLE_CHOICE' | 'OPEN_ENDED' | 'CODING';
+
 type Question = {
   id: string;
   section: string;
@@ -45,8 +51,7 @@ type Question = {
   codeSnippet?: string;
   options: Option[];
   allowMultiple: boolean;
-  // 🆕 Campos para CODING
-  type?: 'MULTIPLE_CHOICE' | 'OPEN_ENDED' | 'CODING';
+  type?: QuestionType;
   language?: string;
   allowedLanguages?: string[];
   starterCode?: string;
@@ -59,13 +64,16 @@ type Props = {
   selectedOptions: string[];
   onAnswer: (options: string[]) => void;
   disabled?: boolean;
-  // 🆕 Props adicionales para CODING
   attemptId?: string;
   onCodeSubmit?: (code: string, language: string) => void;
 };
 
-function keyOfOption(o: any) {
-  return String(o?.id ?? o?.value ?? JSON.stringify(o));
+function keyOfOption(option: Option): string {
+  return String(option.id ?? option.value ?? JSON.stringify(option));
+}
+
+function normalizeOptions(options?: Option[]): Option[] {
+  return Array.isArray(options) ? options : [];
 }
 
 export default function AssessmentQuestion({
@@ -76,19 +84,24 @@ export default function AssessmentQuestion({
   attemptId,
   onCodeSubmit,
 }: Props) {
-  // 🆕 Si es pregunta de CODING, renderizar CodeEditor
+  const options = normalizeOptions(question.options);
+
   if (question.type === 'CODING') {
     if (!attemptId) {
       return (
-        <div className="p-6 md:p-8 rounded-2xl border border-red-500/30 bg-red-500/5">
-          <p className="text-red-600 font-semibold">❌ Error: attemptId no disponible para pregunta de código</p>
-          <p className="text-sm text-red-500 mt-2">Por favor, recarga la página o contacta soporte.</p>
+        <div className="rounded-2xl border border-red-300 bg-red-50 p-6 md:p-8 dark:border-red-500/30 dark:bg-red-500/5">
+          <p className="font-semibold text-red-700 dark:text-red-400">
+            Error: attemptId no disponible para pregunta de código
+          </p>
+          <p className="mt-2 text-sm text-red-600 dark:text-red-300">
+            Recarga la página. Si el problema persiste, revisa la ruta o el parámetro del intento.
+          </p>
         </div>
       );
     }
 
     return (
-      <div className="rounded-2xl overflow-hidden h-[700px]">
+      <div className="h-[700px] overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-slate-800/50 dark:bg-transparent">
         <CodeEditor
           questionId={question.id}
           attemptId={attemptId}
@@ -105,54 +118,50 @@ export default function AssessmentQuestion({
     );
   }
 
-  // Código existente para MULTIPLE_CHOICE
   const handleSelect = (optionKey: string) => {
     if (disabled) return;
 
     if (question.allowMultiple) {
       if (selectedOptions.includes(optionKey)) {
-        onAnswer(selectedOptions.filter((k) => k !== optionKey));
+        onAnswer(selectedOptions.filter((key) => key !== optionKey));
       } else {
         onAnswer([...selectedOptions, optionKey]);
       }
-    } else {
-      onAnswer([optionKey]);
+      return;
     }
+
+    onAnswer([optionKey]);
   };
 
   return (
-    <div className="p-6 md:p-8 rounded-2xl border glass-card">
-      {/* Badge de sección */}
-      <div className="flex items-center gap-2 mb-4">
-        <span className="px-3 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+    <div className="glass-card rounded-2xl border p-6 md:p-8">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
           {question.section}
         </span>
-        <span className="px-3 py-1 rounded-full text-xs font-medium bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+        <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
           {question.difficulty}
         </span>
       </div>
 
-      {/* Pregunta */}
       <div className="mb-6">
-        <h2 className="text-xl font-semibold text-default mb-4 whitespace-pre-wrap">
+        <h2 className="text-default mb-4 whitespace-pre-wrap text-xl font-semibold">
           {question.questionText}
         </h2>
 
         {question.codeSnippet && (
-          <pre className="p-4 rounded-lg bg-zinc-900 dark:bg-zinc-950 text-zinc-100 text-sm overflow-x-auto mb-4">
+          <pre className="mb-4 overflow-x-auto rounded-lg bg-zinc-100 p-4 text-sm text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
             <code>{question.codeSnippet}</code>
           </pre>
         )}
       </div>
 
-      {/* Opciones */}
       <div className="space-y-3">
-        {question.options.map((option, idx) => {
+        {options.map((option, idx) => {
           const optionKey = keyOfOption(option);
           const isSelected = selectedOptions.includes(optionKey);
-
-          const label = option?.id ?? option?.value ?? String(idx + 1);
-          const text = option?.text ?? String(optionKey);
+          const label = option.id ?? option.value ?? String(idx + 1);
+          const text = option.text ?? optionKey;
 
           return (
             <button
@@ -160,28 +169,24 @@ export default function AssessmentQuestion({
               key={optionKey}
               onClick={() => handleSelect(optionKey)}
               disabled={disabled}
-              className={`
-                w-full text-left p-4 rounded-xl border-2 transition-all
-                ${disabled ? 'opacity-60 cursor-not-allowed' : ''}
-                ${
-                  isSelected
-                    ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
-                    : 'border-zinc-200 dark:border-zinc-800 hover:border-emerald-300 dark:hover:border-emerald-700'
-                }
-              `}
+              className={[
+                'w-full rounded-xl border-2 p-4 text-left transition-all',
+                disabled ? 'cursor-not-allowed opacity-60' : '',
+                isSelected
+                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                  : 'border-zinc-200 hover:border-emerald-300 dark:border-zinc-800 dark:hover:border-emerald-700',
+              ].join(' ')}
             >
               <div className="flex items-start gap-3">
-                <div className="shrink-0 mt-0.5">
+                <div className="mt-0.5 shrink-0">
                   {question.allowMultiple ? (
                     <div
-                      className={`
-                        h-5 w-5 rounded border-2 flex items-center justify-center
-                        ${
-                          isSelected
-                            ? 'bg-emerald-600 border-emerald-600'
-                            : 'border-zinc-300 dark:border-zinc-600'
-                        }
-                      `}
+                      className={[
+                        'flex h-5 w-5 items-center justify-center rounded border-2',
+                        isSelected
+                          ? 'border-emerald-600 bg-emerald-600'
+                          : 'border-zinc-300 dark:border-zinc-600',
+                      ].join(' ')}
                     >
                       {isSelected && (
                         <svg
@@ -201,10 +206,10 @@ export default function AssessmentQuestion({
                     </div>
                   ) : (
                     <div
-                      className={`
-                        h-5 w-5 rounded-full border-2 flex items-center justify-center
-                        ${isSelected ? 'border-emerald-600' : 'border-zinc-300 dark:border-zinc-600'}
-                      `}
+                      className={[
+                        'flex h-5 w-5 items-center justify-center rounded-full border-2',
+                        isSelected ? 'border-emerald-600' : 'border-zinc-300 dark:border-zinc-600',
+                      ].join(' ')}
                     >
                       {isSelected && <div className="h-3 w-3 rounded-full bg-emerald-600" />}
                     </div>
@@ -212,7 +217,7 @@ export default function AssessmentQuestion({
                 </div>
 
                 <div className="flex-1">
-                  <span className="font-semibold text-default mr-2">{label})</span>
+                  <span className="text-default mr-2 font-semibold">{label})</span>
                   <span className="text-default">{text}</span>
                 </div>
               </div>
@@ -222,7 +227,7 @@ export default function AssessmentQuestion({
       </div>
 
       {question.allowMultiple && (
-        <p className="mt-4 text-sm text-muted">💡 Puedes seleccionar múltiples opciones</p>
+        <p className="text-muted mt-4 text-sm">Puedes seleccionar múltiples opciones.</p>
       )}
     </div>
   );

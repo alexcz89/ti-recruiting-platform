@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useTheme } from 'next-themes';
 import {
   Play,
   Send,
@@ -23,17 +24,21 @@ import {
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950">
+    <div className="flex h-full items-center justify-center bg-white dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950">
       <div className="text-center">
         <div className="relative">
           <div className="absolute inset-0 animate-ping">
-            <Code2 className="h-12 w-12 text-violet-500/30 mx-auto" />
+            <Code2 className="mx-auto h-12 w-12 text-violet-500/30" />
           </div>
-          <Code2 className="relative h-12 w-12 text-violet-500 mx-auto mb-4" />
+          <Code2 className="relative mx-auto mb-4 h-12 w-12 text-violet-500" />
         </div>
-        <Loader2 className="h-6 w-6 animate-spin text-violet-400 mx-auto mb-2" />
-        <p className="text-sm font-medium text-slate-300">Cargando editor de código...</p>
-        <p className="text-xs text-slate-500 mt-1">Preparando el entorno</p>
+        <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-violet-500 dark:text-violet-400" />
+        <p className="text-sm font-medium text-gray-700 dark:text-slate-300">
+          Cargando editor de código...
+        </p>
+        <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">
+          Preparando el entorno
+        </p>
       </div>
     </div>
   ),
@@ -87,6 +92,9 @@ export default function CodeEditor({
   onSubmit,
   readOnly = false,
 }: CodeEditorProps) {
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme === 'dark';
+
   const [code, setCode] = useState(initialCode);
   const [selectedLanguage, setSelectedLanguage] = useState(initialLanguage);
   const [isRunning, setIsRunning] = useState(false);
@@ -249,35 +257,38 @@ export default function CodeEditor({
   const totalTests = testResults?.length || 0;
 
   return (
-    <div 
+    <div
       ref={containerRef}
-      className="flex h-full flex-col bg-gradient-to-br from-slate-950 via-slate-900 to-zinc-950 rounded-2xl overflow-hidden border border-slate-800/50 shadow-2xl"
+      className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl dark:border-slate-800/50 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
     >
-      {/* Header Professional */}
-      <div className="border-b border-slate-800/80 bg-gradient-to-r from-slate-900 to-slate-800/50 backdrop-blur-sm">
+      {/* Header */}
+      <div className="border-b border-gray-200 bg-white dark:border-slate-800/80 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
-            {/* Left: Title & Points */}
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-violet-600 to-indigo-600 rounded-xl blur-lg opacity-30"></div>
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 opacity-30 blur-lg"></div>
                 <div className="relative rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 p-3">
                   <Code2 className="h-6 w-6 text-white" />
                 </div>
               </div>
               <div>
-                <h3 className="font-bold text-lg text-white">Pregunta de Código</h3>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-sm font-medium text-violet-400">
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  Pregunta de Código
+                </h3>
+                <div className="mt-1 flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-sm font-medium text-violet-600 dark:text-violet-400">
                     <Zap className="h-3.5 w-3.5" />
                     {points} puntos
                   </span>
                   {testResults && (
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold ${
-                      passedTests === totalTests
-                        ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                        : 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ${
+                        passedTests === totalTests
+                          ? 'border border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                          : 'border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      }`}
+                    >
                       {passedTests === totalTests ? (
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       ) : (
@@ -290,14 +301,13 @@ export default function CodeEditor({
               </div>
             </div>
 
-            {/* Right: Language selector & Controls */}
             <div className="flex items-center gap-3">
               {allowedLanguages.length > 1 && !readOnly && (
                 <div className="relative">
                   <select
                     value={selectedLanguage}
                     onChange={(e) => setSelectedLanguage(e.target.value)}
-                    className="appearance-none rounded-lg border border-slate-700/50 bg-slate-800/50 backdrop-blur-sm px-4 py-2 pr-10 text-sm font-medium text-white transition-all hover:border-violet-500/50 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+                    className="appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2 pr-10 text-sm font-medium text-gray-900 transition-all hover:border-violet-500/50 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-white"
                   >
                     {allowedLanguages.map((lang) => (
                       <option key={lang} value={lang}>
@@ -305,25 +315,24 @@ export default function CodeEditor({
                       </option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500 dark:text-slate-400" />
                 </div>
               )}
 
-              {/* Settings */}
               <div className="relative">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
-                  className="p-2.5 rounded-lg bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 text-slate-400 hover:text-white hover:border-violet-500/50 transition-all"
+                  className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-violet-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                   title="Configuración"
                 >
                   <Settings className="h-4 w-4" />
                 </button>
-                
+
                 {showSettings && (
-                  <div className="absolute right-0 mt-2 p-4 rounded-xl bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 shadow-2xl min-w-[240px] z-50">
+                  <div className="absolute right-0 z-50 mt-2 min-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-slate-700/50 dark:bg-slate-900/95 dark:backdrop-blur-xl">
                     <div className="space-y-4">
                       <div>
-                        <label className="text-xs font-medium text-slate-400 block mb-2">
+                        <label className="mb-2 block text-xs font-medium text-gray-600 dark:text-slate-400">
                           Tamaño de fuente
                         </label>
                         <div className="flex items-center gap-3">
@@ -333,9 +342,11 @@ export default function CodeEditor({
                             max="24"
                             value={fontSize}
                             onChange={(e) => setFontSize(Number(e.target.value))}
-                            className="flex-1 h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-violet-500"
+                            className="h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-violet-500 dark:bg-slate-700"
                           />
-                          <span className="text-sm font-semibold text-white w-10 text-right">{fontSize}px</span>
+                          <span className="w-10 text-right text-sm font-semibold text-gray-900 dark:text-white">
+                            {fontSize}px
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -343,10 +354,9 @@ export default function CodeEditor({
                 )}
               </div>
 
-              {/* Fullscreen */}
               <button
                 onClick={toggleFullscreen}
-                className="p-2.5 rounded-lg bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 text-slate-400 hover:text-white hover:border-violet-500/50 transition-all"
+                className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-violet-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                 title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
               >
                 {isFullscreen ? (
@@ -360,13 +370,13 @@ export default function CodeEditor({
         </div>
 
         {/* Tabs */}
-        <div className="flex border-t border-slate-800/50 bg-slate-900/30">
+        <div className="flex border-t border-gray-200 bg-gray-50 dark:border-slate-800/50 dark:bg-slate-900/30">
           <button
             onClick={() => setActiveTab('problem')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-all relative ${
+            className={`relative flex-1 px-6 py-3 text-sm font-medium transition-all ${
               activeTab === 'problem'
-                ? 'text-white bg-slate-800/50'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
+                ? 'bg-white text-gray-900 dark:bg-slate-800/50 dark:text-white'
+                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
             }`}
           >
             Descripción del Problema
@@ -376,19 +386,21 @@ export default function CodeEditor({
           </button>
           <button
             onClick={() => setActiveTab('results')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-all relative ${
+            className={`relative flex-1 px-6 py-3 text-sm font-medium transition-all ${
               activeTab === 'results'
-                ? 'text-white bg-slate-800/50'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/30'
+                ? 'bg-white text-gray-900 dark:bg-slate-800/50 dark:text-white'
+                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
             }`}
           >
             Resultados de Tests
             {testResults && (
-              <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                passedTests === totalTests
-                  ? 'bg-emerald-500/20 text-emerald-400'
-                  : 'bg-red-500/20 text-red-400'
-              }`}>
+              <span
+                className={`ml-2 rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  passedTests === totalTests
+                    ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-red-500/20 text-red-600 dark:text-red-400'
+                }`}
+              >
                 {passedTests}/{totalTests}
               </span>
             )}
@@ -400,29 +412,29 @@ export default function CodeEditor({
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      <div className="flex flex-1 flex-col overflow-hidden">
         {activeTab === 'problem' ? (
           <>
             {/* Problem Description */}
-            <div className="border-b border-slate-800/50 bg-slate-900/30 px-6 py-5 max-h-48 overflow-y-auto">
-              <div 
-                className="prose prose-invert prose-sm max-w-none prose-headings:text-white prose-p:text-slate-300 prose-strong:text-white prose-code:text-violet-400 prose-code:bg-violet-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded" 
-                dangerouslySetInnerHTML={{ __html: questionText }} 
+            <div className="max-h-48 overflow-y-auto border-b border-gray-200 bg-white px-6 py-5 dark:border-slate-800/50 dark:bg-slate-900/30">
+              <div
+                className="prose prose-sm max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-strong:text-gray-900 prose-code:rounded prose-code:bg-violet-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:text-violet-700 dark:prose-invert dark:prose-headings:text-white dark:prose-p:text-slate-300 dark:prose-strong:text-white dark:prose-code:text-violet-400"
+                dangerouslySetInnerHTML={{ __html: questionText }}
               />
             </div>
 
             {/* Monaco Editor */}
-            <div className="flex-1 relative">
+            <div className="relative flex-1">
               <MonacoEditor
                 height="100%"
                 language={monacoLanguages[selectedLanguage] || 'javascript'}
                 value={code}
                 onChange={(value) => setCode(value || '')}
                 onMount={handleEditorDidMount}
-                theme="vs-dark"
+                theme={isDark ? 'vs-dark' : 'vs'}
                 options={{
                   minimap: { enabled: true, scale: 1 },
-                  fontSize: fontSize,
+                  fontSize,
                   lineNumbers: 'on',
                   roundedSelection: false,
                   scrollBeyondLastLine: false,
@@ -444,29 +456,33 @@ export default function CodeEditor({
           </>
         ) : (
           /* Results Panel */
-          <div className="flex-1 overflow-y-auto bg-slate-900/20 p-6">
+          <div className="flex-1 overflow-y-auto bg-gray-50 p-6 dark:bg-slate-900/20">
             {!testResults && !error && (
-              <div className="flex flex-col items-center justify-center h-full text-center py-16">
+              <div className="flex h-full flex-col items-center justify-center py-16 text-center">
                 <div className="relative mb-6">
-                  <div className="absolute inset-0 bg-violet-600/20 rounded-full blur-2xl"></div>
-                  <Terminal className="relative h-16 w-16 text-violet-400" />
+                  <div className="absolute inset-0 rounded-full bg-violet-600/20 blur-2xl"></div>
+                  <Terminal className="relative h-16 w-16 text-violet-500 dark:text-violet-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-white mb-2">Sin resultados aún</h3>
-                <p className="text-sm text-slate-400 max-w-md">
+                <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
+                  Sin resultados aún
+                </h3>
+                <p className="max-w-md text-sm text-gray-600 dark:text-slate-400">
                   Ejecuta los tests para ver los resultados de tu código
                 </p>
               </div>
             )}
 
             {error && (
-              <div className="rounded-xl border border-red-500/30 bg-red-500/5 backdrop-blur-sm p-5">
+              <div className="rounded-xl border border-red-300 bg-red-50 p-5 dark:border-red-500/30 dark:bg-red-500/5 dark:backdrop-blur-sm">
                 <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-lg bg-red-500/10">
-                    <AlertCircle className="h-5 w-5 text-red-400" />
+                  <div className="rounded-lg bg-red-100 p-2 dark:bg-red-500/10">
+                    <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-red-400 mb-1">Error de Ejecución</p>
-                    <p className="text-sm text-red-300/90">{error}</p>
+                    <p className="mb-1 font-semibold text-red-700 dark:text-red-400">
+                      Error de Ejecución
+                    </p>
+                    <p className="text-sm text-red-600 dark:text-red-300/90">{error}</p>
                   </div>
                 </div>
               </div>
@@ -475,32 +491,40 @@ export default function CodeEditor({
             {testResults && testResults.length > 0 && (
               <div className="space-y-4">
                 {/* Summary Card */}
-                <div className={`rounded-xl border p-5 backdrop-blur-sm ${
-                  passedTests === totalTests
-                    ? 'border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5'
-                    : 'border-red-500/30 bg-gradient-to-br from-red-500/10 to-red-500/5'
-                }`}>
+                <div
+                  className={`rounded-xl border p-5 ${
+                    passedTests === totalTests
+                      ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:border-emerald-500/30 dark:from-emerald-500/10 dark:to-emerald-500/5'
+                      : 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50 dark:border-red-500/30 dark:from-red-500/10 dark:to-red-500/5'
+                  } dark:backdrop-blur-sm`}
+                >
                   <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-xl ${
-                      passedTests === totalTests
-                        ? 'bg-emerald-500/20'
-                        : 'bg-red-500/20'
-                    }`}>
+                    <div
+                      className={`rounded-xl p-3 ${
+                        passedTests === totalTests
+                          ? 'bg-emerald-100 dark:bg-emerald-500/20'
+                          : 'bg-red-100 dark:bg-red-500/20'
+                      }`}
+                    >
                       {passedTests === totalTests ? (
-                        <CheckCircle2 className="h-7 w-7 text-emerald-400" />
+                        <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
                       ) : (
-                        <XCircle className="h-7 w-7 text-red-400" />
+                        <XCircle className="h-7 w-7 text-red-600 dark:text-red-400" />
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`text-lg font-bold ${
-                        passedTests === totalTests
-                          ? 'text-emerald-400'
-                          : 'text-red-400'
-                      }`}>
-                        {passedTests === totalTests ? '¡Excelente! Todos los tests pasaron' : 'Algunos tests fallaron'}
+                      <p
+                        className={`text-lg font-bold ${
+                          passedTests === totalTests
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-red-700 dark:text-red-400'
+                        }`}
+                      >
+                        {passedTests === totalTests
+                          ? '¡Excelente! Todos los tests pasaron'
+                          : 'Algunos tests fallaron'}
                       </p>
-                      <p className="text-sm text-slate-400 mt-0.5">
+                      <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">
                         {passedTests} de {totalTests} tests pasados
                       </p>
                     </div>
@@ -511,59 +535,79 @@ export default function CodeEditor({
                 {testResults.map((result, idx) => {
                   const isHidden = Boolean(result.hidden);
                   const showDetails =
-                    !isHidden && isNonEmptyString(result.input) && isNonEmptyString(result.expectedOutput);
+                    !isHidden &&
+                    isNonEmptyString(result.input) &&
+                    isNonEmptyString(result.expectedOutput);
 
                   return (
                     <div
                       key={result.testCaseId}
-                      className={`rounded-xl border p-4 backdrop-blur-sm transition-all hover:scale-[1.01] ${
-                        result.passed 
-                          ? 'border-emerald-500/30 bg-emerald-500/5' 
-                          : 'border-red-500/30 bg-red-500/5'
-                      }`}
+                      className={`rounded-xl border p-4 transition-all hover:scale-[1.01] ${
+                        result.passed
+                          ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/5'
+                          : 'border-red-300 bg-red-50 dark:border-red-500/30 dark:bg-red-500/5'
+                      } dark:backdrop-blur-sm`}
                     >
                       <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3 flex-1">
-                          <div className={`p-1.5 rounded-lg ${
-                            result.passed ? 'bg-emerald-500/20' : 'bg-red-500/20'
-                          }`}>
+                        <div className="flex flex-1 items-start gap-3">
+                          <div
+                            className={`rounded-lg p-1.5 ${
+                              result.passed
+                                ? 'bg-emerald-100 dark:bg-emerald-500/20'
+                                : 'bg-red-100 dark:bg-red-500/20'
+                            }`}
+                          >
                             {result.passed ? (
-                              <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                              <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                             ) : (
-                              <XCircle className="h-5 w-5 text-red-400" />
+                              <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
                             )}
                           </div>
 
                           <div className="flex-1">
-                            <p className={`font-semibold mb-2 ${
-                              result.passed ? 'text-emerald-400' : 'text-red-400'
-                            }`}>
+                            <p
+                              className={`mb-2 font-semibold ${
+                                result.passed
+                                  ? 'text-emerald-700 dark:text-emerald-400'
+                                  : 'text-red-700 dark:text-red-400'
+                              }`}
+                            >
                               Test {idx + 1} {result.passed ? 'Pasó' : 'Falló'}
-                              {isHidden && <span className="ml-2 text-xs opacity-60">(Oculto)</span>}
+                              {isHidden && (
+                                <span className="ml-2 text-xs opacity-60">(Oculto)</span>
+                              )}
                             </p>
 
                             {showDetails && (
                               <div className="space-y-2 text-sm">
                                 <div>
-                                  <span className="font-medium text-slate-400">Input: </span>
-                                  <code className="rounded-lg bg-slate-800/80 px-2 py-1 font-mono text-slate-200 text-xs">
+                                  <span className="font-medium text-gray-600 dark:text-slate-400">
+                                    Input:{' '}
+                                  </span>
+                                  <code className="rounded-lg bg-gray-200 px-2 py-1 font-mono text-xs text-gray-800 dark:bg-slate-800/80 dark:text-slate-200">
                                     {result.input}
                                   </code>
                                 </div>
                                 <div>
-                                  <span className="font-medium text-slate-400">Expected: </span>
-                                  <code className="rounded-lg bg-slate-800/80 px-2 py-1 font-mono text-slate-200 text-xs">
+                                  <span className="font-medium text-gray-600 dark:text-slate-400">
+                                    Expected:{' '}
+                                  </span>
+                                  <code className="rounded-lg bg-gray-200 px-2 py-1 font-mono text-xs text-gray-800 dark:bg-slate-800/80 dark:text-slate-200">
                                     {result.expectedOutput}
                                   </code>
                                 </div>
                                 {isNonEmptyString(result.actualOutput) && (
                                   <div>
-                                    <span className="font-medium text-slate-400">Actual: </span>
-                                    <code className={`rounded-lg px-2 py-1 font-mono text-xs ${
-                                      result.passed
-                                        ? 'bg-emerald-500/20 text-emerald-200'
-                                        : 'bg-red-500/20 text-red-200'
-                                    }`}>
+                                    <span className="font-medium text-gray-600 dark:text-slate-400">
+                                      Actual:{' '}
+                                    </span>
+                                    <code
+                                      className={`rounded-lg px-2 py-1 font-mono text-xs ${
+                                        result.passed
+                                          ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200'
+                                          : 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-200'
+                                      }`}
+                                    >
                                       {result.actualOutput}
                                     </code>
                                   </div>
@@ -572,15 +616,17 @@ export default function CodeEditor({
                             )}
 
                             {result.error && (
-                              <div className="mt-3 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
-                                <p className="text-xs font-mono text-red-300">{result.error}</p>
+                              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-500/20 dark:bg-red-500/10">
+                                <p className="text-xs font-mono text-red-700 dark:text-red-300">
+                                  {result.error}
+                                </p>
                               </div>
                             )}
                           </div>
                         </div>
 
                         {result.executionTimeMs !== undefined && (
-                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800/50 text-xs text-slate-400">
+                          <div className="flex items-center gap-1.5 rounded-lg bg-gray-200 px-2.5 py-1 text-xs text-gray-600 dark:bg-slate-800/50 dark:text-slate-400">
                             <Clock className="h-3.5 w-3.5" />
                             <span className="font-medium">{result.executionTimeMs}ms</span>
                           </div>
@@ -597,24 +643,24 @@ export default function CodeEditor({
 
       {/* Footer Actions */}
       {!readOnly && (
-        <div className="border-t border-slate-800/50 bg-gradient-to-r from-slate-900 to-slate-800/50 backdrop-blur-sm px-6 py-4">
+        <div className="border-t border-gray-200 bg-white px-6 py-4 dark:border-slate-800/50 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-slate-400 flex items-center gap-2">
-              <kbd className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-xs">
+            <p className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-slate-400">
+              <kbd className="rounded border border-gray-300 bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 Ctrl/Cmd
               </kbd>
               +
-              <kbd className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 font-mono text-xs">
+              <kbd className="rounded border border-gray-300 bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 Enter
               </kbd>
               <span>para ejecutar tests</span>
             </p>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={handleRunTests}
                 disabled={isRunning || isSubmitting || !code.trim()}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 px-5 py-2.5 text-sm font-semibold text-white transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100 border border-slate-700/50 shadow-lg hover:shadow-violet-500/20"
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50 dark:bg-slate-800 dark:hover:shadow-violet-500/20"
               >
                 {isRunning ? (
                   <>
@@ -628,11 +674,11 @@ export default function CodeEditor({
                   </>
                 )}
               </button>
-              
+
               <button
                 onClick={handleSubmit}
                 disabled={isRunning || isSubmitting || !code.trim()}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-violet-500/30 transition-all hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-violet-500/30 transition-all hover:scale-105 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:hover:scale-100"
               >
                 {isSubmitting ? (
                   <>

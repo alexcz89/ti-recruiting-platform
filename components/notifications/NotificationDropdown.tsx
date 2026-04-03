@@ -85,7 +85,13 @@ export function NotificationDropdown({
       case 'APPLICATION_STATUS_CHANGE':
         return '/jobs?applied=1';
       case 'ASSESSMENT_INVITATION':
-        return '/candidate/assessments';
+        if (meta?.templateId && meta?.attemptId) {
+          return `/assessments/${meta.templateId}?attemptId=${meta.attemptId}${
+            meta?.token ? `&token=${meta.token}` : ''
+          }`;
+        }
+        console.error('ASSESSMENT_INVITATION sin metadata completa', notification);
+        return '/dashboard';
       case 'ASSESSMENT_COMPLETED':
         if (meta?.attemptId) {
           return `/dashboard/assessments/attempts/${meta.attemptId}/results`;
