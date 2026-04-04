@@ -453,7 +453,7 @@ export default async function CompanyAssessmentsPage({
                         : null);
 
                     const resultsUrl =
-                      r.resultsUrl ?? (attempt?.id ? `/assessments/attempts/${attempt.id}/results` : null);
+                      r.resultsUrl ?? (attempt?.id ? `/dashboard/assessments/attempts/${attempt.id}/results` : null);
 
                     const applicationId = String(inv?.applicationId ?? inv?.application?.id ?? "");
                     const menuTemplateId = templateId || null;
