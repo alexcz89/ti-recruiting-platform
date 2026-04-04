@@ -158,7 +158,9 @@ export default async function CompanyAssessmentsPage({
     .map((r) => (typeof r.attempt?.totalScore === "number" ? r.attempt.totalScore : null))
     .filter((n: any) => n !== null) as number[];
 
-  const avgScore = scored.length ? Math.round(scored.reduce((s, n) => s + n, 0) / scored.length) : 0;
+  const avgScore = scored.length 
+  ? Math.min(100, Math.round(scored.reduce((s, n) => s + n, 0) / scored.length)) 
+  : 0;
 
   const suspicious = rows.filter((r) => {
     const sev = String(r.attempt?.severity ?? "").toUpperCase();
@@ -428,7 +430,11 @@ export default async function CompanyAssessmentsPage({
                     const stTone = tone(st);
                     const stLabel = stateLabel(st);
 
-                    const scoreTxt = fmtScore(attempt?.totalScore);
+                    const scoreTxt = fmtScore(
+                      typeof attempt?.totalScore === "number" 
+                        ? Math.min(100, attempt.totalScore) 
+                        : attempt?.totalScore
+                    );
                     const passed = attempt?.passed === true;
                     const hasFinal = Boolean(r.resultsUrl);
 
