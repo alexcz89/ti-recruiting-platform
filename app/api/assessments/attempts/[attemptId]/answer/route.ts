@@ -42,6 +42,8 @@ function keyOfOption(o: unknown) {
   return String(JSON.stringify(o));
 }
 
+const CODE_SENTINEL = "__CODE_SUBMITTED__";
+
 // POST /api/assessments/attempts/[attemptId]/answer
 export async function POST(
   request: Request,
@@ -152,6 +154,7 @@ export async function POST(
         },
         select: {
           id: true,
+          type: true,
           allowMultiple: true,
           options: true,
         },
@@ -162,6 +165,67 @@ export async function POST(
           code: "QUESTION_NOT_FOUND",
         });
       }
+
+      const isCoding = String(question.type ?? "").toUpperCase() === "CODING";
+
+      // ✅ Para preguntas CODING: solo aceptar el sentinel y guardar timeSpent
+      // El puntaje real ya fue guardado por /execute con upsert en AttemptAnswer
+      if (isCoding) {
+        const isSentinel =
+          selectedOptions.length === 1 &&
+          selectedOptions[0] === CODE_SENTINEL;
+
+        if (!isSentinel) {
+          throw Object.assign(new Error("INVALID_OPTION"), {
+            code: "INVALID_OPTION",
+          });
+        }
+
+        // Actualizar solo el timeSpent en el AttemptAnswer existente (creado por /execute)
+        // Si no existe aún, crear uno básico
+        try {
+          await tx.attemptAnswer.update({
+            where: {
+              attemptId_questionId: {
+                attemptId: params.attemptId,
+                questionId,
+              },
+            },
+            data: {
+              timeSpent: timeSpent ?? undefined,
+              answeredAt: now,
+            },
+          });
+        } catch {
+          // Si no existe el answer (no ejecutó tests), crear uno vacío
+          await tx.attemptAnswer.upsert({
+            where: {
+              attemptId_questionId: {
+                attemptId: params.attemptId,
+                questionId,
+              },
+            },
+            create: {
+              attemptId: params.attemptId,
+              questionId,
+              selectedOptions,
+              isCorrect: false,
+              pointsEarned: 0,
+              timeSpent: timeSpent ?? undefined,
+              answeredAt: now,
+            },
+            update: {
+              selectedOptions,
+              timeSpent: timeSpent ?? undefined,
+              answeredAt: now,
+            },
+          });
+        }
+
+        return { answerId: null, isCoding: true };
+      }
+
+      // ── MCQ / OPEN_ENDED ──────────────────────────────────────────
 
       if (!question.allowMultiple && selectedOptions.length > 1) {
         throw Object.assign(new Error("SINGLE_CHOICE_ONLY"), {
@@ -249,7 +313,7 @@ export async function POST(
         });
       }
 
-      return { answerId };
+      return { answerId, isCoding: false };
     });
 
     return jsonNoStore({ success: true, answerId: result.answerId });

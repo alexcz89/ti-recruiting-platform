@@ -379,7 +379,8 @@ export default function AssessmentPage() {
   const handleCodeSubmitted = (qid: string) => {
     setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
     setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
-    // ✅ No auto-avanzar — dejar que el candidato navegue manualmente
+    // ✅ Guardar timeSpent al hacer submit de código
+    handleAnswer(qid, [CODE_SENTINEL]);
     if (currentIndex < total - 1) {
       toastSuccess('✓ Solución enviada. Puedes continuar con la siguiente pregunta.');
     }
