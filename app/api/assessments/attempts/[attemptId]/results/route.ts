@@ -57,6 +57,7 @@ function sanitizeOptions(options: unknown): OptionLike[] {
       value: typeof o.value === "string" ? o.value : undefined,
       text: typeof o.text === "string" ? o.text : undefined,
       label: typeof o.label === "string" ? o.label : undefined,
+      isCorrect: Boolean(o.isCorrect),
     };
   });
 }
@@ -229,6 +230,7 @@ export async function GET(
       });
     }
 
+    // ✅ Incluir type y codeSubmission para preguntas CODING
     const answersFull = await prisma.attemptAnswer.findMany({
       where: { attemptId: attemptBase.id },
       select: {
@@ -238,6 +240,10 @@ export async function GET(
         isCorrect: true,
         pointsEarned: true,
         timeSpent: true,
+        codeSubmission: true,   // ✅ código enviado por el candidato
+        language: true,          // ✅ lenguaje usado
+        passedTests: true,       // ✅ tests pasados
+        totalTests: true,        // ✅ total de tests
         question: {
           select: {
             id: true,
@@ -247,6 +253,7 @@ export async function GET(
             codeSnippet: true,
             options: true,
             explanation: true,
+            type: true,          // ✅ tipo de pregunta (CODING / MULTIPLE_CHOICE)
           },
         },
       },
@@ -292,6 +299,12 @@ export async function GET(
         pointsEarned: answer.pointsEarned,
         timeSpent: answer.timeSpent,
         explanation: answer.question.explanation,
+        // ✅ Campos para preguntas CODING
+        type: answer.question.type,
+        codeSubmission: answer.codeSubmission ?? null,
+        language: answer.language ?? null,
+        passedTests: answer.passedTests ?? 0,
+        totalTests: answer.totalTests ?? 0,
       })),
       stats: {
         correctAnswers: correctCount,
