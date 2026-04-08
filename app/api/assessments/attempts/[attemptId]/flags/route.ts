@@ -56,7 +56,6 @@ function stableHash(input: string) {
 async function readBody(request: Request) {
   const ct = request.headers.get("content-type") || "";
   if (ct.includes("application/json")) return await request.json();
-
   const txt = await request.text();
   if (!txt) return null;
   try {
@@ -89,8 +88,53 @@ function normalizeEvents(body: any): IncomingEvent[] {
   return [];
 }
 
-function computeSeverity(score: number) {
-  return score >= 20 ? "CRITICAL" : score >= 10 ? "SUSPICIOUS" : "NORMAL";
+/**
+ * ✅ Severidad calibrada para assessments de coding:
+ *
+ * - tabSwitches * 3     → cambiar de pestaña es intencional y sospechoso
+ * - copyAttempts * 5    → copiar es muy sospechoso
+ * - pasteAttempts * 5   → pegar es muy sospechoso
+ * - rightClicks * 0     → ignorado — normal en coding (click derecho en editor)
+ * - pageHides * 2       → moderado
+ * - focusLoss           → ignorar primeros 20 (normal en editor), luego pesa poco
+ * - multiSession * 30   → múltiples dispositivos = definitivamente sospechoso
+ *
+ * Thresholds:
+ * - NORMAL    → score < 40
+ * - SUSPICIOUS → score 40-79
+ * - CRITICAL  → score >= 80
+ *
+ * Ejemplos con uso normal de coding:
+ *   15 tabs + 70 focusLoss = 45 + 25 = 70 → SUSPICIOUS (no CRITICAL)
+ *   5 tabs + 20 focusLoss = 15 + 0 = 15 → NORMAL
+ *   50 tabs + 3 copias = 150 + 15 = 165 → CRITICAL (fraude real)
+ */
+function computeSeverityScore(counters: {
+  tabSwitches: number;
+  copyAttempts: number;
+  pasteAttempts: number;
+  rightClicks: number;
+  pageHides: number;
+  focusLoss: number;
+  multiSession: boolean;
+}): number {
+  const focusLossExtra = Math.max(0, counters.focusLoss - 20);
+
+  return Math.round(
+    counters.tabSwitches * 3 +
+    counters.copyAttempts * 5 +
+    counters.pasteAttempts * 5 +
+    counters.rightClicks * 0 +       // ignorado
+    counters.pageHides * 2 +
+    focusLossExtra * 0.5 +           // solo el exceso, con peso bajo
+    (counters.multiSession ? 30 : 0)
+  );
+}
+
+function computeSeverity(score: number): string {
+  if (score >= 80) return "CRITICAL";
+  if (score >= 40) return "SUSPICIOUS";
+  return "NORMAL";
 }
 
 export async function PATCH(
@@ -151,7 +195,6 @@ export async function PATCH(
     if (attempt.status !== "IN_PROGRESS") return noStoreJson({ error: "El intento no está en progreso" }, 400);
     if (attempt.expiresAt && new Date() > attempt.expiresAt) return noStoreJson({ error: "El tiempo ha expirado" }, 400);
 
-    // batch -> increments
     const inc = {
       tabSwitches: 0,
       visibilityHidden: 0,
@@ -179,7 +222,11 @@ export async function PATCH(
       attemptId: attempt.id,
       candidateId: attempt.candidateId,
       type: e.type,
-      meta: e.meta ? { ...e.meta, ...(e.clientTs ? { clientTs: e.clientTs } : {}) } : (e.clientTs ? { clientTs: e.clientTs } : undefined),
+      meta: e.meta
+        ? { ...e.meta, ...(e.clientTs ? { clientTs: e.clientTs } : {}) }
+        : e.clientTs
+        ? { clientTs: e.clientTs }
+        : undefined,
       eventId: e.eventId,
       clientSig,
       ipPrefix: ipPfx,
@@ -188,13 +235,11 @@ export async function PATCH(
     }));
 
     const updated = await prisma.$transaction(async (tx) => {
-      // 1) append-only events (idempotente si eventId viene)
       await tx.assessmentAttemptEvent.createMany({
         data: toInsert,
         skipDuplicates: true,
       });
 
-      // 2) atomic counters
       const afterCounters = await tx.assessmentAttempt.update({
         where: { id: attempt.id },
         data: {
@@ -205,7 +250,6 @@ export async function PATCH(
           rightClicks: inc.rightClicks ? { increment: inc.rightClicks } : undefined,
           focusLoss: inc.focusLoss ? { increment: inc.focusLoss } : undefined,
           pageHides: inc.pageHides ? { increment: inc.pageHides } : undefined,
-
           firstClientSig: attempt.firstClientSig ? undefined : firstSig,
           lastClientSig: clientSig,
           multiSession: multiSession ? true : undefined,
@@ -222,15 +266,16 @@ export async function PATCH(
         },
       });
 
-      // 3) severity summary
-      const severityScore =
-        afterCounters.tabSwitches * 2 +
-        afterCounters.copyAttempts * 3 +
-        afterCounters.pasteAttempts * 3 +
-        afterCounters.rightClicks +
-        afterCounters.pageHides * 2 +
-        afterCounters.focusLoss +
-        (afterCounters.multiSession ? 8 : 0);
+      // ✅ Nueva fórmula de severidad
+      const severityScore = computeSeverityScore({
+        tabSwitches: afterCounters.tabSwitches,
+        copyAttempts: afterCounters.copyAttempts,
+        pasteAttempts: afterCounters.pasteAttempts,
+        rightClicks: afterCounters.rightClicks,
+        pageHides: afterCounters.pageHides,
+        focusLoss: afterCounters.focusLoss,
+        multiSession: afterCounters.multiSession,
+      });
 
       const severity = computeSeverity(severityScore);
 

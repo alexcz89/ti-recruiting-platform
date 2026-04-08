@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
+import { toastError, toastWarning } from "@/lib/ui/toast";
 
 type Flags = {
   tabSwitches: number;
@@ -31,7 +31,7 @@ export function useAntiCheating({
   enabled,
   attemptId,
   onFlagsChange,
-  maxTabSwitches = 5,
+  maxTabSwitches = 15, // ✅ Subido de 5 a 15 — más realista para coding
 }: Props) {
   const flagsRef = useRef<Flags>({
     tabSwitches: 0,
@@ -76,7 +76,11 @@ export function useAntiCheating({
       const url = `/api/assessments/attempts/${attemptId}/flags`;
       const payload = JSON.stringify({ events: batch });
 
-      if (useBeacon && typeof navigator !== "undefined" && "sendBeacon" in navigator) {
+      if (
+        useBeacon &&
+        typeof navigator !== "undefined" &&
+        "sendBeacon" in navigator
+      ) {
         try {
           const ok = navigator.sendBeacon(url, payload);
           if (ok) return;
@@ -98,8 +102,8 @@ export function useAntiCheating({
   useEffect(() => {
     if (!enabled) return;
 
-    // flush periódico (reduce requests)
-    timerRef.current = setInterval(() => flush(false), 2000);
+    // Flush periódico cada 3s (reduce requests)
+    timerRef.current = setInterval(() => flush(false), 3000);
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
@@ -107,17 +111,23 @@ export function useAntiCheating({
         flagsRef.current.focusLoss += 1;
         emit();
 
-        // ✅ envía solo un evento canonical o ambos; aquí dejo ambos porque ya es batch
         enqueue("TAB_SWITCH");
         enqueue("VISIBILITY_HIDDEN");
 
         if (flagsRef.current.tabSwitches >= maxTabSwitches) {
-          toastError("⚠️ Has cambiado de pestaña muchas veces. Esto será reportado.", { duration: 5000 });
-        } else {
-          toastWarning(`⚠️ Evita cambiar de pestaña (${flagsRef.current.tabSwitches}/${maxTabSwitches})`, {
-            duration: 3000,
-          });
+          // ✅ Solo mostrar warning severo después del threshold real
+          toastError(
+            "⚠️ Has cambiado de pestaña muchas veces. Esto será reportado.",
+            { duration: 5000 }
+          );
+        } else if (flagsRef.current.tabSwitches >= Math.floor(maxTabSwitches / 2)) {
+          // ✅ Warning suave a mitad del camino
+          toastWarning(
+            `⚠️ Evita cambiar de pestaña (${flagsRef.current.tabSwitches}/${maxTabSwitches})`,
+            { duration: 3000 }
+          );
         }
+        // ✅ Sin toast en las primeras pocas veces — no molestar innecesariamente
       }
     };
 
@@ -125,33 +135,38 @@ export function useAntiCheating({
       flagsRef.current.focusLoss += 1;
       emit();
       enqueue("BLUR");
+      // ✅ Sin toast — el blur ocurre constantemente en el editor de código
     };
 
-    const handleCopy = (e: ClipboardEvent) => {
+    // ✅ Copy/paste: solo registrar, NO bloquear
+    // En assessments de coding el candidato necesita copiar/pegar código
+    // El registro sirve para detectar patrones sospechosos (copiar mucho = posible plagiarismo)
+    const handleCopy = (_e: ClipboardEvent) => {
       flagsRef.current.copyAttempts += 1;
       emit();
       enqueue("COPY");
-      toastWarning("⚠️ Copiar está deshabilitado durante la evaluación");
-      e.preventDefault();
+      // Sin preventDefault() — permitir copiar
+      // Sin toast — no interrumpir el flujo de trabajo
     };
 
-    const handlePaste = (e: ClipboardEvent) => {
+    const handlePaste = (_e: ClipboardEvent) => {
       flagsRef.current.pasteAttempts += 1;
       emit();
       enqueue("PASTE");
-      toastWarning("⚠️ Pegar está deshabilitado durante la evaluación");
-      e.preventDefault();
+      // Sin preventDefault() — permitir pegar
+      // Sin toast — no interrumpir el flujo de trabajo
     };
 
-    const handleContextMenu = (e: MouseEvent) => {
-      e.preventDefault();
+    // ✅ Click derecho: solo registrar, NO bloquear
+    // El editor Monaco usa click derecho para su menú contextual
+    const handleContextMenu = (_e: MouseEvent) => {
       enqueue("RIGHT_CLICK");
-      toastWarning("⚠️ Click derecho deshabilitado");
+      // Sin preventDefault() — permitir menú contextual del editor
     };
 
     const handlePageHide = () => {
       enqueue("PAGEHIDE");
-      flush(true); // ✅ intenta beacon al salir
+      flush(true); // beacon al salir
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -170,7 +185,6 @@ export function useAntiCheating({
       document.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("pagehide", handlePageHide);
 
-      // flush final
       flush(true);
     };
   }, [enabled, enqueue, flush, emit, maxTabSwitches]);
