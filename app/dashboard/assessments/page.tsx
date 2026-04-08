@@ -8,18 +8,18 @@ import type { ReactNode } from "react";
 import AssessmentActionsMenu from "@/components/dashboard/assessments/AssessmentActionsMenu";
 import { authOptions } from '@/lib/server/auth';
 import { fromNow } from "@/lib/dates";
-import { 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  ShieldAlert, 
-  Filter, 
-  Search, 
-  Briefcase, 
+import {
+  CheckCircle2,
+  XCircle,
+  Clock,
+  ShieldAlert,
+  Filter,
+  Search,
+  Briefcase,
   ListChecks,
   TrendingUp,
   Users,
-  AlertTriangle
+  AlertTriangle,
 } from "lucide-react";
 
 export const metadata = { title: "Evaluaciones | Panel" };
@@ -61,9 +61,11 @@ function fmtScore(n: any) {
   return typeof n === "number" && Number.isFinite(n) ? `${Math.round(n)}%` : "—";
 }
 
-function buildPageHref(searchParams: Record<string, string | string[] | undefined> | undefined, nextPage: number) {
+function buildPageHref(
+  searchParams: Record<string, string | string[] | undefined> | undefined,
+  nextPage: number
+) {
   const sp = new URLSearchParams();
-
   if (searchParams) {
     for (const [k, v] of Object.entries(searchParams)) {
       if (k === "page") continue;
@@ -74,7 +76,6 @@ function buildPageHref(searchParams: Record<string, string | string[] | undefine
       }
     }
   }
-
   sp.set("page", String(nextPage));
   const qs = sp.toString();
   return `/dashboard/assessments${qs ? `?${qs}` : ""}`;
@@ -82,17 +83,20 @@ function buildPageHref(searchParams: Record<string, string | string[] | undefine
 
 function getBaseUrl() {
   const h = headers();
-
   const proto = h.get("x-forwarded-proto") || "http";
   const host = h.get("x-forwarded-host") || h.get("host");
   if (host) return `${proto}://${host}`.replace(/\/$/, "");
-
   const env =
     process.env.NEXT_PUBLIC_BASE_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXTAUTH_URL;
-
-  return (env ? (env.startsWith("http") ? env : `https://${env}`) : "http://localhost:3000").replace(/\/$/, "");
+  return (
+    env
+      ? env.startsWith("http")
+        ? env
+        : `https://${env}`
+      : "http://localhost:3000"
+  ).replace(/\/$/, "");
 }
 
 export default async function CompanyAssessmentsPage({
@@ -108,9 +112,16 @@ export default async function CompanyAssessmentsPage({
 
   const q = typeof searchParams?.q === "string" ? searchParams.q.trim() : "";
   const jobId = typeof searchParams?.jobId === "string" ? searchParams.jobId.trim() : "";
-  const state = normalizeState(typeof searchParams?.state === "string" ? searchParams.state : null);
-  const hasAttempt = typeof searchParams?.hasAttempt === "string" ? searchParams.hasAttempt : "";
-  const page = clampInt(parseInt(String(searchParams?.page ?? "1"), 10) || 1, 1, 9999);
+  const state = normalizeState(
+    typeof searchParams?.state === "string" ? searchParams.state : null
+  );
+  const hasAttempt =
+    typeof searchParams?.hasAttempt === "string" ? searchParams.hasAttempt : "";
+  const page = clampInt(
+    parseInt(String(searchParams?.page ?? "1"), 10) || 1,
+    1,
+    9999
+  );
 
   const qs = new URLSearchParams();
   if (q) qs.set("q", q);
@@ -130,10 +141,14 @@ export default async function CompanyAssessmentsPage({
   if (!res.ok) {
     return (
       <main className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
-        <div className="mx-auto max-w-[1800px] px-4 py-12 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-8">
           <div className="rounded-2xl border border-red-200 bg-red-50 p-8 dark:border-red-900/50 dark:bg-red-950/20">
-            <p className="text-lg font-semibold text-red-900 dark:text-red-200">Error cargando evaluaciones</p>
-            <p className="mt-2 text-sm text-red-700 dark:text-red-300">Status: {res.status}</p>
+            <p className="text-lg font-semibold text-red-900 dark:text-red-200">
+              Error cargando evaluaciones
+            </p>
+            <p className="mt-2 text-sm text-red-700 dark:text-red-300">
+              Status: {res.status}
+            </p>
           </div>
         </div>
       </main>
@@ -141,7 +156,6 @@ export default async function CompanyAssessmentsPage({
   }
 
   const data = await res.json();
-
   const jobs: Array<{ id: string; title: string }> = data.jobs ?? [];
   const rows: any[] = data.rows ?? [];
   const total: number = data.total ?? 0;
@@ -155,12 +169,14 @@ export default async function CompanyAssessmentsPage({
   const mInactive = rows.filter((r) => r.uiState === "INACTIVE").length;
 
   const scored = rows
-    .map((r) => (typeof r.attempt?.totalScore === "number" ? r.attempt.totalScore : null))
+    .map((r) =>
+      typeof r.attempt?.totalScore === "number" ? r.attempt.totalScore : null
+    )
     .filter((n: any) => n !== null) as number[];
 
-  const avgScore = scored.length 
-  ? Math.min(100, Math.round(scored.reduce((s, n) => s + n, 0) / scored.length)) 
-  : 0;
+  const avgScore = scored.length
+    ? Math.min(100, Math.round(scored.reduce((s, n) => s + n, 0) / scored.length))
+    : 0;
 
   const suspicious = rows.filter((r) => {
     const sev = String(r.attempt?.severity ?? "").toUpperCase();
@@ -169,13 +185,12 @@ export default async function CompanyAssessmentsPage({
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
-      <div className="mx-auto max-w-[1800px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        {/* Header mejorado */}
+      <div className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+
+        {/* Header */}
         <div className="relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-gradient-to-br from-white via-zinc-50/50 to-white p-6 shadow-sm dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
-          {/* Decoración de fondo */}
           <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-violet-100 to-blue-100 opacity-20 blur-3xl dark:from-violet-900 dark:to-blue-900 dark:opacity-10" />
           <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 opacity-20 blur-3xl dark:from-emerald-900 dark:to-teal-900 dark:opacity-10" />
-          
           <div className="relative">
             <div className="flex items-center gap-2">
               <div className="rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 p-2 shadow-lg shadow-violet-500/20">
@@ -194,53 +209,17 @@ export default async function CompanyAssessmentsPage({
           </div>
         </div>
 
-        {/* Métricas mejoradas */}
+        {/* Métricas */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <MetricCard
-            label="Pendientes"
-            value={mPending}
-            icon={Clock}
-            color="violet"
-            total={mTotal}
-          />
-          <MetricCard
-            label="En progreso"
-            value={mInProgress}
-            icon={TrendingUp}
-            color="blue"
-            total={mTotal}
-          />
-          <MetricCard
-            label="Completadas"
-            value={mCompleted}
-            icon={CheckCircle2}
-            color="emerald"
-            total={mTotal}
-          />
-          <MetricCard
-            label="Inactivas"
-            value={mInactive}
-            icon={Users}
-            color="zinc"
-            total={mTotal}
-          />
-          <MetricCard
-            label="Score prom."
-            value={`${avgScore}%`}
-            icon={TrendingUp}
-            color="teal"
-            isPercentage
-          />
-          <MetricCard
-            label="Alertas"
-            value={suspicious}
-            icon={AlertTriangle}
-            color="amber"
-            isAlert
-          />
+          <MetricCard label="Pendientes" value={mPending} icon={Clock} color="violet" total={mTotal} />
+          <MetricCard label="En progreso" value={mInProgress} icon={TrendingUp} color="blue" total={mTotal} />
+          <MetricCard label="Completadas" value={mCompleted} icon={CheckCircle2} color="emerald" total={mTotal} />
+          <MetricCard label="Inactivas" value={mInactive} icon={Users} color="zinc" total={mTotal} />
+          <MetricCard label="Score prom." value={`${avgScore}%`} icon={TrendingUp} color="teal" isPercentage />
+          <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert />
         </div>
 
-        {/* Filtros mejorados */}
+        {/* Filtros */}
         <form className="group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white/80 shadow-sm backdrop-blur-sm transition-all hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80">
           <div className="p-5">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
@@ -338,13 +317,14 @@ export default async function CompanyAssessmentsPage({
               </div>
             </div>
 
-            {/* Acciones del formulario */}
             <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200/70 pt-4 dark:border-zinc-700/70 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                Mostrando <span className="font-bold text-violet-600 dark:text-violet-400">{mTotal}</span> de{" "}
-                <span className="font-bold text-zinc-900 dark:text-zinc-100">{total}</span> resultados
+                Mostrando{" "}
+                <span className="font-bold text-violet-600 dark:text-violet-400">{mTotal}</span>{" "}
+                de{" "}
+                <span className="font-bold text-zinc-900 dark:text-zinc-100">{total}</span>{" "}
+                resultados
               </p>
-
               <div className="flex gap-2">
                 <button
                   type="submit"
@@ -364,7 +344,7 @@ export default async function CompanyAssessmentsPage({
           </div>
         </form>
 
-        {/* Tabla mejorada - NOTA: Se agregó pb-48 para espacio del menú */}
+        {/* ✅ Tabla rediseñada — 5 columnas, sin scroll horizontal */}
         {rows.length === 0 ? (
           <div className="relative overflow-hidden rounded-3xl border border-dashed border-zinc-300 bg-white/50 p-12 text-center backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/50">
             <div className="mx-auto max-w-md">
@@ -379,278 +359,238 @@ export default async function CompanyAssessmentsPage({
           </div>
         ) : (
           <div className="overflow-hidden rounded-3xl border border-zinc-200/80 bg-white/80 shadow-lg backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80">
-            {/* IMPORTANTE: Envolver en un div con padding bottom para el menú */}
-            <div className="overflow-x-auto pb-48">
-              <table className="w-full table-fixed text-sm" style={{ minWidth: '1400px' }}>
-                <colgroup>
-                  <col style={{ width: '220px' }} />
-                  <col style={{ width: '240px' }} />
-                  <col style={{ width: '220px' }} />
-                  <col style={{ width: '140px' }} />
-                  <col style={{ width: '120px' }} />
-                  <col style={{ width: '140px' }} />
-                  <col style={{ width: '140px' }} />
-                  <col style={{ width: '180px' }} />
-                </colgroup>
-                <thead className="border-b border-zinc-200/80 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
-                  <tr>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Candidato
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Assessment
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Vacante
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-center text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Estado
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-center text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Score
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-center text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Anti-cheat
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Actividad
-                    </th>
-                    <th className="whitespace-nowrap px-5 py-3.5 text-right text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
+            <table className="w-full text-sm">
+              <thead className="border-b border-zinc-200/80 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
+                <tr>
+                  {/* Col 1: Candidato — 25% */}
+                  <th className="w-1/4 px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                    Candidato
+                  </th>
+                  {/* Col 2: Assessment + Vacante — 30% */}
+                  <th className="w-[30%] px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                    Assessment · Vacante
+                  </th>
+                  {/* Col 3: Estado + Score — 20% */}
+                  <th className="w-1/5 px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                    Estado · Score
+                  </th>
+                  {/* Col 4: Anti-cheat — 15% */}
+                  <th className="w-[15%] px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                    Anti-cheat
+                  </th>
+                  {/* Col 5: Acciones — 10% */}
+                  <th className="w-[10%] px-5 py-3.5 text-right text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
 
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
-                  {rows.map((r) => {
-                    const inv = (r?.inv ?? r) as any;
-                    const attempt = (r?.attempt ?? null) as any;
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+                {rows.map((r) => {
+                  const inv = (r?.inv ?? r) as any;
+                  const attempt = (r?.attempt ?? null) as any;
 
-                    const st = r.uiState as "PENDING" | "IN_PROGRESS" | "COMPLETED" | "INACTIVE";
-                    const stTone = tone(st);
-                    const stLabel = stateLabel(st);
+                  const st = r.uiState as "PENDING" | "IN_PROGRESS" | "COMPLETED" | "INACTIVE";
+                  const stTone = tone(st);
+                  const stLabel = stateLabel(st);
 
-                    const scoreTxt = fmtScore(
-                      typeof attempt?.totalScore === "number" 
-                        ? Math.min(100, attempt.totalScore) 
-                        : attempt?.totalScore
-                    );
-                    const passed = attempt?.passed === true;
-                    const hasFinal = Boolean(r.resultsUrl);
+                  const scoreRaw =
+                    typeof attempt?.totalScore === "number"
+                      ? Math.min(100, attempt.totalScore)
+                      : attempt?.totalScore;
+                  const scoreTxt = fmtScore(scoreRaw);
+                  const passed = attempt?.passed === true;
+                  const hasFinal = Boolean(r.resultsUrl);
 
-                    const sev = String(attempt?.severity ?? "NORMAL").toUpperCase();
-                    const sevScore = typeof attempt?.severityScore === "number" ? attempt.severityScore : 0;
-                    const showAlert = sev === "SUSPICIOUS" || sev === "CRITICAL" || attempt?.multiSession;
+                  const sev = String(attempt?.severity ?? "NORMAL").toUpperCase();
+                  const sevScore =
+                    typeof attempt?.severityScore === "number" ? attempt.severityScore : 0;
+                  const showAlert =
+                    sev === "SUSPICIOUS" || sev === "CRITICAL" || attempt?.multiSession;
 
-                    const lastActivity = attempt?.submittedAt || attempt?.createdAt || inv.updatedAt || inv.createdAt;
+                  const lastActivity =
+                    attempt?.submittedAt ||
+                    attempt?.createdAt ||
+                    inv.updatedAt ||
+                    inv.createdAt;
 
-                    const templateId = String(inv?.templateId ?? inv?.template?.id ?? "");
-                    const token = String(inv?.token ?? "");
-                    const inviteLink =
-                      r.inviteLink ??
-                      (templateId && token
-                        ? `/assessments/${encodeURIComponent(templateId)}?token=${encodeURIComponent(token)}`
-                        : null);
+                  const templateId = String(inv?.templateId ?? inv?.template?.id ?? "");
+                  const token = String(inv?.token ?? "");
+                  const inviteLink =
+                    r.inviteLink ??
+                    (templateId && token
+                      ? `/assessments/${encodeURIComponent(templateId)}?token=${encodeURIComponent(token)}`
+                      : null);
 
-                    const resultsUrl =
-                      r.resultsUrl ?? (attempt?.id ? `/dashboard/assessments/attempts/${attempt.id}/results` : null);
+                  const resultsUrl =
+                    r.resultsUrl ??
+                    (attempt?.id
+                      ? `/dashboard/assessments/attempts/${attempt.id}/results`
+                      : null);
 
-                    const applicationId = String(inv?.applicationId ?? inv?.application?.id ?? "");
-                    const menuTemplateId = templateId || null;
+                  const applicationId = String(
+                    inv?.applicationId ?? inv?.application?.id ?? ""
+                  );
+                  const menuTemplateId = templateId || null;
 
-                    return (
-                      <tr
-                        key={inv.id}
-                        className="group relative bg-white transition-all hover:bg-gradient-to-r hover:from-violet-50/50 hover:to-blue-50/50 dark:bg-zinc-900/50 dark:hover:from-violet-950/20 dark:hover:to-blue-950/20"
-                      >
-                        {/* Candidato - CLICABLE */}
-                        <td className="relative px-5 py-4">
-                          {/* Indicador lateral en hover */}
-                          <div className="absolute left-0 top-0 h-full w-1 bg-gradient-to-b from-violet-500 to-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
-                          <Link
-                            href={`/dashboard/candidates/${inv.candidate?.id || '#'}`}
-                            className="flex items-center gap-2.5 transition-all hover:opacity-80"
-                          >
-                            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-blue-100 text-xs font-bold text-violet-700 ring-2 ring-transparent transition-all group-hover:ring-violet-200 dark:from-violet-900/40 dark:to-blue-900/40 dark:text-violet-300 dark:group-hover:ring-violet-800/50">
-                              {(inv.candidate?.name || "?").charAt(0).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate font-bold text-zinc-900 transition-colors hover:text-violet-600 dark:text-zinc-50 dark:hover:text-violet-400">
-                                {inv.candidate?.name || "Sin nombre"}
-                              </p>
-                              <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
-                                {inv.candidate?.email}
-                              </p>
-                            </div>
-                          </Link>
-                        </td>
-
-                        {/* Assessment */}
-                        <td className="px-5 py-4">
+                  return (
+                    <tr
+                      key={inv.id}
+                      className="group relative bg-white transition-all hover:bg-violet-50/30 dark:bg-zinc-900/50 dark:hover:bg-violet-950/10"
+                    >
+                      {/* Col 1: Candidato */}
+                      <td className="relative px-5 py-4">
+                        <div className="absolute left-0 top-0 h-full w-0.5 bg-gradient-to-b from-violet-500 to-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
+                        <Link
+                          href={`/dashboard/candidates/${inv.candidate?.id || "#"}`}
+                          className="flex items-center gap-2.5 transition-all hover:opacity-80"
+                        >
+                          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-blue-100 text-xs font-bold text-violet-700 dark:from-violet-900/40 dark:to-blue-900/40 dark:text-violet-300">
+                            {(inv.candidate?.name || "?").charAt(0).toUpperCase()}
+                          </div>
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-zinc-900 dark:text-zinc-50">
-                              {inv.template?.title}
+                            <p className="truncate font-bold text-zinc-900 hover:text-violet-600 dark:text-zinc-50 dark:hover:text-violet-400">
+                              {inv.candidate?.name || "Sin nombre"}
                             </p>
-                            <p className="mt-0.5 truncate text-xs text-zinc-500 dark:text-zinc-400">
-                              {String(inv.template?.difficulty ?? "").toLowerCase()}
-                              {typeof inv.template?.timeLimit === "number" ? ` · ${inv.template.timeLimit} min` : ""}
+                            <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
+                              {inv.candidate?.email}
                             </p>
                           </div>
-                        </td>
+                        </Link>
+                      </td>
 
-                        {/* Vacante - CLICABLE a applications */}
-                        <td className="px-5 py-4">
-                          {inv.application?.job?.id ? (
-                            <Link
-                              href={`/dashboard/jobs/${inv.application.job.id}/applications`}
-                              className="inline-block truncate font-medium text-zinc-800 transition-colors hover:text-violet-600 dark:text-zinc-100 dark:hover:text-violet-400"
-                            >
-                              {inv.application.job.title}
-                            </Link>
-                          ) : (
-                            <p className="truncate text-zinc-500 dark:text-zinc-400">—</p>
-                          )}
-                        </td>
-
-                        {/* Estado - MEJORADO CON ICONOS MÁS DISTINTIVOS */}
-                        <td className="px-5 py-4 text-center">
-                          {st === "COMPLETED" && (
-                            <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}>
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 dark:bg-emerald-500">
-                                <CheckCircle2 className="h-3 w-3 text-white" />
-                              </div>
-                              <span className="flex-shrink-0">{stLabel}</span>
-                            </span>
-                          )}
-                          {st === "IN_PROGRESS" && (
-                            <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}>
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 dark:bg-blue-500">
-                                <div className="h-2 w-2 animate-pulse rounded-full bg-white" />
-                              </div>
-                              <span className="flex-shrink-0">{stLabel}</span>
-                            </span>
-                          )}
-                          {st === "PENDING" && (
-                            <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}>
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-violet-600 dark:bg-violet-500">
-                                <Clock className="h-2.5 w-2.5 text-white" />
-                              </div>
-                              <span className="flex-shrink-0">{stLabel}</span>
-                            </span>
-                          )}
-                          {st === "INACTIVE" && (
-                            <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}>
-                              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-zinc-500 dark:bg-zinc-600">
-                                <XCircle className="h-2.5 w-2.5 text-white" />
-                              </div>
-                              <span className="flex-shrink-0">{stLabel}</span>
-                            </span>
-                          )}
-                        </td>
-
-                        {/* Score - MEJORADO CON TOOLTIP Y ANIMACIÓN */}
-                        <td className="px-5 py-4 text-center">
-                          <div className="inline-flex flex-col items-center gap-1.5">
-                            <div className="group/score relative">
-                              <span className="inline-flex min-w-[3.5rem] cursor-help justify-center rounded-lg border-2 border-zinc-200 bg-white px-2.5 py-1.5 text-base font-black text-zinc-900 transition-all hover:scale-105 hover:border-violet-300 hover:shadow-md dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:border-violet-600">
-                                {scoreTxt}
-                              </span>
-                              {/* Tooltip on hover */}
-                              {typeof attempt?.totalScore === "number" && (
-                                <div className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover/score:opacity-100 dark:bg-zinc-100 dark:text-zinc-900">
-                                  Puntuación total
-                                </div>
+                      {/* Col 2: Assessment + Vacante combinados */}
+                      <td className="px-5 py-4">
+                        <p className="truncate font-semibold text-zinc-900 dark:text-zinc-50">
+                          {inv.template?.title}
+                        </p>
+                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
+                          <span>
+                            {String(inv.template?.difficulty ?? "").toLowerCase()}
+                            {typeof inv.template?.timeLimit === "number"
+                              ? ` · ${inv.template.timeLimit} min`
+                              : ""}
+                          </span>
+                          {inv.application?.job?.title && (
+                            <>
+                              <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                              {inv.application?.job?.id ? (
+                                <Link
+                                  href={`/dashboard/jobs/${inv.application.job.id}/applications`}
+                                  className="truncate font-medium text-violet-600 hover:underline dark:text-violet-400"
+                                >
+                                  {inv.application.job.title}
+                                </Link>
+                              ) : (
+                                <span className="truncate">{inv.application.job.title}</span>
                               )}
-                            </div>
+                            </>
+                          )}
+                        </div>
+                        {/* Actividad */}
+                        {lastActivity && (
+                          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
+                            {fromNow(lastActivity)}
+                          </p>
+                        )}
+                      </td>
 
-                            {hasFinal && attempt?.passed != null ? (
-                              <span
-                                className={`inline-flex items-center gap-1 text-[10px] font-bold ${
-                                  passed
-                                    ? "text-emerald-700 dark:text-emerald-300"
-                                    : "text-red-700 dark:text-red-300"
-                                }`}
-                              >
-                                {passed ? (
-                                  <>
-                                    <CheckCircle2 className="h-2.5 w-2.5" /> Aprobó
-                                  </>
-                                ) : (
-                                  <>
-                                    <XCircle className="h-2.5 w-2.5" /> No aprobó
-                                  </>
-                                )}
-                              </span>
-                            ) : null}
-                          </div>
-                        </td>
-
-                        {/* Anti-cheat - MEJORADO CON TOOLTIP */}
-                        <td className="px-5 py-4 text-center">
-                          {showAlert ? (
-                            <div className="group/alert relative inline-flex">
-                              <span className="inline-flex cursor-help items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-amber-400 bg-amber-50 px-3 py-1.5 text-[10px] font-bold text-amber-900 shadow-sm transition-all hover:scale-105 hover:shadow-md dark:border-amber-600/50 dark:bg-amber-900/30 dark:text-amber-200">
-                                <ShieldAlert className="h-3.5 w-3.5 flex-shrink-0 animate-pulse" />
-                                <span className="flex-shrink-0">
-                                  {sev}
-                                  {attempt?.multiSession && " · Multi"}
-                                </span>
-                              </span>
-                              {/* Tooltip */}
-                              <div className="pointer-events-none absolute -top-8 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg bg-amber-900 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover/alert:opacity-100">
-                                Puntuación: {sevScore}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">
-                              <div className="flex h-3 w-3 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                              </div>
-                              Normal
+                      {/* Col 3: Estado + Score combinados */}
+                      <td className="px-5 py-4">
+                        {/* Estado badge */}
+                        <div className="mb-2">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}
+                          >
+                            {st === "COMPLETED" && (
+                              <CheckCircle2 className="h-2.5 w-2.5" />
+                            )}
+                            {st === "IN_PROGRESS" && (
+                              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+                            )}
+                            {st === "PENDING" && <Clock className="h-2.5 w-2.5" />}
+                            {st === "INACTIVE" && <XCircle className="h-2.5 w-2.5" />}
+                            {stLabel}
+                          </span>
+                        </div>
+                        {/* Score */}
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`text-lg font-black ${
+                              typeof scoreRaw === "number"
+                                ? scoreRaw >= (attempt?.template?.passingScore ?? 65)
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-red-500 dark:text-red-400"
+                                : "text-zinc-400"
+                            }`}
+                          >
+                            {scoreTxt}
+                          </span>
+                          {hasFinal && attempt?.passed != null && (
+                            <span
+                              className={`text-[10px] font-semibold ${
+                                passed
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : "text-red-500 dark:text-red-400"
+                              }`}
+                            >
+                              {passed ? "✓ Aprobó" : "✗ No aprobó"}
                             </span>
                           )}
-                        </td>
+                        </div>
+                      </td>
 
-                        {/* Actividad - MEJORADO */}
-                        <td className="px-5 py-4">
-                          <div className="inline-flex items-center gap-1.5 text-xs text-zinc-700 dark:text-zinc-200">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                              <Clock className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+                      {/* Col 4: Anti-cheat */}
+                      <td className="px-5 py-4">
+                        {showAlert ? (
+                          <div className="group/alert relative inline-flex">
+                            <span className="inline-flex cursor-help items-center gap-1.5 rounded-full border-2 border-amber-400 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-900 dark:border-amber-600/50 dark:bg-amber-900/30 dark:text-amber-200">
+                              <ShieldAlert className="h-3 w-3 flex-shrink-0 animate-pulse" />
+                              {sev}
+                            </span>
+                            <div className="pointer-events-none absolute -top-7 left-0 z-10 whitespace-nowrap rounded-lg bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover/alert:opacity-100">
+                              Score: {sevScore}
                             </div>
-                            <span className="font-medium">{fromNow(lastActivity)}</span>
                           </div>
-                        </td>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            Normal
+                          </span>
+                        )}
+                      </td>
 
-                        {/* Acciones */}
-                        <td className="px-5 py-4 text-right">
-                          <div className="flex justify-end">
-                            <AssessmentActionsMenu
-                              applicationId={applicationId || null}
-                              templateId={menuTemplateId}
-                              invitePath={inviteLink}
-                              resultsUrl={resultsUrl}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                      {/* Col 5: Acciones */}
+                      <td className="px-5 py-4 text-right">
+                        <AssessmentActionsMenu
+                          applicationId={applicationId || null}
+                          templateId={menuTemplateId}
+                          invitePath={inviteLink}
+                          resultsUrl={resultsUrl}
+                        />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
 
-            {/* Paginación mejorada */}
-            <div className="flex flex-col gap-2 border-t border-zinc-200/80 bg-gradient-to-r from-zinc-50/50 via-white to-zinc-50/50 px-4 py-3 dark:border-zinc-800/50 dark:from-zinc-900/50 dark:via-zinc-900/30 dark:to-zinc-900/50 sm:flex-row sm:items-center sm:justify-between">
+            {/* Paginación */}
+            <div className="flex flex-col gap-2 border-t border-zinc-200/80 bg-gradient-to-r from-zinc-50/50 via-white to-zinc-50/50 px-5 py-3 dark:border-zinc-800/50 dark:from-zinc-900/50 dark:via-zinc-900/30 dark:to-zinc-900/50 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                Página <span className="font-black text-violet-600 dark:text-violet-400">{page}</span> de{" "}
+                Página{" "}
+                <span className="font-black text-violet-600 dark:text-violet-400">{page}</span>{" "}
+                de{" "}
                 <span className="font-black text-zinc-900 dark:text-zinc-100">{totalPages}</span>
               </p>
-
               <div className="flex gap-2">
                 <PagerLink disabled={page <= 1} href={buildPageHref(searchParams, page - 1)}>
                   ← Anterior
                 </PagerLink>
-                <PagerLink disabled={page >= totalPages} href={buildPageHref(searchParams, page + 1)}>
+                <PagerLink
+                  disabled={page >= totalPages}
+                  href={buildPageHref(searchParams, page + 1)}
+                >
                   Siguiente →
                 </PagerLink>
               </div>
@@ -662,7 +602,15 @@ export default async function CompanyAssessmentsPage({
   );
 }
 
-function PagerLink({ href, disabled, children }: { href: string; disabled?: boolean; children: ReactNode }) {
+function PagerLink({
+  href,
+  disabled,
+  children,
+}: {
+  href: string;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
   if (disabled) {
     return (
       <span className="inline-flex items-center rounded-xl border-2 border-zinc-200 bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-600">
@@ -670,7 +618,6 @@ function PagerLink({ href, disabled, children }: { href: string; disabled?: bool
       </span>
     );
   }
-
   return (
     <Link
       href={href}
@@ -699,42 +646,12 @@ function MetricCard({
   isAlert?: boolean;
 }) {
   const colors = {
-    violet: {
-      bg: "from-violet-500 to-purple-500",
-      shadow: "shadow-violet-500/25",
-      text: "text-violet-600 dark:text-violet-400",
-      bar: "bg-violet-500",
-    },
-    blue: {
-      bg: "from-blue-500 to-cyan-500",
-      shadow: "shadow-blue-500/25",
-      text: "text-blue-600 dark:text-blue-400",
-      bar: "bg-blue-500",
-    },
-    emerald: {
-      bg: "from-emerald-500 to-teal-500",
-      shadow: "shadow-emerald-500/25",
-      text: "text-emerald-600 dark:text-emerald-400",
-      bar: "bg-emerald-500",
-    },
-    zinc: {
-      bg: "from-zinc-400 to-zinc-500",
-      shadow: "shadow-zinc-500/25",
-      text: "text-zinc-600 dark:text-zinc-400",
-      bar: "bg-zinc-500",
-    },
-    teal: {
-      bg: "from-teal-500 to-cyan-500",
-      shadow: "shadow-teal-500/25",
-      text: "text-teal-600 dark:text-teal-400",
-      bar: "bg-teal-500",
-    },
-    amber: {
-      bg: "from-amber-500 to-orange-500",
-      shadow: "shadow-amber-500/25",
-      text: "text-amber-600 dark:text-amber-400",
-      bar: "bg-amber-500",
-    },
+    violet: { bg: "from-violet-500 to-purple-500", shadow: "shadow-violet-500/25", text: "text-violet-600 dark:text-violet-400", bar: "bg-violet-500" },
+    blue: { bg: "from-blue-500 to-cyan-500", shadow: "shadow-blue-500/25", text: "text-blue-600 dark:text-blue-400", bar: "bg-blue-500" },
+    emerald: { bg: "from-emerald-500 to-teal-500", shadow: "shadow-emerald-500/25", text: "text-emerald-600 dark:text-emerald-400", bar: "bg-emerald-500" },
+    zinc: { bg: "from-zinc-400 to-zinc-500", shadow: "shadow-zinc-500/25", text: "text-zinc-600 dark:text-zinc-400", bar: "bg-zinc-500" },
+    teal: { bg: "from-teal-500 to-cyan-500", shadow: "shadow-teal-500/25", text: "text-teal-600 dark:text-teal-400", bar: "bg-teal-500" },
+    amber: { bg: "from-amber-500 to-orange-500", shadow: "shadow-amber-500/25", text: "text-amber-600 dark:text-amber-400", bar: "bg-amber-500" },
   };
 
   const c = colors[color];
@@ -742,9 +659,7 @@ function MetricCard({
 
   return (
     <div className="group relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all hover:scale-[1.02] hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80">
-      {/* Icono decorativo */}
       <div className={`absolute -right-3 -top-3 h-20 w-20 rounded-full bg-gradient-to-br ${c.bg} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
-      
       <div className="relative">
         <div className="flex items-center justify-between">
           <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
@@ -754,12 +669,9 @@ function MetricCard({
             <Icon className="h-3 w-3 text-white" />
           </div>
         </div>
-
         <div className="mt-2">
           <p className={`text-2xl font-black ${c.text}`}>{value}</p>
         </div>
-
-        {/* Barra de progreso para valores numéricos */}
         {total && !isPercentage && !isAlert && typeof value === "number" && (
           <div className="mt-2">
             <div className="h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -768,7 +680,9 @@ function MetricCard({
                 style={{ width: `${percentage}%` }}
               />
             </div>
-            <p className="mt-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">{percentage}% del total</p>
+            <p className="mt-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">
+              {percentage}% del total
+            </p>
           </div>
         )}
       </div>
