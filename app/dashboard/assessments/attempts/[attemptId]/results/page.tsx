@@ -4,6 +4,7 @@ import { redirect, notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import {
   CheckCircle2,
   XCircle,
@@ -265,9 +266,9 @@ function CodingAnswerCard({ answer, index }: { answer: Answer; index: number }) 
               </span>
             )}
           </div>
-          <p className="text-sm font-medium leading-relaxed text-gray-800 dark:text-gray-200">
-            {answer.questionText}
-          </p>
+          <div className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-gray-200 prose-code:rounded prose-code:bg-violet-500/10 prose-code:px-1 prose-code:text-violet-700 prose-pre:bg-gray-100 dark:prose-code:text-violet-400 dark:prose-pre:bg-gray-800">
+            <ReactMarkdown>{answer.questionText}</ReactMarkdown>
+          </div>
         </div>
       </div>
 
@@ -339,9 +340,9 @@ function AnswerCard({ answer, index }: { answer: Answer; index: number }) {
               </span>
             )}
           </div>
-          <p className="text-sm font-medium leading-relaxed text-gray-800 dark:text-gray-200">
-            {answer.questionText}
-          </p>
+          <div className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-gray-200 prose-code:rounded prose-code:bg-violet-500/10 prose-code:px-1 prose-code:text-violet-700 prose-pre:bg-gray-100 dark:prose-code:text-violet-400 dark:prose-pre:bg-gray-800">
+            <ReactMarkdown>{answer.questionText}</ReactMarkdown>
+          </div>
         </div>
       </div>
 
