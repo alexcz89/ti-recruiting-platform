@@ -46,6 +46,8 @@ type TemplateForm = {
   language: string;
   passingScore: number;
   timeLimit: number;
+  allowRetry: boolean;
+  maxAttempts: number;
 };
 
 function uid() {
@@ -86,6 +88,8 @@ export default function AssessmentBuilderPage() {
     title: "", description: "",
     type: "MCQ", difficulty: "JUNIOR",
     language: "", passingScore: 70, timeLimit: 30,
+    allowRetry: false,
+    maxAttempts: 1,
   });
 
   const [questions, setQuestions] = useState<Question[]>([emptyMCQ()]);
@@ -358,6 +362,43 @@ export default function AssessmentBuilderPage() {
               </div>
               <p className="text-[10px] text-zinc-400 mt-1">Entre 5 y 180 minutos</p>
             </div>
+
+            {/* Re-intentos toggle */}
+            <div className="sm:col-span-2">
+              <div className="flex items-center justify-between rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3">
+                <div>
+                  <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Permitir re-intentos</p>
+                  <p className="text-[10px] text-zinc-400 mt-0.5">El candidato puede volver a tomar la evaluación si no aprueba</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setField("allowRetry", !form.allowRetry)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
+                    form.allowRetry ? "bg-violet-600" : "bg-zinc-200 dark:bg-zinc-700"
+                  }`}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${
+                    form.allowRetry ? "translate-x-5" : "translate-x-0"
+                  }`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Max intentos — solo si allowRetry está activo */}
+            {form.allowRetry && (
+              <div>
+                <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">
+                  Número máximo de intentos
+                </label>
+                <input
+                  type="number" min={2} max={10}
+                  value={form.maxAttempts}
+                  onChange={e => setField("maxAttempts", Number(e.target.value))}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                />
+                <p className="text-[10px] text-zinc-400 mt-1">Entre 2 y 10 intentos</p>
+              </div>
+            )}
           </div>
         </div>
 
