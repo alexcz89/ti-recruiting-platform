@@ -1,5 +1,14 @@
 // app/dashboard/jobs/new/JobWizard/constants.ts
 import type { EmploymentTypeValue } from "./lib/job-enums";
+import type { LucideIcon } from "lucide-react";
+import {
+  Code,
+  Server,
+  Database,
+  Rocket,
+  Smartphone,
+  Lightbulb,
+} from "lucide-react";
 
 export const EDUCATION_SUGGESTIONS = [
   "Ingeniería en Sistemas",
@@ -70,36 +79,88 @@ export const SCHEDULE_PRESETS = [
   { label: "Turno vespertino", value: "L-V 13:00–22:00" },
 ];
 
-// Categorías de skills para mejor organización
-export const SKILL_CATEGORIES = {
+// Tipado para categorías
+type SkillCategory = {
+  label: string;
+  icon: LucideIcon;
+  skills: string[];
+};
+
+// Categorías de skills
+export const SKILL_CATEGORIES: Record<string, SkillCategory> = {
   frontend: {
     label: "Frontend",
-    icon: "🎨",
-    skills: ["React", "Vue", "Angular", "Next.js", "TypeScript", "JavaScript", "HTML", "CSS", "Tailwind"],
+    icon: Code,
+    skills: [
+      "React",
+      "Vue",
+      "Angular",
+      "Next.js",
+      "TypeScript",
+      "JavaScript",
+      "HTML",
+      "CSS",
+      "Tailwind",
+    ],
   },
   backend: {
     label: "Backend",
-    icon: "⚙️",
-    skills: ["Node.js", "Python", "Java", "C#", "Go", "Ruby", "PHP", "Express", "Django", "Spring"],
+    icon: Server,
+    skills: [
+      "Node.js",
+      "Python",
+      "Java",
+      "C#",
+      "Go",
+      "Ruby",
+      "PHP",
+      "Express",
+      "Django",
+      "Spring",
+    ],
   },
   database: {
     label: "Bases de datos",
-    icon: "🗄️",
-    skills: ["PostgreSQL", "MySQL", "MongoDB", "Redis", "DynamoDB", "SQL Server", "Oracle"],
+    icon: Database,
+    skills: [
+      "PostgreSQL",
+      "MySQL",
+      "MongoDB",
+      "Redis",
+      "DynamoDB",
+      "SQL Server",
+      "Oracle",
+    ],
   },
   devops: {
     label: "DevOps",
-    icon: "🚀",
-    skills: ["Docker", "Kubernetes", "AWS", "Azure", "GCP", "CI/CD", "Jenkins", "GitHub Actions"],
+    icon: Rocket,
+    skills: [
+      "Docker",
+      "Kubernetes",
+      "AWS",
+      "Azure",
+      "GCP",
+      "CI/CD",
+      "Jenkins",
+      "GitHub Actions",
+    ],
   },
   mobile: {
     label: "Mobile",
-    icon: "📱",
-    skills: ["React Native", "Flutter", "iOS", "Android", "Swift", "Kotlin"],
+    icon: Smartphone,
+    skills: [
+      "React Native",
+      "Flutter",
+      "iOS",
+      "Android",
+      "Swift",
+      "Kotlin",
+    ],
   },
   other: {
     label: "Otros",
-    icon: "💡",
+    icon: Lightbulb,
     skills: [],
   },
 };
