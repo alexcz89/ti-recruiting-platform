@@ -72,7 +72,7 @@ export default async function CandidateDetailPage({
 
   const me = await prisma.user.findUnique({
     where: { email: session.user?.email! },
-    select: { id: true, role: true, companyId: true },
+    select: { id: true, role: true, companyId: true, name: true },
   });
   if (!me || (me.role !== "RECRUITER" && me.role !== "ADMIN")) redirect("/");
   const companyId = me.companyId ?? null;
@@ -80,7 +80,7 @@ export default async function CandidateDetailPage({
   const company = companyId
     ? await prisma.company.findUnique({
         where: { id: companyId },
-        select: { billingPlan: true },
+        select: { billingPlan: true, name: true },
       })
     : null;
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
@@ -332,10 +332,30 @@ export default async function CandidateDetailPage({
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{emptyLabel}</p>
     );
 
-  const waHref = candidate.phone
-    ? `https://wa.me/${candidate.phone.replace(/^\+/, "")}?text=${encodeURIComponent(
-        `Hola ${candidate.name ?? ""}, te contacto por una oportunidad laboral.`
-      )}`
+  const candidateFirstName =
+    candidate.name?.trim().split(/\s+/)[0] || "hola";
+
+  const recruiterName =
+    me.name?.trim().split(/\s+/)[0] || "Reclutamiento";
+
+  const companyName =
+    company?.name?.trim() || "la empresa";
+
+  const jobTitle =
+    myApps?.[0]?.job?.title ||
+    jobForMatch?.title ||
+    "la vacante";
+
+  const rawPhone = candidate.phone || "";
+  const whatsappPhone = rawPhone.replace(/\D/g, "");
+
+  const whatsappMessage =
+    `Hola ${candidateFirstName}, soy ${recruiterName} de ${companyName}. ` +
+    `Te contacto porque aplicaste a la vacante de ${jobTitle}. ` +
+    `¿Tienes disponibilidad para platicar?`;
+
+  const waHref = whatsappPhone
+    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(whatsappMessage)}`
     : null;
 
   const pdfSrc = candidate.resumeUrl
