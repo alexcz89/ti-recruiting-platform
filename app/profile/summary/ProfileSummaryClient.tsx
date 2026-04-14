@@ -6,6 +6,7 @@ import Link from "next/link";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import PhoneInputField from "@/components/PhoneInputField";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
+import { Phone, Mail, Linkedin, Github, Cake, DollarSign } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────── */
 type SkillLevel = 1 | 2 | 3 | 4 | 5;
@@ -265,64 +266,90 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
             )}
           </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{user.location || "Sin ubicación"}</p>
+          
 
-          {/* Vista de lectura */}
-          {!editing && (
-            <div className="mt-2 space-y-1.5">
-              {user.phone && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                  <span>📞</span> {user.phone}
-                </p>
-              )}
-              {user.email && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                  <span>✉️</span> {user.email}
-                </p>
-              )}
-              {user.linkedin && (
-                <a href={user.linkedin.startsWith("http") ? user.linkedin : `https://${user.linkedin}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-emerald-600 hover:underline dark:text-emerald-400 flex items-center gap-1.5 truncate">
-                  <span>💼</span> {user.linkedin}
-                </a>
-              )}
-              {user.github && (
-                <a href={user.github.startsWith("http") ? user.github : `https://${user.github}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-zinc-500 hover:underline dark:text-zinc-400 flex items-center gap-1.5 truncate">
-                  <span>🐙</span> {user.github}
-                </a>
-              )}
-              {user.birthdate && (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                  <span>🎂</span>{" "}
-                  {new Date(user.birthdate).toLocaleDateString("es-MX", {
-                    day: "2-digit", month: "long", year: "numeric",
-                  })}
-                </p>
-              )}
-              {user.desiredSalary ? (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                  <span>💰</span>
-                  <span>
-                    Salario deseado:{" "}
-                    <span className="font-medium text-zinc-700 dark:text-zinc-200">{fmtSalary(user.desiredSalary)}</span>
-                    <span className="text-zinc-400"> / mes MXN</span>
-                  </span>
-                </p>
-              ) : null}
-              {/* Modalidad en lectura */}
-              {activeWorkModes.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-0.5">
-                  {activeWorkModes.map(m => (
-                    <span key={m.key} className={`text-[10px] rounded-full border px-2 py-0.5 ${m.color}`}>
-                      {m.emoji} {m.label}
-                    </span>
-                  ))}
-                </div>
-              )}
+        {/* Vista de lectura */}
+        {!editing && (
+        <div className="mt-2 space-y-1.5">
+
+            {user.phone && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                <Phone className="w-3.5 h-3.5 opacity-70" />
+                {user.phone}
+            </p>
+            )}
+
+            {user.email && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 opacity-70" />
+                {user.email}
+            </p>
+            )}
+
+            {user.linkedin && (
+            <a
+                href={user.linkedin.startsWith("http") ? user.linkedin : `https://${user.linkedin}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-emerald-600 hover:underline dark:text-emerald-400 flex items-center gap-1.5 truncate"
+            >
+                <Linkedin className="w-3.5 h-3.5 opacity-70" />
+                {user.linkedin}
+            </a>
+            )}
+
+            {user.github && (
+            <a
+                href={user.github.startsWith("http") ? user.github : `https://${user.github}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-zinc-500 hover:underline dark:text-zinc-400 flex items-center gap-1.5 truncate"
+            >
+                <Github className="w-3.5 h-3.5 opacity-70" />
+                {user.github}
+            </a>
+            )}
+
+            {user.birthdate && (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                <Cake className="w-3.5 h-3.5 opacity-70" />
+                {new Date(user.birthdate).toLocaleDateString("es-MX", {
+                day: "2-digit",
+                month: "long",
+                year: "numeric",
+                })}
+            </p>
+            )}
+
+            {user.desiredSalary ? (
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5 opacity-70" />
+                <span>
+                Salario deseado:{" "}
+                <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                    {fmtSalary(user.desiredSalary)}
+                </span>
+                <span className="text-zinc-400"> / mes MXN</span>
+                </span>
+            </p>
+            ) : null}
+
+            {/* Modalidad en lectura */}
+            {activeWorkModes.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {activeWorkModes.map((m) => (
+                <span
+                    key={m.key}
+                    className={`text-[10px] rounded-full border px-2 py-0.5 ${m.color}`}
+                >
+                    {m.label}
+                </span>
+                ))}
             </div>
-          )}
+            )}
+
+        </div>
+        )}
         </div>
       </div>
 
