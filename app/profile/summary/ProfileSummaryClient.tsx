@@ -1,7 +1,7 @@
 // app/profile/summary/ProfileSummaryClient.tsx
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import Link from "next/link";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 
@@ -29,6 +29,7 @@ export type UserData = {
   certifications: string[];
   seniority: Seniority | null;
   yearsExperience: number | null;
+  desiredSalary: number | null; // ✅ MXN mensual bruto
 };
 
 export type Experience = {
@@ -106,7 +107,7 @@ const LANG_LEVELS = [
   { value: "BASIC", label: "Básico (A1–A2)" },
 ];
 
-/* ─── Skill pill & bar colors (igual que profile/edit) ───── */
+/* ─── Skill pill & bar colors ────────────────────────────── */
 const SKILL_PILL_ACTIVE: Record<number, string> = {
   1: "bg-zinc-400 text-white shadow-sm",
   2: "bg-blue-400 text-white shadow-sm",
@@ -121,6 +122,10 @@ const SKILL_BAR_COLOR: Record<number, string> = {
   4: "bg-emerald-400",
   5: "bg-emerald-600",
 };
+
+/* ─── Salary formatter ───────────────────────────────────── */
+const fmtSalary = (n: number) =>
+  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(n);
 
 /* ─── Shared UI classes ──────────────────────────────────── */
 const INPUT = "block w-full rounded-xl border border-zinc-300 bg-white/90 px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-50 dark:placeholder:text-zinc-500";
@@ -157,7 +162,7 @@ function formatMonthYear(ym?: string | null) {
   return `${months[parseInt(month, 10) - 1]} ${year}`;
 }
 
-/* ─── PATCH helpers — un endpoint por sección ───────────── */
+/* ─── PATCH helpers ──────────────────────────────────────── */
 async function patchSection(endpoint: string, payload: Record<string, unknown>) {
   const res = await fetch(endpoint, {
     method: "PATCH",
@@ -175,12 +180,12 @@ async function patchSection(endpoint: string, payload: Record<string, unknown>) 
   return res.json();
 }
 
-const patchPersonal    = (payload: Record<string, unknown>) => patchSection("/api/profile/personal",    payload);
-const patchExperiences = (payload: Record<string, unknown>) => patchSection("/api/profile/experiences", payload);
-const patchEducation   = (payload: Record<string, unknown>) => patchSection("/api/profile/education",   payload);
-const patchSkills      = (payload: Record<string, unknown>) => patchSection("/api/profile/skills",      payload);
-const patchLanguages   = (payload: Record<string, unknown>) => patchSection("/api/profile/languages",   payload);
-const patchCerts       = (payload: Record<string, unknown>) => patchSection("/api/profile/personal",    payload);
+const patchPersonal    = (p: Record<string, unknown>) => patchSection("/api/profile/personal",    p);
+const patchExperiences = (p: Record<string, unknown>) => patchSection("/api/profile/experiences", p);
+const patchEducation   = (p: Record<string, unknown>) => patchSection("/api/profile/education",   p);
+const patchSkills      = (p: Record<string, unknown>) => patchSection("/api/profile/skills",      p);
+const patchLanguages   = (p: Record<string, unknown>) => patchSection("/api/profile/languages",   p);
+const patchCerts       = (p: Record<string, unknown>) => patchSection("/api/profile/personal",    p);
 
 /* ─── EditBar ────────────────────────────────────────────── */
 function EditBar({ onCancel, onSave, saving }: { onCancel: () => void; onSave: () => void; saving: boolean }) {
@@ -209,14 +214,15 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
     setSaving(true);
     try {
       await patchPersonal({
-        firstName: draft.firstName,
-        lastName1: draft.lastName1,
-        lastName2: draft.lastName2,
-        phone: draft.phone,
-        location: draft.location,
-        birthdate: draft.birthdate,
-        linkedin: draft.linkedin,
-        github: draft.github,
+        firstName:    draft.firstName,
+        lastName1:    draft.lastName1,
+        lastName2:    draft.lastName2,
+        phone:        draft.phone,
+        location:     draft.location,
+        birthdate:    draft.birthdate,
+        linkedin:     draft.linkedin,
+        github:       draft.github,
+        desiredSalary: draft.desiredSalary, // ✅
       });
       onChange({ ...user, ...draft });
       setEditing(false);
@@ -246,7 +252,7 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
           </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{user.location || "Sin ubicación"}</p>
 
-          {/* Info de lectura — solo visible cuando no está editando */}
+          {/* Vista de lectura */}
           {!editing && (
             <div className="mt-2 space-y-1">
               {user.phone && (
@@ -281,6 +287,19 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
                   })}
                 </p>
               )}
+              {/* ✅ Salario deseado en vista lectura */}
+              {user.desiredSalary ? (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                  <span>💰</span>
+                  <span>
+                    Salario deseado:{" "}
+                    <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                      {fmtSalary(user.desiredSalary)}
+                    </span>
+                    <span className="text-zinc-400"> / mes MXN</span>
+                  </span>
+                </p>
+              ) : null}
             </div>
           )}
         </div>
@@ -322,6 +341,27 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
             <div>
               <label className={LABEL}>Fecha de nacimiento</label>
               <input type="date" className={INPUT} value={draft.birthdate} onChange={e => setDraft(d => ({ ...d, birthdate: e.target.value }))} />
+            </div>
+            {/* ✅ Salario deseado en edición */}
+            <div>
+              <label className={LABEL}>Salario deseado (MXN mensual bruto)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400 pointer-events-none">$</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={999999}
+                  step={500}
+                  className={INPUT + " pl-7"}
+                  value={draft.desiredSalary ?? ""}
+                  placeholder="Ej. 25000"
+                  onChange={e => setDraft(d => ({
+                    ...d,
+                    desiredSalary: e.target.value === "" ? null : parseInt(e.target.value, 10),
+                  }))}
+                />
+              </div>
+              <p className="mt-0.5 text-xs text-zinc-400">Solo visible para recruiters con tu aplicación activa</p>
             </div>
           </div>
           <EditBar onCancel={close} onSave={save} saving={saving} />
@@ -659,7 +699,6 @@ function SectionSkills({
         )
       ) : (
         <div className="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-          {/* Buscador */}
           <div className="relative">
             <input
               className={INPUT}
@@ -680,8 +719,6 @@ function SectionSkills({
               </ul>
             )}
           </div>
-
-          {/* Lista de skills con pills de color + barra */}
           <div className="space-y-3">
             {draft.map(s => (
               <div key={s.termId} className="rounded-xl border border-zinc-200/70 dark:border-zinc-700/60 px-3 py-2.5 space-y-2">
@@ -689,7 +726,6 @@ function SectionSkills({
                   <span className="text-sm font-medium">{s.label}</span>
                   <button type="button" onClick={() => removeSkill(s.termId)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                 </div>
-                {/* Pills de nivel con colores */}
                 <div className="flex gap-1 flex-wrap">
                   {SKILL_LEVELS.map(lv => (
                     <button key={lv.value} type="button"
@@ -703,7 +739,6 @@ function SectionSkills({
                     </button>
                   ))}
                 </div>
-                {/* Barra de color según nivel */}
                 <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${SKILL_BAR_COLOR[s.level]}`}
@@ -954,7 +989,6 @@ export default function ProfileSummaryClient({
     <main className="w-full pb-8">
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-4 space-y-3">
 
-        {/* ── Flash banners ── */}
         {flashUpdated && (
           <div className="border text-sm rounded-xl px-3 py-2 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
             Perfil actualizado correctamente.
@@ -975,10 +1009,8 @@ export default function ProfileSummaryClient({
           </div>
         )}
 
-        {/* ── Main grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-          {/* ── Left column ── */}
           <div className="lg:col-span-8 space-y-6">
             <SectionPersonal user={user} onChange={setUser} />
             <SectionExperience
@@ -989,7 +1021,6 @@ export default function ProfileSummaryClient({
             />
             <SectionEducation education={education} onChange={setEducation} />
 
-            {/* Postulaciones (read-only) */}
             <section className={CARD} id="postulaciones">
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Mis postulaciones</h2>
               {applications.length === 0 ? (
@@ -1013,10 +1044,7 @@ export default function ProfileSummaryClient({
             </section>
           </div>
 
-          {/* ── Right sidebar ── */}
           <aside className="lg:col-span-4 space-y-6">
-
-            {/* CV */}
             <section className={CARD}>
               <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">CV</h2>
               {user.resumeUrl ? (
@@ -1035,7 +1063,6 @@ export default function ProfileSummaryClient({
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden dark:border-zinc-700 dark:bg-zinc-900">
                     <iframe src={`${user.resumeUrl}#toolbar=0&navpanes=0&scrollbar=1`} className="w-full h-[400px]" title="Vista previa del CV" />
                   </div>
-                  {/* Botones CV */}
                   <a href={user.resumeUrl} target="_blank" rel="noopener noreferrer"
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 transition-colors">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1071,11 +1098,9 @@ export default function ProfileSummaryClient({
             <SectionLanguages languages={languages} onChange={setLanguages} languageOptions={languageOptions} />
             <SectionCertifications certifications={user.certifications} certOptions={certOptions}
               onChange={certs => setUser(u => ({ ...u, certifications: certs }))} />
-
           </aside>
         </div>
 
-        {/* Footer */}
         <div className="flex items-center gap-4 mt-6">
           <a href="/jobs" className="text-sm text-blue-600 hover:underline dark:text-blue-400">← Buscar vacantes</a>
         </div>

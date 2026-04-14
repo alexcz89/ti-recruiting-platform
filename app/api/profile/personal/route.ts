@@ -6,15 +6,17 @@ import { prisma } from "@/lib/server/prisma";
 import { z } from "zod";
 
 const PersonalSchema = z.object({
-  firstName: z.string().min(1, "Nombre requerido"),
-  lastName1: z.string().min(1, "Apellido paterno requerido"),
-  lastName2: z.string().optional().or(z.literal("")),
-  phone: z.string().optional().or(z.literal("")).nullable(),
-  location: z.string().optional().or(z.literal("")),
-  birthdate: z.string().optional().or(z.literal("")),
-  linkedin: z.string().optional().or(z.literal("")),
-  github: z.string().optional().or(z.literal("")),
+  firstName:     z.string().min(1, "Nombre requerido"),
+  lastName1:     z.string().min(1, "Apellido paterno requerido"),
+  lastName2:     z.string().optional().or(z.literal("")),
+  phone:         z.string().optional().or(z.literal("")).nullable(),
+  location:      z.string().optional().or(z.literal("")),
+  birthdate:     z.string().optional().or(z.literal("")),
+  linkedin:      z.string().optional().or(z.literal("")),
+  github:        z.string().optional().or(z.literal("")),
   certifications: z.array(z.string()).optional(),
+  // ✅ Salario deseado — MXN mensual bruto
+  desiredSalary: z.coerce.number().int().min(0).max(999999).optional().nullable(),
 });
 
 export async function PATCH(req: Request) {
@@ -49,16 +51,20 @@ export async function PATCH(req: Request) {
     await prisma.user.update({
       where: { id: me.id },
       data: {
-        name: fullName,
-        firstName: data.firstName,
-        lastName: data.lastName1,
+        name:            fullName,
+        firstName:       data.firstName,
+        lastName:        data.lastName1,
         maternalSurname: data.lastName2 || null,
-        phone: data.phone || null,
-        location: data.location || null,
-        birthdate: parseBirthdate(data.birthdate),
-        linkedin: data.linkedin || null,
-        github: data.github || null,
+        phone:           data.phone || null,
+        location:        data.location || null,
+        birthdate:       parseBirthdate(data.birthdate),
+        linkedin:        data.linkedin || null,
+        github:          data.github || null,
         profileLastUpdated: new Date(),
+        // ✅ Salario deseado
+        ...(data.desiredSalary !== undefined
+          ? { desiredSalaryMin: data.desiredSalary || null, desiredCurrency: "MXN" }
+          : {}),
         ...(data.certifications !== undefined
           ? { certifications: data.certifications }
           : {}),

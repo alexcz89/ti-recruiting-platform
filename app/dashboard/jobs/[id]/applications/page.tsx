@@ -192,6 +192,7 @@ export default async function JobApplicationsPage({
           certifications: true,
           seniority: true,
           yearsExperience: true,
+          desiredSalaryMin: true,
           aiProfile: {
             select: {
               tags: true,
@@ -719,6 +720,11 @@ export default async function JobApplicationsPage({
                           <span className="text-sm font-semibold">{a._fullName}</span>
                         )}
                         <p className="truncate text-xs text-zinc-500">{a.candidate?.location ?? "—"}</p>
+                        {(a.candidate as any)?.desiredSalaryMin != null && (
+                          <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                            💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes
+                          </p>
+                        )}
                         {profileTypeLabel && (
                           <div className="mt-1 flex flex-wrap gap-1">
                             <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">
@@ -891,6 +897,11 @@ export default async function JobApplicationsPage({
                             )}
 
                             <span className="text-xs text-zinc-500">{a.candidate?.location ?? "—"}</span>
+                            {(a.candidate as any)?.desiredSalaryMin != null && (
+                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+                                💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes
+                              </span>
+                            )}
 
                             {profileTypeLabel && (
                               <div className="mt-0.5">

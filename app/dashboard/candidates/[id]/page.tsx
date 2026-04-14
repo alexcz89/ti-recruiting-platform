@@ -101,6 +101,8 @@ export default async function CandidateDetailPage({
       certifications: true,
       seniority: true,
       yearsExperience: true,
+      desiredSalaryMin: true,
+      desiredCurrency:  true,
       candidateSkills: {
         select: {
           id: true,
@@ -453,6 +455,11 @@ export default async function CandidateDetailPage({
                   {candidate.yearsExperience} año{candidate.yearsExperience !== 1 ? "s" : ""} exp.
                 </span>
               )}
+              {(candidate as any).desiredSalaryMin != null && (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-950/30 dark:text-emerald-300">
+                  💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((candidate as any).desiredSalaryMin)}/mes
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -660,6 +667,9 @@ export default async function CandidateDetailPage({
                 { label: "Fecha de nacimiento", value: candidate.birthdate ? new Date(candidate.birthdate).toLocaleDateString() : null },
                 { label: "Seniority", value: candidate.seniority ? (SENIORITY_LABEL[candidate.seniority as string] ?? candidate.seniority) : null },
                 { label: "Años de experiencia", value: candidate.yearsExperience != null ? `${candidate.yearsExperience} años` : null },
+                { label: "Salario deseado", value: (candidate as any).desiredSalaryMin != null
+                  ? `${new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((candidate as any).desiredSalaryMin)} / mes MXN`
+                  : null },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <dt className="text-xs text-zinc-500 dark:text-zinc-400">{label}</dt>

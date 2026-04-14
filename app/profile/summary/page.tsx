@@ -39,6 +39,7 @@ export default async function ProfileSummaryPage({
       highestEducationLevel: true,
       seniority: true,
       yearsExperience: true,
+      desiredSalaryMin: true,
     },
   });
 
@@ -170,6 +171,7 @@ export default async function ProfileSummaryPage({
         certifications: me.certifications ?? [],
         seniority: (me.seniority as any) ?? null,
         yearsExperience: me.yearsExperience ?? null,
+        desiredSalary: me.desiredSalaryMin ?? null,
       }}
       experiences={experiences.map((e) => ({
         id: e.id,
