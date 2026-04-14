@@ -1,19 +1,37 @@
 // app/profile/summary/ProfileSummaryClient.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, type ReactNode, type ElementType } from "react";
 import Link from "next/link";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import PhoneInputField from "@/components/PhoneInputField";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
-import { Phone, Mail, Linkedin, Github, Cake, DollarSign } from "lucide-react";
+import {
+  Phone,
+  Mail,
+  Linkedin,
+  Github,
+  Cake,
+  DollarSign,
+  Home,
+  Laptop,
+  Building2,
+  AlertTriangle,
+} from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────── */
 type SkillLevel = 1 | 2 | 3 | 4 | 5;
 type LangLevel = "NATIVE" | "PROFESSIONAL" | "CONVERSATIONAL" | "BASIC";
 type EducationLevel =
-  | "NONE" | "PRIMARY" | "SECONDARY" | "HIGH_SCHOOL"
-  | "TECHNICAL" | "BACHELOR" | "MASTER" | "DOCTORATE" | "OTHER";
+  | "NONE"
+  | "PRIMARY"
+  | "SECONDARY"
+  | "HIGH_SCHOOL"
+  | "TECHNICAL"
+  | "BACHELOR"
+  | "MASTER"
+  | "DOCTORATE"
+  | "OTHER";
 type EducationStatus = "ONGOING" | "COMPLETED" | "INCOMPLETE";
 type Seniority = "JUNIOR" | "MID" | "SENIOR";
 
@@ -80,20 +98,32 @@ export type Application = {
 
 /* ─── Constants ──────────────────────────────────────────── */
 const SKILL_LEVEL_LABEL: Record<number, string> = {
-  1: "Básico", 2: "Junior", 3: "Intermedio", 4: "Avanzado", 5: "Experto",
+  1: "Básico",
+  2: "Junior",
+  3: "Intermedio",
+  4: "Avanzado",
+  5: "Experto",
 };
+
 const LANG_LEVEL_LABEL: Record<string, string> = {
   NATIVE: "Nativo",
   PROFESSIONAL: "Profesional (C1–C2)",
   CONVERSATIONAL: "Conversacional (B1–B2)",
   BASIC: "Básico (A1–A2)",
 };
+
 const EDUCATION_LEVEL_LABEL: Record<string, string> = {
-  NONE: "Sin estudios formales", PRIMARY: "Primaria", SECONDARY: "Secundaria",
-  HIGH_SCHOOL: "Preparatoria / Bachillerato", TECHNICAL: "Técnico / TSU",
-  BACHELOR: "Licenciatura / Ingeniería", MASTER: "Maestría",
-  DOCTORATE: "Doctorado", OTHER: "Diplomado / Curso",
+  NONE: "Sin estudios formales",
+  PRIMARY: "Primaria",
+  SECONDARY: "Secundaria",
+  HIGH_SCHOOL: "Preparatoria / Bachillerato",
+  TECHNICAL: "Técnico / TSU",
+  BACHELOR: "Licenciatura / Ingeniería",
+  MASTER: "Maestría",
+  DOCTORATE: "Doctorado",
+  OTHER: "Diplomado / Curso",
 };
+
 const EDUCATION_LEVEL_OPTIONS = [
   { value: "HIGH_SCHOOL", label: "Preparatoria / Bachillerato" },
   { value: "TECHNICAL", label: "Técnico / TSU" },
@@ -102,20 +132,44 @@ const EDUCATION_LEVEL_OPTIONS = [
   { value: "DOCTORATE", label: "Doctorado" },
   { value: "OTHER", label: "Diplomado / Curso" },
 ];
+
 const SKILL_LEVELS = [
-  { value: 1, label: "Básico" }, { value: 2, label: "Junior" },
-  { value: 3, label: "Intermedio" }, { value: 4, label: "Avanzado" }, { value: 5, label: "Experto" },
+  { value: 1, label: "Básico" },
+  { value: 2, label: "Junior" },
+  { value: 3, label: "Intermedio" },
+  { value: 4, label: "Avanzado" },
+  { value: 5, label: "Experto" },
 ];
+
 const LANG_LEVELS = [
   { value: "NATIVE", label: "Nativo" },
   { value: "PROFESSIONAL", label: "Profesional (C1–C2)" },
   { value: "CONVERSATIONAL", label: "Conversacional (B1–B2)" },
   { value: "BASIC", label: "Básico (A1–A2)" },
 ];
+
 const WORK_MODES = [
-  { key: "seekingRemote" as const, label: "Remoto",     emoji: "🏠", color: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-600/40 dark:bg-blue-950/30 dark:text-blue-300" },
-  { key: "seekingHybrid" as const, label: "Híbrido",    emoji: "🔀", color: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-600/40 dark:bg-violet-950/30 dark:text-violet-300" },
-  { key: "seekingOnsite" as const, label: "Presencial", emoji: "🏢", color: "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-600/40 dark:bg-zinc-800 dark:text-zinc-300" },
+  {
+    key: "seekingRemote" as const,
+    label: "Remoto",
+    icon: Home,
+    color:
+      "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-600/40 dark:bg-blue-950/30 dark:text-blue-300",
+  },
+  {
+    key: "seekingHybrid" as const,
+    label: "Híbrido",
+    icon: Laptop,
+    color:
+      "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-600/40 dark:bg-violet-950/30 dark:text-violet-300",
+  },
+  {
+    key: "seekingOnsite" as const,
+    label: "Presencial",
+    icon: Building2,
+    color:
+      "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-600/40 dark:bg-zinc-800 dark:text-zinc-300",
+  },
 ];
 
 /* ─── Skill pill & bar colors ────────────────────────────── */
@@ -126,6 +180,7 @@ const SKILL_PILL_ACTIVE: Record<number, string> = {
   4: "bg-emerald-400 text-white shadow-sm",
   5: "bg-emerald-600 text-white shadow-sm",
 };
+
 const SKILL_BAR_COLOR: Record<number, string> = {
   1: "bg-zinc-300 dark:bg-zinc-600",
   2: "bg-blue-400",
@@ -136,22 +191,60 @@ const SKILL_BAR_COLOR: Record<number, string> = {
 
 /* ─── Salary formatter ───────────────────────────────────── */
 const fmtSalary = (n: number) =>
-  new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format(n);
+  new Intl.NumberFormat("es-MX", {
+    style: "currency",
+    currency: "MXN",
+    maximumFractionDigits: 0,
+  }).format(n);
 
 /* ─── Shared UI classes ──────────────────────────────────── */
-const INPUT = "block w-full rounded-xl border border-zinc-300 bg-white/90 px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-50 dark:placeholder:text-zinc-500";
-const LABEL = "block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1";
-const BTN_SAVE = "rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50";
-const BTN_CANCEL = "rounded-lg border border-zinc-300 px-4 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60";
-const BTN_EDIT = "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/60";
+const INPUT =
+  "block min-h-[42px] w-full rounded-xl border border-zinc-300 bg-white/90 px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-50 dark:placeholder:text-zinc-500";
+const LABEL =
+  "mb-1 block text-xs font-medium text-zinc-500 dark:text-zinc-400";
+const BTN_SAVE =
+  "w-full sm:w-auto rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors disabled:opacity-50";
+const BTN_CANCEL =
+  "w-full sm:w-auto rounded-lg border border-zinc-300 px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50 transition-colors dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60";
+const BTN_EDIT =
+  "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 transition-colors dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/60";
 const CARD = "glass-card p-4 md:p-6 space-y-4";
 const SECTION_HEADER = "flex items-center justify-between gap-3";
 
 function PencilIcon() {
   return (
-    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 16 16" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M11 2l3 3-8 8H3v-3l8-8z" />
+    <svg
+      className="h-3.5 w-3.5"
+      fill="none"
+      viewBox="0 0 16 16"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M11 2l3 3-8 8H3v-3l8-8z"
+      />
     </svg>
+  );
+}
+
+function MetaRow({
+  icon: Icon,
+  children,
+  className = "",
+}: {
+  icon: ElementType;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex items-start gap-2 text-xs text-zinc-500 dark:text-zinc-400 ${className}`}
+    >
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-70" />
+      <div className="min-w-0 break-words">{children}</div>
+    </div>
   );
 }
 
@@ -173,6 +266,10 @@ function formatMonthYear(ym?: string | null) {
   return `${months[parseInt(month, 10) - 1]} ${year}`;
 }
 
+function prettyExternalUrl(url: string) {
+  return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+}
+
 /* ─── PATCH helpers ──────────────────────────────────────── */
 async function patchSection(endpoint: string, payload: Record<string, unknown>) {
   const res = await fetch(endpoint, {
@@ -180,6 +277,7 @@ async function patchSection(endpoint: string, payload: Record<string, unknown>) 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
@@ -188,22 +286,49 @@ async function patchSection(endpoint: string, payload: Record<string, unknown>) 
         : JSON.stringify(err?.error) || "Error al guardar"
     );
   }
+
   return res.json();
 }
 
-const patchPersonal    = (p: Record<string, unknown>) => patchSection("/api/profile/personal",    p);
-const patchExperiences = (p: Record<string, unknown>) => patchSection("/api/profile/experiences", p);
-const patchEducation   = (p: Record<string, unknown>) => patchSection("/api/profile/education",   p);
-const patchSkills      = (p: Record<string, unknown>) => patchSection("/api/profile/skills",      p);
-const patchLanguages   = (p: Record<string, unknown>) => patchSection("/api/profile/languages",   p);
-const patchCerts       = (p: Record<string, unknown>) => patchSection("/api/profile/personal",    p);
+const patchPersonal = (p: Record<string, unknown>) =>
+  patchSection("/api/profile/personal", p);
+const patchExperiences = (p: Record<string, unknown>) =>
+  patchSection("/api/profile/experiences", p);
+const patchEducation = (p: Record<string, unknown>) =>
+  patchSection("/api/profile/education", p);
+const patchSkills = (p: Record<string, unknown>) =>
+  patchSection("/api/profile/skills", p);
+const patchLanguages = (p: Record<string, unknown>) =>
+  patchSection("/api/profile/languages", p);
+const patchCerts = (p: Record<string, unknown>) =>
+  patchSection("/api/profile/personal", p);
 
 /* ─── EditBar ────────────────────────────────────────────── */
-function EditBar({ onCancel, onSave, saving }: { onCancel: () => void; onSave: () => void; saving: boolean }) {
+function EditBar({
+  onCancel,
+  onSave,
+  saving,
+}: {
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
   return (
-    <div className="flex justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-      <button type="button" className={BTN_CANCEL} onClick={onCancel} disabled={saving}>Cancelar</button>
-      <button type="button" className={BTN_SAVE} onClick={onSave} disabled={saving}>
+    <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+      <button
+        type="button"
+        className={BTN_CANCEL}
+        onClick={onCancel}
+        disabled={saving}
+      >
+        Cancelar
+      </button>
+      <button
+        type="button"
+        className={BTN_SAVE}
+        onClick={onSave}
+        disabled={saving}
+      >
         {saving ? "Guardando…" : "Guardar"}
       </button>
     </div>
@@ -213,26 +338,38 @@ function EditBar({ onCancel, onSave, saving }: { onCancel: () => void; onSave: (
 /* ════════════════════════════════════════════════════════════
    SECTION: Datos personales
    ════════════════════════════════════════════════════════════ */
-function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: UserData) => void }) {
+function SectionPersonal({
+  user,
+  onChange,
+}: {
+  user: UserData;
+  onChange: (u: UserData) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<UserData>(user);
 
-  function open() { setDraft(user); setEditing(true); }
-  function close() { setEditing(false); }
+  function open() {
+    setDraft(user);
+    setEditing(true);
+  }
+
+  function close() {
+    setEditing(false);
+  }
 
   async function save() {
     setSaving(true);
     try {
       await patchPersonal({
-        firstName:     draft.firstName,
-        lastName1:     draft.lastName1,
-        lastName2:     draft.lastName2,
-        phone:         draft.phone,
-        location:      draft.location,
-        birthdate:     draft.birthdate,
-        linkedin:      draft.linkedin,
-        github:        draft.github,
+        firstName: draft.firstName,
+        lastName1: draft.lastName1,
+        lastName2: draft.lastName2,
+        phone: draft.phone,
+        location: draft.location,
+        birthdate: draft.birthdate,
+        linkedin: draft.linkedin,
+        github: draft.github,
         desiredSalary: draft.desiredSalary,
         seekingRemote: draft.seekingRemote,
         seekingHybrid: draft.seekingHybrid,
@@ -248,9 +385,14 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
     }
   }
 
-  const displayName = [user.firstName, user.lastName1, user.lastName2].filter(Boolean).join(" ");
-  const initials = [user.firstName[0], user.lastName1[0]].filter(Boolean).join("").toUpperCase();
-  const activeWorkModes = WORK_MODES.filter(m => user[m.key]);
+  const displayName = [user.firstName, user.lastName1, user.lastName2]
+    .filter(Boolean)
+    .join(" ");
+  const initials = [user.firstName[0], user.lastName1[0]]
+    .filter(Boolean)
+    .join("")
+    .toUpperCase();
+  const activeWorkModes = WORK_MODES.filter((m) => user[m.key]);
 
   return (
     <section className={CARD} id="personal">
@@ -258,138 +400,157 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-semibold text-lg dark:bg-emerald-900/40 dark:text-emerald-300">
           {initials || "?"}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 truncate">{displayName || "—"}</h1>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <h1 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50 break-words">
+              {displayName || "—"}
+            </h1>
             {!editing && (
-              <button className={BTN_EDIT} onClick={open}><PencilIcon />Editar</button>
+              <button className={`${BTN_EDIT} self-start sm:self-auto`} onClick={open}>
+                <PencilIcon />
+                Editar
+              </button>
             )}
           </div>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{user.location || "Sin ubicación"}</p>
-          
 
-        {/* Vista de lectura */}
-        {!editing && (
-        <div className="mt-2 space-y-1.5">
+          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400 break-words">
+            {user.location || "Sin ubicación"}
+          </p>
 
-            {user.phone && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 opacity-70" />
-                {user.phone}
-            </p>
-            )}
+          {!editing && (
+            <div className="mt-3 space-y-2">
+              {user.phone && (
+                <MetaRow icon={Phone}>{user.phone}</MetaRow>
+              )}
 
-            {user.email && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 opacity-70" />
-                {user.email}
-            </p>
-            )}
+              {user.email && (
+                <MetaRow icon={Mail}>{user.email}</MetaRow>
+              )}
 
-            {user.linkedin && (
-            <a
-                href={user.linkedin.startsWith("http") ? user.linkedin : `https://${user.linkedin}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-emerald-600 hover:underline dark:text-emerald-400 flex items-center gap-1.5 truncate"
-            >
-                <Linkedin className="w-3.5 h-3.5 opacity-70" />
-                {user.linkedin}
-            </a>
-            )}
-
-            {user.github && (
-            <a
-                href={user.github.startsWith("http") ? user.github : `https://${user.github}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-zinc-500 hover:underline dark:text-zinc-400 flex items-center gap-1.5 truncate"
-            >
-                <Github className="w-3.5 h-3.5 opacity-70" />
-                {user.github}
-            </a>
-            )}
-
-            {user.birthdate && (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                <Cake className="w-3.5 h-3.5 opacity-70" />
-                {new Date(user.birthdate).toLocaleDateString("es-MX", {
-                day: "2-digit",
-                month: "long",
-                year: "numeric",
-                })}
-            </p>
-            )}
-
-            {user.desiredSalary ? (
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
-                <DollarSign className="w-3.5 h-3.5 opacity-70" />
-                <span>
-                Salario deseado:{" "}
-                <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                    {fmtSalary(user.desiredSalary)}
-                </span>
-                <span className="text-zinc-400"> / mes MXN</span>
-                </span>
-            </p>
-            ) : null}
-
-            {/* Modalidad en lectura */}
-            {activeWorkModes.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-0.5">
-                {activeWorkModes.map((m) => (
-                <span
-                    key={m.key}
-                    className={`text-[10px] rounded-full border px-2 py-0.5 ${m.color}`}
+              {user.linkedin && (
+                <a
+                  href={user.linkedin.startsWith("http") ? user.linkedin : `https://${user.linkedin}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
                 >
-                    {m.label}
-                </span>
-                ))}
-            </div>
-            )}
+                  <MetaRow
+                    icon={Linkedin}
+                    className="text-emerald-600 hover:underline dark:text-emerald-400"
+                  >
+                    {prettyExternalUrl(user.linkedin)}
+                  </MetaRow>
+                </a>
+              )}
 
-        </div>
-        )}
+              {user.github && (
+                <a
+                  href={user.github.startsWith("http") ? user.github : `https://${user.github}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <MetaRow
+                    icon={Github}
+                    className="hover:underline"
+                  >
+                    {prettyExternalUrl(user.github)}
+                  </MetaRow>
+                </a>
+              )}
+
+              {user.birthdate && (
+                <MetaRow icon={Cake}>
+                  {new Date(user.birthdate).toLocaleDateString("es-MX", {
+                    day: "2-digit",
+                    month: "long",
+                    year: "numeric",
+                  })}
+                </MetaRow>
+              )}
+
+              {user.desiredSalary ? (
+                <MetaRow icon={DollarSign}>
+                  <span>
+                    Salario deseado:{" "}
+                    <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                      {fmtSalary(user.desiredSalary)}
+                    </span>
+                    <span className="text-zinc-400"> / mes MXN</span>
+                  </span>
+                </MetaRow>
+              ) : null}
+
+              {activeWorkModes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {activeWorkModes.map((m) => (
+                    <span
+                      key={m.key}
+                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] ${m.color}`}
+                    >
+                      <m.icon className="h-3 w-3" />
+                      {m.label}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {editing && (
         <div className="space-y-4 border-t border-zinc-100 dark:border-zinc-800 pt-4">
-
-          {/* Nombre */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className={LABEL}>Nombre(s) *</label>
-              <input className={INPUT} value={draft.firstName}
-                onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))} />
+              <input
+                className={INPUT}
+                value={draft.firstName}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, firstName: e.target.value }))
+                }
+              />
             </div>
             <div>
               <label className={LABEL}>Apellido paterno *</label>
-              <input className={INPUT} value={draft.lastName1}
-                onChange={e => setDraft(d => ({ ...d, lastName1: e.target.value }))} />
+              <input
+                className={INPUT}
+                value={draft.lastName1}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, lastName1: e.target.value }))
+                }
+              />
             </div>
             <div>
               <label className={LABEL}>Apellido materno</label>
-              <input className={INPUT} value={draft.lastName2}
-                onChange={e => setDraft(d => ({ ...d, lastName2: e.target.value }))} />
+              <input
+                className={INPUT}
+                value={draft.lastName2}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, lastName2: e.target.value }))
+                }
+              />
             </div>
           </div>
 
-          {/* Teléfono + Ubicación */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Teléfono</label>
               <PhoneInputField
                 value={draft.phone}
-                onChange={val => setDraft(d => ({ ...d, phone: val }))}
+                onChange={(val) => setDraft((d) => ({ ...d, phone: val }))}
               />
             </div>
             <div>
               <label className={LABEL}>Ubicación</label>
               <LocationAutocomplete
                 value={draft.location}
-                onChange={val => setDraft(d => ({ ...d, location: val }))}
-                onPlace={place => setDraft(d => ({ ...d, location: place.label }))}
+                onChange={(val) => setDraft((d) => ({ ...d, location: val }))}
+                onPlace={(place) =>
+                  setDraft((d) => ({ ...d, location: place.label }))
+                }
                 className={INPUT}
                 placeholder="Ciudad, Estado, País"
                 countries={["mx", "us", "ca", "ar", "co", "es"]}
@@ -397,75 +558,107 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
             </div>
           </div>
 
-          {/* LinkedIn + GitHub */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>LinkedIn</label>
-              <input className={INPUT} value={draft.linkedin}
-                onChange={e => setDraft(d => ({ ...d, linkedin: e.target.value }))}
-                placeholder="linkedin.com/in/tu-usuario" />
+              <input
+                className={INPUT}
+                value={draft.linkedin}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, linkedin: e.target.value }))
+                }
+                placeholder="linkedin.com/in/tu-usuario"
+              />
             </div>
             <div>
               <label className={LABEL}>GitHub</label>
-              <input className={INPUT} value={draft.github}
-                onChange={e => setDraft(d => ({ ...d, github: e.target.value }))}
-                placeholder="github.com/tu-usuario" />
+              <input
+                className={INPUT}
+                value={draft.github}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, github: e.target.value }))
+                }
+                placeholder="github.com/tu-usuario"
+              />
             </div>
           </div>
 
-          {/* Fecha de nacimiento + Salario */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Fecha de nacimiento</label>
-              <input type="date" className={INPUT} value={draft.birthdate}
-                onChange={e => setDraft(d => ({ ...d, birthdate: e.target.value }))} />
+              <input
+                type="date"
+                className={INPUT}
+                value={draft.birthdate}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, birthdate: e.target.value }))
+                }
+              />
             </div>
             <div>
               <label className={LABEL}>Salario deseado (MXN mensual bruto)</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400 pointer-events-none">$</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400">
+                  $
+                </span>
                 <input
-                  type="number" min={0} max={999999} step={500}
-                  className={INPUT + " pl-7"}
+                  type="number"
+                  min={0}
+                  max={999999}
+                  step={500}
+                  className={`${INPUT} pl-7`}
                   value={draft.desiredSalary ?? ""}
                   placeholder="Ej. 25000"
-                  onChange={e => setDraft(d => ({
-                    ...d,
-                    desiredSalary: e.target.value === "" ? null : parseInt(e.target.value, 10),
-                  }))}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      desiredSalary:
+                        e.target.value === "" ? null : parseInt(e.target.value, 10),
+                    }))
+                  }
                 />
               </div>
             </div>
           </div>
 
-          {/* Modalidad de trabajo */}
           <div>
             <label className={LABEL}>Modalidad de trabajo preferida</label>
-            <div className="flex flex-wrap gap-4 mt-1">
-              {WORK_MODES.map(m => (
-                <label key={m.key} className="flex items-center gap-2 cursor-pointer select-none">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-1">
+              {WORK_MODES.map((m) => (
+                <label
+                  key={m.key}
+                  className="flex items-center gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 px-3 py-2 cursor-pointer select-none hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors"
+                >
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
                     checked={draft[m.key]}
-                    onChange={e => setDraft(d => ({ ...d, [m.key]: e.target.checked }))}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, [m.key]: e.target.checked }))
+                    }
                   />
-                  <span className="text-sm text-zinc-700 dark:text-zinc-200">{m.emoji} {m.label}</span>
+                  <span className="flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                    <m.icon className="h-3.5 w-3.5 opacity-80" />
+                    {m.label}
+                  </span>
                 </label>
               ))}
             </div>
           </div>
 
-          {/* Cambiar CV */}
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3">
             <div>
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Currículum (CV)</p>
-              <p className="text-xs text-zinc-400 mt-0.5">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                Currículum (CV)
+              </p>
+              <p className="mt-0.5 text-xs text-zinc-400">
                 {user.resumeUrl ? "CV subido activo" : "Sin CV subido"}
               </p>
             </div>
-            <a href="/profile/edit#cv"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 transition-colors whitespace-nowrap">
+            <a
+              href="/profile/edit#cv"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 transition-colors whitespace-nowrap"
+            >
               {user.resumeUrl ? "Cambiar CV" : "Subir CV"}
             </a>
           </div>
@@ -481,7 +674,10 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
    SECTION: Experiencia laboral (múltiples isCurrent ✅)
    ════════════════════════════════════════════════════════════ */
 function SectionExperience({
-  experiences, onChange, totalYears, appCount,
+  experiences,
+  onChange,
+  totalYears,
+  appCount,
 }: {
   experiences: Experience[];
   onChange: (e: Experience[]) => void;
@@ -492,19 +688,32 @@ function SectionExperience({
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Experience[]>(experiences);
 
-  function open() { setDraft(experiences.map(e => ({ ...e }))); setEditing(true); }
-  function close() { setEditing(false); }
+  function open() {
+    setDraft(experiences.map((e) => ({ ...e })));
+    setEditing(true);
+  }
+
+  function close() {
+    setEditing(false);
+  }
 
   function addExp() {
-    setDraft(d => [...d, { role: "", company: "", startDate: "", endDate: null, isCurrent: false }]);
+    setDraft((d) => [
+      ...d,
+      { role: "", company: "", startDate: "", endDate: null, isCurrent: false },
+    ]);
   }
-  function removeExp(i: number) { setDraft(d => d.filter((_, idx) => idx !== i)); }
+
+  function removeExp(i: number) {
+    setDraft((d) => d.filter((_, idx) => idx !== i));
+  }
+
   function updateExp(i: number, field: keyof Experience, value: any) {
-    setDraft(d => d.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
+    setDraft((d) => d.map((e, idx) => (idx === i ? { ...e, [field]: value } : e)));
   }
 
   async function save() {
-    if (draft.some(e => !e.role.trim() || !e.company.trim() || !e.startDate)) {
+    if (draft.some((e) => !e.role.trim() || !e.company.trim() || !e.startDate)) {
       toastError("Completa puesto, empresa e inicio en todas las experiencias");
       return;
     }
@@ -514,28 +723,45 @@ function SectionExperience({
       onChange(draft);
       setEditing(false);
       toastSuccess("Experiencia actualizada");
-    } catch (e: any) { toastError(e.message); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      toastError(e.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <section className={CARD} id="experiencia">
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
           { num: totalYears != null ? `${totalYears}` : "—", label: "Años exp." },
           { num: experiences.length, label: "Trabajos" },
           { num: appCount, label: "Postulaciones" },
-        ].map(s => (
-          <div key={s.label} className="rounded-xl bg-zinc-50 dark:bg-zinc-900/40 px-3 py-3 text-center">
-            <p className="text-xl font-bold text-zinc-900 dark:text-zinc-50">{s.num}</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">{s.label}</p>
+        ].map((s) => (
+          <div
+            key={s.label}
+            className="rounded-xl bg-zinc-50 dark:bg-zinc-900/40 px-2 sm:px-3 py-3 text-center"
+          >
+            <p className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50">
+              {s.num}
+            </p>
+            <p className="text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400">
+              {s.label}
+            </p>
           </div>
         ))}
       </div>
 
       <div className={SECTION_HEADER}>
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Historial de trabajo</h2>
-        {!editing && <button className={BTN_EDIT} onClick={open}><PencilIcon />Editar</button>}
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Historial de trabajo
+        </h2>
+        {!editing && (
+          <button className={BTN_EDIT} onClick={open}>
+            <PencilIcon />
+            Editar
+          </button>
+        )}
       </div>
 
       {!editing ? (
@@ -546,11 +772,16 @@ function SectionExperience({
           {experiences.map((e, i) => (
             <div key={e.id ?? i} className="soft-panel px-3 py-3">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{e.role}</p>
-                  <p className="text-sm text-zinc-500 dark:text-zinc-400">{e.company}</p>
-                  <p className="text-xs text-zinc-400 mt-0.5">
-                    {formatMonthYear(e.startDate)} — {e.isCurrent ? "actual" : formatMonthYear(e.endDate)}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50 break-words">
+                    {e.role}
+                  </p>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 break-words">
+                    {e.company}
+                  </p>
+                  <p className="mt-0.5 text-xs text-zinc-400">
+                    {formatMonthYear(e.startDate)} —{" "}
+                    {e.isCurrent ? "actual" : formatMonthYear(e.endDate)}
                   </p>
                 </div>
                 {e.isCurrent && (
@@ -564,50 +795,100 @@ function SectionExperience({
         </div>
       ) : (
         <div className="space-y-4 border-t border-zinc-100 dark:border-zinc-800 pt-4">
-          {draft.filter(e => e.isCurrent).length > 1 && (
+          {draft.filter((e) => e.isCurrent).length > 1 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-200">
-              ⚠ Detectamos más de un trabajo actual. Verifica que sea correcto.
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>
+                  Detectamos más de un trabajo actual. Verifica que sea correcto.
+                </span>
+              </div>
             </div>
           )}
+
           {draft.map((e, i) => (
-            <div key={i} className="rounded-2xl border border-zinc-200/70 dark:border-zinc-700/60 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Experiencia {i + 1}</span>
-                <button type="button" onClick={() => removeExp(i)} className="text-xs text-red-500 hover:text-red-600">Eliminar</button>
+            <div
+              key={i}
+              className="rounded-2xl border border-zinc-200/70 dark:border-zinc-700/60 p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+                  Experiencia {i + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeExp(i)}
+                  className="text-xs text-red-500 hover:text-red-600"
+                >
+                  Eliminar
+                </button>
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Puesto *</label>
-                  <input className={INPUT} value={e.role} onChange={ev => updateExp(i, "role", ev.target.value)} placeholder="Ej. Software Engineer" />
+                  <input
+                    className={INPUT}
+                    value={e.role}
+                    onChange={(ev) => updateExp(i, "role", ev.target.value)}
+                    placeholder="Ej. Software Engineer"
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>Empresa *</label>
-                  <input className={INPUT} value={e.company} onChange={ev => updateExp(i, "company", ev.target.value)} placeholder="Ej. Google" />
+                  <input
+                    className={INPUT}
+                    value={e.company}
+                    onChange={(ev) => updateExp(i, "company", ev.target.value)}
+                    placeholder="Ej. Google"
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>Inicio *</label>
-                  <input type="month" className={INPUT} value={e.startDate} onChange={ev => updateExp(i, "startDate", ev.target.value)} />
+                  <input
+                    type="month"
+                    className={INPUT}
+                    value={e.startDate}
+                    onChange={(ev) => updateExp(i, "startDate", ev.target.value)}
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>Fin</label>
-                  <input type="month" className={INPUT} value={e.endDate ?? ""} disabled={e.isCurrent}
-                    onChange={ev => updateExp(i, "endDate", ev.target.value || null)} />
+                  <input
+                    type="month"
+                    className={INPUT}
+                    value={e.endDate ?? ""}
+                    disabled={e.isCurrent}
+                    onChange={(ev) => updateExp(i, "endDate", ev.target.value || null)}
+                  />
                 </div>
               </div>
+
               <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input type="checkbox" className="rounded" checked={e.isCurrent}
-                  onChange={ev => {
+                <input
+                  type="checkbox"
+                  className="rounded"
+                  checked={e.isCurrent}
+                  onChange={(ev) => {
                     updateExp(i, "isCurrent", ev.target.checked);
                     if (ev.target.checked) updateExp(i, "endDate", null);
-                  }} />
-                <span className="text-zinc-700 dark:text-zinc-200">Trabajo actual</span>
+                  }}
+                />
+                <span className="text-zinc-700 dark:text-zinc-200">
+                  Trabajo actual
+                </span>
               </label>
             </div>
           ))}
-          <button type="button" onClick={addExp}
-            className="w-full rounded-xl border border-dashed border-zinc-300 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/40 transition-colors">
+
+          <button
+            type="button"
+            onClick={addExp}
+            className="w-full rounded-xl border border-dashed border-zinc-300 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/40 transition-colors"
+          >
             + Agregar experiencia
           </button>
+
           <EditBar onCancel={close} onSave={save} saving={saving} />
         </div>
       )}
@@ -618,24 +899,51 @@ function SectionExperience({
 /* ════════════════════════════════════════════════════════════
    SECTION: Escolaridad
    ════════════════════════════════════════════════════════════ */
-function SectionEducation({ education, onChange }: { education: Education[]; onChange: (e: Education[]) => void }) {
+function SectionEducation({
+  education,
+  onChange,
+}: {
+  education: Education[];
+  onChange: (e: Education[]) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Education[]>(education);
 
-  function open() { setDraft(education.map(e => ({ ...e }))); setEditing(true); }
-  function close() { setEditing(false); }
+  function open() {
+    setDraft(education.map((e) => ({ ...e })));
+    setEditing(true);
+  }
+
+  function close() {
+    setEditing(false);
+  }
 
   function addEd() {
-    setDraft(d => [...d, { level: null, status: "COMPLETED", institution: "", program: "", startDate: "", endDate: "", sortIndex: d.length }]);
+    setDraft((d) => [
+      ...d,
+      {
+        level: null,
+        status: "COMPLETED",
+        institution: "",
+        program: "",
+        startDate: "",
+        endDate: "",
+        sortIndex: d.length,
+      },
+    ]);
   }
-  function removeEd(i: number) { setDraft(d => d.filter((_, idx) => idx !== i)); }
+
+  function removeEd(i: number) {
+    setDraft((d) => d.filter((_, idx) => idx !== i));
+  }
+
   function updateEd(i: number, field: keyof Education, value: any) {
-    setDraft(d => d.map((e, idx) => idx === i ? { ...e, [field]: value } : e));
+    setDraft((d) => d.map((e, idx) => (idx === i ? { ...e, [field]: value } : e)));
   }
 
   async function save() {
-    if (draft.some(e => !e.institution.trim())) {
+    if (draft.some((e) => !e.institution.trim())) {
       toastError("Completa el nombre de la institución en todos los estudios");
       return;
     }
@@ -645,35 +953,65 @@ function SectionEducation({ education, onChange }: { education: Education[]; onC
       onChange(draft);
       setEditing(false);
       toastSuccess("Escolaridad actualizada");
-    } catch (e: any) { toastError(e.message); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      toastError(e.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <section className={CARD} id="educacion">
       <div className={SECTION_HEADER}>
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Escolaridad</h2>
-        {!editing && <button className={BTN_EDIT} onClick={open}><PencilIcon />Editar</button>}
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Escolaridad
+        </h2>
+        {!editing && (
+          <button className={BTN_EDIT} onClick={open}>
+            <PencilIcon />
+            Editar
+          </button>
+        )}
       </div>
 
       {!editing ? (
         <div className="space-y-3">
-          {education.length === 0 && <p className="text-sm text-zinc-400 italic">Sin escolaridad registrada</p>}
+          {education.length === 0 && (
+            <p className="text-sm text-zinc-400 italic">Sin escolaridad registrada</p>
+          )}
+
           {education.map((ed, i) => (
             <div key={ed.id ?? i} className="soft-panel px-3 py-3">
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{ed.institution}</p>
-                  {ed.program && <p className="text-sm text-zinc-500 dark:text-zinc-400">{ed.program}</p>}
-                  <div className="flex gap-2 mt-0.5 flex-wrap">
-                    {ed.level && <span className="text-xs text-zinc-400">{EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level}</span>}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50 break-words">
+                    {ed.institution}
+                  </p>
+                  {ed.program && (
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 break-words">
+                      {ed.program}
+                    </p>
+                  )}
+                  <div className="mt-0.5 flex gap-2 flex-wrap">
+                    {ed.level && (
+                      <span className="text-xs text-zinc-400">
+                        {EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level}
+                      </span>
+                    )}
                     <span className="text-xs text-zinc-400">
-                      {formatMonthYear(ed.startDate)} — {ed.status === "ONGOING" ? "en curso" : formatMonthYear(ed.endDate)}
+                      {formatMonthYear(ed.startDate)} —{" "}
+                      {ed.status === "ONGOING"
+                        ? "en curso"
+                        : formatMonthYear(ed.endDate)}
                     </span>
                   </div>
                 </div>
                 <span className="shrink-0 text-[10px] rounded-full bg-zinc-100 text-zinc-500 px-2 py-0.5 dark:bg-zinc-800 dark:text-zinc-400">
-                  {ed.status === "COMPLETED" ? "Concluido" : ed.status === "ONGOING" ? "En curso" : "Trunco"}
+                  {ed.status === "COMPLETED"
+                    ? "Concluido"
+                    : ed.status === "ONGOING"
+                      ? "En curso"
+                      : "Trunco"}
                 </span>
               </div>
             </div>
@@ -682,45 +1020,90 @@ function SectionEducation({ education, onChange }: { education: Education[]; onC
       ) : (
         <div className="space-y-4 border-t border-zinc-100 dark:border-zinc-800 pt-4">
           {draft.map((ed, i) => (
-            <div key={i} className="rounded-2xl border border-zinc-200/70 dark:border-zinc-700/60 p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">Entrada #{i + 1}</span>
-                <button type="button" onClick={() => removeEd(i)} className="text-xs text-red-500 hover:text-red-600">Eliminar</button>
+            <div
+              key={i}
+              className="rounded-2xl border border-zinc-200/70 dark:border-zinc-700/60 p-4 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wide">
+                  Entrada #{i + 1}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeEd(i)}
+                  className="text-xs text-red-500 hover:text-red-600"
+                >
+                  Eliminar
+                </button>
               </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={LABEL}>Nivel</label>
-                  <select className={INPUT} value={ed.level ?? ""} onChange={ev => updateEd(i, "level", ev.target.value || null)}>
+                  <select
+                    className={INPUT}
+                    value={ed.level ?? ""}
+                    onChange={(ev) => updateEd(i, "level", ev.target.value || null)}
+                  >
                     <option value="">— Sin especificar —</option>
-                    {EDUCATION_LEVEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    {EDUCATION_LEVEL_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className={LABEL}>Institución *</label>
-                  <input className={INPUT} value={ed.institution} onChange={ev => updateEd(i, "institution", ev.target.value)} placeholder="Ej. UANL, Tec de Monterrey…" />
+                  <input
+                    className={INPUT}
+                    value={ed.institution}
+                    onChange={(ev) => updateEd(i, "institution", ev.target.value)}
+                    placeholder="Ej. UANL, Tec de Monterrey…"
+                  />
                 </div>
                 <div>
                   <label className={LABEL}>Programa / Carrera</label>
-                  <input className={INPUT} value={ed.program} onChange={ev => updateEd(i, "program", ev.target.value)} placeholder="Ej. Ingeniería en Sistemas" />
+                  <input
+                    className={INPUT}
+                    value={ed.program}
+                    onChange={(ev) => updateEd(i, "program", ev.target.value)}
+                    placeholder="Ej. Ingeniería en Sistemas"
+                  />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className={LABEL}>Inicio</label>
-                    <input type="month" className={INPUT} value={ed.startDate} onChange={ev => updateEd(i, "startDate", ev.target.value)} />
+                    <input
+                      type="month"
+                      className={INPUT}
+                      value={ed.startDate}
+                      onChange={(ev) => updateEd(i, "startDate", ev.target.value)}
+                    />
                   </div>
                   <div>
                     <label className={LABEL}>Fin</label>
-                    <input type="month" className={INPUT} value={ed.endDate} onChange={ev => updateEd(i, "endDate", ev.target.value)} />
+                    <input
+                      type="month"
+                      className={INPUT}
+                      value={ed.endDate}
+                      onChange={(ev) => updateEd(i, "endDate", ev.target.value)}
+                    />
                     <p className="mt-0.5 text-xs text-zinc-400">Vacío = en curso</p>
                   </div>
                 </div>
               </div>
             </div>
           ))}
-          <button type="button" onClick={addEd}
-            className="w-full rounded-xl border border-dashed border-zinc-300 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/40 transition-colors">
+
+          <button
+            type="button"
+            onClick={addEd}
+            className="w-full rounded-xl border border-dashed border-zinc-300 py-2 text-sm text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/40 transition-colors"
+          >
             + Agregar escolaridad
           </button>
+
           <EditBar onCancel={close} onSave={save} saving={saving} />
         </div>
       )}
@@ -732,7 +1115,9 @@ function SectionEducation({ education, onChange }: { education: Education[]; onC
    SECTION: Skills (sidebar)
    ════════════════════════════════════════════════════════════ */
 function SectionSkills({
-  skills, onChange, skillTermOptions,
+  skills,
+  onChange,
+  skillTermOptions,
 }: {
   skills: Skill[];
   onChange: (s: Skill[]) => void;
@@ -743,25 +1128,39 @@ function SectionSkills({
   const [draft, setDraft] = useState<Skill[]>(skills);
   const [query, setQuery] = useState("");
 
-  function open() { setDraft(skills.map(s => ({ ...s }))); setEditing(true); }
-  function close() { setEditing(false); setQuery(""); }
+  function open() {
+    setDraft(skills.map((s) => ({ ...s })));
+    setEditing(true);
+  }
+
+  function close() {
+    setEditing(false);
+    setQuery("");
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const used = new Set(draft.map(s => s.termId));
-    return (q ? skillTermOptions.filter(o => o.label.toLowerCase().includes(q)) : skillTermOptions)
-      .filter(o => !used.has(o.id))
+    const used = new Set(draft.map((s) => s.termId));
+    return (q
+      ? skillTermOptions.filter((o) => o.label.toLowerCase().includes(q))
+      : skillTermOptions
+    )
+      .filter((o) => !used.has(o.id))
       .slice(0, 15);
   }, [query, skillTermOptions, draft]);
 
   function addSkill(opt: { id: string; label: string }) {
-    if (draft.some(s => s.termId === opt.id)) return;
-    setDraft(d => [...d, { termId: opt.id, label: opt.label, level: 3 }]);
+    if (draft.some((s) => s.termId === opt.id)) return;
+    setDraft((d) => [...d, { termId: opt.id, label: opt.label, level: 3 }]);
     setQuery("");
   }
-  function removeSkill(termId: string) { setDraft(d => d.filter(s => s.termId !== termId)); }
+
+  function removeSkill(termId: string) {
+    setDraft((d) => d.filter((s) => s.termId !== termId));
+  }
+
   function setLevel(termId: string, level: SkillLevel) {
-    setDraft(d => d.map(s => s.termId === termId ? { ...s, level } : s));
+    setDraft((d) => d.map((s) => (s.termId === termId ? { ...s, level } : s)));
   }
 
   async function save() {
@@ -771,15 +1170,25 @@ function SectionSkills({
       onChange(draft);
       setEditing(false);
       toastSuccess("Skills actualizadas");
-    } catch (e: any) { toastError(e.message); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      toastError(e.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <section className={CARD} id="skills">
       <div className={SECTION_HEADER}>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Skills</h2>
-        {!editing && <button className={BTN_EDIT} onClick={open}><PencilIcon />Editar</button>}
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+          Skills
+        </h2>
+        {!editing && (
+          <button className={BTN_EDIT} onClick={open}>
+            <PencilIcon />
+            Editar
+          </button>
+        )}
       </div>
 
       {!editing ? (
@@ -789,20 +1198,29 @@ function SectionSkills({
               const pct = Math.max(0, Math.min(100, Math.round((s.level ?? 0) * 20)));
               return (
                 <li key={s.termId} className="soft-panel px-3 py-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{s.label}</span>
-                    <span className={`text-xs font-medium ${
-                      s.level === 5 ? "text-emerald-600 dark:text-emerald-400" :
-                      s.level === 4 ? "text-emerald-500 dark:text-emerald-400" :
-                      s.level === 3 ? "text-yellow-600 dark:text-yellow-400" :
-                      s.level === 2 ? "text-blue-500 dark:text-blue-400" :
-                      "text-zinc-400"
-                    }`}>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="min-w-0 break-words font-medium">{s.label}</span>
+                    <span
+                      className={`shrink-0 text-xs font-medium ${
+                        s.level === 5
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : s.level === 4
+                            ? "text-emerald-500 dark:text-emerald-400"
+                            : s.level === 3
+                              ? "text-yellow-600 dark:text-yellow-400"
+                              : s.level === 2
+                                ? "text-blue-500 dark:text-blue-400"
+                                : "text-zinc-400"
+                      }`}
+                    >
                       {SKILL_LEVEL_LABEL[s.level] ?? `Nivel ${s.level}`}
                     </span>
                   </div>
                   <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${SKILL_BAR_COLOR[s.level]}`} style={{ width: `${pct}%` }} />
+                    <div
+                      className={`h-full rounded-full transition-all ${SKILL_BAR_COLOR[s.level]}`}
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </li>
               );
@@ -814,13 +1232,21 @@ function SectionSkills({
       ) : (
         <div className="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
           <div className="relative">
-            <input className={INPUT} placeholder="Ej. React, Node.js, AWS…" value={query} onChange={e => setQuery(e.target.value)} />
+            <input
+              className={INPUT}
+              placeholder="Ej. React, Node.js, AWS…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             {query && filtered.length > 0 && (
               <ul className="absolute z-20 mt-1 w-full rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900 max-h-48 overflow-y-auto">
-                {filtered.map(o => (
+                {filtered.map((o) => (
                   <li key={o.id}>
-                    <button type="button" onClick={() => addSkill(o)}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60">
+                    <button
+                      type="button"
+                      onClick={() => addSkill(o)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                    >
                       {o.label}
                     </button>
                   </li>
@@ -828,30 +1254,53 @@ function SectionSkills({
               </ul>
             )}
           </div>
+
           <div className="space-y-3">
-            {draft.map(s => (
-              <div key={s.termId} className="rounded-xl border border-zinc-200/70 dark:border-zinc-700/60 px-3 py-2.5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{s.label}</span>
-                  <button type="button" onClick={() => removeSkill(s.termId)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+            {draft.map((s) => (
+              <div
+                key={s.termId}
+                className="rounded-xl border border-zinc-200/70 dark:border-zinc-700/60 px-3 py-2.5 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="min-w-0 break-words text-sm font-medium">
+                    {s.label}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeSkill(s.termId)}
+                    className="shrink-0 text-xs text-red-400 hover:text-red-600"
+                  >
+                    ✕
+                  </button>
                 </div>
+
                 <div className="flex gap-1 flex-wrap">
-                  {SKILL_LEVELS.map(lv => (
-                    <button key={lv.value} type="button"
+                  {SKILL_LEVELS.map((lv) => (
+                    <button
+                      key={lv.value}
+                      type="button"
                       onClick={() => setLevel(s.termId, lv.value as SkillLevel)}
                       className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
-                        s.level === lv.value ? SKILL_PILL_ACTIVE[lv.value] : "border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"
-                      }`}>
+                        s.level === lv.value
+                          ? SKILL_PILL_ACTIVE[lv.value]
+                          : "border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"
+                      }`}
+                    >
                       {lv.label}
                     </button>
                   ))}
                 </div>
+
                 <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                  <div className={`h-full rounded-full transition-all duration-300 ${SKILL_BAR_COLOR[s.level]}`} style={{ width: `${Math.round(s.level * 20)}%` }} />
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${SKILL_BAR_COLOR[s.level]}`}
+                    style={{ width: `${Math.round(s.level * 20)}%` }}
+                  />
                 </div>
               </div>
             ))}
           </div>
+
           <EditBar onCancel={close} onSave={save} saving={saving} />
         </div>
       )}
@@ -863,7 +1312,9 @@ function SectionSkills({
    SECTION: Idiomas (sidebar)
    ════════════════════════════════════════════════════════════ */
 function SectionLanguages({
-  languages, onChange, languageOptions,
+  languages,
+  onChange,
+  languageOptions,
 }: {
   languages: Language[];
   onChange: (l: Language[]) => void;
@@ -873,16 +1324,29 @@ function SectionLanguages({
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<Language[]>(languages);
 
-  function open() { setDraft(languages.map(l => ({ ...l }))); setEditing(true); }
-  function close() { setEditing(false); }
+  function open() {
+    setDraft(languages.map((l) => ({ ...l })));
+    setEditing(true);
+  }
+
+  function close() {
+    setEditing(false);
+  }
 
   function addLang(opt: { id: string; label: string }) {
-    if (draft.some(l => l.termId === opt.id)) return;
-    setDraft(d => [...d, { termId: opt.id, label: opt.label, level: "CONVERSATIONAL" }]);
+    if (draft.some((l) => l.termId === opt.id)) return;
+    setDraft((d) => [
+      ...d,
+      { termId: opt.id, label: opt.label, level: "CONVERSATIONAL" },
+    ]);
   }
-  function removeLang(termId: string) { setDraft(d => d.filter(l => l.termId !== termId)); }
+
+  function removeLang(termId: string) {
+    setDraft((d) => d.filter((l) => l.termId !== termId));
+  }
+
   function setLevel(termId: string, level: LangLevel) {
-    setDraft(d => d.map(l => l.termId === termId ? { ...l, level } : l));
+    setDraft((d) => d.map((l) => (l.termId === termId ? { ...l, level } : l)));
   }
 
   async function save() {
@@ -892,26 +1356,40 @@ function SectionLanguages({
       onChange(draft);
       setEditing(false);
       toastSuccess("Idiomas actualizados");
-    } catch (e: any) { toastError(e.message); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      toastError(e.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
-  const available = languageOptions.filter(o => !draft.some(l => l.termId === o.id));
+  const available = languageOptions.filter(
+    (o) => !draft.some((l) => l.termId === o.id)
+  );
 
   return (
     <section className={CARD} id="idiomas">
       <div className={SECTION_HEADER}>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Idiomas</h2>
-        {!editing && <button className={BTN_EDIT} onClick={open}><PencilIcon />Editar</button>}
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+          Idiomas
+        </h2>
+        {!editing && (
+          <button className={BTN_EDIT} onClick={open}>
+            <PencilIcon />
+            Editar
+          </button>
+        )}
       </div>
 
       {!editing ? (
         languages.length > 0 ? (
           <ul className="space-y-2 text-sm">
-            {languages.map(l => (
-              <li key={l.termId} className="flex items-center justify-between">
-                <span>{l.label}</span>
-                <span className="text-xs text-muted">{LANG_LEVEL_LABEL[l.level] ?? l.level}</span>
+            {languages.map((l) => (
+              <li key={l.termId} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 break-words">{l.label}</span>
+                <span className="shrink-0 text-xs text-muted">
+                  {LANG_LEVEL_LABEL[l.level] ?? l.level}
+                </span>
               </li>
             ))}
           </ul>
@@ -920,26 +1398,55 @@ function SectionLanguages({
         )
       ) : (
         <div className="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-          {draft.map(l => (
-            <div key={l.termId} className="rounded-xl border border-zinc-200/70 dark:border-zinc-700/60 px-3 py-2.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">{l.label}</span>
-                <button type="button" onClick={() => removeLang(l.termId)} className="text-xs text-red-400 hover:text-red-600">✕</button>
+          {draft.map((l) => (
+            <div
+              key={l.termId}
+              className="rounded-xl border border-zinc-200/70 dark:border-zinc-700/60 px-3 py-2.5 space-y-2"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 break-words text-sm font-medium">
+                  {l.label}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeLang(l.termId)}
+                  className="shrink-0 text-xs text-red-400 hover:text-red-600"
+                >
+                  ✕
+                </button>
               </div>
-              <select className={INPUT} value={l.level} onChange={e => setLevel(l.termId, e.target.value as LangLevel)}>
-                {LANG_LEVELS.map(lv => <option key={lv.value} value={lv.value}>{lv.label}</option>)}
+              <select
+                className={INPUT}
+                value={l.level}
+                onChange={(e) => setLevel(l.termId, e.target.value as LangLevel)}
+              >
+                {LANG_LEVELS.map((lv) => (
+                  <option key={lv.value} value={lv.value}>
+                    {lv.label}
+                  </option>
+                ))}
               </select>
             </div>
           ))}
+
           {available.length > 0 && (
-            <select className={INPUT} value="" onChange={e => {
-              const opt = languageOptions.find(o => o.id === e.target.value);
-              if (opt) addLang(opt);
-            }}>
+            <select
+              className={INPUT}
+              value=""
+              onChange={(e) => {
+                const opt = languageOptions.find((o) => o.id === e.target.value);
+                if (opt) addLang(opt);
+              }}
+            >
               <option value="">+ Agregar idioma…</option>
-              {available.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              {available.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
             </select>
           )}
+
           <EditBar onCancel={close} onSave={save} saving={saving} />
         </div>
       )}
@@ -951,7 +1458,9 @@ function SectionLanguages({
    SECTION: Certificaciones (sidebar)
    ════════════════════════════════════════════════════════════ */
 function SectionCertifications({
-  certifications, onChange, certOptions,
+  certifications,
+  onChange,
+  certOptions,
 }: {
   certifications: string[];
   onChange: (c: string[]) => void;
@@ -962,24 +1471,34 @@ function SectionCertifications({
   const [draft, setDraft] = useState<string[]>(certifications);
   const [query, setQuery] = useState("");
 
-  function open() { setDraft([...certifications]); setEditing(true); }
-  function close() { setEditing(false); setQuery(""); }
+  function open() {
+    setDraft([...certifications]);
+    setEditing(true);
+  }
+
+  function close() {
+    setEditing(false);
+    setQuery("");
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const used = new Set(draft.map(c => c.toLowerCase()));
-    return (q ? certOptions.filter(c => c.toLowerCase().includes(q)) : certOptions)
-      .filter(c => !used.has(c.toLowerCase()))
+    const used = new Set(draft.map((c) => c.toLowerCase()));
+    return (q ? certOptions.filter((c) => c.toLowerCase().includes(q)) : certOptions)
+      .filter((c) => !used.has(c.toLowerCase()))
       .slice(0, 20);
   }, [query, certOptions, draft]);
 
   function add(label: string) {
     const v = label.trim();
-    if (!v || draft.some(c => c.toLowerCase() === v.toLowerCase())) return;
-    setDraft(d => [...d, v]);
+    if (!v || draft.some((c) => c.toLowerCase() === v.toLowerCase())) return;
+    setDraft((d) => [...d, v]);
     setQuery("");
   }
-  function remove(label: string) { setDraft(d => d.filter(c => c.toLowerCase() !== label.toLowerCase())); }
+
+  function remove(label: string) {
+    setDraft((d) => d.filter((c) => c.toLowerCase() !== label.toLowerCase()));
+  }
 
   async function save() {
     setSaving(true);
@@ -988,21 +1507,35 @@ function SectionCertifications({
       onChange(draft);
       setEditing(false);
       toastSuccess("Certificaciones actualizadas");
-    } catch (e: any) { toastError(e.message); }
-    finally { setSaving(false); }
+    } catch (e: any) {
+      toastError(e.message);
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <section className={CARD} id="certificaciones">
       <div className={SECTION_HEADER}>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">Certificaciones</h2>
-        {!editing && <button className={BTN_EDIT} onClick={open}><PencilIcon />Editar</button>}
+        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+          Certificaciones
+        </h2>
+        {!editing && (
+          <button className={BTN_EDIT} onClick={open}>
+            <PencilIcon />
+            Editar
+          </button>
+        )}
       </div>
 
       {!editing ? (
         certifications.length > 0 ? (
           <div className="flex flex-wrap gap-2">
-            {certifications.map(c => <span key={c} className="badge">{c}</span>)}
+            {certifications.map((c) => (
+              <span key={c} className="badge">
+                {c}
+              </span>
+            ))}
           </div>
         ) : (
           <p className="text-sm text-zinc-400 italic">Sin certificaciones</p>
@@ -1010,28 +1543,50 @@ function SectionCertifications({
       ) : (
         <div className="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
           <div className="relative">
-            <input className={INPUT} placeholder="Busca o escribe una certificación…"
-              value={query} onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); if (query.trim()) add(query); } }} />
+            <input
+              className={INPUT}
+              placeholder="Busca o escribe una certificación…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (query.trim()) add(query);
+                }
+              }}
+            />
             {query && filtered.length > 0 && (
               <ul className="absolute z-20 mt-1 w-full rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900 max-h-48 overflow-y-auto">
-                {filtered.map(c => (
+                {filtered.map((c) => (
                   <li key={c}>
-                    <button type="button" onClick={() => add(c)}
-                      className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60">{c}</button>
+                    <button
+                      type="button"
+                      onClick={() => add(c)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                    >
+                      {c}
+                    </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
+
           <div className="flex flex-wrap gap-2">
-            {draft.map(c => (
+            {draft.map((c) => (
               <span key={c} className="badge inline-flex items-center gap-1">
                 {c}
-                <button type="button" onClick={() => remove(c)} className="text-zinc-400 hover:text-red-500 ml-0.5">✕</button>
+                <button
+                  type="button"
+                  onClick={() => remove(c)}
+                  className="ml-0.5 text-zinc-400 hover:text-red-500"
+                >
+                  ✕
+                </button>
               </span>
             ))}
           </div>
+
           <EditBar onCancel={close} onSave={save} saving={saving} />
         </div>
       )}
@@ -1083,32 +1638,43 @@ export default function ProfileSummaryClient({
         const start = e.startDate ? new Date(`${e.startDate}-01`) : null;
         const end = e.isCurrent || !e.endDate ? new Date() : new Date(`${e.endDate}-01`);
         if (!start || isNaN(start.getTime()) || isNaN(end.getTime())) return acc;
-        return acc + Math.max(0, (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+        return (
+          acc +
+          Math.max(
+            0,
+            (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+          )
+        );
       }, 0);
       return Math.round(sum * 10) / 10;
-    } catch { return initialTotalYears; }
+    } catch {
+      return initialTotalYears;
+    }
   }, [experiences, initialTotalYears]);
 
   return (
     <main className="w-full pb-8">
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-4 space-y-3">
-
         {flashUpdated && (
           <div className="border text-sm rounded-xl px-3 py-2 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
             Perfil actualizado correctamente.
           </div>
         )}
+
         {flashCvImported && (
           <div className="border text-sm rounded-xl px-3 py-2 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
             Hemos importado el CV que creaste en el constructor. Ya está guardado en tu perfil.
           </div>
         )}
+
         {appliedMsg && (
-          <div className={`border text-sm rounded-xl px-3 py-2 ${
-            appliedMsg.tone === "emerald"
-              ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
-              : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
-          }`}>
+          <div
+            className={`border text-sm rounded-xl px-3 py-2 ${
+              appliedMsg.tone === "emerald"
+                ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200"
+                : "border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
+            }`}
+          >
             {appliedMsg.text}
           </div>
         )}
@@ -1116,24 +1682,43 @@ export default function ProfileSummaryClient({
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 space-y-6">
             <SectionPersonal user={user} onChange={setUser} />
-            <SectionExperience experiences={experiences} onChange={setExperiences} totalYears={totalYears} appCount={applications.length} />
+            <SectionExperience
+              experiences={experiences}
+              onChange={setExperiences}
+              totalYears={totalYears}
+              appCount={applications.length}
+            />
             <SectionEducation education={education} onChange={setEducation} />
 
             <section className={CARD} id="postulaciones">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Mis postulaciones</h2>
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                Mis postulaciones
+              </h2>
               {applications.length === 0 ? (
-                <div className="soft-panel p-4 flex items-center justify-between">
+                <div className="soft-panel p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <p className="text-sm text-muted">Aún no has postulado.</p>
-                  <Link href="/jobs" className="btn-ghost text-xs whitespace-nowrap shrink-0">Buscar vacantes</Link>
+                  <Link
+                    href="/jobs"
+                    className="btn-ghost text-xs whitespace-nowrap shrink-0"
+                  >
+                    Buscar vacantes
+                  </Link>
                 </div>
               ) : (
                 <ul className="space-y-2">
-                  {applications.map(a => (
+                  {applications.map((a) => (
                     <li key={a.id} className="soft-panel p-3">
-                      <p className="text-sm font-medium">{a.jobTitle} — {a.companyName}</p>
+                      <p className="text-sm font-medium break-words">
+                        {a.jobTitle} — {a.companyName}
+                      </p>
                       <p className="text-xs text-muted">{fromNowSimple(a.createdAt)}</p>
                       <div className="mt-2">
-                        <a href={`/jobs/${a.jobId}`} className="btn-ghost text-xs whitespace-nowrap">Ver vacante</a>
+                        <a
+                          href={`/jobs/${a.jobId}`}
+                          className="btn-ghost text-xs whitespace-nowrap"
+                        >
+                          Ver vacante
+                        </a>
                       </div>
                     </li>
                   ))}
@@ -1144,31 +1729,71 @@ export default function ProfileSummaryClient({
 
           <aside className="lg:col-span-4 space-y-6">
             <section className={CARD}>
-              <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">CV</h2>
+              <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                CV
+              </h2>
               {user.resumeUrl ? (
                 <div className="space-y-3">
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-800/40 dark:bg-emerald-950/20">
                     <div className="flex items-center gap-2">
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-600 text-white">
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        <svg
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                          />
                         </svg>
                       </div>
-                      <p className="text-xs font-medium text-emerald-900 dark:text-emerald-100 flex-1">CV disponible</p>
-                      <span className="inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">✓ Activo</span>
+                      <p className="flex-1 text-xs font-medium text-emerald-900 dark:text-emerald-100">
+                        CV disponible
+                      </p>
+                      <span className="inline-flex items-center rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        ✓ Activo
+                      </span>
                     </div>
                   </div>
-                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden dark:border-zinc-700 dark:bg-zinc-900">
-                    <iframe src={`${user.resumeUrl}#toolbar=0&navpanes=0&scrollbar=1`} className="w-full h-[400px]" title="Vista previa del CV" />
+
+                  <div className="hidden sm:block rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden dark:border-zinc-700 dark:bg-zinc-900">
+                    <iframe
+                      src={`${user.resumeUrl}#toolbar=0&navpanes=0&scrollbar=1`}
+                      className="h-[400px] w-full"
+                      title="Vista previa del CV"
+                    />
                   </div>
-                  <a href={user.resumeUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 transition-colors">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+
+                  <a
+                    href={user.resumeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 transition-colors"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                      />
                     </svg>
                     Abrir en nueva pestaña
                   </a>
-                  <Link href="/cv/builder" className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
+
+                  <Link
+                    href="/cv/builder"
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
+                  >
                     Editar en CV Builder
                   </Link>
                 </div>
@@ -1176,29 +1801,63 @@ export default function ProfileSummaryClient({
                 <div className="space-y-3">
                   <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
                     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
-                      <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      <svg
+                        className="h-5 w-5 text-zinc-400"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
                       </svg>
                     </div>
-                    <h3 className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Sin CV</h3>
-                    <p className="mt-1 text-xs text-zinc-500">Crea tu currículum profesional</p>
+                    <h3 className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Sin CV
+                    </h3>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Crea tu currículum profesional
+                    </p>
                   </div>
-                  <Link href="/cv/builder" className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
+
+                  <Link
+                    href="/cv/builder"
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
+                  >
                     Crear CV en CV Builder
                   </Link>
                 </div>
               )}
             </section>
 
-            <SectionSkills skills={skills} onChange={setSkills} skillTermOptions={skillTermOptions} />
-            <SectionLanguages languages={languages} onChange={setLanguages} languageOptions={languageOptions} />
-            <SectionCertifications certifications={user.certifications} certOptions={certOptions}
-              onChange={certs => setUser(u => ({ ...u, certifications: certs }))} />
+            <SectionSkills
+              skills={skills}
+              onChange={setSkills}
+              skillTermOptions={skillTermOptions}
+            />
+            <SectionLanguages
+              languages={languages}
+              onChange={setLanguages}
+              languageOptions={languageOptions}
+            />
+            <SectionCertifications
+              certifications={user.certifications}
+              certOptions={certOptions}
+              onChange={(certs) => setUser((u) => ({ ...u, certifications: certs }))}
+            />
           </aside>
         </div>
 
-        <div className="flex items-center gap-4 mt-6">
-          <a href="/jobs" className="text-sm text-blue-600 hover:underline dark:text-blue-400">← Buscar vacantes</a>
+        <div className="mt-6">
+          <Link
+            href="/jobs"
+            className="inline-flex items-center justify-center rounded-lg border border-zinc-300 px-4 py-2 text-sm text-blue-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-blue-400 dark:hover:bg-zinc-800/40"
+          >
+            ← Buscar vacantes
+          </Link>
         </div>
       </div>
     </main>
