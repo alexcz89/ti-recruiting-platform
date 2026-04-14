@@ -1,8 +1,8 @@
 // components/notifications/NotificationDropdown.tsx
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { X, CheckCheck, Settings, Bell } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { X, CheckCheck, Bell } from 'lucide-react';
 import { NotificationItem } from './NotificationItem';
 import type { Notification } from '@prisma/client';
 import Link from 'next/link';
@@ -21,30 +21,32 @@ export function NotificationDropdown({
   const [isMarkingAllRead, setIsMarkingAllRead] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Fetch notifications
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
       setIsLoading(true);
       const response = await fetch('/api/notifications?limit=10');
+
       if (response.ok) {
         const data = await response.json();
-        setNotifications(data.data.notifications);
-        onCountUpdate(data.data.unreadCount);
+        const nextNotifications = data.data.notifications as Notification[];
+        const unreadCount = data.data.unreadCount as number;
+
+        setNotifications(nextNotifications);
+        onCountUpdate(unreadCount);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [onCountUpdate]);
 
   useEffect(() => {
     fetchNotifications();
-  }, []);
+  }, [fetchNotifications]);
 
-  // Close on click outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: PointerEvent) => {
       if (
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
@@ -53,14 +55,14 @@ export function NotificationDropdown({
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, [onClose]);
 
-  // Mark all as read
   const handleMarkAllRead = async () => {
     try {
       setIsMarkingAllRead(true);
+
       const response = await fetch('/api/notifications/mark-all-read', {
         method: 'PATCH',
       });
@@ -75,15 +77,17 @@ export function NotificationDropdown({
     }
   };
 
-  // Compute action URL from notification type + metadata
   const getActionUrl = (notification: Notification): string => {
     const meta = notification.metadata as any;
+
     switch (notification.type) {
       case 'NEW_APPLICATION':
         if (meta?.jobId) return `/dashboard/jobs/${meta.jobId}/applications`;
         break;
+
       case 'APPLICATION_STATUS_CHANGE':
         return '/jobs?applied=1';
+
       case 'ASSESSMENT_INVITATION':
         if (meta?.templateId && meta?.attemptId) {
           return `/assessments/${meta.templateId}?attemptId=${meta.attemptId}${
@@ -92,6 +96,7 @@ export function NotificationDropdown({
         }
         console.error('ASSESSMENT_INVITATION sin metadata completa', notification);
         return '/dashboard';
+
       case 'ASSESSMENT_COMPLETED':
         if (meta?.attemptId) {
           return `/dashboard/assessments/attempts/${meta.attemptId}/results`;
@@ -99,38 +104,36 @@ export function NotificationDropdown({
         if (meta?.jobId) return `/dashboard/jobs/${meta.jobId}/applications`;
         break;
     }
+
     return '/dashboard';
   };
 
-  // Handle notification click
   const handleNotificationClick = async (notification: Notification) => {
-    // Mark as read if unread
     if (!notification.read) {
       try {
         await fetch(`/api/notifications/${notification.id}/read`, {
           method: 'PATCH',
         });
 
-        // Update local state
-        setNotifications((prev) =>
-          prev.map((n) =>
+        setNotifications((prev) => {
+          const updated = prev.map((n) =>
             n.id === notification.id ? { ...n, read: true } : n
-          )
-        );
+          );
 
-        // Update count
-        onCountUpdate(Math.max(0, notifications.filter((n) => !n.read).length - 1));
+          const unread = updated.filter((n) => !n.read).length;
+          onCountUpdate(unread);
+
+          return updated;
+        });
       } catch (error) {
         console.error('Error marking as read:', error);
       }
     }
 
-    // Navigate to action URL
     const url = getActionUrl(notification);
     window.location.href = url;
   };
 
-  // Handle delete
   const handleDelete = async (notificationId: string) => {
     try {
       const response = await fetch(`/api/notifications/${notificationId}`, {
@@ -138,12 +141,17 @@ export function NotificationDropdown({
       });
 
       if (response.ok) {
-        setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+        setNotifications((prev) => {
+          const deletedNotification = prev.find((n) => n.id === notificationId);
+          const updated = prev.filter((n) => n.id !== notificationId);
 
-        const deletedNotification = notifications.find((n) => n.id === notificationId);
-        if (deletedNotification && !deletedNotification.read) {
-          onCountUpdate(Math.max(0, notifications.filter((n) => !n.read).length - 1));
-        }
+          if (deletedNotification && !deletedNotification.read) {
+            const unread = updated.filter((n) => !n.read).length;
+            onCountUpdate(unread);
+          }
+
+          return updated;
+        });
       }
     } catch (error) {
       console.error('Error deleting notification:', error);
@@ -155,45 +163,46 @@ export function NotificationDropdown({
   return (
     <div
       ref={dropdownRef}
-      className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-lg border border-gray-200 z-50"
+      className="absolute right-0 mt-2 z-50 w-[calc(100vw-1rem)] max-w-96 rounded-lg border border-gray-200 bg-white shadow-lg sm:w-96"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
-        <div>
+      <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+        <div className="min-w-0">
           <h3 className="font-semibold text-gray-900">Notificaciones</h3>
           {unreadCount > 0 && (
             <p className="text-sm text-gray-500">{unreadCount} sin leer</p>
           )}
         </div>
+
         <div className="flex items-center gap-2">
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllRead}
               disabled={isMarkingAllRead}
-              className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+              className="rounded p-2 text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:opacity-50"
               title="Marcar todas como leídas"
             >
-              <CheckCheck className="w-4 h-4" />
+              <CheckCheck className="h-4 w-4" />
             </button>
           )}
+
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+            className="rounded p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            aria-label="Cerrar notificaciones"
           >
-            <X className="w-4 h-4" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-h-[500px] overflow-y-auto">
+      <div className="max-h-[70vh] overflow-y-auto sm:max-h-[500px]">
         {isLoading ? (
           <div className="px-4 py-8 text-center text-gray-500">
             Cargando...
           </div>
         ) : notifications.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+            <Bell className="mx-auto mb-2 h-12 w-12 text-gray-300" />
             <p className="text-gray-500">No tienes notificaciones</p>
           </div>
         ) : (
@@ -210,12 +219,11 @@ export function NotificationDropdown({
         )}
       </div>
 
-      {/* Footer */}
       {notifications.length > 0 && (
-        <div className="px-4 py-3 border-t border-gray-200">
+        <div className="border-t border-gray-200 px-4 py-3">
           <Link
             href="/dashboard/notifications"
-            className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+            className="inline-flex min-h-[44px] items-center text-sm font-medium text-blue-600 hover:text-blue-800"
             onClick={onClose}
           >
             Ver todas las notificaciones →

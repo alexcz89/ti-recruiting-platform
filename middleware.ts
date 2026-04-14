@@ -1,4 +1,3 @@
-// middleware.ts
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -33,11 +32,6 @@ export default withAuth(
     }
 
     // ===== /assessments =====
-    // FIX Bug #9:
-    // - Si no hay sesión, NO redirigimos manualmente aquí.
-    //   Dejamos que withAuth + pages.signIn resuelva a /signin
-    //   preservando callbackUrl automáticamente.
-    // - Si sí hay sesión pero es recruiter/admin, no debe entrar al flujo candidato.
     if (pathname.startsWith("/assessments")) {
       if (isRecruiterOrAdmin) {
         const url = req.nextUrl.clone();
@@ -69,6 +63,8 @@ export default withAuth(
     }
 
     // ===== /dashboard =====
+    // La autorización real se decide en callbacks.authorized.
+    // Aquí no forzamos lógica extra para evitar duplicar reglas.
     if (pathname.startsWith("/dashboard")) {
       return NextResponse.next();
     }
@@ -90,29 +86,31 @@ export default withAuth(
         const role = String((token as AuthToken | undefined)?.role ?? "").toUpperCase();
         const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
 
-        // /assessments requiere sesión.
-        // withAuth redirige a /signin?callbackUrl=... automáticamente.
         if (pathname.startsWith("/assessments")) {
           return !!token;
         }
 
-        // Todo dashboard requiere sesión recruiter/admin
+        // Importante:
+        // esta excepción debe ir antes del guard general de /dashboard,
+        // porque /dashboard/notifications también hace match con /dashboard.
+        // Cualquier usuario autenticado puede entrar a sus notificaciones.
+        if (pathname.startsWith("/dashboard/notifications")) {
+          return !!token;
+        }
+
+        // Dashboard general: solo recruiter/admin
         if (pathname.startsWith("/dashboard")) {
           return !!token && isRecruiterOrAdmin;
         }
 
-        // Profile requiere cualquier sesión
         if (pathname.startsWith("/profile")) {
           return !!token;
         }
 
-        // Jobs públicos
         if (pathname.startsWith("/jobs")) {
           return true;
         }
 
-        // Debug endpoints: mismos controles duros en middleware;
-        // aquí solo permitimos continuar para que el middleware los evalúe.
         if (pathname.startsWith("/api/debug-")) {
           return true;
         }

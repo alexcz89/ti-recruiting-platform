@@ -1,7 +1,7 @@
 // components/cv/CvBuilder.tsx
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import { useReactToPrint } from "react-to-print";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -496,14 +496,14 @@ export default function CvBuilder({
     [normalizedInitial]
   );
 
-  const applyProfileData = () => {
+  const applyProfileData = useCallback(() => {
     setIdentity(normalizedInitial.identity);
     setExperiences(normalizedInitial.experiences);
     setEducation(normalizedInitial.education);
     setSkills(normalizedInitial.skills);
     setLanguages(normalizedInitial.languages);
     setCertifications(normalizedInitial.certifications);
-  };
+  }, [normalizedInitial]);
 
   const handleSyncFromProfile = async (opts?: { silent?: boolean }) => {
     if (!profileHasMeaningfulData) {
@@ -663,14 +663,16 @@ export default function CvBuilder({
       }
     } catch {
       // ignore
-    } finally {
-      loadedDraftKeyRef.current = draftKey;
-      if (!importedMeaningfulDraft && profileHasMeaningfulData) {
-        applyProfileData();
-      }
-      setShowProfileSyncBanner(importedMeaningfulDraft && profileHasMeaningfulData);
     }
-  }, [draftKey, profileHasMeaningfulData, normalizedInitial]);
+
+    loadedDraftKeyRef.current = draftKey;
+
+    if (!importedMeaningfulDraft && profileHasMeaningfulData) {
+      applyProfileData();
+    }
+
+    setShowProfileSyncBanner(importedMeaningfulDraft && profileHasMeaningfulData);
+  }, [draftKey, profileHasMeaningfulData, applyProfileData]);
 
 
   useEffect(() => {
