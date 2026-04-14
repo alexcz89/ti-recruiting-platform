@@ -462,7 +462,7 @@ function SectionPersonal({
 
               {user.birthdate && (
                 <MetaRow icon={Cake}>
-                  {new Date(user.birthdate).toLocaleDateString("es-MX", {
+                  {new Date(`${user.birthdate}T12:00:00`).toLocaleDateString("es-MX", {
                     day: "2-digit",
                     month: "long",
                     year: "numeric",
@@ -1691,39 +1691,32 @@ export default function ProfileSummaryClient({
             <SectionEducation education={education} onChange={setEducation} />
 
             <section className={CARD} id="postulaciones">
-              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                Mis postulaciones
-              </h2>
-              {applications.length === 0 ? (
-                <div className="soft-panel p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <p className="text-sm text-muted">Aún no has postulado.</p>
-                  <Link
-                    href="/jobs"
-                    className="btn-ghost text-xs whitespace-nowrap shrink-0"
-                  >
-                    Buscar vacantes
-                  </Link>
+            <div className={SECTION_HEADER}>
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Mis postulaciones</h2>
+                {applications.length > 5 && (
+                <Link href="/profile/applications" className={BTN_EDIT}>
+                    Ver todas ({applications.length})
+                </Link>
+                )}
+            </div>
+            {applications.length === 0 ? (
+                <div className="soft-panel p-4 flex items-center justify-between">
+                <p className="text-sm text-muted">Aún no has postulado.</p>
+                <Link href="/jobs" className="btn-ghost text-xs whitespace-nowrap shrink-0">Buscar vacantes</Link>
                 </div>
-              ) : (
+            ) : (
                 <ul className="space-y-2">
-                  {applications.map((a) => (
-                    <li key={a.id} className="soft-panel p-3">
-                      <p className="text-sm font-medium break-words">
-                        {a.jobTitle} — {a.companyName}
-                      </p>
-                      <p className="text-xs text-muted">{fromNowSimple(a.createdAt)}</p>
-                      <div className="mt-2">
-                        <a
-                          href={`/jobs/${a.jobId}`}
-                          className="btn-ghost text-xs whitespace-nowrap"
-                        >
-                          Ver vacante
-                        </a>
-                      </div>
+                {applications.slice(0, 5).map(a => (
+                    <li key={a.id} className="soft-panel p-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-sm font-medium truncate">{a.jobTitle} — {a.companyName}</p>
+                        <p className="text-xs text-muted">{fromNowSimple(a.createdAt)}</p>
+                    </div>
+                    <a href={`/jobs/${a.jobId}`} className="btn-ghost text-xs whitespace-nowrap shrink-0">Ver</a>
                     </li>
-                  ))}
+                ))}
                 </ul>
-              )}
+            )}
             </section>
           </div>
 
