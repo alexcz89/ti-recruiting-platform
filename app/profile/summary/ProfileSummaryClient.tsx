@@ -105,11 +105,22 @@ const LANG_LEVELS = [
   { value: "CONVERSATIONAL", label: "Conversacional (B1–B2)" },
   { value: "BASIC", label: "Básico (A1–A2)" },
 ];
-const SENIORITY_OPTIONS = [
-  { value: "JUNIOR", label: "Junior", desc: "0–2 años" },
-  { value: "MID", label: "Mid", desc: "2–5 años" },
-  { value: "SENIOR", label: "Senior", desc: "5+ años" },
-];
+
+/* ─── Skill pill & bar colors (igual que profile/edit) ───── */
+const SKILL_PILL_ACTIVE: Record<number, string> = {
+  1: "bg-zinc-400 text-white shadow-sm",
+  2: "bg-blue-400 text-white shadow-sm",
+  3: "bg-yellow-400 text-white shadow-sm",
+  4: "bg-emerald-400 text-white shadow-sm",
+  5: "bg-emerald-600 text-white shadow-sm",
+};
+const SKILL_BAR_COLOR: Record<number, string> = {
+  1: "bg-zinc-300 dark:bg-zinc-600",
+  2: "bg-blue-400",
+  3: "bg-yellow-400",
+  4: "bg-emerald-400",
+  5: "bg-emerald-600",
+};
 
 /* ─── Shared UI classes ──────────────────────────────────── */
 const INPUT = "block w-full rounded-xl border border-zinc-300 bg-white/90 px-3 py-2 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-50 dark:placeholder:text-zinc-500";
@@ -217,13 +228,11 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
     }
   }
 
-  const topSkills = "";
   const displayName = [user.firstName, user.lastName1, user.lastName2].filter(Boolean).join(" ");
   const initials = [user.firstName[0], user.lastName1[0]].filter(Boolean).join("").toUpperCase();
 
   return (
     <section className={CARD} id="personal">
-      {/* Avatar + name row */}
       <div className="flex items-start gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 font-semibold text-lg dark:bg-emerald-900/40 dark:text-emerald-300">
           {initials || "?"}
@@ -236,12 +245,43 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
             )}
           </div>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">{user.location || "Sin ubicación"}</p>
-          {user.linkedin && (
-            <a href={user.linkedin.startsWith("http") ? user.linkedin : `https://${user.linkedin}`}
-              target="_blank" rel="noopener noreferrer"
-              className="text-xs text-emerald-600 hover:underline dark:text-emerald-400 mt-1 block truncate">
-              {user.linkedin}
-            </a>
+
+          {/* Info de lectura — solo visible cuando no está editando */}
+          {!editing && (
+            <div className="mt-2 space-y-1">
+              {user.phone && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                  <span>📞</span> {user.phone}
+                </p>
+              )}
+              {user.email && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                  <span>✉️</span> {user.email}
+                </p>
+              )}
+              {user.linkedin && (
+                <a href={user.linkedin.startsWith("http") ? user.linkedin : `https://${user.linkedin}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-emerald-600 hover:underline dark:text-emerald-400 flex items-center gap-1.5 truncate">
+                  <span>💼</span> {user.linkedin}
+                </a>
+              )}
+              {user.github && (
+                <a href={user.github.startsWith("http") ? user.github : `https://${user.github}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-zinc-500 hover:underline dark:text-zinc-400 flex items-center gap-1.5 truncate">
+                  <span>🐙</span> {user.github}
+                </a>
+              )}
+              {user.birthdate && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+                  <span>🎂</span>{" "}
+                  {new Date(user.birthdate).toLocaleDateString("es-MX", {
+                    day: "2-digit", month: "long", year: "numeric",
+                  })}
+                </p>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -334,7 +374,6 @@ function SectionExperience({
 
   return (
     <section className={CARD} id="experiencia">
-      {/* Stats row */}
       <div className="grid grid-cols-3 gap-3">
         {[
           { num: totalYears != null ? `${totalYears}` : "—", label: "Años exp." },
@@ -379,7 +418,6 @@ function SectionExperience({
         </div>
       ) : (
         <div className="space-y-4 border-t border-zinc-100 dark:border-zinc-800 pt-4">
-          {/* ⚠️ Multiple isCurrent warning */}
           {draft.filter(e => e.isCurrent).length > 1 && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/20 dark:text-amber-200">
               ⚠ Detectamos más de un trabajo actual. Verifica que sea correcto.
@@ -591,14 +629,6 @@ function SectionSkills({
     finally { setSaving(false); }
   }
 
-  const SKILL_PILL_ACTIVE: Record<number, string> = {
-    1: "bg-zinc-400 text-white",
-    2: "bg-blue-400 text-white",
-    3: "bg-yellow-400 text-white",
-    4: "bg-emerald-400 text-white",
-    5: "bg-emerald-600 text-white",
-  };
-
   return (
     <section className={CARD} id="skills">
       <div className={SECTION_HEADER}>
@@ -629,7 +659,7 @@ function SectionSkills({
         )
       ) : (
         <div className="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
-          {/* Search */}
+          {/* Buscador */}
           <div className="relative">
             <input
               className={INPUT}
@@ -651,7 +681,7 @@ function SectionSkills({
             )}
           </div>
 
-          {/* Skill list with level pills */}
+          {/* Lista de skills con pills de color + barra */}
           <div className="space-y-3">
             {draft.map(s => (
               <div key={s.termId} className="rounded-xl border border-zinc-200/70 dark:border-zinc-700/60 px-3 py-2.5 space-y-2">
@@ -659,14 +689,26 @@ function SectionSkills({
                   <span className="text-sm font-medium">{s.label}</span>
                   <button type="button" onClick={() => removeSkill(s.termId)} className="text-xs text-red-400 hover:text-red-600">✕</button>
                 </div>
+                {/* Pills de nivel con colores */}
                 <div className="flex gap-1 flex-wrap">
                   {SKILL_LEVELS.map(lv => (
                     <button key={lv.value} type="button"
                       onClick={() => setLevel(s.termId, lv.value as SkillLevel)}
-                      className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${s.level === lv.value ? SKILL_PILL_ACTIVE[lv.value] : "border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"}`}>
+                      className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
+                        s.level === lv.value
+                          ? SKILL_PILL_ACTIVE[lv.value]
+                          : "border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"
+                      }`}>
                       {lv.label}
                     </button>
                   ))}
+                </div>
+                {/* Barra de color según nivel */}
+                <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${SKILL_BAR_COLOR[s.level]}`}
+                    style={{ width: `${Math.round(s.level * 20)}%` }}
+                  />
                 </div>
               </div>
             ))}
@@ -908,8 +950,6 @@ export default function ProfileSummaryClient({
     } catch { return initialTotalYears; }
   }, [experiences, initialTotalYears]);
 
-  const topStack = skills.slice(0, 3).map(s => s.label);
-
   return (
     <main className="w-full pb-8">
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-4 space-y-3">
@@ -938,21 +978,15 @@ export default function ProfileSummaryClient({
         {/* ── Main grid ── */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-          {/* ── Left column (main) ── */}
+          {/* ── Left column ── */}
           <div className="lg:col-span-8 space-y-6">
-
-            {/* Hero / datos personales */}
             <SectionPersonal user={user} onChange={setUser} />
-
-            {/* Experiencia */}
             <SectionExperience
               experiences={experiences}
               onChange={setExperiences}
               totalYears={totalYears}
               appCount={applications.length}
             />
-
-            {/* Escolaridad */}
             <SectionEducation education={education} onChange={setEducation} />
 
             {/* Postulaciones (read-only) */}
@@ -1001,6 +1035,7 @@ export default function ProfileSummaryClient({
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 overflow-hidden dark:border-zinc-700 dark:bg-zinc-900">
                     <iframe src={`${user.resumeUrl}#toolbar=0&navpanes=0&scrollbar=1`} className="w-full h-[400px]" title="Vista previa del CV" />
                   </div>
+                  {/* Botones CV */}
                   <a href={user.resumeUrl} target="_blank" rel="noopener noreferrer"
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 transition-colors">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1008,27 +1043,32 @@ export default function ProfileSummaryClient({
                     </svg>
                     Abrir en nueva pestaña
                   </a>
+                  <Link href="/cv/builder"
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
+                    Editar en CV Builder
+                  </Link>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
-                  <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
-                    <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <svg className="h-5 w-5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <h3 className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Sin CV</h3>
+                    <p className="mt-1 text-xs text-zinc-500">Crea tu currículum profesional</p>
                   </div>
-                  <h3 className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Sin CV</h3>
-                  <p className="mt-1 text-xs text-zinc-500">Sube tu currículum en PDF</p>
+                  <Link href="/cv/builder"
+                    className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
+                    Crear CV en CV Builder
+                  </Link>
                 </div>
               )}
             </section>
 
-            {/* Skills */}
             <SectionSkills skills={skills} onChange={setSkills} skillTermOptions={skillTermOptions} />
-
-            {/* Idiomas */}
             <SectionLanguages languages={languages} onChange={setLanguages} languageOptions={languageOptions} />
-
-            {/* Certificaciones */}
             <SectionCertifications certifications={user.certifications} certOptions={certOptions}
               onChange={certs => setUser(u => ({ ...u, certifications: certs }))} />
 
