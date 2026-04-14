@@ -4,6 +4,8 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import PhoneInputField from "@/components/PhoneInputField";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 
 /* ─── Types ──────────────────────────────────────────────── */
 type SkillLevel = 1 | 2 | 3 | 4 | 5;
@@ -29,7 +31,10 @@ export type UserData = {
   certifications: string[];
   seniority: Seniority | null;
   yearsExperience: number | null;
-  desiredSalary: number | null; // ✅ MXN mensual bruto
+  desiredSalary: number | null;
+  seekingRemote: boolean;
+  seekingHybrid: boolean;
+  seekingOnsite: boolean;
 };
 
 export type Experience = {
@@ -105,6 +110,11 @@ const LANG_LEVELS = [
   { value: "PROFESSIONAL", label: "Profesional (C1–C2)" },
   { value: "CONVERSATIONAL", label: "Conversacional (B1–B2)" },
   { value: "BASIC", label: "Básico (A1–A2)" },
+];
+const WORK_MODES = [
+  { key: "seekingRemote" as const, label: "Remoto",     emoji: "🏠", color: "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-600/40 dark:bg-blue-950/30 dark:text-blue-300" },
+  { key: "seekingHybrid" as const, label: "Híbrido",    emoji: "🔀", color: "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-600/40 dark:bg-violet-950/30 dark:text-violet-300" },
+  { key: "seekingOnsite" as const, label: "Presencial", emoji: "🏢", color: "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-600/40 dark:bg-zinc-800 dark:text-zinc-300" },
 ];
 
 /* ─── Skill pill & bar colors ────────────────────────────── */
@@ -214,15 +224,18 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
     setSaving(true);
     try {
       await patchPersonal({
-        firstName:    draft.firstName,
-        lastName1:    draft.lastName1,
-        lastName2:    draft.lastName2,
-        phone:        draft.phone,
-        location:     draft.location,
-        birthdate:    draft.birthdate,
-        linkedin:     draft.linkedin,
-        github:       draft.github,
-        desiredSalary: draft.desiredSalary, // ✅
+        firstName:     draft.firstName,
+        lastName1:     draft.lastName1,
+        lastName2:     draft.lastName2,
+        phone:         draft.phone,
+        location:      draft.location,
+        birthdate:     draft.birthdate,
+        linkedin:      draft.linkedin,
+        github:        draft.github,
+        desiredSalary: draft.desiredSalary,
+        seekingRemote: draft.seekingRemote,
+        seekingHybrid: draft.seekingHybrid,
+        seekingOnsite: draft.seekingOnsite,
       });
       onChange({ ...user, ...draft });
       setEditing(false);
@@ -236,6 +249,7 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
 
   const displayName = [user.firstName, user.lastName1, user.lastName2].filter(Boolean).join(" ");
   const initials = [user.firstName[0], user.lastName1[0]].filter(Boolean).join("").toUpperCase();
+  const activeWorkModes = WORK_MODES.filter(m => user[m.key]);
 
   return (
     <section className={CARD} id="personal">
@@ -254,7 +268,7 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
 
           {/* Vista de lectura */}
           {!editing && (
-            <div className="mt-2 space-y-1">
+            <div className="mt-2 space-y-1.5">
               {user.phone && (
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
                   <span>📞</span> {user.phone}
@@ -287,19 +301,26 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
                   })}
                 </p>
               )}
-              {/* ✅ Salario deseado en vista lectura */}
               {user.desiredSalary ? (
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
                   <span>💰</span>
                   <span>
                     Salario deseado:{" "}
-                    <span className="font-medium text-zinc-700 dark:text-zinc-200">
-                      {fmtSalary(user.desiredSalary)}
-                    </span>
+                    <span className="font-medium text-zinc-700 dark:text-zinc-200">{fmtSalary(user.desiredSalary)}</span>
                     <span className="text-zinc-400"> / mes MXN</span>
                   </span>
                 </p>
               ) : null}
+              {/* Modalidad en lectura */}
+              {activeWorkModes.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                  {activeWorkModes.map(m => (
+                    <span key={m.key} className={`text-[10px] rounded-full border px-2 py-0.5 ${m.color}`}>
+                      {m.emoji} {m.label}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -307,51 +328,77 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
 
       {editing && (
         <div className="space-y-4 border-t border-zinc-100 dark:border-zinc-800 pt-4">
+
+          {/* Nombre */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className={LABEL}>Nombre(s) *</label>
-              <input className={INPUT} value={draft.firstName} onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))} />
+              <input className={INPUT} value={draft.firstName}
+                onChange={e => setDraft(d => ({ ...d, firstName: e.target.value }))} />
             </div>
             <div>
               <label className={LABEL}>Apellido paterno *</label>
-              <input className={INPUT} value={draft.lastName1} onChange={e => setDraft(d => ({ ...d, lastName1: e.target.value }))} />
+              <input className={INPUT} value={draft.lastName1}
+                onChange={e => setDraft(d => ({ ...d, lastName1: e.target.value }))} />
             </div>
             <div>
               <label className={LABEL}>Apellido materno</label>
-              <input className={INPUT} value={draft.lastName2} onChange={e => setDraft(d => ({ ...d, lastName2: e.target.value }))} />
+              <input className={INPUT} value={draft.lastName2}
+                onChange={e => setDraft(d => ({ ...d, lastName2: e.target.value }))} />
             </div>
           </div>
+
+          {/* Teléfono + Ubicación */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Teléfono</label>
-              <input className={INPUT} value={draft.phone} onChange={e => setDraft(d => ({ ...d, phone: e.target.value }))} placeholder="+52 818 000 0000" />
+              <PhoneInputField
+                value={draft.phone}
+                onChange={val => setDraft(d => ({ ...d, phone: val }))}
+              />
             </div>
             <div>
               <label className={LABEL}>Ubicación</label>
-              <input className={INPUT} value={draft.location} onChange={e => setDraft(d => ({ ...d, location: e.target.value }))} placeholder="Ciudad, Estado, País" />
+              <LocationAutocomplete
+                value={draft.location}
+                onChange={val => setDraft(d => ({ ...d, location: val }))}
+                onPlace={place => setDraft(d => ({ ...d, location: place.label }))}
+                className={INPUT}
+                placeholder="Ciudad, Estado, País"
+                countries={["mx", "us", "ca", "ar", "co", "es"]}
+              />
             </div>
+          </div>
+
+          {/* LinkedIn + GitHub */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>LinkedIn</label>
-              <input className={INPUT} value={draft.linkedin} onChange={e => setDraft(d => ({ ...d, linkedin: e.target.value }))} placeholder="linkedin.com/in/tu-usuario" />
+              <input className={INPUT} value={draft.linkedin}
+                onChange={e => setDraft(d => ({ ...d, linkedin: e.target.value }))}
+                placeholder="linkedin.com/in/tu-usuario" />
             </div>
             <div>
               <label className={LABEL}>GitHub</label>
-              <input className={INPUT} value={draft.github} onChange={e => setDraft(d => ({ ...d, github: e.target.value }))} placeholder="github.com/tu-usuario" />
+              <input className={INPUT} value={draft.github}
+                onChange={e => setDraft(d => ({ ...d, github: e.target.value }))}
+                placeholder="github.com/tu-usuario" />
             </div>
+          </div>
+
+          {/* Fecha de nacimiento + Salario */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Fecha de nacimiento</label>
-              <input type="date" className={INPUT} value={draft.birthdate} onChange={e => setDraft(d => ({ ...d, birthdate: e.target.value }))} />
+              <input type="date" className={INPUT} value={draft.birthdate}
+                onChange={e => setDraft(d => ({ ...d, birthdate: e.target.value }))} />
             </div>
-            {/* ✅ Salario deseado en edición */}
             <div>
               <label className={LABEL}>Salario deseado (MXN mensual bruto)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-400 pointer-events-none">$</span>
                 <input
-                  type="number"
-                  min={0}
-                  max={999999}
-                  step={500}
+                  type="number" min={0} max={999999} step={500}
                   className={INPUT + " pl-7"}
                   value={draft.desiredSalary ?? ""}
                   placeholder="Ej. 25000"
@@ -361,9 +408,41 @@ function SectionPersonal({ user, onChange }: { user: UserData; onChange: (u: Use
                   }))}
                 />
               </div>
-              <p className="mt-0.5 text-xs text-zinc-400">Solo visible para recruiters con tu aplicación activa</p>
             </div>
           </div>
+
+          {/* Modalidad de trabajo */}
+          <div>
+            <label className={LABEL}>Modalidad de trabajo preferida</label>
+            <div className="flex flex-wrap gap-4 mt-1">
+              {WORK_MODES.map(m => (
+                <label key={m.key} className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+                    checked={draft[m.key]}
+                    onChange={e => setDraft(d => ({ ...d, [m.key]: e.target.checked }))}
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-200">{m.emoji} {m.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Cambiar CV */}
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 px-4 py-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">Currículum (CV)</p>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {user.resumeUrl ? "CV subido activo" : "Sin CV subido"}
+              </p>
+            </div>
+            <a href="/profile/edit#cv"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 transition-colors whitespace-nowrap">
+              {user.resumeUrl ? "Cambiar CV" : "Subir CV"}
+            </a>
+          </div>
+
           <EditBar onCancel={close} onSave={save} saving={saving} />
         </div>
       )}
@@ -685,10 +764,18 @@ function SectionSkills({
                 <li key={s.termId} className="soft-panel px-3 py-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{s.label}</span>
-                    <span className="text-xs text-muted">{SKILL_LEVEL_LABEL[s.level] ?? `Nivel ${s.level}`}</span>
+                    <span className={`text-xs font-medium ${
+                      s.level === 5 ? "text-emerald-600 dark:text-emerald-400" :
+                      s.level === 4 ? "text-emerald-500 dark:text-emerald-400" :
+                      s.level === 3 ? "text-yellow-600 dark:text-yellow-400" :
+                      s.level === 2 ? "text-blue-500 dark:text-blue-400" :
+                      "text-zinc-400"
+                    }`}>
+                      {SKILL_LEVEL_LABEL[s.level] ?? `Nivel ${s.level}`}
+                    </span>
                   </div>
-                  <div className="mt-2 progress" role="progressbar" aria-valuemin={0} aria-valuemax={5} aria-valuenow={s.level}>
-                    <div className="progress-bar" style={{ width: `${pct}%` }} />
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${SKILL_BAR_COLOR[s.level]}`} style={{ width: `${pct}%` }} />
                   </div>
                 </li>
               );
@@ -700,12 +787,7 @@ function SectionSkills({
       ) : (
         <div className="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
           <div className="relative">
-            <input
-              className={INPUT}
-              placeholder="Ej. React, Node.js, AWS…"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
+            <input className={INPUT} placeholder="Ej. React, Node.js, AWS…" value={query} onChange={e => setQuery(e.target.value)} />
             {query && filtered.length > 0 && (
               <ul className="absolute z-20 mt-1 w-full rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900 max-h-48 overflow-y-auto">
                 {filtered.map(o => (
@@ -731,19 +813,14 @@ function SectionSkills({
                     <button key={lv.value} type="button"
                       onClick={() => setLevel(s.termId, lv.value as SkillLevel)}
                       className={`rounded-full px-2.5 py-0.5 text-xs transition-colors ${
-                        s.level === lv.value
-                          ? SKILL_PILL_ACTIVE[lv.value]
-                          : "border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"
+                        s.level === lv.value ? SKILL_PILL_ACTIVE[lv.value] : "border border-zinc-200 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400"
                       }`}>
                       {lv.label}
                     </button>
                   ))}
                 </div>
                 <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${SKILL_BAR_COLOR[s.level]}`}
-                    style={{ width: `${Math.round(s.level * 20)}%` }}
-                  />
+                  <div className={`h-full rounded-full transition-all duration-300 ${SKILL_BAR_COLOR[s.level]}`} style={{ width: `${Math.round(s.level * 20)}%` }} />
                 </div>
               </div>
             ))}
@@ -1010,15 +1087,9 @@ export default function ProfileSummaryClient({
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
           <div className="lg:col-span-8 space-y-6">
             <SectionPersonal user={user} onChange={setUser} />
-            <SectionExperience
-              experiences={experiences}
-              onChange={setExperiences}
-              totalYears={totalYears}
-              appCount={applications.length}
-            />
+            <SectionExperience experiences={experiences} onChange={setExperiences} totalYears={totalYears} appCount={applications.length} />
             <SectionEducation education={education} onChange={setEducation} />
 
             <section className={CARD} id="postulaciones">
@@ -1070,8 +1141,7 @@ export default function ProfileSummaryClient({
                     </svg>
                     Abrir en nueva pestaña
                   </a>
-                  <Link href="/cv/builder"
-                    className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
+                  <Link href="/cv/builder" className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
                     Editar en CV Builder
                   </Link>
                 </div>
@@ -1086,8 +1156,7 @@ export default function ProfileSummaryClient({
                     <h3 className="mt-2 text-sm font-medium text-zinc-900 dark:text-zinc-100">Sin CV</h3>
                     <p className="mt-1 text-xs text-zinc-500">Crea tu currículum profesional</p>
                   </div>
-                  <Link href="/cv/builder"
-                    className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
+                  <Link href="/cv/builder" className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors">
                     Crear CV en CV Builder
                   </Link>
                 </div>

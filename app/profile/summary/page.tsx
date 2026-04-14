@@ -40,6 +40,9 @@ export default async function ProfileSummaryPage({
       seniority: true,
       yearsExperience: true,
       desiredSalaryMin: true,
+      seekingRemote: true,
+      seekingHybrid: true,
+      seekingOnsite: true,
     },
   });
 
@@ -172,6 +175,9 @@ export default async function ProfileSummaryPage({
         seniority: (me.seniority as any) ?? null,
         yearsExperience: me.yearsExperience ?? null,
         desiredSalary: me.desiredSalaryMin ?? null,
+        seekingRemote: me.seekingRemote ?? false,
+        seekingHybrid: me.seekingHybrid ?? false,
+        seekingOnsite: me.seekingOnsite ?? false,
       }}
       experiences={experiences.map((e) => ({
         id: e.id,

@@ -17,6 +17,10 @@ const PersonalSchema = z.object({
   certifications: z.array(z.string()).optional(),
   // ✅ Salario deseado — MXN mensual bruto
   desiredSalary: z.coerce.number().int().min(0).max(999999).optional().nullable(),
+  // ✅ Modalidad de trabajo
+  seekingRemote: z.boolean().optional(),
+  seekingHybrid: z.boolean().optional(),
+  seekingOnsite: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request) {
@@ -65,6 +69,11 @@ export async function PATCH(req: Request) {
         ...(data.desiredSalary !== undefined
           ? { desiredSalaryMin: data.desiredSalary || null, desiredCurrency: "MXN" }
           : {}),
+        // ✅ Modalidad de trabajo
+        ...(data.seekingRemote !== undefined ? { seekingRemote: data.seekingRemote } : {}),
+        ...(data.seekingHybrid !== undefined ? { seekingHybrid: data.seekingHybrid } : {}),
+        ...(data.seekingOnsite !== undefined ? { seekingOnsite: data.seekingOnsite } : {}),
+        // ✅ Certificaciones
         ...(data.certifications !== undefined
           ? { certifications: data.certifications }
           : {}),
