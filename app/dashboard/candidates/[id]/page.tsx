@@ -22,8 +22,6 @@ import {
   Lock,
   CheckCircle2,
   XCircle,
-  Send,
-  MessageCircle,
   ExternalLink,
 } from "lucide-react";
 import CandidateSummaryCard from "@/components/dashboard/CandidateSummaryCard";
@@ -72,10 +70,21 @@ export default async function CandidateDetailPage({
 
   const me = await prisma.user.findUnique({
     where: { email: session.user?.email! },
-    select: { id: true, role: true, companyId: true, name: true },
+    select: {
+      id: true,
+      role: true,
+      name: true,
+      recruiterProfile: {
+        select: {
+          companyId: true,
+        },
+      },
+    },
   });
+
   if (!me || (me.role !== "RECRUITER" && me.role !== "ADMIN")) redirect("/");
-  const companyId = me.companyId ?? null;
+
+  const companyId = me.recruiterProfile?.companyId ?? null;
 
   const company = companyId
     ? await prisma.company.findUnique({
@@ -83,6 +92,7 @@ export default async function CandidateDetailPage({
         select: { billingPlan: true, name: true },
       })
     : null;
+
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
 
   const candidate = await prisma.user.findUnique({
@@ -102,7 +112,7 @@ export default async function CandidateDetailPage({
       seniority: true,
       yearsExperience: true,
       desiredSalaryMin: true,
-      desiredCurrency:  true,
+      desiredCurrency: true,
       candidateSkills: {
         select: {
           id: true,
@@ -119,6 +129,7 @@ export default async function CandidateDetailPage({
       },
     },
   });
+
   if (!candidate) notFound();
   if (candidate.role !== "CANDIDATE") redirect("/dashboard");
 
@@ -174,7 +185,6 @@ export default async function CandidateDetailPage({
     }
   }
 
-  // Fetch assessment state for the active application
   let assessmentState: {
     applicationId: string;
     templateId: string;
@@ -438,7 +448,6 @@ export default async function CandidateDetailPage({
     );
   };
 
-  // Button styles
   const btnBase = "inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium shadow-sm transition min-h-[40px]";
   const btnDefault = `${btnBase} border-zinc-300 bg-white text-zinc-700 hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800`;
   const btnGreen = `${btnBase} border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300`;
@@ -446,8 +455,6 @@ export default async function CandidateDetailPage({
 
   return (
     <main className="mx-auto max-w-[1200px] space-y-5 px-4 py-5 sm:px-6 sm:py-6 lg:space-y-8 lg:px-8 lg:py-8">
-
-      {/* ── Header ── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-600/90 text-sm font-semibold text-white shadow-sm">
@@ -484,7 +491,6 @@ export default async function CandidateDetailPage({
           </div>
         </div>
 
-        {/* Action buttons */}
         <div className="flex flex-wrap items-center gap-2">
           {fromJobId && (
             <>
@@ -519,7 +525,6 @@ export default async function CandidateDetailPage({
             </a>
           )}
 
-          {/* FIX Bug #3b: botón de enviar assessment si hay template + applicationId */}
           {assessmentState && activeAppId && (
             <SendAssessmentButton
               applicationId={activeAppId}
@@ -529,13 +534,8 @@ export default async function CandidateDetailPage({
         </div>
       </div>
 
-      {/* ── Main grid ── */}
       <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
-
-        {/* ── Left: main content ── */}
         <section className="space-y-5 lg:col-span-2">
-
-          {/* AI Match */}
           {jobForMatch && (
             <div className="glass-card rounded-2xl border p-4 md:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -619,7 +619,7 @@ export default async function CandidateDetailPage({
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                          ✅ Tiene ({matchedDetails.length})
+                          Tiene ({matchedDetails.length})
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
                           {matchedDetails.length === 0 ? (
@@ -641,7 +641,7 @@ export default async function CandidateDetailPage({
 
                       <div>
                         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                          ❌ Le falta ({missingRequired.length + missingNice.length})
+                          Le falta ({missingRequired.length + missingNice.length})
                         </h3>
                         <div className="flex flex-wrap gap-1.5">
                           {missingRequired.length === 0 && missingNice.length === 0 ? (
@@ -672,10 +672,8 @@ export default async function CandidateDetailPage({
             </div>
           )}
 
-          {/* AI Summary */}
           <CandidateSummaryCard candidateId={candidate.id} jobId={jobForMatch?.id ?? null} />
 
-          {/* Info */}
           <div className="glass-card rounded-2xl border p-4 md:p-6">
             <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Información</h2>
             <dl className="grid gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -715,7 +713,6 @@ export default async function CandidateDetailPage({
             </dl>
           </div>
 
-          {/* Skills + Certs */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="glass-card rounded-2xl border p-4 md:p-5">
               <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Skills</h2>
@@ -766,7 +763,6 @@ export default async function CandidateDetailPage({
             </div>
           </div>
 
-          {/* CV Preview */}
           {candidate.resumeUrl && (
             <div className="glass-card rounded-2xl border p-4 md:p-6">
               <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">CV</h2>
@@ -786,7 +782,6 @@ export default async function CandidateDetailPage({
           )}
         </section>
 
-        {/* ── Sidebar ── */}
         <aside className="space-y-4">
           <div className="glass-card rounded-2xl border p-4 md:p-5">
             <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -828,9 +823,7 @@ export default async function CandidateDetailPage({
                         </div>
                       )}
 
-                      {/* FIX Bug #5: botones con estilo correcto (sin Mensajes) */}
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {/* Ver vacante → lleva al pipeline */}
                         <Link
                           href={`/dashboard/jobs/${a.job?.id}/applications`}
                           className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:bg-zinc-800"

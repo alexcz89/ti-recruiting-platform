@@ -1,52 +1,97 @@
-// app/dashboard/profile/ProfileForm.tsx
 "use client";
 
 import { useTransition, useState, useEffect } from "react";
-import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
+import { toastSuccess, toastError } from "@/lib/ui/toast";
 import { saveRecruiterProfile } from "./actions";
 import PhoneInputField from "@/components/PhoneInputField";
-import { Check, X, ExternalLink, Globe } from "lucide-react";
+import {
+  Check,
+  X,
+  ExternalLink,
+  Globe,
+  Briefcase,
+  Linkedin,
+  PhoneCall,
+} from "lucide-react";
 
 type Props = {
-  initial: { phone: string; website: string };
+  initial: {
+    phone: string;
+    website: string;
+    jobTitle: string;
+    linkedinUrl: string;
+    directPhone: string;
+  };
 };
 
 export default function ProfileForm({ initial }: Props) {
   const [pending, startTransition] = useTransition();
-  const [phone, setPhone] = useState(initial.phone || "");
-  const [website, setWebsite] = useState(initial.website || "");
-  const [hasChanges, setHasChanges] = useState(false);
-  const [isValidUrl, setIsValidUrl] = useState(false);
 
-  // Detectar cambios
+  const [jobTitle, setJobTitle] = useState(initial.jobTitle || "");
+  const [phone, setPhone] = useState(initial.phone || "");
+  const [directPhone, setDirectPhone] = useState(initial.directPhone || "");
+  const [website, setWebsite] = useState(initial.website || "");
+  const [linkedinUrl, setLinkedinUrl] = useState(initial.linkedinUrl || "");
+
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isValidWebsite, setIsValidWebsite] = useState(false);
+  const [isValidLinkedin, setIsValidLinkedin] = useState(false);
+
   useEffect(() => {
     const changed =
-      phone !== (initial.phone || "") || website !== (initial.website || "");
-    setHasChanges(changed);
-  }, [phone, website, initial]);
+      jobTitle !== (initial.jobTitle || "") ||
+      phone !== (initial.phone || "") ||
+      directPhone !== (initial.directPhone || "") ||
+      website !== (initial.website || "") ||
+      linkedinUrl !== (initial.linkedinUrl || "");
 
-  // Validar URL
+    setHasChanges(changed);
+  }, [jobTitle, phone, directPhone, website, linkedinUrl, initial]);
+
   useEffect(() => {
     if (!website) {
-      setIsValidUrl(false);
+      setIsValidWebsite(false);
       return;
     }
 
     try {
-      // Agregar https:// si no tiene protocolo
       const urlToTest = website.startsWith("http")
         ? website
         : `https://${website}`;
       new URL(urlToTest);
-      setIsValidUrl(true);
+      setIsValidWebsite(true);
     } catch {
-      setIsValidUrl(false);
+      setIsValidWebsite(false);
     }
   }, [website]);
 
+  useEffect(() => {
+    if (!linkedinUrl) {
+      setIsValidLinkedin(false);
+      return;
+    }
+
+    try {
+      const urlToTest = linkedinUrl.startsWith("http")
+        ? linkedinUrl
+        : `https://${linkedinUrl}`;
+      const parsed = new URL(urlToTest);
+      const hostname = parsed.hostname.replace(/^www\./, "").toLowerCase();
+
+      setIsValidLinkedin(
+        hostname === "linkedin.com" || hostname.endsWith(".linkedin.com")
+      );
+    } catch {
+      setIsValidLinkedin(false);
+    }
+  }, [linkedinUrl]);
+
   const handleDiscard = () => {
+    setJobTitle(initial.jobTitle || "");
     setPhone(initial.phone || "");
+    setDirectPhone(initial.directPhone || "");
     setWebsite(initial.website || "");
+    setLinkedinUrl(initial.linkedinUrl || "");
   };
 
   const normalizeUrl = (url: string) => {
@@ -57,8 +102,11 @@ export default function ProfileForm({ initial }: Props) {
   return (
     <form
       action={(formData: FormData) => {
+        formData.set("jobTitle", jobTitle);
         formData.set("phone", phone);
+        formData.set("directPhone", directPhone);
         formData.set("website", normalizeUrl(website));
+        formData.set("linkedinUrl", normalizeUrl(linkedinUrl));
 
         startTransition(async () => {
           const res = await saveRecruiterProfile(null as any, formData);
@@ -73,7 +121,33 @@ export default function ProfileForm({ initial }: Props) {
       className="space-y-6"
       id="contact"
     >
-      {/* Phone Input */}
+      {/* Cargo */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-default">
+          Cargo
+          <span className="ml-1 text-xs text-muted font-normal">(opcional)</span>
+        </label>
+
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <Briefcase className="h-4 w-4 text-muted" />
+          </div>
+
+          <input
+            type="text"
+            value={jobTitle}
+            onChange={(e) => setJobTitle(e.target.value)}
+            placeholder="Senior Technical Recruiter"
+            className="w-full rounded-lg border glass-card p-3 pl-10 transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+          />
+        </div>
+
+        <p className="text-xs text-muted">
+          Ayuda a identificar tu rol dentro del proceso de reclutamiento.
+        </p>
+      </div>
+
+      {/* Teléfono principal */}
       <PhoneInputField
         value={phone}
         onChange={setPhone}
@@ -81,7 +155,33 @@ export default function ProfileForm({ initial }: Props) {
         helperText="Guardamos el número en formato internacional para que funcionen los botones de WhatsApp y llamadas."
       />
 
-      {/* Website Input with validation */}
+      {/* Teléfono directo */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-default">
+          Teléfono directo
+          <span className="ml-1 text-xs text-muted font-normal">(opcional)</span>
+        </label>
+
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <PhoneCall className="h-4 w-4 text-muted" />
+          </div>
+
+          <input
+            type="text"
+            value={directPhone}
+            onChange={(e) => setDirectPhone(e.target.value)}
+            placeholder="+52 81 1234 5678"
+            className="w-full rounded-lg border glass-card p-3 pl-10 transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+          />
+        </div>
+
+        <p className="text-xs text-muted">
+          Úsalo si quieres separar tu contacto principal del número directo.
+        </p>
+      </div>
+
+      {/* Sitio web */}
       <div className="space-y-2">
         <label className="block text-sm font-medium text-default">
           Sitio web
@@ -89,7 +189,7 @@ export default function ProfileForm({ initial }: Props) {
         </label>
 
         <div className="relative">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <Globe className="h-4 w-4 text-muted" />
           </div>
 
@@ -103,7 +203,7 @@ export default function ProfileForm({ initial }: Props) {
 
           {website && (
             <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-              {isValidUrl ? (
+              {isValidWebsite ? (
                 <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               ) : (
                 <X className="h-4 w-4 text-red-600 dark:text-red-400" />
@@ -112,12 +212,12 @@ export default function ProfileForm({ initial }: Props) {
           )}
         </div>
 
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <p className="text-xs text-muted">
             Puedes escribir &quot;miempresa.com&quot; o la URL completa.
           </p>
 
-          {website && isValidUrl && (
+          {website && isValidWebsite && (
             <a
               href={normalizeUrl(website)}
               target="_blank"
@@ -131,8 +231,58 @@ export default function ProfileForm({ initial }: Props) {
         </div>
       </div>
 
+      {/* LinkedIn */}
+      <div className="space-y-2">
+        <label className="block text-sm font-medium text-default">
+          LinkedIn
+          <span className="ml-1 text-xs text-muted font-normal">(opcional)</span>
+        </label>
+
+        <div className="relative">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+            <Linkedin className="h-4 w-4 text-muted" />
+          </div>
+
+          <input
+            type="text"
+            value={linkedinUrl}
+            onChange={(e) => setLinkedinUrl(e.target.value)}
+            placeholder="linkedin.com/in/tu-perfil"
+            className="w-full rounded-lg border glass-card p-3 pl-10 pr-10 transition-colors focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+          />
+
+          {linkedinUrl && (
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+              {isValidLinkedin ? (
+                <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+              ) : (
+                <X className="h-4 w-4 text-red-600 dark:text-red-400" />
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <p className="text-xs text-muted">
+            Agrega tu perfil profesional para generar más confianza al candidato.
+          </p>
+
+          {linkedinUrl && isValidLinkedin && (
+            <a
+              href={normalizeUrl(linkedinUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 hover:underline shrink-0"
+            >
+              Abrir perfil
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+        </div>
+      </div>
+
       {/* Action Buttons */}
-      <div className="flex items-center gap-3 pt-2">
+      <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center">
         <button
           type="submit"
           disabled={pending || !hasChanges}

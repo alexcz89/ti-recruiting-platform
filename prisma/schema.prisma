@@ -52,6 +52,13 @@ enum EmploymentType {
   INTERNSHIP
 }
 
+enum ApplicationInterest {
+  REVIEW
+  MAYBE
+  ACCEPTED
+  REJECTED
+}
+
 enum Seniority {
   JUNIOR
   MID
@@ -65,13 +72,6 @@ enum ApplicationStatus {
   INTERVIEW
   OFFER
   HIRED
-  REJECTED
-}
-
-enum ApplicationInterest {
-  REVIEW
-  MAYBE
-  ACCEPTED
   REJECTED
 }
 
@@ -175,6 +175,10 @@ enum RecruiterStatus {
 
 enum CreditLedgerKind {
   ASSESSMENT_INVITE
+  PURCHASE
+  REFUND
+  BONUS
+  ADJUSTMENT
 }
 
 enum NotificationType {
@@ -212,6 +216,27 @@ enum QuestionType {
   MULTIPLE_CHOICE
   OPEN_ENDED
   CODING
+}
+
+enum CompanySize {
+  ONE_TO_TEN
+  ELEVEN_TO_FIFTY
+  FIFTY_ONE_TO_TWO_HUNDRED
+  TWO_HUNDRED_ONE_TO_FIVE_HUNDRED
+  FIVE_HUNDRED_PLUS
+}
+
+enum AssessmentPlan {
+  BASIC
+  PRO
+  ENTERPRISE
+}
+
+enum AssessmentChargeStatus {
+  RESERVED
+  CHARGED
+  REFUNDED
+  CANCELLED
 }
 
 // =========================
@@ -255,30 +280,35 @@ model Invoice {
 }
 
 model Company {
-  id      String  @id @default(cuid())
-  name    String
-  domain  String? @unique
-  website String?
-  size    String?
-  logoUrl String?
-  logoKey String?
+  id        String      @id @default(cuid())
+  name      String
+  domain    String?     @unique
+  website   String?
+  size      CompanySize?
+  logoUrl   String?
+  logoKey   String?
+  bannerUrl String?
+  bannerKey String?
+
+  description String? @db.Text
+  industry    String?
 
   billingPlan BillingPlan @default(FREE)
 
-  // ✅ UBICACIÓN ESTRUCTURADA (mejorada)
+  // ✅ UBICACIÓN ESTRUCTURADA
   country     String?
   city        String?
+  state       String?
+  postalCode  String?
+  address     String?
   location    String? // "Monterrey, NL, México"
-  locationLat Float? // 25.6866
-  locationLng Float? // -100.3161
+  locationLat Float?  // 25.6866
+  locationLng Float?  // -100.3161
   placeId     String? // Google Places ID
-  state       String? // "Nuevo León"
-  postalCode  String? // "64000"
-  address     String? // Dirección completa
-  cityNorm    String? // "monterrey" (normalizado para búsquedas)
-  stateNorm   String? // "nuevo leon" (normalizado)
+  cityNorm    String? // "monterrey"
+  stateNorm   String? // "nuevo leon"
 
-  // Datos fiscales (México)
+  // ✅ DATOS FISCALES (México)
   taxLegalName     String?
   taxRfc           String? @db.VarChar(13)
   taxRegime        String? @db.VarChar(3)
@@ -289,34 +319,35 @@ model Company {
   cfdiUseDefault   String? @db.VarChar(5)
   taxDataCompleted Boolean @default(false)
 
-  users                   User[]
+  // ✅ RELACIONES
+  recruiters              RecruiterProfile[]
   jobs                    Job[]
-  templates               JobTemplate[]                  @relation("CompanyTemplates")
+  templates               JobTemplate[] @relation("CompanyTemplates")
   invoices                Invoice[]
   assessmentInviteCharges AssessmentInviteChargeLedger[]
+  customTemplates         AssessmentTemplate[]
+  subscription            Subscription?
 
-  // ✅ NUEVO: Sistema de créditos para evaluaciones
-  assessmentCredits         Decimal   @default(0) @db.Decimal(10, 2)
-  assessmentCreditsUsed     Decimal   @default(0) @db.Decimal(10, 2)
-  assessmentCreditsReserved Decimal   @default(0) @db.Decimal(10, 2)
+  // ✅ SISTEMA DE CRÉDITOS PARA EVALUACIONES
+  assessmentCredits         Int      @default(0)
+  assessmentCreditsUsed     Int      @default(0)
+  assessmentCreditsReserved Int      @default(0)
   lastCreditRefill          DateTime?
-  stripeCustomerId          String?   @unique
+  stripeCustomerId          String?  @unique
 
-  // Plan de evaluaciones
-  assessmentPlan                String? // "BASIC" | "PRO" | "ENTERPRISE"
-  assessmentPlanCreditsPerMonth Int                  @default(0)
+  // ✅ PLAN DE EVALUACIONES
+  assessmentPlan                AssessmentPlan?
+  assessmentPlanCreditsPerMonth Int       @default(0)
   assessmentPlanStartedAt       DateTime?
-  customTemplates               AssessmentTemplate[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  // ✅ ÍNDICES MEJORADOS
+  // ✅ ÍNDICES
   @@index([domain])
   @@index([cityNorm])
   @@index([country, city])
   @@index([billingPlan])
-  @@index([assessmentCredits])
 }
 
 model User {
@@ -338,9 +369,9 @@ model User {
   // CONTACTO
   phone            String?
   phoneVerified    DateTime?
-  phoneCountryCode String?   @default("+52")
+  phoneCountryCode String? @default("+52")
 
-  // UBICACIÓN (mantener estructura existente)
+  // UBICACIÓN
   location    String?
   locationLat Float?
   locationLng Float?
@@ -352,7 +383,7 @@ model User {
   placeId     String?
   placeSource String?
 
-  // PERFIL PROFESIONAL (mantener existente)
+  // PERFIL PROFESIONAL
   linkedin  String?
   github    String?
   resumeUrl String?
@@ -373,13 +404,13 @@ model User {
   signupUserAgent String?
 
   // ✅ NUEVO: PREFERENCIAS DE BÚSQUEDA LABORAL
-  seekingRemote    Boolean   @default(false)
-  seekingHybrid    Boolean   @default(false)
-  seekingOnsite    Boolean   @default(false)
+  seekingRemote    Boolean  @default(false)
+  seekingHybrid    Boolean  @default(false)
+  seekingOnsite    Boolean  @default(false)
   desiredSalaryMin Int?
   desiredSalaryMax Int?
-  desiredCurrency  String?   @default("MXN")
-  openToRelocate   Boolean   @default(false)
+  desiredCurrency  String?  @default("MXN")
+  openToRelocate   Boolean  @default(false)
   availableFrom    DateTime?
 
   // ✅ NUEVO: NOTIFICACIONES POR TIPO DE TRABAJO
@@ -392,15 +423,15 @@ model User {
   locale   String? @default("es-MX")
   theme    String? @default("light")
 
-  // SKILLS Y EDUCACIÓN (mantener existente)
+  // SKILLS Y EDUCACIÓN
   certifications        String[]       @default([])
   highestEducationLevel EducationLevel @default(NONE)
   seniority             Seniority?
   yearsExperience       Int?
 
   // ✅ NUEVO: TIMESTAMPS MEJORADOS
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @default(now()) @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @default(now()) @updatedAt
   lastLoginAt        DateTime?
   lastActivityAt     DateTime?
   profileLastUpdated DateTime?
@@ -414,20 +445,18 @@ model User {
 
   // RELACIONES
   applications              Application[]
-  jobs                      Job[]                    @relation("PostedJobs")
-  company                   Company?                 @relation(fields: [companyId], references: [id])
-  companyId                 String?
+  jobs                      Job[]              @relation("PostedJobs")
   candidateSkills           CandidateSkill[]
   candidateCredentials      CandidateCredential[]
   candidateLanguages        CandidateLanguage[]
   recruiterProfile          RecruiterProfile?
   experiences               WorkExperience[]
   education                 Education[]
-  createdTemplates          JobTemplate[]            @relation("UserCreatedTemplates")
+  createdTemplates          JobTemplate[]      @relation("UserCreatedTemplates")
   resumes                   Resume[]
   assessmentAttempts        AssessmentAttempt[]
-  assessmentInvitesReceived AssessmentInvite[]       @relation("AssessmentInviteCandidate")
-  assessmentInvitesSent     AssessmentInvite[]       @relation("AssessmentInviteInvitedBy")
+  assessmentInvitesReceived AssessmentInvite[] @relation("AssessmentInviteCandidate")
+  assessmentInvitesSent     AssessmentInvite[] @relation("AssessmentInviteInvitedBy")
   codeExecutions            CodeExecution[]
   notifications             Notification[]
   notificationPreferences   NotificationPreference[]
@@ -444,7 +473,6 @@ model User {
 
   @@index([email])
   @@index([role])
-  @@index([companyId])
   @@index([locationLat, locationLng])
   @@index([country])
   @@index([country, admin1])
@@ -678,21 +706,26 @@ model Plan {
 }
 
 model Subscription {
-  id        String @id @default(cuid())
-  accountId String
-  planId    String
-  plan      Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  id String @id @default(cuid())
+
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  planId String
+  plan   Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   status           SubscriptionStatus @default(ACTIVE)
   startedAt        DateTime           @default(now())
   currentPeriodEnd DateTime
   canceledAt       DateTime?
 
-  stripeCustomerId     String?
   stripeSubscriptionId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([status])
+  @@index([currentPeriodEnd])
 }
 
 model JobTemplate {
@@ -736,43 +769,60 @@ model RecruiterProfile {
   user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   status RecruiterStatus @default(PENDING)
 
-  // Campos existentes
-  company String
-  website String?
-  phone   String?
+  // Relación con empresa
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
 
-  // ✅ NUEVO: Información profesional
-  jobTitle       String? // "Senior Technical Recruiter"
-  department     String? // "Human Resources"
-  phoneExtension String?
+  // Relación con cargos de assessments
+  assessmentChargeEntries AssessmentInviteChargeLedger[]
+
+  // Contacto
+  phone          String?
   directPhone    String?
-  bio            String? @db.Text
+  phoneExtension String?
+  linkedinUrl    String?
 
-  // ✅ NUEVO: Metadata de actividad
-  activeJobsCount   Int  @default(0)
-  totalHires        Int  @default(0)
+  // Información profesional
+  jobTitle   String? // "Senior Technical Recruiter"
+  department String? // "Human Resources"
+  bio        String? @db.Text
+
+  // Permisos dentro de la empresa
+  canPostJobs            Boolean @default(true)
+  canInviteToAssessments Boolean @default(true)
+  canViewBilling         Boolean @default(false)
+  canManageTeam          Boolean @default(false)
+
+  // Control de consumo
+  monthlyAssessmentCreditLimit Int?
+  assessmentCreditsConsumed    Int       @default(0)
+  lastAssessmentInviteAt       DateTime?
+
+  // Metadata de actividad
+  activeJobsCount   Int @default(0)
+  totalHires        Int @default(0)
   avgTimeToHire     Int? // Días promedio
-  totalApplications Int  @default(0)
+  totalApplications Int @default(0)
 
-  // ✅ NUEVO: Preferencias
+  // Preferencias
   preferredLanguage String? @default("es")
   timezone          String? @default("America/Monterrey")
 
-  // ✅ NUEVO: Aprobación detallada
+  // Aprobación
   approvedAt     DateTime?
   approvedBy     String?
   rejectedAt     DateTime?
-  rejectedReason String?   @db.Text
+  rejectedReason String? @db.Text
 
-  // ✅ NUEVO: Especialización
-  specializations String[] @default([]) // ["tech", "sales", "marketing"]
-  industries      String[] @default([]) // ["software", "fintech", "ecommerce"]
+  // Especialización
+  specializations String[] @default([])
+  industries      String[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  // ✅ NUEVOS ÍNDICES
   @@index([userId])
+  @@index([companyId])
   @@index([status])
   @@index([activeJobsCount])
 }
@@ -1007,14 +1057,15 @@ model AssessmentInviteChargeLedger {
   companyId String
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  recruiterProfileId String?
+  recruiterProfile   RecruiterProfile? @relation(fields: [recruiterProfileId], references: [id], onDelete: SetNull)
+
   kind  CreditLedgerKind @default(ASSESSMENT_INVITE)
   cycle Int
 
-  // ✅ CAMBIAR: amount ahora es Decimal
   amount Decimal @db.Decimal(10, 2)
 
-  // ✅ NUEVO: Tracking detallado de estados
-  status String @default("RESERVED") // RESERVED | CHARGED | REFUNDED | CANCELLED
+  status AssessmentChargeStatus @default(RESERVED)
 
   reservedAmount Decimal? @db.Decimal(10, 2)
   chargedAmount  Decimal? @db.Decimal(10, 2)
@@ -1023,15 +1074,14 @@ model AssessmentInviteChargeLedger {
   // Metadata
   assessmentType AssessmentType?
   difficulty     AssessmentDifficulty?
-
-  meta Json?
+  meta           Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  // ✅ NUEVO: Índices para queries eficientes
   @@unique([inviteId, kind, cycle, status])
   @@index([companyId, status])
+  @@index([recruiterProfileId])
   @@index([status, createdAt])
   @@index([cycle])
   @@index([inviteId])

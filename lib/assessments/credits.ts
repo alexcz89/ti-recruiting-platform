@@ -223,7 +223,7 @@ export async function refundReservedCredits(
         where: { id: ledger.companyId },
         data: {
           assessmentCreditsReserved: {
-            decrement: ledger.reservedAmount,
+            decrement: ledger.reservedAmount?.toNumber() ?? 0,
           },
         },
       }),

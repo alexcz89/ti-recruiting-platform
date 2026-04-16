@@ -1,6 +1,6 @@
 // lib/company.ts
-import { prisma } from '@/lib/server/prisma';
-import type { Company } from "@prisma/client";
+import { prisma } from "@/lib/server/prisma";
+import type { Company, CompanySize } from "@prisma/client";
 
 /**
  * Dominios "genéricos" que NO deberían crear una Company
@@ -50,7 +50,7 @@ export function extractDomainFromEmail(
  * Normaliza dominio: quita esquema/subdominios y pasa a minúsculas.
  *   "https://jobs.kfc.com/path" -> "kfc.com"
  *   "jobs.kfc.com"              -> "kfc.com"
- *   "task.com.mx"               -> "task.com.mx"  ✅ (no "com.mx")
+ *   "task.com.mx"               -> "task.com.mx"
  */
 export function normalizeDomain(
   domain: string | null | undefined
@@ -58,25 +58,17 @@ export function normalizeDomain(
   if (!domain) return null;
   let d = String(domain).trim().toLowerCase();
 
-  // Quitar esquema y path
   d = d.replace(/^https?:\/\//, "").split("/")[0];
-  // Quitar puerto si lo hay
   d = d.split(":")[0];
 
   const parts = d.split(".").filter(Boolean);
   if (parts.length <= 2) return d || null;
 
-  // Verificar si los últimos 2 segmentos forman un TLD compuesto (ej: com.mx)
   const lastTwo = parts.slice(-2).join(".");
   if (COMPOUND_TLDS.has(lastTwo)) {
-    // TLD compuesto: tomar los últimos 3 segmentos como dominio base
-    // "task.com.mx" → ["task", "com", "mx"] → "task.com.mx"
-    // "jobs.task.com.mx" → ["jobs", "task", "com", "mx"] → "task.com.mx"
     return parts.slice(-3).join(".");
   }
 
-  // TLD simple: tomar los últimos 2 segmentos
-  // "jobs.kfc.com" → "kfc.com"
   return parts.slice(-2).join(".");
 }
 
@@ -92,15 +84,38 @@ export function isGenericDomain(domain: string | null | undefined): boolean {
 
 /**
  * Convierte un dominio en un nombre razonable:
- *   "kfc.com"       -> "Kfc"
- *   "bbva.mx"       -> "Bbva"
- *   "task.com.mx"   -> "Task"  ✅
+ *   "kfc.com"     -> "Kfc"
+ *   "bbva.mx"     -> "Bbva"
+ *   "task.com.mx" -> "Task"
  */
 export function domainToDisplayName(domain: string): string {
   const d = normalizeDomain(domain) || domain;
-  // Tomar el primer segmento (antes del primer punto)
   const firstPart = d.split(".")[0] || d;
   return firstPart.charAt(0).toUpperCase() + firstPart.slice(1);
+}
+
+function normalizeCompanySize(size?: string | null): CompanySize | undefined {
+  if (!size) return undefined;
+
+  const map: Record<string, CompanySize> = {
+    ONE_TO_TEN: "ONE_TO_TEN",
+    ELEVEN_TO_FIFTY: "ELEVEN_TO_FIFTY",
+    FIFTY_ONE_TO_TWO_HUNDRED: "FIFTY_ONE_TO_TWO_HUNDRED",
+    TWO_HUNDRED_ONE_TO_FIVE_HUNDRED: "TWO_HUNDRED_ONE_TO_FIVE_HUNDRED",
+    FIVE_HUNDRED_PLUS: "FIVE_HUNDRED_PLUS",
+
+    "1-10": "ONE_TO_TEN",
+    "11-50": "ELEVEN_TO_FIFTY",
+    "51-200": "FIFTY_ONE_TO_TWO_HUNDRED",
+    "201-500": "TWO_HUNDRED_ONE_TO_FIVE_HUNDRED",
+    "500+": "FIVE_HUNDRED_PLUS",
+
+    // legacy
+    "201-1000": "TWO_HUNDRED_ONE_TO_FIVE_HUNDRED",
+    "1000+": "FIVE_HUNDRED_PLUS",
+  };
+
+  return map[size] ?? undefined;
 }
 
 /**
@@ -126,19 +141,21 @@ export async function getOrCreateCompanyFromEmail(opts: {
     (opts.suggestedName && opts.suggestedName.trim()) ||
     domainToDisplayName(domain);
 
+  const normalizedSize = normalizeCompanySize(opts.size);
+
   const company = await prisma.company.upsert({
     where: { domain },
     update: {
       country: opts.country ?? undefined,
       city: opts.city ?? undefined,
-      size: opts.size ?? undefined,
+      size: normalizedSize ?? undefined,
     },
     create: {
       name,
       domain,
       country: opts.country ?? null,
       city: opts.city ?? null,
-      size: opts.size ?? null,
+      size: normalizedSize ?? null,
     },
   });
 
@@ -147,7 +164,7 @@ export async function getOrCreateCompanyFromEmail(opts: {
 
 /**
  * Helper pensado para reclutadores:
- * - Siempre espera un correo corporativo (ya filtramos Gmail/etc. antes).
+ * - Siempre espera un correo corporativo.
  * - Llama a getOrCreateCompanyFromEmail y lanza error si no puede.
  */
 export async function ensureCompanyForRecruiter(opts: {
@@ -177,7 +194,7 @@ export async function ensureCompanyForRecruiter(opts: {
 /**
  * Helper de más alto nivel:
  * - Obtiene/crea Company desde el email
- * - Liga el user.companyId si aplica
+ * - Liga el recruiterProfile.companyId si aplica
  */
 export async function ensureUserCompanyByEmail(opts: {
   userId: string;
@@ -197,10 +214,16 @@ export async function ensureUserCompanyByEmail(opts: {
 
   if (!company) return null;
 
-  await prisma.user.update({
-    where: { id: opts.userId },
-    data: {
+  await prisma.recruiterProfile.upsert({
+    where: { userId: opts.userId },
+    update: {
       companyId: company.id,
+    },
+    create: {
+      userId: opts.userId,
+      companyId: company.id,
+      phone: null,
+      status: "PENDING",
     },
   });
 

@@ -1,33 +1,38 @@
 // app/dashboard/company/actions.ts
 "use server";
 
-import { prisma } from '@/lib/server/prisma';
-import { getSessionCompanyId } from '@/lib/server/session';
+import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyId } from "@/lib/server/session";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { CompanySize } from "@prisma/client";
 
 /** ✅ Guardar nombre/tamaño con toasts (sin redirect) */
-export async function saveCompanyBasic(input: { name: string; size?: string | null }) {
+export async function saveCompanyBasic(input: {
+  name: string;
+  size?: string | null;
+}) {
   try {
     const companyId = await getSessionCompanyId().catch(() => null);
     if (!companyId) return { ok: false, message: "Sin empresa asociada" };
 
-    const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
     const Schema = z.object({
       name: z.string().trim().min(2, "Nombre requerido").max(120),
-      size: z
-        .enum(SIZES)
-        .optional()
-        .nullable()
-        .transform((v) => (v ?? undefined)),
+      size: z.nativeEnum(CompanySize).nullable().optional(),
     });
 
-    const data = Schema.parse(input);
+    const data = Schema.parse({
+      name: input.name,
+      size: input.size ?? null,
+    });
 
     await prisma.company.update({
       where: { id: companyId },
-      data: { name: data.name, size: data.size ?? null },
+      data: {
+        name: data.name,
+        size: data.size ?? null,
+      },
     });
 
     revalidatePath("/dashboard/overview");
@@ -35,7 +40,8 @@ export async function saveCompanyBasic(input: { name: string; size?: string | nu
 
     return { ok: true, message: "Datos de empresa guardados" };
   } catch (err: any) {
-    const msg = err?.message || err?.errors?.[0]?.message || "Error al guardar";
+    const msg =
+      err?.message || err?.errors?.[0]?.message || "Error al guardar";
     return { ok: false, message: msg };
   }
 }
@@ -45,30 +51,26 @@ export async function saveCompanySize(formData: FormData) {
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) redirect("/dashboard/overview");
 
-  const SIZES = ["1-10", "11-50", "51-200", "201-1000", "1000+"] as const;
-  const Schema = z
-    .object({
-      size: z
-        .enum(SIZES, {
-          errorMap: () => ({ message: "Selecciona un tamaño válido" }),
-        })
-        .optional()
-        .transform((v) => (v ? v : undefined)),
-    })
-    .strict();
+  const Schema = z.object({
+    size: z.nativeEnum(CompanySize).optional().nullable(),
+  });
 
   const parsed = Schema.safeParse({
     size: formData.get("size")?.toString(),
   });
+
   if (!parsed.success) redirect("/dashboard/company?saved=0");
 
   await prisma.company.update({
     where: { id: companyId },
-    data: { size: parsed.data.size ?? null },
+    data: {
+      size: parsed.data.size ?? null,
+    },
   });
 
   revalidatePath("/dashboard/overview");
   revalidatePath("/dashboard/company");
+
   redirect("/dashboard/company?saved=1");
 }
 
@@ -102,10 +104,11 @@ export async function setCompanyLogo(url: string | null) {
 
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard/overview");
+
   return { ok: true };
 }
 
-/** ✅ Alias para compatibilidad con componentes existentes */
+/** ✅ Alias */
 export async function updateCompanyLogo(input: { logoUrl: string }) {
   return setCompanyLogo(input.logoUrl ?? null);
 }
@@ -122,10 +125,14 @@ export async function removeCompanyLogo() {
 
   revalidatePath("/dashboard/profile");
   revalidatePath("/dashboard/overview");
+
   return { ok: true };
 }
 
-/** 🔥 Nuevo: Alias oficial para eliminar el warning */
-export async function saveCompany(input: { name: string; size?: string | null }) {
+/** 🔥 Alias principal */
+export async function saveCompany(input: {
+  name: string;
+  size?: string | null;
+}) {
   return saveCompanyBasic(input);
 }

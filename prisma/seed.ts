@@ -59,6 +59,7 @@ async function seedTaxonomy(kind: TaxonomyKind, labels: readonly string[]) {
     select: { id: true, label: true },
     orderBy: { label: "asc" },
   });
+
   return final;
 }
 
@@ -75,25 +76,35 @@ async function seedCertifications() {
 }
 
 async function seedDemoData() {
-  let company = await prisma.company.findFirst({ where: { name: "Task Consultores" } });
+  let company = await prisma.company.findFirst({
+    where: { name: "Task Consultores" },
+  });
+
   if (!company) {
     company = await prisma.company.create({
-      data: { name: "Task Consultores", country: "MX", city: "Monterrey", domain: "task.com.mx" },
+      data: {
+        name: "Task Consultores",
+        country: "MX",
+        city: "Monterrey",
+        domain: "task.com.mx",
+        website: "task.com.mx",
+      },
     });
   }
 
-  let recruiter = await prisma.user.findUnique({ where: { email: "alejandro@task.com.mx" } });
+  let recruiter = await prisma.user.findUnique({
+    where: { email: "alejandro@task.com.mx" },
+  });
+
   if (!recruiter) {
     recruiter = await prisma.user.create({
       data: {
         email: "alejandro@task.com.mx",
         name: "Alejandro Cerda",
         role: Role.RECRUITER,
-        companyId: company.id,
         recruiterProfile: {
           create: {
-            company: company.name,
-            website: "https://task.com.mx",
+            company: { connect: { id: company.id } },
             phone: "+52 81 8162 2482",
             status: RecruiterStatus.APPROVED,
           },
@@ -102,7 +113,10 @@ async function seedDemoData() {
     });
   }
 
-  let candidate = await prisma.user.findUnique({ where: { email: "carolina@example.com" } });
+  let candidate = await prisma.user.findUnique({
+    where: { email: "carolina@example.com" },
+  });
+
   if (!candidate) {
     candidate = await prisma.user.create({
       data: {
@@ -122,6 +136,7 @@ async function seedDemoData() {
   let job = await prisma.job.findFirst({
     where: { title: "Frontend Developer", companyId: company.id },
   });
+
   if (!job) {
     job = await prisma.job.create({
       data: {
@@ -140,8 +155,14 @@ async function seedDemoData() {
   }
 
   const existingApp = await prisma.application.findUnique({
-    where: { candidateId_jobId: { candidateId: candidate.id, jobId: job.id } },
+    where: {
+      candidateId_jobId: {
+        candidateId: candidate.id,
+        jobId: job.id,
+      },
+    },
   });
+
   if (!existingApp) {
     await prisma.application.create({
       data: {
@@ -156,7 +177,6 @@ async function seedDemoData() {
 }
 
 async function main() {
-  // 1) Catálogos
   const [langs, skills, certs] = await Promise.all([
     seedLanguages(),
     seedSkills(),
@@ -167,17 +187,16 @@ async function main() {
   console.log(`✅ Skills en DB: ${skills.length}`);
   console.log(`✅ Certificaciones en DB: ${certs.length}`);
 
-  // 2) Demo data
   await seedDemoData();
-  console.log("✅ Seed completado: catálogos (LANGUAGE/SKILL/CERTIFICATION) y demo listos.");
+  console.log(
+    "✅ Seed completado: catálogos (LANGUAGE/SKILL/CERTIFICATION) y demo listos."
+  );
 
-  // 3) Assessment templates (JS, SQL, Lógica, TypeScript/React)
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("📋 ASSESSMENT TEMPLATES");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   await seedAssessmentTemplates();
 
-  // 4) Data Analyst (Python + SAS)
   console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("📊 DATA ANALYST TEMPLATE");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");

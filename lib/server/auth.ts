@@ -61,9 +61,13 @@ export const authOptions: AuthOptions = {
             email: true,
             name: true,
             role: true,
-            companyId: true,
             passwordHash: true,
             emailVerified: true,
+            recruiterProfile: {
+              select: {
+                companyId: true,
+              },
+            },
           },
         });
 
@@ -81,7 +85,8 @@ export const authOptions: AuthOptions = {
           throw new Error("EMAIL_NOT_VERIFIED:" + email);
         }
 
-        let companyId = dbUser.companyId ?? null;
+        let companyId = dbUser.recruiterProfile?.companyId ?? null;
+
         if (intendedRole === "RECRUITER" && !companyId) {
           const company = await ensureUserCompanyByEmail({
             userId: dbUser.id,
@@ -122,8 +127,12 @@ export const authOptions: AuthOptions = {
                 email: true,
                 name: true,
                 role: true,
-                companyId: true,
                 emailVerified: true,
+                recruiterProfile: {
+                  select: {
+                    companyId: true,
+                  },
+                },
               },
             },
           },
@@ -140,7 +149,8 @@ export const authOptions: AuthOptions = {
 
         const user = record.user;
 
-        let companyId = user.companyId ?? null;
+        let companyId = user.recruiterProfile?.companyId ?? null;
+
         if (user.role === "RECRUITER" && !companyId) {
           const company = await ensureUserCompanyByEmail({
             userId: user.id,
@@ -210,8 +220,6 @@ export const authOptions: AuthOptions = {
         (token as any).role = authUser.role;
         (token as any).companyId = authUser.companyId ?? null;
         (token as any).rememberMe = Boolean(authUser.rememberMe);
-
-        // Guardamos una referencia informativa; no tocamos exp manualmente.
         (token as any).sessionMode = authUser.rememberMe ? "extended" : "default";
       }
 
@@ -225,21 +233,27 @@ export const authOptions: AuthOptions = {
       }
 
       const email = token.email as string | undefined;
+
       if (email) {
         const dbUser = await prisma.user.findUnique({
           where: { email },
           select: {
             id: true,
             role: true,
-            companyId: true,
             emailVerified: true,
+            recruiterProfile: {
+              select: {
+                companyId: true,
+              },
+            },
           },
         });
 
         if (dbUser) {
           (token as any).id = dbUser.id;
           (token as any).role = dbUser.role;
-          (token as any).companyId = dbUser.companyId ?? null;
+          (token as any).companyId =
+            dbUser.recruiterProfile?.companyId ?? null;
           (token as any).emailVerified = dbUser.emailVerified ?? null;
         }
       }
@@ -251,7 +265,8 @@ export const authOptions: AuthOptions = {
       (session.user as any).id = (token as any).id ?? null;
       (session.user as any).role = (token as any).role ?? "CANDIDATE";
       (session.user as any).companyId = (token as any).companyId ?? null;
-      (session.user as any).emailVerified = (token as any).emailVerified ?? null;
+      (session.user as any).emailVerified =
+        (token as any).emailVerified ?? null;
       (session as any).rememberMe = Boolean((token as any).rememberMe);
       (session as any).sessionMode = (token as any).sessionMode ?? "default";
       return session;
