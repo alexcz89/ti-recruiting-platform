@@ -61,7 +61,11 @@ function normalizeLinkedinUrl(input?: string | null): string | undefined {
     const url = new URL(normalized);
     const hostname = url.hostname.replace(/^www\./i, "").toLowerCase();
 
-    if (hostname !== "linkedin.com" && hostname !== "mx.linkedin.com" && !hostname.endsWith(".linkedin.com")) {
+    if (
+      hostname !== "linkedin.com" &&
+      hostname !== "mx.linkedin.com" &&
+      !hostname.endsWith(".linkedin.com")
+    ) {
       return undefined;
     }
 
@@ -139,6 +143,8 @@ export async function saveRecruiterProfile(
     });
 
     revalidatePath("/dashboard/profile");
+    revalidatePath("/dashboard/overview");
+    revalidatePath("/dashboard/company");
 
     return {
       ok: true,
