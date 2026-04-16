@@ -48,64 +48,139 @@ export const authOptions: AuthOptions = {
         rememberMe: { label: "Remember Me", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        try {
+          console.log("[AUTH] authorize start", {
+            hasEmail: Boolean(credentials?.email),
+            hasPassword: Boolean(credentials?.password),
+            role: credentials?.role ?? null,
+            rememberMe: credentials?.rememberMe ?? null,
+          });
 
-        const email = credentials.email.toLowerCase().trim();
-        const intendedRole: Role =
-          credentials.role === "RECRUITER" ? "RECRUITER" : "CANDIDATE";
+          if (!credentials?.email || !credentials?.password) {
+            console.log("[AUTH] missing credentials");
+            return null;
+          }
 
-        const dbUser = await prisma.user.findUnique({
-          where: { email },
-          select: {
-            id: true,
-            email: true,
-            name: true,
-            role: true,
-            passwordHash: true,
-            emailVerified: true,
-            recruiterProfile: {
-              select: {
-                companyId: true,
+          const email = credentials.email.toLowerCase().trim();
+          const intendedRole: Role =
+            credentials.role === "RECRUITER" ? "RECRUITER" : "CANDIDATE";
+
+          console.log("[AUTH] normalized input", {
+            email,
+            intendedRole,
+            passwordLength: credentials.password.length,
+          });
+
+          const dbUser = await prisma.user.findUnique({
+            where: { email },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              role: true,
+              passwordHash: true,
+              emailVerified: true,
+              recruiterProfile: {
+                select: {
+                  companyId: true,
+                },
               },
             },
-          },
-        });
-
-        if (!dbUser || !dbUser.passwordHash) return null;
-
-        const isValidPassword = await bcrypt.compare(
-          credentials.password,
-          dbUser.passwordHash
-        );
-        if (!isValidPassword) return null;
-
-        if (dbUser.role !== intendedRole) return null;
-
-        if (!dbUser.emailVerified) {
-          throw new Error("EMAIL_NOT_VERIFIED:" + email);
-        }
-
-        let companyId = dbUser.recruiterProfile?.companyId ?? null;
-
-        if (intendedRole === "RECRUITER" && !companyId) {
-          const company = await ensureUserCompanyByEmail({
-            userId: dbUser.id,
-            email,
-            suggestedName: null,
-            country: null,
-            city: null,
           });
-          companyId = company?.id ?? null;
-        }
 
-        return {
-          id: dbUser.id,
-          name: dbUser.name ?? email.split("@")[0],
-          email: dbUser.email,
-          role: dbUser.role,
-          companyId,
-          rememberMe: credentials.rememberMe === "true",
-        } as AuthUser;
+          console.log("[AUTH] dbUser found", {
+            exists: Boolean(dbUser),
+            id: dbUser?.id ?? null,
+            email: dbUser?.email ?? null,
+            role: dbUser?.role ?? null,
+            hasPasswordHash: Boolean(dbUser?.passwordHash),
+            emailVerified: dbUser?.emailVerified ?? null,
+            recruiterCompanyId: dbUser?.recruiterProfile?.companyId ?? null,
+          });
+
+          if (!dbUser || !dbUser.passwordHash) {
+            console.log("[AUTH] user not found or without passwordHash");
+            return null;
+          }
+
+          const isValidPassword = await bcrypt.compare(
+            credentials.password,
+            dbUser.passwordHash
+          );
+
+          console.log("[AUTH] password result", {
+            email,
+            isValidPassword,
+          });
+
+          if (!isValidPassword) {
+            console.log("[AUTH] password check failed");
+            return null;
+          }
+
+          console.log("[AUTH] role check", {
+            dbRole: dbUser.role,
+            intendedRole,
+            matches: dbUser.role === intendedRole,
+          });
+
+          if (dbUser.role !== intendedRole) {
+            console.log("[AUTH] role mismatch");
+            return null;
+          }
+
+          if (!dbUser.emailVerified) {
+            console.log("[AUTH] email not verified");
+            throw new Error("EMAIL_NOT_VERIFIED:" + email);
+          }
+
+          let companyId = dbUser.recruiterProfile?.companyId ?? null;
+
+          console.log("[AUTH] company before ensure", {
+            email,
+            intendedRole,
+            companyId,
+          });
+
+          if (intendedRole === "RECRUITER" && !companyId) {
+            console.log("[AUTH] recruiter without companyId, ensuring company");
+            const company = await ensureUserCompanyByEmail({
+              userId: dbUser.id,
+              email,
+              suggestedName: null,
+              country: null,
+              city: null,
+            });
+            companyId = company?.id ?? null;
+
+            console.log("[AUTH] ensureUserCompanyByEmail result", {
+              email,
+              companyId,
+            });
+          }
+
+          const authUser: AuthUser = {
+            id: dbUser.id,
+            name: dbUser.name ?? email.split("@")[0],
+            email: dbUser.email,
+            role: dbUser.role,
+            companyId,
+            rememberMe: credentials.rememberMe === "true",
+          };
+
+          console.log("[AUTH] authorize success", {
+            id: authUser.id,
+            email: authUser.email,
+            role: authUser.role,
+            companyId: authUser.companyId,
+            rememberMe: authUser.rememberMe,
+          });
+
+          return authUser;
+        } catch (error) {
+          console.error("[AUTH] authorize exception", error);
+          throw error;
+        }
       },
     }),
 
@@ -116,60 +191,91 @@ export const authOptions: AuthOptions = {
         token: { label: "Token", type: "text" },
       },
       async authorize(credentials) {
-        if (!credentials?.token) return null;
+        try {
+          console.log("[AUTH] auto-login start", {
+            hasToken: Boolean(credentials?.token),
+          });
 
-        const record = await prisma.autoLoginToken.findUnique({
-          where: { token: credentials.token },
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                name: true,
-                role: true,
-                emailVerified: true,
-                recruiterProfile: {
-                  select: {
-                    companyId: true,
+          if (!credentials?.token) {
+            console.log("[AUTH] auto-login missing token");
+            return null;
+          }
+
+          const record = await prisma.autoLoginToken.findUnique({
+            where: { token: credentials.token },
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  email: true,
+                  name: true,
+                  role: true,
+                  emailVerified: true,
+                  recruiterProfile: {
+                    select: {
+                      companyId: true,
+                    },
                   },
                 },
               },
             },
-          },
-        });
-
-        if (!record) return null;
-        if (record.usedAt) return null;
-        if (record.expiresAt < new Date()) return null;
-
-        await prisma.autoLoginToken.update({
-          where: { token: credentials.token },
-          data: { usedAt: new Date() },
-        });
-
-        const user = record.user;
-
-        let companyId = user.recruiterProfile?.companyId ?? null;
-
-        if (user.role === "RECRUITER" && !companyId) {
-          const company = await ensureUserCompanyByEmail({
-            userId: user.id,
-            email: user.email,
-            suggestedName: null,
-            country: null,
-            city: null,
           });
-          companyId = company?.id ?? null;
-        }
 
-        return {
-          id: user.id,
-          name: user.name ?? user.email.split("@")[0],
-          email: user.email,
-          role: user.role,
-          companyId,
-          rememberMe: false,
-        } as AuthUser;
+          console.log("[AUTH] auto-login record", {
+            exists: Boolean(record),
+            usedAt: record?.usedAt ?? null,
+            expiresAt: record?.expiresAt ?? null,
+            userId: record?.user?.id ?? null,
+            recruiterCompanyId:
+              record?.user?.recruiterProfile?.companyId ?? null,
+          });
+
+          if (!record) return null;
+          if (record.usedAt) return null;
+          if (record.expiresAt < new Date()) return null;
+
+          await prisma.autoLoginToken.update({
+            where: { token: credentials.token },
+            data: { usedAt: new Date() },
+          });
+
+          const user = record.user;
+
+          let companyId = user.recruiterProfile?.companyId ?? null;
+
+          if (user.role === "RECRUITER" && !companyId) {
+            console.log("[AUTH] auto-login recruiter without companyId");
+            const company = await ensureUserCompanyByEmail({
+              userId: user.id,
+              email: user.email,
+              suggestedName: null,
+              country: null,
+              city: null,
+            });
+            companyId = company?.id ?? null;
+          }
+
+          const authUser: AuthUser = {
+            id: user.id,
+            name: user.name ?? user.email.split("@")[0],
+            email: user.email,
+            role: user.role,
+            companyId,
+            rememberMe: false,
+          };
+
+          console.log("[AUTH] auto-login success", {
+            id: authUser.id,
+            email: authUser.email,
+            role: authUser.role,
+            companyId: authUser.companyId,
+          });
+
+          return authUser;
+        } catch (error) {
+          console.error("[AUTH] auto-login exception", error);
+          throw error;
+        }
       },
     }),
   ],
@@ -185,6 +291,11 @@ export const authOptions: AuthOptions = {
 
   callbacks: {
     async signIn({ user, account }) {
+      console.log("[AUTH] signIn callback", {
+        provider: account?.provider ?? null,
+        email: user.email ?? null,
+      });
+
       if (account?.provider === "google") {
         const email = user.email?.toLowerCase().trim();
         if (!email) return false;
@@ -192,6 +303,13 @@ export const authOptions: AuthOptions = {
         const existingUser = await prisma.user.findUnique({
           where: { email },
           select: { id: true, role: true, emailVerified: true },
+        });
+
+        console.log("[AUTH] google signIn existingUser", {
+          email,
+          exists: Boolean(existingUser),
+          role: existingUser?.role ?? null,
+          emailVerified: existingUser?.emailVerified ?? null,
         });
 
         if (existingUser) {
@@ -220,7 +338,17 @@ export const authOptions: AuthOptions = {
         (token as any).role = authUser.role;
         (token as any).companyId = authUser.companyId ?? null;
         (token as any).rememberMe = Boolean(authUser.rememberMe);
-        (token as any).sessionMode = authUser.rememberMe ? "extended" : "default";
+        (token as any).sessionMode = authUser.rememberMe
+          ? "extended"
+          : "default";
+
+        console.log("[AUTH] jwt initial user", {
+          email: authUser.email,
+          id: authUser.id,
+          role: authUser.role,
+          companyId: authUser.companyId,
+          rememberMe: authUser.rememberMe,
+        });
       }
 
       if (trigger === "update" && session) {
@@ -230,6 +358,11 @@ export const authOptions: AuthOptions = {
             ? "extended"
             : "default";
         }
+
+        console.log("[AUTH] jwt update trigger", {
+          rememberMe: (token as any).rememberMe,
+          sessionMode: (token as any).sessionMode,
+        });
       }
 
       const email = token.email as string | undefined;
@@ -255,6 +388,16 @@ export const authOptions: AuthOptions = {
           (token as any).companyId =
             dbUser.recruiterProfile?.companyId ?? null;
           (token as any).emailVerified = dbUser.emailVerified ?? null;
+
+          console.log("[AUTH] jwt refresh", {
+            email,
+            id: dbUser.id,
+            role: dbUser.role,
+            companyId: dbUser.recruiterProfile?.companyId ?? null,
+            emailVerified: dbUser.emailVerified ?? null,
+          });
+        } else {
+          console.log("[AUTH] jwt refresh missing dbUser", { email });
         }
       }
 
@@ -268,17 +411,25 @@ export const authOptions: AuthOptions = {
       (session.user as any).emailVerified =
         (token as any).emailVerified ?? null;
       (session as any).rememberMe = Boolean((token as any).rememberMe);
-      (session as any).sessionMode = (token as any).sessionMode ?? "default";
+      (session as any).sessionMode =
+        (token as any).sessionMode ?? "default";
+
+      console.log("[AUTH] session callback", {
+        userId: (session.user as any).id ?? null,
+        role: (session.user as any).role ?? null,
+        companyId: (session.user as any).companyId ?? null,
+        emailVerified: (session.user as any).emailVerified ?? null,
+        rememberMe: (session as any).rememberMe,
+        sessionMode: (session as any).sessionMode,
+      });
+
       return session;
     },
   },
 
   pages: {
     signIn: "/auth/signin",
-    error: "/auth/signin",
   },
 
-  debug: process.env.NODE_ENV !== "production",
+  secret: process.env.NEXTAUTH_SECRET,
 };
-
-export default authOptions;
