@@ -1,8 +1,8 @@
-import 'server-only';
+import "server-only";
 
-// lib/server/session.ts
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
+import { prisma } from "@/lib/server/prisma";
 
 export async function getSessionOrThrow() {
   const session = await getServerSession(authOptions);
@@ -22,9 +22,18 @@ export async function getSessionUserIdOrThrow() {
 }
 
 export async function getSessionCompanyId() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user) throw new Error("Unauthorized");
-  // si tipaste next-auth, esto ya no necesita ts-ignore
-  // @ts-ignore
-  return session.user.companyId as string | null;
+  const userId = await getSessionUserIdOrThrow();
+
+  const recruiterProfile = await prisma.recruiterProfile.findUnique({
+    where: { userId },
+    select: { companyId: true },
+  });
+
+  return recruiterProfile?.companyId ?? null;
+}
+
+export async function getSessionCompanyIdOrThrow() {
+  const companyId = await getSessionCompanyId();
+  if (!companyId) throw new Error("No company associated");
+  return companyId;
 }
