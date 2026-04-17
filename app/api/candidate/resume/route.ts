@@ -1,13 +1,19 @@
-// /app/api/candidate/resume/route.ts
+// app/api/candidate/resume/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
 import { LanguageProficiency } from "@prisma/client";
 
-// 👇 fuerza a que esta ruta sea dinámica (no se prerenderiza)
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+function jsonNoStore(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 function fromLangLevel(l: LanguageProficiency | null): string {
   return l ?? "CONVERSATIONAL";
@@ -17,20 +23,22 @@ function parseDate(input?: string | null): Date | null {
   if (!input) return null;
   const normalized = /^\d{4}-\d{2}$/.test(input) ? `${input}-01` : input;
   const dt = new Date(normalized);
-  return isNaN(dt.getTime()) ? null : dt;
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-async function requireUserId(): Promise<string | null> {
+async function requireUserIdOrThrow(): Promise<string> {
   const session = await getServerSession(authOptions);
-  return (session?.user as any)?.id ?? null;
+  const userId = (session?.user as any)?.id ?? null;
+  if (!userId) {
+    throw new Error("UNAUTHORIZED");
+  }
+  return String(userId);
 }
 
+// GET /api/candidate/resume
 export async function GET() {
   try {
-    const userId = await requireUserId();
-    if (!userId) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
+    const userId = await requireUserIdOrThrow();
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -87,10 +95,10 @@ export async function GET() {
     });
 
     if (!user) {
-      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 });
+      return jsonNoStore({ error: "Usuario no encontrado" }, 404);
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       personal: {
         fullName: user.name ?? "",
         email: user.email ?? "",
@@ -147,22 +155,25 @@ export async function GET() {
         url: c.url ?? null,
       })),
     });
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.message === "UNAUTHORIZED") {
+      return jsonNoStore({ error: "No autenticado" }, 401);
+    }
+
     console.error("[GET /api/candidate/resume] error", e);
-    return NextResponse.json({ error: "Error al obtener CV" }, { status: 500 });
+    return jsonNoStore({ error: "Error al obtener CV" }, 500);
   }
 }
 
+// POST /api/candidate/resume
+// Nota: hoy este endpoint solo actualiza experiencia laboral.
 export async function POST(req: Request) {
   try {
-    const userId = await requireUserId();
-    if (!userId) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
+    const userId = await requireUserIdOrThrow();
 
     const body = await req.json().catch(() => null);
     if (!body || typeof body !== "object") {
-      return NextResponse.json({ error: "Payload invalido" }, { status: 400 });
+      return jsonNoStore({ error: "Payload invalido" }, 400);
     }
 
     const rawExperiences = Array.isArray((body as any).experiences)
@@ -172,10 +183,7 @@ export async function POST(req: Request) {
       : [];
 
     if (!Array.isArray(rawExperiences)) {
-      return NextResponse.json(
-        { error: "Experiencias invalidas" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "Experiencias invalidas" }, 400);
     }
 
     const experiences = rawExperiences
@@ -187,24 +195,31 @@ export async function POST(req: Request) {
         isCurrent: !!w?.isCurrent,
         description:
           typeof w?.description === "string" && w.description.trim()
-            ? w.description
+            ? w.description.trim()
             : null,
       }))
       .filter((w) => w.company && w.role);
 
-    await prisma.workExperience.deleteMany({ where: { userId } });
-    if (experiences.length) {
-      await prisma.workExperience.createMany({
-        data: experiences.map((w) => ({ ...w, userId })),
-      });
-    }
+    await prisma.$transaction(async (tx) => {
+      await tx.workExperience.deleteMany({ where: { userId } });
 
-    return NextResponse.json({
+      if (experiences.length) {
+        await tx.workExperience.createMany({
+          data: experiences.map((w) => ({ ...w, userId })),
+        });
+      }
+    });
+
+    return jsonNoStore({
       ok: true,
       counts: { experience: experiences.length },
     });
-  } catch (e) {
+  } catch (e: any) {
+    if (e?.message === "UNAUTHORIZED") {
+      return jsonNoStore({ error: "No autenticado" }, 401);
+    }
+
     console.error("[POST /api/candidate/resume] error", e);
-    return NextResponse.json({ error: "Error al guardar CV" }, { status: 500 });
+    return jsonNoStore({ error: "Error al guardar CV" }, 500);
   }
 }

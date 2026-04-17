@@ -327,7 +327,7 @@ export async function PATCH(
       }
 
       await prisma.job.update({
-        where: { id: params.id },
+        where: { id: existingJob.id },
         data: {
           status,
           updatedAt: new Date(),
@@ -472,7 +472,7 @@ export async function PATCH(
         select: { id: true },
       });
 
-      await syncJobSkills(tx, params.id, skillsJson);
+      await syncJobSkills(tx, existingJob.id, skillsJson);
 
       return updatedJob;
     });
@@ -571,7 +571,7 @@ export async function DELETE(
       );
     }
 
-    await prisma.job.delete({ where: { id: params.id } });
+    await prisma.job.delete({ where: { id: exists.id } });
 
     return jsonNoStore({ ok: true });
   } catch (err) {

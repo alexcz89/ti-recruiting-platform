@@ -1,8 +1,8 @@
-﻿// /app/api/candidate/resume/pdf/route.tsx
+﻿// app/api/candidate/resume/pdf/route.tsx
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { prisma } from '@/lib/server/prisma';
+import { authOptions } from "@/lib/server/auth";
+import { prisma } from "@/lib/server/prisma";
 import {
   Document,
   Page,
@@ -13,11 +13,8 @@ import {
 } from "@react-pdf/renderer";
 import type { EducationLevel, LanguageProficiency } from "@prisma/client";
 
-// Forzamos ruta dinámica (no prerender)
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-// ========== Estilos ==========
 
 const styles = StyleSheet.create({
   page: {
@@ -25,7 +22,7 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     fontSize: 11,
     lineHeight: 1.45,
-    fontFamily: "Helvetica", // fuente integrada, sin Font.register
+    fontFamily: "Helvetica",
     color: "#0f172a",
   },
   name: {
@@ -50,8 +47,6 @@ const styles = StyleSheet.create({
     fontWeight: 700,
     marginBottom: 8,
   },
-
-  // Layout general
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -63,8 +58,6 @@ const styles = StyleSheet.create({
     width: "28%",
     textAlign: "right",
   },
-
-  // Experiencia: empresa arriba, rol + fecha en la misma fila
   company: {
     fontWeight: 700,
     marginBottom: 2,
@@ -73,8 +66,6 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     fontWeight: 700,
   },
-
-  // Educación: fecha alineada con el programa
   program: {
     fontStyle: "italic",
     fontWeight: 700,
@@ -82,8 +73,6 @@ const styles = StyleSheet.create({
   institution: {
     marginTop: 2,
   },
-
-  // Bullets de descripción
   bulletList: {
     marginTop: 4,
     paddingLeft: 10,
@@ -102,8 +91,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 11,
   },
-
-  // Listas simples
   listLine: {
     fontSize: 11,
     marginTop: 2,
@@ -115,8 +102,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
 });
-
-// ========== Helpers ==========
 
 const monthYearES = (d?: Date | null) => {
   if (!d) return "";
@@ -160,7 +145,48 @@ function joinNonEmpty(...vals: (string | null | undefined)[]) {
     .join("  ");
 }
 
-// Componente reutilizable para bullets (descripción)
+function safeFilename(input?: string | null) {
+  const base = (input || "resume")
+    .normalize("NFKD")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .toLowerCase();
+
+  return `${base || "resume"}.pdf`;
+}
+
+async function requireUserIdOrThrow(): Promise<string> {
+  const session = await getServerSession(authOptions);
+  const userId = (session?.user as any)?.id as string | undefined;
+
+  if (!userId) {
+    throw new Error("UNAUTHORIZED");
+  }
+
+  return userId;
+}
+
+function pdfHeaders(filename: string) {
+  const headers = new Headers();
+  headers.set("Content-Type", "application/pdf");
+  headers.set("Content-Disposition", `inline; filename="${filename}"`);
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "no-referrer");
+  return headers;
+}
+
+function errorJson(message: string, status: number) {
+  return NextResponse.json(
+    { error: message },
+    {
+      status,
+      headers: { "Cache-Control": "no-store" },
+    }
+  );
+}
+
 function BulletLine({ children }: { children: string }) {
   return (
     <View style={styles.bulletContainer}>
@@ -169,8 +195,6 @@ function BulletLine({ children }: { children: string }) {
     </View>
   );
 }
-
-// ========== PDF Component ==========
 
 function ResumeDoc({
   name,
@@ -223,7 +247,6 @@ function ResumeDoc({
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
-        {/* Nombre centrado */}
         <Text style={styles.name}>{name || "Nombre Apellido"}</Text>
         {contactLine && <Text style={styles.contactLine}>{contactLine}</Text>}
 
@@ -241,10 +264,8 @@ function ResumeDoc({
             <Text style={styles.sectionTitle}>EXPERIENCIA LABORAL</Text>
             {experience.map((w, i) => (
               <View key={`${w.company}-${i}`} style={{ marginBottom: 10 }}>
-                {/* Línea 1: Empresa */}
                 <Text style={styles.company}>{w.company}</Text>
 
-                {/* Línea 2: Rol + fecha (la fecha se alinea con el rol) */}
                 <View style={styles.row}>
                   <View style={styles.left}>
                     <Text style={styles.role}>{w.role}</Text>
@@ -261,7 +282,6 @@ function ResumeDoc({
                   </View>
                 </View>
 
-                {/* Descripción en bullets (cuando exista en BD) */}
                 {w.description ? (
                   <View style={styles.bulletList}>
                     {w.description
@@ -284,10 +304,8 @@ function ResumeDoc({
             <Text style={styles.sectionTitle}>EDUCACIÓN</Text>
             {education.map((e, i) => (
               <View key={`${e.institution}-${i}`} style={{ marginBottom: 8 }}>
-                {/* Línea 1: institución */}
                 <Text style={styles.institution}>{e.institution}</Text>
 
-                {/* Línea 2: programa + nivel + fecha (alineada con el programa) */}
                 <View style={styles.row}>
                   <View style={styles.left}>
                     <Text style={styles.program}>
@@ -333,9 +351,7 @@ function ResumeDoc({
 
             {skills.length ? (
               <>
-                <Text style={[styles.listLine, styles.listLabel]}>
-                  Habilidades
-                </Text>
+                <Text style={[styles.listLine, styles.listLabel]}>Habilidades</Text>
                 <Text style={styles.listLine}>
                   {skills
                     .map((s) => {
@@ -364,15 +380,9 @@ function ResumeDoc({
   );
 }
 
-// ========== Handler ==========
-
 export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as any)?.id as string | undefined;
-    if (!userId) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
+    const userId = await requireUserIdOrThrow();
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -420,10 +430,7 @@ export async function GET() {
     });
 
     if (!user) {
-      return NextResponse.json(
-        { error: "Usuario no encontrado" },
-        { status: 404 }
-      );
+      return errorJson("Usuario no encontrado", 404);
     }
 
     const doc = (
@@ -435,7 +442,7 @@ export async function GET() {
         portfolio={user.linkedin}
         github={user.github}
         summary={undefined}
-        experience={user.experiences.map((w: any) => ({
+        experience={user.experiences.map((w) => ({
           company: w.company || "",
           role: w.role || "",
           startDate: w.startDate,
@@ -466,18 +473,23 @@ export async function GET() {
       />
     );
 
-    const file = await pdf(doc).toBuffer();
+    const stream = await pdf(doc).toBuffer();
+    const filename = safeFilename(user.name || "resume");
 
-    const headers = new Headers();
-    headers.set("Content-Type", "application/pdf");
-    headers.set("Content-Disposition", `inline; filename="resume.pdf"`);
+    const arrayBuffer = await new Response(
+      stream as unknown as ReadableStream<Uint8Array>
+    ).arrayBuffer();
 
-    return new NextResponse(file as any, { status: 200, headers });
-  } catch (e) {
+    return new Response(arrayBuffer, {
+      status: 200,
+      headers: pdfHeaders(filename),
+    });
+  } catch (e: any) {
+    if (e?.message === "UNAUTHORIZED") {
+      return errorJson("No autenticado", 401);
+    }
+
     console.error("[GET /api/candidate/resume/pdf] error", e);
-    return NextResponse.json(
-      { error: "No se pudo generar el PDF" },
-      { status: 500 }
-    );
+    return errorJson("No se pudo generar el PDF", 500);
   }
 }

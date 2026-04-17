@@ -32,8 +32,13 @@ export async function GET(
       return jsonNoStore({ error: "Unauthorized" }, 401);
     }
 
-    const app = await prisma.application.findUnique({
-      where: { id: params.id },
+    const app = await prisma.application.findFirst({
+      where: {
+        id: params.id,
+        job: {
+          companyId,
+        },
+      },
       include: {
         job: {
           select: {
@@ -60,7 +65,7 @@ export async function GET(
       },
     });
 
-    if (!app || app.job.companyId !== companyId) {
+    if (!app) {
       return jsonNoStore({ error: "Not found" }, 404);
     }
 
@@ -87,8 +92,6 @@ export async function PATCH(
     const companyId = await getSessionCompanyId();
     if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
 
-    const id = params.id;
-
     let bodyRaw: unknown;
     try {
       bodyRaw = await req.json();
@@ -102,12 +105,19 @@ export async function PATCH(
       coverLetter: string | null;
     }>;
 
-    const found = await prisma.application.findUnique({
-      where: { id },
-      include: { job: true },
+    const found = await prisma.application.findFirst({
+      where: {
+        id: params.id,
+        job: {
+          companyId,
+        },
+      },
+      select: {
+        id: true,
+      },
     });
 
-    if (!found || found.job.companyId !== companyId) {
+    if (!found) {
       return jsonNoStore({ error: "Not found" }, 404);
     }
 
@@ -119,7 +129,7 @@ export async function PATCH(
     }
 
     const updated = await prisma.application.update({
-      where: { id },
+      where: { id: found.id },
       data: {
         status: body.status ?? undefined,
         resumeUrl:
@@ -155,7 +165,12 @@ export async function DELETE(
     if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     const app = await prisma.application.findFirst({
-      where: { id: params.id, job: { companyId } },
+      where: {
+        id: params.id,
+        job: {
+          companyId,
+        },
+      },
       select: { id: true },
     });
 
@@ -163,7 +178,7 @@ export async function DELETE(
       return jsonNoStore({ error: "Application not found" }, 404);
     }
 
-    await prisma.application.delete({ where: { id: params.id } });
+    await prisma.application.delete({ where: { id: app.id } });
 
     return jsonNoStore({ ok: true }, 200);
   } catch (err) {

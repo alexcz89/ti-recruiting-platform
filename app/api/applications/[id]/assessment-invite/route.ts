@@ -104,13 +104,6 @@ export async function POST(
       return json(403, { error: "Sin empresa asociada" });
     }
 
-    if (!isAdmin && isCreditsEnforced()) {
-      return json(402, {
-        error: "Sin créditos para enviar assessments",
-        code: "NO_CREDITS",
-      });
-    }
-
     let body: { templateId?: unknown; expiresInDays?: unknown } = {};
     const contentType = request.headers.get("content-type") || "";
 
@@ -152,7 +145,13 @@ export async function POST(
             title: true,
             companyId: true,
             recruiterId: true,
-            company: { select: { name: true } },
+            company: {
+              select: {
+                id: true,
+                name: true,
+                assessmentCredits: true,
+              },
+            },
             assessments: {
               orderBy: { createdAt: "asc" },
               select: {
@@ -220,74 +219,93 @@ export async function POST(
 
     if (!template) return json(404, { error: "Template no encontrado" });
 
-    let invite = await prisma.assessmentInvite.findFirst({
-      where: { applicationId: application.id, templateId: template.id },
-      select: selectInvite,
-    });
-
     let createdInvite = false;
-    let reusedInvite = Boolean(invite);
+    let reusedInvite = false;
     let rotated = false;
+    let creditsCharged = false;
 
-    if (!invite) {
-      const token = crypto.randomBytes(32).toString("hex");
+    const invite = await prisma.$transaction(async (tx) => {
+      let localInvite = await tx.assessmentInvite.findFirst({
+        where: { applicationId: application.id, templateId: template.id },
+        select: selectInvite,
+      });
 
-      try {
-        invite = await prisma.assessmentInvite.create({
-          data: {
-            application: { connect: { id: application.id } },
-            job: { connect: { id: application.jobId } },
-            candidate: { connect: { id: application.candidateId } },
-            template: { connect: { id: template.id } },
-            token,
-            status: "SENT",
-            expiresAt: newExpiresAt,
-            sentAt: null,
-            invitedBy: user.id ? { connect: { id: user.id } } : undefined,
-          },
-          select: selectInvite,
-        });
+      const enforceCredits = !isAdmin && isCreditsEnforced();
+      const availableCredits = application.job.company.assessmentCredits ?? 0;
 
-        createdInvite = true;
-        reusedInvite = false;
-      } catch (e: unknown) {
-        if (
-          typeof e !== "object" ||
-          e === null ||
-          !("code" in e) ||
-          String(e.code) !== "P2002"
-        ) {
-          throw e;
+      if (!localInvite && enforceCredits) {
+        if (availableCredits <= 0) {
+          throw new Error("NO_CREDITS");
         }
-
-        invite = await prisma.assessmentInvite.findFirst({
-          where: { applicationId: application.id, templateId: template.id },
-          select: selectInvite,
-        });
-
-        reusedInvite = true;
       }
-    }
 
-    if (!invite) {
-      return json(500, { error: "No se pudo crear la invitación" });
-    }
+      if (!localInvite) {
+        const token = crypto.randomBytes(32).toString("hex");
 
-    if (!isInviteReusable(invite, now)) {
-      const rotatedToken = crypto.randomBytes(32).toString("hex");
-      rotated = true;
+        try {
+          localInvite = await tx.assessmentInvite.create({
+            data: {
+              application: { connect: { id: application.id } },
+              job: { connect: { id: application.jobId } },
+              candidate: { connect: { id: application.candidateId } },
+              template: { connect: { id: template.id } },
+              token,
+              status: "SENT",
+              expiresAt: newExpiresAt,
+              sentAt: null,
+              invitedBy: user.id ? { connect: { id: user.id } } : undefined,
+            },
+            select: selectInvite,
+          });
 
-      invite = await prisma.$transaction(async (tx) => {
+          createdInvite = true;
+          reusedInvite = false;
+
+          if (enforceCredits) {
+            await tx.company.update({
+              where: { id: application.job.company.id },
+              data: {
+                assessmentCredits: { decrement: 1 },
+              },
+            });
+            creditsCharged = true;
+          }
+        } catch (e: unknown) {
+          const isP2002 =
+            typeof e === "object" &&
+            e !== null &&
+            "code" in e &&
+            String((e as any).code) === "P2002";
+
+          if (!isP2002) throw e;
+
+          localInvite = await tx.assessmentInvite.findFirst({
+            where: { applicationId: application.id, templateId: template.id },
+            select: selectInvite,
+          });
+
+          reusedInvite = true;
+        }
+      }
+
+      if (!localInvite) {
+        throw new Error("INVITE_CREATE_FAILED");
+      }
+
+      if (!isInviteReusable(localInvite, now)) {
+        const rotatedToken = crypto.randomBytes(32).toString("hex");
+        rotated = true;
+
         await tx.assessmentAttempt.updateMany({
           where: {
-            inviteId: invite!.id,
+            inviteId: localInvite.id,
             status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
           },
           data: { inviteId: null },
         });
 
-        return tx.assessmentInvite.update({
-          where: { id: invite!.id },
+        localInvite = await tx.assessmentInvite.update({
+          where: { id: localInvite.id },
           data: {
             token: rotatedToken,
             status: "SENT",
@@ -297,22 +315,23 @@ export async function POST(
           },
           select: selectInvite,
         });
-      });
-    } else {
-      const s = String(invite.status || "").toUpperCase();
-      if (s === "SENT" || s === "STARTED") {
-        invite = await prisma.assessmentInvite.update({
-          where: { id: invite.id },
-          data: {
-            expiresAt: newExpiresAt,
-            invitedBy: user.id ? { connect: { id: user.id } } : undefined,
-          },
-          select: selectInvite,
-        });
+      } else {
+        const s = String(localInvite.status || "").toUpperCase();
+        if (s === "SENT" || s === "STARTED") {
+          localInvite = await tx.assessmentInvite.update({
+            where: { id: localInvite.id },
+            data: {
+              expiresAt: newExpiresAt,
+              invitedBy: user.id ? { connect: { id: user.id } } : undefined,
+            },
+            select: selectInvite,
+          });
+        }
       }
-    }
 
-    // URL de la invitación (con token)
+      return localInvite;
+    });
+
     const baseUrl = buildBaseUrl(request);
     const inviteUrl = new URL(`/assessments/${template.id}`, baseUrl);
     inviteUrl.searchParams.set("token", invite.token);
@@ -339,12 +358,7 @@ export async function POST(
           dedupeKey: invite.id,
         });
 
-        if (
-          typeof r === "object" &&
-          r !== null &&
-          "ok" in r &&
-          r.ok === true
-        ) {
+        if (typeof r === "object" && r !== null && "ok" in r && r.ok === true) {
           emailStatus = "sent";
         } else if (
           typeof r === "object" &&
@@ -372,15 +386,12 @@ export async function POST(
     }
 
     if (emailStatus === "sent" || emailStatus === "skipped") {
-      invite = await prisma.assessmentInvite.update({
+      await prisma.assessmentInvite.update({
         where: { id: invite.id },
         data: { sentAt: new Date() },
-        select: selectInvite,
       });
     }
 
-    // ✅ FIX: agregar actionUrl para que el click en la notificación
-    // lleve directamente a la evaluación en vez de al signin
     await NotificationService.create({
       userId: application.candidateId,
       type: "ASSESSMENT_INVITATION",
@@ -448,6 +459,7 @@ export async function POST(
         reusedInvite,
         createdInvite,
         rotated,
+        creditsCharged,
         attemptId: existingAttempt?.id ?? null,
         inviteUrl: inviteUrlString,
         emailStatus,
@@ -482,17 +494,24 @@ export async function POST(
       inviteUrl: inviteUrlString,
       emailStatus,
       emailError,
-      meta: { reusedInvite, createdInvite, rotated },
+      meta: { reusedInvite, createdInvite, rotated, creditsCharged },
     });
   } catch (e: unknown) {
     console.error("[ASSESSMENT INVITE] ERROR", e);
 
+    const msg = e instanceof Error ? e.message : String(e);
+
+    if (msg === "NO_CREDITS") {
+      return json(402, {
+        error: "Sin créditos para enviar assessments",
+        code: "NO_CREDITS",
+      });
+    }
+
     const isDev = process.env.NODE_ENV !== "production";
     return json(500, {
       error: "Error al enviar invitación",
-      ...(isDev
-        ? { detail: e instanceof Error ? e.message : String(e) }
-        : {}),
+      ...(isDev ? { detail: msg } : {}),
     });
   }
 }

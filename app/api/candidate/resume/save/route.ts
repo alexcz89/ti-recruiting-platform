@@ -1,8 +1,8 @@
 // app/api/candidate/resume/save/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
+import { authOptions } from "@/lib/server/auth";
 import { z } from "zod";
 import {
   TaxonomyKind,
@@ -10,6 +10,16 @@ import {
   EducationLevel,
   Prisma,
 } from "@prisma/client";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+function jsonNoStore(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
 
 /* =======================
  * Helpers
@@ -25,8 +35,9 @@ function slugify(s: string) {
 
 function parseDate(d?: string | null) {
   if (!d) return null;
-  const dt = new Date(d);
-  return isNaN(dt.getTime()) ? null : dt;
+  const normalized = /^\d{4}-\d{2}$/.test(d) ? `${d}-01` : d;
+  const dt = new Date(normalized);
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
 const levelRank: Record<EducationLevel, number> = {
@@ -43,7 +54,9 @@ const levelRank: Record<EducationLevel, number> = {
 
 function highestLevel(levels: (EducationLevel | null | undefined)[]): EducationLevel {
   let best: EducationLevel = "NONE";
-  for (const l of levels) if (l && levelRank[l] > levelRank[best]) best = l;
+  for (const l of levels) {
+    if (l && levelRank[l] > levelRank[best]) best = l;
+  }
   return best;
 }
 
@@ -56,16 +69,22 @@ function toLangLevel(input?: string): LanguageProficiency {
   return "CONVERSATIONAL";
 }
 
-async function ensureTerm(kind: TaxonomyKind, label: string) {
-  const slug = slugify(label);
-  const existing = await prisma.taxonomyTerm.findFirst({
+async function ensureTermTx(
+  tx: Prisma.TransactionClient,
+  kind: TaxonomyKind,
+  label: string
+) {
+  const normalized = label.trim();
+  const slug = slugify(normalized);
+
+  const existing = await tx.taxonomyTerm.findFirst({
     where: { kind, slug },
     select: { id: true },
   });
   if (existing) return existing.id;
 
-  const created = await prisma.taxonomyTerm.create({
-    data: { kind, slug, label },
+  const created = await tx.taxonomyTerm.create({
+    data: { kind, slug, label: normalized },
     select: { id: true },
   });
   return created.id;
@@ -74,9 +93,11 @@ async function ensureTerm(kind: TaxonomyKind, label: string) {
 /* =======================
  * Auth (NextAuth)
  * ======================= */
-async function requireUserId(): Promise<string | null> {
+async function requireUserIdOrThrow(): Promise<string> {
   const session = await getServerSession(authOptions);
-  return (session?.user as any)?.id ?? null;
+  const userId = (session?.user as any)?.id ?? null;
+  if (!userId) throw new Error("UNAUTHORIZED");
+  return String(userId);
 }
 
 /* =======================
@@ -87,7 +108,7 @@ const PersonalSchema = z.object({
   email: z.string().email().optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   location: z.string().optional().or(z.literal("")),
-  birthDate: z.string().optional().or(z.literal("")), // ISO yyyy-mm-dd
+  birthDate: z.string().optional().or(z.literal("")),
   linkedin: z.string().optional().or(z.literal("")),
   github: z.string().optional().or(z.literal("")),
 });
@@ -112,7 +133,6 @@ const WorkItem = z.object({
   startDate: z.string().optional().or(z.literal("")),
   endDate: z.string().optional().or(z.literal("")),
   isCurrent: z.boolean().optional(),
-  // Aceptamos description en el payload, pero NO se persiste (tabla no tiene columna).
   description: z.string().optional().or(z.literal("")),
 });
 
@@ -150,37 +170,40 @@ const ResumeSchema = z.object({
  * ======================= */
 export async function POST(req: Request) {
   try {
-    const userId = await requireUserId();
-    if (!userId) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
+    const userId = await requireUserIdOrThrow();
+
+    const json = await req.json().catch(() => null);
+    if (!json || typeof json !== "object") {
+      return jsonNoStore({ error: "Payload inválido" }, 400);
     }
 
-    const json = await req.json();
     const parsed = ResumeSchema.safeParse(json);
     if (!parsed.success) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: "Datos inválidos", details: parsed.error.flatten() },
-        { status: 400 }
+        400
       );
     }
 
-    const { personal, about, education, experience, skills, languages, certifications } = parsed.data;
+    const { personal, about, education, experience, skills, languages, certifications } =
+      parsed.data;
 
     const result = await prisma.$transaction(async (tx) => {
-      // 1) USER
       const userUpdate: Prisma.UserUpdateInput = {
-        name: personal.fullName,
-        firstName: personal.fullName?.split(" ")?.[0] || undefined,
+        name: personal.fullName.trim(),
+        firstName: personal.fullName.trim().split(" ")[0] || undefined,
         phone: personal.phone || null,
         location: personal.location || null,
         birthdate: personal.birthDate ? parseDate(personal.birthDate) : null,
         linkedin: personal.linkedin || null,
         github: personal.github || null,
-        // summary: about  ❌ tu tabla User no tiene este campo
       };
-      await tx.user.update({ where: { id: userId }, data: userUpdate });
 
-      // 2) EDUCATION — reemplazo completo
+      await tx.user.update({
+        where: { id: userId },
+        data: userUpdate,
+      });
+
       await tx.education.deleteMany({ where: { userId } });
       if (education.length) {
         await tx.education.createMany({
@@ -199,7 +222,10 @@ export async function POST(req: Request) {
             sortIndex: typeof e.sortIndex === "number" ? e.sortIndex : idx,
           })),
         });
-        const levels = education.map((e) => e.level as EducationLevel | null | undefined);
+
+        const levels = education.map(
+          (e) => e.level as EducationLevel | null | undefined
+        );
         await tx.user.update({
           where: { id: userId },
           data: { highestEducationLevel: highestLevel(levels) },
@@ -211,50 +237,56 @@ export async function POST(req: Request) {
         });
       }
 
-      // 3) EXPERIENCE — reemplazo completo
       await tx.workExperience.deleteMany({ where: { userId } });
       if (experience.length) {
         await tx.workExperience.createMany({
-          data: experience.map((w) => ({
-            userId,
-            company: w.company.trim(),
-            role: w.role.trim(),
-            startDate: parseDate(w.startDate) ?? new Date(),
-            endDate: parseDate(w.endDate) ?? null,
-            isCurrent: !!w.isCurrent,
-            // description: w.description || null, // ❌ la tabla no tiene esta columna
-          })),
+          data: experience
+            .map((w) => ({
+              userId,
+              company: w.company.trim(),
+              role: w.role.trim(),
+              startDate: parseDate(w.startDate) ?? new Date(),
+              endDate: parseDate(w.endDate) ?? null,
+              isCurrent: !!w.isCurrent,
+              description: w.description?.trim() || null,
+            }))
+            .filter((w) => w.company && w.role),
         });
       }
 
-      // 4) SKILLS — reemplazo + catálogo
       await tx.candidateSkill.deleteMany({ where: { userId } });
       for (const s of skills) {
         const name = s.name.trim();
         if (!name) continue;
-        const termId = await ensureTerm(TaxonomyKind.SKILL, name);
+        const termId = await ensureTermTx(tx, TaxonomyKind.SKILL, name);
         await tx.candidateSkill.create({
-          data: { userId, termId, level: typeof s.level === "number" ? s.level : null },
+          data: {
+            userId,
+            termId,
+            level: typeof s.level === "number" ? s.level : null,
+          },
         });
       }
 
-      // 5) LANGUAGES — reemplazo + catálogo
       await tx.candidateLanguage.deleteMany({ where: { userId } });
       for (const l of languages) {
         const name = l.name.trim();
         if (!name) continue;
-        const termId = await ensureTerm(TaxonomyKind.LANGUAGE, name);
+        const termId = await ensureTermTx(tx, TaxonomyKind.LANGUAGE, name);
         await tx.candidateLanguage.create({
-          data: { userId, termId, level: toLangLevel(l.level) },
+          data: {
+            userId,
+            termId,
+            level: toLangLevel(l.level),
+          },
         });
       }
 
-      // 6) CERTIFICATIONS — reemplazo + catálogo
       await tx.candidateCredential.deleteMany({ where: { userId } });
       for (const c of certifications) {
         const name = c.name.trim();
         if (!name) continue;
-        const termId = await ensureTerm(TaxonomyKind.CERTIFICATION, name);
+        const termId = await ensureTermTx(tx, TaxonomyKind.CERTIFICATION, name);
         await tx.candidateCredential.create({
           data: {
             userId,
@@ -287,9 +319,13 @@ export async function POST(req: Request) {
       };
     });
 
-    return NextResponse.json({ ok: true, ...result });
-  } catch (err) {
+    return jsonNoStore({ ok: true, ...result });
+  } catch (err: any) {
+    if (err?.message === "UNAUTHORIZED") {
+      return jsonNoStore({ error: "No autenticado" }, 401);
+    }
+
     console.error("[POST /api/candidate/resume/save] error", err);
-    return NextResponse.json({ error: "Error al guardar CV" }, { status: 500 });
+    return jsonNoStore({ error: "Error al guardar CV" }, 500);
   }
 }

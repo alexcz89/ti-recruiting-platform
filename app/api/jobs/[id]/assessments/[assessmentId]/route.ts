@@ -1,9 +1,9 @@
 // app/api/jobs/[id]/assessments/[assessmentId]/route.ts
 import { NextResponse } from "next/server";
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from '@/lib/server/auth';
-import { getSessionCompanyId } from '@/lib/server/session';
+import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyIdOrThrow } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,7 +20,7 @@ function requireRecruiterOrAdmin(user: any) {
   return role === "RECRUITER" || role === "ADMIN";
 }
 
-// DELETE /api/jobs/[id]/assessments/[assessmentId] - Remover assessment (✅ multiempresa + rol)
+// DELETE /api/jobs/[id]/assessments/[assessmentId]
 export async function DELETE(
   _request: Request,
   { params }: { params: { id: string; assessmentId: string } }
@@ -31,29 +31,47 @@ export async function DELETE(
 
     const user = session.user as any;
     const isAdmin = user?.role === "ADMIN";
-    if (!requireRecruiterOrAdmin(user)) return noStoreJson({ error: "No autorizado" }, 403);
 
-    const sessionCompanyId = await getSessionCompanyId().catch(() => null);
-    if (!sessionCompanyId && !isAdmin) return noStoreJson({ error: "Sin empresa asociada" }, 403);
-
-    const job = await prisma.job.findUnique({
-      where: { id: params.id },
-      select: { id: true, companyId: true },
-    });
-
-    if (!job) return noStoreJson({ error: "Vacante no encontrada" }, 404);
-
-    if (!isAdmin) {
-      if (!sessionCompanyId || job.companyId !== sessionCompanyId) {
-        return noStoreJson({ error: "No autorizado" }, 403);
-      }
+    if (!requireRecruiterOrAdmin(user)) {
+      return noStoreJson({ error: "No autorizado" }, 403);
     }
 
-    // ✅ asegura que el assessmentId pertenece a ESTE job
+    if (isAdmin) {
+      const deleted = await prisma.jobAssessment.deleteMany({
+        where: {
+          id: params.assessmentId,
+          jobId: params.id,
+        },
+      });
+
+      if (deleted.count === 0) {
+        return noStoreJson(
+          { error: "No se encontró la asignación (o no pertenece a esta vacante)" },
+          404
+        );
+      }
+
+      return noStoreJson({ success: true }, 200);
+    }
+
+    const companyId = await getSessionCompanyIdOrThrow();
+
+    const job = await prisma.job.findFirst({
+      where: {
+        id: params.id,
+        companyId,
+      },
+      select: { id: true },
+    });
+
+    if (!job) {
+      return noStoreJson({ error: "Vacante no encontrada o no autorizada" }, 404);
+    }
+
     const deleted = await prisma.jobAssessment.deleteMany({
       where: {
         id: params.assessmentId,
-        jobId: params.id,
+        jobId: job.id,
       },
     });
 

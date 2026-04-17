@@ -1,70 +1,68 @@
 // app/api/billing/credits/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/server/auth";
-import { getSessionCompanyId } from "@/lib/server/session";
-import { getCreditBalance, getCreditHistory } from "@/lib/assessments/credits";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyIdOrThrow } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
-/**
- * GET /api/billing/credits
- * Obtener balance y historial de créditos de la empresa
- */
-export async function GET(req: NextRequest) {
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, {
+    status,
+    headers: { "Cache-Control": "no-store" },
+  });
+}
+
+export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const companyId = await getSessionCompanyIdOrThrow();
 
-    const user = session.user as any;
-    const role = String(user?.role || "");
-
-    // Solo reclutadores y admins pueden ver créditos
-    if (role !== "RECRUITER" && role !== "ADMIN") {
-      return NextResponse.json(
-        { error: "Only recruiters can access credits" },
-        { status: 403 }
-      );
-    }
-
-    const companyId = await getSessionCompanyId();
-    if (!companyId) {
-      return NextResponse.json(
-        { error: "No company associated" },
-        { status: 400 }
-      );
-    }
-
-    const { searchParams } = new URL(req.url);
-    const includeHistory = searchParams.get("history") === "true";
-    const historyLimit = parseInt(searchParams.get("limit") || "50");
-
-    // Obtener balance
-    const balance = await getCreditBalance(companyId);
-    if (!balance) {
-      return NextResponse.json(
-        { error: "Company not found" },
-        { status: 404 }
-      );
-    }
-
-    // Obtener historial si se solicita
-    let history = null;
-    if (includeHistory) {
-      history = await getCreditHistory(companyId, historyLimit);
-    }
-
-    return NextResponse.json({
-      balance,
-      history,
+    // snapshot actual (rápido)
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        assessmentCredits: true,
+      },
     });
-  } catch (error) {
-    console.error("[GET /api/billing/credits] Error:", error);
-    return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
-    );
+
+    if (!company) {
+      return json({ error: "Company not found" }, 404);
+    }
+
+    // invites activos (no completados)
+    const activeInvites = await prisma.assessmentInvite.count({
+      where: {
+        job: { companyId },
+        status: { in: ["SENT", "STARTED"] },
+        OR: [
+          { expiresAt: null },
+          { expiresAt: { gt: new Date() } },
+        ],
+      },
+    });
+
+    // attempts completados (consumo real)
+    const completedAttempts = await prisma.assessmentAttempt.count({
+      where: {
+        invite: {
+          job: {
+            companyId,
+          },
+        },
+        status: "COMPLETED",
+      },
+    });
+
+    return json({
+      snapshot: {
+        available: company.assessmentCredits ?? 0,
+      },
+      derived: {
+        activeInvites,
+        completedAttempts,
+      },
+    });
+  } catch (err) {
+    console.error("[GET /api/billing/credits]", err);
+    return json({ error: "Internal error" }, 500);
   }
 }
