@@ -6,7 +6,8 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   Building2,
-  ImagePlus,
+  Camera,
+  CheckCircle2,
   Loader2,
   Save,
   Trash2,
@@ -106,13 +107,13 @@ export default function CompanyForm({ companyId, initial }: Props) {
     return true;
   };
 
-  const uploadCardClasses = useMemo(
+  const uploadSurfaceClasses = useMemo(
     () =>
       [
-        "relative w-full rounded-2xl border border-dashed px-4 py-4 transition-all",
+        "relative rounded-2xl border border-dashed px-4 py-4 transition-all",
         isDragging
-          ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-900/10"
-          : "border-zinc-300 bg-zinc-50 hover:border-emerald-400 dark:border-zinc-700 dark:bg-zinc-900/40 dark:hover:border-emerald-600",
+          ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/20"
+          : "border-zinc-300 bg-zinc-50 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900/50 dark:hover:border-zinc-600",
       ].join(" "),
     [isDragging]
   );
@@ -219,109 +220,144 @@ export default function CompanyForm({ companyId, initial }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="border-b border-zinc-200 px-4 py-5 sm:px-6 dark:border-zinc-800">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+      <section className="overflow-hidden rounded-[28px] border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="border-b border-zinc-200 px-4 py-5 dark:border-zinc-800 sm:px-6">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+              <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Empresa activa
+                Company settings
               </div>
 
-              <h2 className="mt-3 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              <h2 className="mt-3 text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-2xl">
                 Perfil de empresa
               </h2>
 
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                Administra la identidad visual y la información principal de tu empresa.
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+                Gestiona la identidad visual y la información principal de tu empresa con una
+                configuración clara y consistente.
               </p>
             </div>
 
-            <div className="w-full lg:w-auto">
-              <div className="flex flex-col gap-3 sm:flex-row lg:flex-col lg:items-end">
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
-                  <div className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Empresa
-                  </div>
-                  <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    {name || "Sin nombre"}
-                  </div>
-                  <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    {getSizeLabel(size)}
-                  </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:min-w-[420px]">
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Empresa
+                </div>
+                <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {name || "Sin nombre"}
+                </div>
+                <div className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  {getSizeLabel(size)}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-500/20 dark:bg-emerald-950/20">
+                <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                  <Wallet className="h-3.5 w-3.5" />
+                  Créditos disponibles
                 </div>
 
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-500/20 dark:bg-emerald-900/10">
-                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                    <Wallet className="h-3.5 w-3.5" />
-                    Créditos disponibles
-                  </div>
-                  <div className="mt-1 flex items-end gap-2">
-                    <span className="text-2xl font-bold leading-none text-emerald-800 dark:text-emerald-200">
-                      {initial.assessmentCredits ?? 0}
-                    </span>
-                    <span className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
-                      assessments
-                    </span>
-                  </div>
-                  <Link
-                    href="/dashboard/billing/credits"
-                    className="mt-2 inline-flex text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-300"
-                  >
-                    Ver detalle
-                  </Link>
+                <div className="mt-1 flex items-end gap-2">
+                  <span className="text-2xl font-bold leading-none text-emerald-800 dark:text-emerald-200">
+                    {initial.assessmentCredits ?? 0}
+                  </span>
+                  <span className="text-xs text-emerald-700/80 dark:text-emerald-300/80">
+                    assessments
+                  </span>
                 </div>
+
+                <Link
+                  href="/dashboard/billing/credits"
+                  className="mt-2 inline-flex text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-300"
+                >
+                  Ver detalle
+                </Link>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <div className="grid gap-6 px-4 py-5 sm:px-6 lg:grid-cols-[320px_minmax(0,1fr)]">
           <aside className="order-2 lg:order-1">
-            <div className="rounded-3xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
-              <div className="mb-4 flex items-center justify-between">
-                <div>
-                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Logo de empresa
-                  </h3>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                    Usa una imagen clara y cuadrada.
-                  </p>
-                </div>
+            <div className="rounded-[24px] border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-900/40">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  Logo de empresa
+                </h3>
+                <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                  Una marca visual clara mejora la confianza y la presentación pública.
+                </p>
               </div>
 
-              <div className="flex flex-col items-center gap-4">
-                {logoPreview ? (
-                  <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900 sm:h-28 sm:w-28">
-                    <Image
-                      src={logoPreview}
-                      alt="Logo de la empresa"
-                      fill
-                      sizes="112px"
-                      className="object-contain p-2.5"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleRemoveLogo}
-                      disabled={isBusy}
-                      className="absolute -right-2 -top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label="Eliminar logo"
-                    >
-                      {isUploading ? (
-                        <Spinner className="h-4 w-4" />
-                      ) : (
+              <div className="space-y-4">
+                <div className="relative overflow-hidden rounded-[22px] border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                  <div className="flex min-h-[180px] items-center justify-center p-6">
+                    {logoPreview ? (
+                      <div className="relative h-24 w-24 sm:h-28 sm:w-28">
+                        <Image
+                          src={logoPreview}
+                          alt="Logo de la empresa"
+                          fill
+                          sizes="112px"
+                          className="object-contain"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex h-24 w-24 items-center justify-center rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
+                        <Building2 className="h-8 w-8 text-zinc-400 dark:text-zinc-600" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="border-t border-zinc-200 bg-zinc-50/80 p-3 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <label
+                        className="relative inline-flex min-h-10 flex-1 cursor-pointer items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setIsDragging(true);
+                        }}
+                        onDragLeave={() => setIsDragging(false)}
+                        onDrop={handleDrop}
+                      >
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                          disabled={isUploading}
+                          onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
+                        />
+
+                        {isUploading ? (
+                          <>
+                            <Spinner className="h-4 w-4" />
+                            Subiendo...
+                          </>
+                        ) : (
+                          <>
+                            <Camera className="h-4 w-4" />
+                            {logoPreview ? "Cambiar logo" : "Subir logo"}
+                          </>
+                        )}
+                      </label>
+
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        disabled={isBusy || !logoPreview}
+                        className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                      >
                         <Trash2 className="h-4 w-4" />
-                      )}
-                    </button>
+                        Quitar
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-950 sm:h-28 sm:w-28">
-                    <Building2 className="h-8 w-8 text-zinc-400 dark:text-zinc-600" />
-                  </div>
-                )}
+                </div>
 
                 <label
-                  className={uploadCardClasses}
+                  className={uploadSurfaceClasses}
                   onDragOver={(e) => {
                     e.preventDefault();
                     setIsDragging(true);
@@ -330,7 +366,6 @@ export default function CompanyForm({ companyId, initial }: Props) {
                   onDrop={handleDrop}
                 >
                   <input
-                    ref={fileInputRef}
                     type="file"
                     accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
@@ -339,42 +374,27 @@ export default function CompanyForm({ companyId, initial }: Props) {
                   />
 
                   <div className="pointer-events-none text-center">
-                    {isUploading ? (
-                      <>
-                        <Spinner className="mx-auto mb-2 h-5 w-5 text-emerald-600" />
-                        <p className="text-sm font-medium text-emerald-600">
-                          Subiendo logo...
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <ImagePlus className="mx-auto mb-2 h-5 w-5 text-zinc-400" />
-                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                          Cambiar logo
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                          PNG, JPG, WEBP o SVG · máximo 4 MB
-                        </p>
-                      </>
-                    )}
+                    <Camera className="mx-auto mb-2 h-5 w-5 text-zinc-400" />
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Arrastra y suelta tu archivo aquí
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      PNG, JPG, WEBP o SVG · máximo 4 MB
+                    </p>
                   </div>
                 </label>
-
-                <p className="text-center text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-                  Recomendado: formato cuadrado, mínimo 200×200 px.
-                </p>
               </div>
             </div>
           </aside>
 
-          <div className="order-1 space-y-5 lg:order-2">
-            <div className="rounded-3xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
-              <div className="mb-4">
+          <div className="order-1 lg:order-2">
+            <div className="rounded-[24px] border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
+              <div className="mb-5">
                 <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                   Información general
                 </h3>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Estos datos se usan en tu panel y en la presentación pública de la empresa.
+                <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+                  Estos datos se reflejan en tu panel y en la presencia pública de la empresa.
                 </p>
               </div>
 
@@ -426,14 +446,12 @@ export default function CompanyForm({ companyId, initial }: Props) {
                   </select>
                 </div>
               </div>
-            </div>
 
-            <div className="rounded-3xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950 sm:p-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="mt-6 flex flex-col gap-3 border-t border-zinc-200 pt-5 dark:border-zinc-800 sm:flex-row sm:flex-wrap sm:items-center">
                 <button
                   type="submit"
                   disabled={isBusy || !hasChanges}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
                 >
                   {pending ? <Spinner /> : <Save className="h-4 w-4" />}
                   {pending ? "Guardando..." : "Guardar cambios"}
@@ -446,17 +464,20 @@ export default function CompanyForm({ companyId, initial }: Props) {
                   className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-5 py-3 text-sm font-medium text-zinc-900 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:hover:bg-zinc-900"
                 >
                   <Undo2 className="h-4 w-4" />
-                  Descartar cambios
+                  Restablecer
                 </button>
 
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 sm:ml-auto">
                   {hasChanges ? (
                     <span className="inline-flex items-center gap-2 text-amber-600 dark:text-amber-400">
                       <span className="h-2 w-2 rounded-full bg-amber-500" />
-                      Tienes cambios sin guardar
+                      Cambios pendientes
                     </span>
                   ) : (
-                    "Todo está guardado"
+                    <span className="inline-flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Todo está guardado
+                    </span>
                   )}
                 </div>
               </div>
