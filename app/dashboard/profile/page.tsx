@@ -64,8 +64,6 @@ export default async function ProfilePage() {
             logoUrl: true,
             website: true,
             assessmentCredits: true,
-            assessmentCreditsReserved: true,
-            assessmentCreditsUsed: true,
             _count: { select: { jobs: true } },
           },
         })
@@ -268,8 +266,6 @@ export default async function ProfilePage() {
                     size: company?.size || "",
                     logoUrl: company?.logoUrl || "",
                     assessmentCredits: company?.assessmentCredits ?? 0,
-                    assessmentCreditsReserved: company?.assessmentCreditsReserved ?? 0,
-                    assessmentCreditsUsed: company?.assessmentCreditsUsed ?? 0,
                   }}
                 />
               </section>

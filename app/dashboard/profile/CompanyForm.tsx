@@ -35,8 +35,6 @@ type Props = {
     size: string | null;
     logoUrl: string | null;
     assessmentCredits?: number | null;
-    assessmentCreditsReserved?: number | null;
-    assessmentCreditsUsed?: number | null;
   };
 };
 
@@ -110,7 +108,7 @@ export default function CompanyForm({ companyId, initial }: Props) {
   const cardClasses = useMemo(
     () =>
       [
-        "relative rounded-2xl border-2 border-dashed p-4 sm:p-5 transition-all",
+        "relative w-full max-w-md rounded-2xl border-2 border-dashed px-4 py-5 transition-all",
         isDragging
           ? "border-emerald-500 bg-emerald-50/70 dark:bg-emerald-900/10"
           : "border-zinc-300 bg-zinc-50/70 hover:border-emerald-400 dark:border-zinc-700 dark:bg-zinc-900/40 dark:hover:border-emerald-600",
@@ -218,7 +216,7 @@ export default function CompanyForm({ companyId, initial }: Props) {
     });
   };
 
-  return (
+  return (  
     <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <div className="border-b border-zinc-200 px-4 py-4 sm:px-6 sm:py-5 dark:border-zinc-800">
@@ -227,42 +225,48 @@ export default function CompanyForm({ companyId, initial }: Props) {
               <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 Perfil de empresa
               </h2>
-              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Actualiza el nombre, el tamaño, la identidad visual y revisa tus créditos disponibles.
+              <p className="mt-1 max-w-xl text-sm text-zinc-500 dark:text-zinc-400">
+                Actualiza el nombre, el tamaño y la identidad visual de tu empresa.
               </p>
             </div>
 
-            <div className="w-full lg:max-w-sm">
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-                <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                  {name || "Sin nombre"}
+            <div className="w-full lg:max-w-[320px]">
+              <div className="rounded-3xl border border-zinc-200 bg-gradient-to-br from-white to-zinc-50 px-4 py-4 shadow-sm dark:border-zinc-800 dark:from-zinc-950 dark:to-zinc-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                      {name || "Sin nombre"}
+                    </div>
+                    <div className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                      {getSizeLabel(size)}
+                    </div>
+                  </div>
+
+                  <div className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300">
+                    Activa
+                  </div>
                 </div>
 
-                <div className="mt-1 text-zinc-500 dark:text-zinc-400">
-                  {getSizeLabel(size)}
-                </div>
+                <div className="mt-4 rounded-2xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                  <div className="text-[11px] uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Créditos disponibles
+                  </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                  <div className="rounded-xl bg-white px-3 py-2 dark:bg-zinc-950">
-                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Disponibles</div>
-                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  <div className="mt-1 flex items-end gap-2">
+                    <span className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
                       {initial.assessmentCredits ?? 0}
-                    </div>
+                    </span>
+                    <span className="pb-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      assessments
+                    </span>
                   </div>
 
-                  <div className="rounded-xl bg-white px-3 py-2 dark:bg-zinc-950">
-                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Reservados</div>
-                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      {initial.assessmentCreditsReserved ?? 0}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-white px-3 py-2 dark:bg-zinc-950">
-                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Usados</div>
-                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      {initial.assessmentCreditsUsed ?? 0}
-                    </div>
-                  </div>
+                  <Link
+                    href="/dashboard/billing/credits"
+                    className="mt-3 inline-flex text-xs font-medium text-emerald-600 hover:underline dark:text-emerald-400"
+                  >
+                    Ver detalle de créditos
+                  </Link>
                 </div>
               </div>
             </div>
@@ -275,77 +279,83 @@ export default function CompanyForm({ companyId, initial }: Props) {
               Identidad visual
             </div>
 
-            <div className="mx-auto w-fit lg:mx-0">
-              {logoPreview ? (
-                <div className="relative h-28 w-28 overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:h-32 sm:w-32">
-                  <Image
-                    src={logoPreview}
-                    alt="Logo de la empresa"
-                    fill
-                    sizes="128px"
-                    className="object-contain p-3"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleRemoveLogo}
-                    disabled={isBusy}
-                    className="absolute -right-2 -top-2 inline-flex h-9 w-9 items-center justify-center rounded-full bg-red-500 text-white shadow-md transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
-                    aria-label="Eliminar logo"
-                  >
-                    {isUploading ? <Spinner /> : <Trash2 className="h-4 w-4" />}
-                  </button>
-                </div>
-              ) : (
-                <div className="flex h-28 w-28 items-center justify-center rounded-3xl border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 sm:h-32 sm:w-32">
-                  <Building2 className="h-10 w-10 text-zinc-400 dark:text-zinc-600" />
-                </div>
-              )}
-            </div>
-
-            <label
-              className={cardClasses}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setIsDragging(true);
-              }}
-              onDragLeave={() => setIsDragging(false)}
-              onDrop={handleDrop}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                disabled={isUploading}
-                onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
-              />
-
-              <div className="pointer-events-none text-center">
-                {isUploading ? (
-                  <>
-                    <Spinner className="mx-auto mb-2 h-6 w-6 text-emerald-600" />
-                    <p className="text-sm font-medium text-emerald-600">
-                      Subiendo logo...
-                    </p>
-                  </>
+            <div className="rounded-3xl border border-zinc-200 bg-gradient-to-b from-zinc-50 to-white p-4 shadow-sm dark:border-zinc-800 dark:from-zinc-900 dark:to-zinc-950">
+              <div className="flex flex-col items-center gap-4">
+                {logoPreview ? (
+                  <div className="relative h-24 w-24 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900 sm:h-28 sm:w-28">
+                    <Image
+                      src={logoPreview}
+                      alt="Logo de la empresa"
+                      fill
+                      sizes="112px"
+                      className="object-contain p-2.5"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveLogo}
+                      disabled={isBusy}
+                      className="absolute -right-2 -top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label="Eliminar logo"
+                    >
+                      {isUploading ? (
+                        <Spinner className="h-4 w-4" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
                 ) : (
-                  <>
-                    <ImagePlus className="mx-auto mb-2 h-6 w-6 text-zinc-400" />
-                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                      Arrastra tu logo aquí o{" "}
-                      <span className="text-emerald-600">haz clic para seleccionar</span>
-                    </p>
-                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                      PNG, JPG, WEBP o SVG · máximo 4 MB
-                    </p>
-                  </>
+                  <div className="flex h-24 w-24 items-center justify-center rounded-2xl border-2 border-dashed border-zinc-300 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 sm:h-28 sm:w-28">
+                    <Building2 className="h-8 w-8 text-zinc-400 dark:text-zinc-600" />
+                  </div>
                 )}
-              </div>
-            </label>
 
-            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-              Recomendado: imagen cuadrada, mínimo 200×200 px.
-            </p>
+                <label
+                  className={cardClasses}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragging(true);
+                  }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    disabled={isUploading}
+                    onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
+                  />
+
+                  <div className="pointer-events-none text-center">
+                    {isUploading ? (
+                      <>
+                        <Spinner className="mx-auto mb-2 h-5 w-5 text-emerald-600" />
+                        <p className="text-sm font-medium text-emerald-600">
+                          Subiendo logo...
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <ImagePlus className="mx-auto mb-2 h-5 w-5 text-zinc-400" />
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          Arrastra tu logo aquí o{" "}
+                          <span className="text-emerald-600">haz clic para seleccionar</span>
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          PNG, JPG, WEBP o SVG · máximo 4 MB
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </label>
+
+                <p className="text-center text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+                  Recomendado: imagen cuadrada, mínimo 200×200 px.
+                </p>
+              </div>
+            </div>
           </aside>
 
           <div className="space-y-6">
