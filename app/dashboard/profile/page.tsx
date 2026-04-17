@@ -14,6 +14,8 @@ import {
   Briefcase,
   PhoneCall,
   Linkedin,
+  ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 
 export default async function ProfilePage() {
@@ -73,203 +75,231 @@ export default async function ProfilePage() {
   const emailVerified = !!dbUser.emailVerified;
   const profileStatus = profile?.status || "PENDING";
 
+  const initials =
+    dbUser.name
+      ?.split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "U";
+
+  const memberSince = dbUser.createdAt
+    ? new Date(dbUser.createdAt).toLocaleDateString("es-MX", {
+        year: "numeric",
+        month: "long",
+      })
+    : "Sin fecha";
+
   return (
     <main className="w-full">
-      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-3 py-3 sm:px-6 sm:py-4 lg:px-10 space-y-4 sm:space-y-6">
-        <div className="rounded-2xl border glass-card p-4 sm:p-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-default">
-            Mi perfil
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Actualiza tus datos de contacto y la información básica de tu
-            empresa.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
-          <div className="space-y-4 sm:space-y-6 lg:order-2 lg:col-span-1">
-            <section className="rounded-2xl border glass-card p-4 sm:p-6">
-              <h2 className="mb-4 text-base sm:text-lg font-semibold text-default">
-                Tu cuenta
-              </h2>
-
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 text-base font-bold text-white sm:h-12 sm:w-12 sm:text-lg">
-                    {dbUser.name?.charAt(0).toUpperCase() || "U"}
+      <div className="mx-auto max-w-[1500px] px-4 py-4 sm:px-6 sm:py-6 lg:px-8 xl:px-10">
+        <div className="space-y-6">
+          <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="bg-gradient-to-r from-zinc-50 via-white to-zinc-50 px-5 py-6 dark:from-zinc-950 dark:via-zinc-950 dark:to-zinc-900 sm:px-6 sm:py-7 lg:px-8">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-900/10 dark:text-emerald-300">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    Perfil profesional
                   </div>
 
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <p className="truncate font-semibold text-default">
-                      {dbUser.name || "Usuario"}
-                    </p>
+                  <h1 className="mt-3 text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-3xl">
+                    Mi perfil
+                  </h1>
 
-                    {profile?.jobTitle && (
-                      <p className="inline-flex items-center gap-1 text-xs text-muted">
-                        <Briefcase className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate">{profile.jobTitle}</span>
-                      </p>
-                    )}
-
-                    <p className="flex items-center gap-1 truncate text-xs text-muted">
-                      <Mail className="h-3 w-3 shrink-0" />
-                      {dbUser.email}
-                    </p>
-
-                    {profile?.directPhone && (
-                      <p className="flex items-center gap-1 truncate text-xs text-muted">
-                        <PhoneCall className="h-3 w-3 shrink-0" />
-                        {profile.directPhone}
-                      </p>
-                    )}
-
-                    {profile?.linkedinUrl && (
-                      <a
-                        href={
-                          profile.linkedinUrl.startsWith("http")
-                            ? profile.linkedinUrl
-                            : `https://${profile.linkedinUrl}`
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:underline dark:text-emerald-400"
-                      >
-                        <Linkedin className="h-3 w-3 shrink-0" />
-                        Ver LinkedIn
-                      </a>
-                    )}
-                  </div>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400 sm:text-base">
+                    Administra tus datos de contacto, la información de tu empresa
+                    y la identidad visual de tu cuenta de reclutador.
+                  </p>
                 </div>
 
-                <div className="h-px bg-zinc-200 dark:bg-zinc-700" />
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50">
-                    <span className="text-sm text-muted">Email</span>
-                    {emailVerified ? (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                        <CheckCircle className="h-3.5 w-3.5" /> Verificado
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-300">
-                        <XCircle className="h-3.5 w-3.5" /> Sin verificar
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50">
-                    <span className="text-sm text-muted">Estado</span>
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${
-                        profileStatus === "APPROVED"
-                          ? "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-300"
-                          : "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300"
-                      }`}
-                    >
-                      {profileStatus === "APPROVED" ? (
-                        <>
-                          <CheckCircle className="h-3 w-3" /> Aprobado
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="h-3 w-3" /> Pendiente
-                        </>
-                      )}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-lg bg-zinc-50 p-2 dark:bg-zinc-900/50">
-                    <span className="text-sm text-muted">Miembro desde</span>
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-default">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {new Date(dbUser.createdAt).toLocaleDateString("es-MX", {
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-2xl border border-blue-200 bg-blue-50/60 p-4 sm:p-6 dark:border-blue-500/30 dark:bg-blue-900/20">
-              <h3 className="mb-2 text-sm font-semibold text-blue-900 dark:text-blue-100">
-                ¿Necesitas ayuda?
-              </h3>
-              <p className="mb-3 text-xs text-blue-700 dark:text-blue-300">
-                Si tienes problemas con tu cuenta o necesitas cambiar
-                información, contáctanos.
-              </p>
-              <a
-                href="mailto:support@taskit.com"
-                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
-              >
-                <Mail className="h-3.5 w-3.5" />
-                support@taskit.com
-              </a>
-            </section>
-          </div>
-
-          <div className="space-y-4 sm:space-y-6 lg:order-1 lg:col-span-2">
-            <section className="rounded-2xl border glass-card p-4 sm:p-6">
-              <div className="mb-4">
-                <h2 className="text-base sm:text-lg font-semibold text-default">
-                  Datos de contacto
-                </h2>
-                <p className="text-sm text-muted">
-                  Estos datos ayudan a que te ubiquen y te contacten más
-                  rápido.
-                </p>
-              </div>
-
-              <ProfileForm
-                initial={{
-                  phone: profile?.phone || "",
-                  website: company?.website || "",
-                  jobTitle: profile?.jobTitle || "",
-                  linkedinUrl: profile?.linkedinUrl || "",
-                  directPhone: profile?.directPhone || "",
-                }}
-              />
-            </section>
-
-            {companyId && (
-              <section className="rounded-2xl border glass-card p-4 sm:p-6">
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="text-base sm:text-lg font-semibold text-default">
-                      Mi empresa
-                    </h2>
-                    <p className="text-sm text-muted">
-                      Empresa actual:{" "}
-                      <span className="font-medium text-default">
-                        {company?.name || ""}
-                      </span>
-                    </p>
-                  </div>
-
-                  {company && company._count.jobs > 0 && (
-                    <div className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 dark:border-emerald-500/40 dark:bg-emerald-900/30">
-                      <Building2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                        {company._count.jobs} vacante
-                        {company._count.jobs !== 1 ? "s" : ""}
-                      </span>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 lg:min-w-[520px]">
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Empresa
                     </div>
-                  )}
+                    <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {company?.name || "Sin empresa"}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Vacantes activas
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {company?._count.jobs ?? 0}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                      Créditos
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {company?.assessmentCredits ?? 0} disponibles
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+            <aside className="space-y-6">
+              <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+                <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+                  <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Tu cuenta
+                  </h2>
                 </div>
 
-                <CompanyForm
-                  companyId={companyId}
+                <div className="p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 text-lg font-bold text-white shadow-sm">
+                      {initials}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="truncate text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                        {dbUser.name || "Usuario"}
+                      </div>
+                      <div className="mt-1 flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+                        <Mail className="h-4 w-4" />
+                        <span className="truncate">{dbUser.email}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-5 grid gap-3">
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        <Calendar className="h-3.5 w-3.5" />
+                        Miembro desde
+                      </div>
+                      <div className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        {memberSince}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Estado del correo
+                      </div>
+                      <div className="mt-1 inline-flex items-center gap-2 text-sm font-medium">
+                        {emailVerified ? (
+                          <>
+                            <CheckCircle className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                            <span className="text-emerald-700 dark:text-emerald-300">
+                              Verificado
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            <span className="text-amber-700 dark:text-amber-300">
+                              Pendiente de verificación
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                        <Briefcase className="h-3.5 w-3.5" />
+                        Estado del perfil
+                      </div>
+                      <div className="mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                        {profileStatus}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section className="overflow-hidden rounded-3xl border border-blue-200 bg-blue-50/70 shadow-sm dark:border-blue-900/40 dark:bg-blue-950/30">
+                <div className="p-5">
+                  <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                    Soporte
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-blue-800/80 dark:text-blue-200/80">
+                    Si necesitas ayuda con tu cuenta o quieres actualizar información
+                    sensible, contáctanos.
+                  </p>
+
+                  <a
+                    href="mailto:support@taskit.com"
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                  >
+                    <Mail className="h-4 w-4" />
+                    support@taskit.com
+                  </a>
+                </div>
+              </section>
+            </aside>
+
+            <section className="space-y-6">
+              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
+                <div className="mb-5">
+                  <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                    Datos de contacto
+                  </h2>
+                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                    Estos datos facilitan el contacto contigo dentro del flujo de
+                    reclutamiento.
+                  </p>
+                </div>
+
+                <ProfileForm
                   initial={{
-                    name: company?.name || "",
-                    size: company?.size || "",
-                    logoUrl: company?.logoUrl || "",
-                    assessmentCredits: company?.assessmentCredits ?? 0,
+                    phone: profile?.phone || "",
+                    website: company?.website || "",
+                    jobTitle: profile?.jobTitle || "",
+                    linkedinUrl: profile?.linkedinUrl || "",
+                    directPhone: profile?.directPhone || "",
                   }}
                 />
-              </section>
-            )}
+              </div>
+
+              {companyId && (
+                <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
+                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                        Mi empresa
+                      </h2>
+                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                        Configura la información principal y la identidad visual de{" "}
+                        <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                          {company?.name || "tu empresa"}
+                        </span>
+                        .
+                      </p>
+                    </div>
+
+                    {company && company._count.jobs > 0 && (
+                      <div className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300">
+                        <Building2 className="h-4 w-4" />
+                        {company._count.jobs} vacante
+                        {company._count.jobs !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </div>
+
+                  <CompanyForm
+                    companyId={companyId}
+                    initial={{
+                      name: company?.name || "",
+                      size: company?.size || "",
+                      logoUrl: company?.logoUrl || "",
+                      assessmentCredits: company?.assessmentCredits ?? 0,
+                    }}
+                  />
+                </div>
+              )}
+            </section>
           </div>
         </div>
       </div>
