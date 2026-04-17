@@ -34,6 +34,9 @@ type Props = {
     name: string;
     size: string | null;
     logoUrl: string | null;
+    assessmentCredits?: number | null;
+    assessmentCreditsReserved?: number | null;
+    assessmentCreditsUsed?: number | null;
   };
 };
 
@@ -219,27 +222,55 @@ export default function CompanyForm({ companyId, initial }: Props) {
     <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
       <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <div className="border-b border-zinc-200 px-4 py-4 sm:px-6 sm:py-5 dark:border-zinc-800">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
                 Perfil de empresa
               </h2>
               <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                Actualiza el nombre, el tamaño y la identidad visual de tu empresa.
+                Actualiza el nombre, el tamaño, la identidad visual y revisa tus créditos disponibles.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">{name || "Sin nombre"}</div>
-              <div className="mt-1 text-zinc-500 dark:text-zinc-400">
-                {getSizeLabel(size)}
+            <div className="w-full lg:max-w-sm">
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                  {name || "Sin nombre"}
+                </div>
+
+                <div className="mt-1 text-zinc-500 dark:text-zinc-400">
+                  {getSizeLabel(size)}
+                </div>
+
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl bg-white px-3 py-2 dark:bg-zinc-950">
+                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Disponibles</div>
+                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {initial.assessmentCredits ?? 0}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-white px-3 py-2 dark:bg-zinc-950">
+                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Reservados</div>
+                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {initial.assessmentCreditsReserved ?? 0}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl bg-white px-3 py-2 dark:bg-zinc-950">
+                    <div className="text-[11px] text-zinc-500 dark:text-zinc-400">Usados</div>
+                    <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      {initial.assessmentCreditsUsed ?? 0}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <aside className="space-y-3">
+        <div className="grid gap-6 px-4 py-5 sm:px-6 sm:py-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className="space-y-4">
             <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
               Identidad visual
             </div>
@@ -270,6 +301,47 @@ export default function CompanyForm({ companyId, initial }: Props) {
                 </div>
               )}
             </div>
+
+            <label
+              className={cardClasses}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragging(true);
+              }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                disabled={isUploading}
+                onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
+              />
+
+              <div className="pointer-events-none text-center">
+                {isUploading ? (
+                  <>
+                    <Spinner className="mx-auto mb-2 h-6 w-6 text-emerald-600" />
+                    <p className="text-sm font-medium text-emerald-600">
+                      Subiendo logo...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="mx-auto mb-2 h-6 w-6 text-zinc-400" />
+                    <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Arrastra tu logo aquí o{" "}
+                      <span className="text-emerald-600">haz clic para seleccionar</span>
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                      PNG, JPG, WEBP o SVG · máximo 4 MB
+                    </p>
+                  </>
+                )}
+              </div>
+            </label>
 
             <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
               Recomendado: imagen cuadrada, mínimo 200×200 px.
@@ -322,53 +394,6 @@ export default function CompanyForm({ companyId, initial }: Props) {
                   </option>
                 ))}
               </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                Logo
-              </label>
-
-              <label
-                className={cardClasses}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setIsDragging(true);
-                }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  disabled={isUploading}
-                  onChange={(e) => void handleUpload(e.target.files?.[0] ?? null)}
-                />
-
-                <div className="pointer-events-none text-center">
-                  {isUploading ? (
-                    <>
-                      <Spinner className="mx-auto mb-2 h-6 w-6 text-emerald-600" />
-                      <p className="text-sm font-medium text-emerald-600">
-                        Subiendo logo...
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <ImagePlus className="mx-auto mb-2 h-6 w-6 text-zinc-400" />
-                      <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                        Arrastra tu logo aquí o{" "}
-                        <span className="text-emerald-600">haz clic para seleccionar</span>
-                      </p>
-                      <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                        PNG, JPG, WEBP o SVG · máximo 4 MB
-                      </p>
-                    </>
-                  )}
-                </div>
-              </label>
             </div>
           </div>
         </div>
