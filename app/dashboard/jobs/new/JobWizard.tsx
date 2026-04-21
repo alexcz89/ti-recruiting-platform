@@ -89,6 +89,17 @@ function plainToBasicHtml(plain: string): string {
     .join("");
 }
 
+function withAssessmentDefaults(values: any) {
+  return {
+    ...values,
+    assessmentTemplateIds: Array.isArray(values?.assessmentTemplateIds)
+      ? values.assessmentTemplateIds
+      : values?.assessmentTemplateId
+      ? [values.assessmentTemplateId]
+      : [],
+  };
+}
+
 export default function JobWizard({
   onSubmit,
   presetCompany,
@@ -100,7 +111,6 @@ export default function JobWizard({
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [maxStepVisited, setMaxStepVisited] = useState(1);
-  // FIX Bug #14: 5 pasos en lugar de 6
   const [stepCompletion, setStepCompletion] = useState<boolean[]>([
     false,
     false,
@@ -111,9 +121,11 @@ export default function JobWizard({
   const [busy, setBusy] = useState(false);
   const [step3Tab, setStep3Tab] = useState<Step5Tab>("desc");
 
-  const methods = useForm<JobForm>({
+  const methods = useForm<any>({
     resolver: zodResolver(jobSchema),
-    defaultValues: makeDefaultValues({ presetCompany, initial }),
+    defaultValues: withAssessmentDefaults(
+      makeDefaultValues({ presetCompany, initial })
+    ),
     mode: "onChange",
   });
 
@@ -138,7 +150,7 @@ export default function JobWizard({
         "¿Deseas continuar con el borrador guardado automáticamente?"
       )
     ) {
-      reset(draft);
+      reset(withAssessmentDefaults(draft));
     } else {
       clearDraft();
     }
@@ -175,8 +187,8 @@ export default function JobWizard({
     const plain = tpl.description
       ? tpl.description
       : html
-        ? htmlToPlain(html)
-        : "";
+      ? htmlToPlain(html)
+      : "";
 
     if (!html.trim() && plain.trim()) {
       html = sanitizeHtml(plainToBasicHtml(plain));
@@ -220,44 +232,46 @@ export default function JobWizard({
       ? tpl.skills.filter((s) => !s.required).map((s) => s.name)
       : [];
 
-    reset({
-      ...makeDefaultValues({ presetCompany, initial }),
-      title: tpl.title ?? "",
-      locationType: normalizeLocationTypeValue(tpl.locationType) ?? "ONSITE",
-      city: tpl.city ?? "",
-      country: tpl.country ?? "",
-      admin1: tpl.admin1 ?? "",
-      cityNorm: tpl.cityNorm ?? "",
-      admin1Norm: tpl.admin1Norm ?? "",
-      locationLat: tpl.locationLat ?? null,
-      locationLng: tpl.locationLng ?? null,
-      currency: tpl.currency === "USD" ? "USD" : "MXN",
-      salaryMin: tpl.salaryMin ?? undefined,
-      salaryMax: tpl.salaryMax ?? undefined,
-      showSalary: Boolean(tpl.showSalary),
-      employmentType:
-        normalizeEmploymentTypeValue(tpl.employmentType) ?? "FULL_TIME",
-      schedule: tpl.schedule ?? "",
-      showBenefits,
-      benefits: benefitsJson,
-      aguinaldoDias,
-      vacacionesDias,
-      primaVacPct,
-      descriptionHtml: html,
-      descriptionPlain: plain,
-      minDegree: normalizeDegreeValue(tpl.minDegree),
-      eduRequired: eduReq,
-      eduNice,
-      requiredSkills: skillsReq,
-      niceSkills: skillsNice,
-      certs: Array.isArray(tpl.certs) ? tpl.certs : [],
-      languages: Array.isArray(tpl.languages) ? tpl.languages : [],
-    });
+    reset(
+      withAssessmentDefaults({
+        ...makeDefaultValues({ presetCompany, initial }),
+        title: tpl.title ?? "",
+        locationType: normalizeLocationTypeValue(tpl.locationType) ?? "ONSITE",
+        city: tpl.city ?? "",
+        country: tpl.country ?? "",
+        admin1: tpl.admin1 ?? "",
+        cityNorm: tpl.cityNorm ?? "",
+        admin1Norm: tpl.admin1Norm ?? "",
+        locationLat: tpl.locationLat ?? null,
+        locationLng: tpl.locationLng ?? null,
+        currency: tpl.currency === "USD" ? "USD" : "MXN",
+        salaryMin: tpl.salaryMin ?? undefined,
+        salaryMax: tpl.salaryMax ?? undefined,
+        showSalary: Boolean(tpl.showSalary),
+        employmentType:
+          normalizeEmploymentTypeValue(tpl.employmentType) ?? "FULL_TIME",
+        schedule: tpl.schedule ?? "",
+        showBenefits,
+        benefits: benefitsJson,
+        aguinaldoDias,
+        vacacionesDias,
+        primaVacPct,
+        descriptionHtml: html,
+        descriptionPlain: plain,
+        minDegree: normalizeDegreeValue(tpl.minDegree),
+        eduRequired: eduReq,
+        eduNice,
+        requiredSkills: skillsReq,
+        niceSkills: skillsNice,
+        certs: Array.isArray(tpl.certs) ? tpl.certs : [],
+        languages: Array.isArray(tpl.languages) ? tpl.languages : [],
+      })
+    );
 
     toastSuccess("Plantilla aplicada");
   }
 
-  async function onValidSubmit(v: JobForm) {
+  async function onValidSubmit(v: any) {
     setBusy(true);
 
     try {
@@ -287,7 +301,7 @@ export default function JobWizard({
         if (v.admin1Norm) fd.set("admin1Norm", v.admin1Norm);
         if (v.locationLat != null) fd.set("locationLat", String(v.locationLat));
         if (v.locationLng != null) fd.set("locationLng", String(v.locationLng));
-}
+      }
 
       fd.set("currency", v.currency);
 
@@ -315,8 +329,17 @@ export default function JobWizard({
       fd.set("showBenefits", String(v.showBenefits));
       fd.set("benefitsJson", JSON.stringify(benefitsPayload));
 
-      if (v.assessmentTemplateId) {
-        fd.set("assessmentTemplateId", v.assessmentTemplateId);
+      const assessmentTemplateIds = Array.isArray(v.assessmentTemplateIds)
+        ? v.assessmentTemplateIds
+        : v.assessmentTemplateId
+        ? [v.assessmentTemplateId]
+        : [];
+
+      fd.set("assessmentTemplateIds", JSON.stringify(assessmentTemplateIds));
+
+      // Compatibilidad temporal con backend viejo
+      if (assessmentTemplateIds.length > 0) {
+        fd.set("assessmentTemplateId", assessmentTemplateIds[0]);
       }
 
       let safeHtml = sanitizeHtml((v.descriptionHtml || "").trim());
@@ -339,16 +362,16 @@ export default function JobWizard({
       fd.set(
         "educationJson",
         JSON.stringify([
-          ...v.eduRequired.map((name) => ({ name, required: true })),
-          ...v.eduNice.map((name) => ({ name, required: false })),
+          ...v.eduRequired.map((name: string) => ({ name, required: true })),
+          ...v.eduNice.map((name: string) => ({ name, required: false })),
         ])
       );
 
       fd.set(
         "skillsJson",
         JSON.stringify([
-          ...v.requiredSkills.map((name) => ({ name, required: true })),
-          ...v.niceSkills.map((name) => ({ name, required: false })),
+          ...v.requiredSkills.map((name: string) => ({ name, required: true })),
+          ...v.niceSkills.map((name: string) => ({ name, required: false })),
         ])
       );
 
@@ -453,7 +476,6 @@ export default function JobWizard({
                   />
                 </div>
 
-                {/* 1 — Básicos: título, empresa, tipo empleo, horario, ubicación, sueldo */}
                 {step === 1 && (
                   <Step1Basic
                     presetCompany={presetCompany ?? null}
@@ -463,7 +485,6 @@ export default function JobWizard({
                   />
                 )}
 
-                {/* 2 — Prestaciones */}
                 {step === 2 && (
                   <Step3Benefits
                     onNext={() => goNextStep(3)}
@@ -471,7 +492,6 @@ export default function JobWizard({
                   />
                 )}
 
-                {/* 3 — Detalles: descripción, skills, idiomas, educación */}
                 {step === 3 && (
                   <Step5Details
                     skillsOptions={skillsOptions}
@@ -483,7 +503,6 @@ export default function JobWizard({
                   />
                 )}
 
-                {/* 4 — Evaluaciones */}
                 {step === 4 && (
                   <Step4Assessments
                     onNext={() => goNextStep(5)}
@@ -491,7 +510,6 @@ export default function JobWizard({
                   />
                 )}
 
-                {/* 5 — Revisión y publicación */}
                 {step === 5 && (
                   <Step6Review
                     presetCompany={presetCompany ?? null}

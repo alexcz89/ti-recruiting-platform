@@ -189,10 +189,7 @@ function normalizeEducationLevel(
   ) {
     return "HIGH_SCHOOL";
   }
-  if (
-    normalized.includes("TECNICO") ||
-    normalized.includes("TECNICA")
-  ) {
+  if (normalized.includes("TECNICO") || normalized.includes("TECNICA")) {
     return "TECHNICAL";
   }
   if (normalized.includes("SECUNDARIA")) return "SECONDARY";
@@ -269,11 +266,11 @@ export async function GET(req: NextRequest) {
       const companyObj = job.companyConfidential
         ? null
         : job.company
-          ? {
-              name: job.company.name ?? null,
-              logoUrl: job.company.logoUrl ?? null,
-            }
-          : null;
+        ? {
+            name: job.company.name ?? null,
+            logoUrl: job.company.logoUrl ?? null,
+          }
+        : null;
 
       return jsonPublic({
         job: {
@@ -286,9 +283,7 @@ export async function GET(req: NextRequest) {
           companyLogoUrl: job.companyConfidential
             ? null
             : companyObj?.logoUrl ?? null,
-          logoUrl: job.companyConfidential
-            ? null
-            : companyObj?.logoUrl ?? null,
+          logoUrl: job.companyConfidential ? null : companyObj?.logoUrl ?? null,
           location: job.location,
           locationType: job.locationType,
           locationLat: job.locationLat,
@@ -328,8 +323,8 @@ export async function GET(req: NextRequest) {
       remoteParam === "true"
         ? true
         : remoteParam === "false"
-          ? false
-          : undefined;
+        ? false
+        : undefined;
     const employmentTypeParam = (
       searchParams.get("employmentType") || ""
     ).trim();
@@ -404,8 +399,8 @@ export async function GET(req: NextRequest) {
       const companyObj = j.companyConfidential
         ? null
         : j.company
-          ? { name: j.company.name ?? null, logoUrl: j.company.logoUrl ?? null }
-          : null;
+        ? { name: j.company.name ?? null, logoUrl: j.company.logoUrl ?? null }
+        : null;
 
       return {
         id: j.id,
@@ -581,7 +576,25 @@ export async function POST(req: NextRequest) {
     const companyMode = getFormString(formData, "companyMode");
     const companyConfidential = companyMode === "confidential";
 
-    // FIX: leer assessmentTemplateId del FormData
+    // Nuevo: soportar múltiples assessments
+    const assessmentTemplateIdsParsed = getFormJSON<string[]>(
+      formData,
+      "assessmentTemplateIds"
+    );
+    if (!assessmentTemplateIdsParsed.ok) {
+      return jsonNoStore({ error: "assessmentTemplateIds inválido" }, 400);
+    }
+
+    let assessmentTemplateIds: string[] = Array.isArray(
+      assessmentTemplateIdsParsed.value
+    )
+      ? assessmentTemplateIdsParsed.value
+          .filter((id): id is string => typeof id === "string")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [];
+
+    // Fallback temporal para compatibilidad con el campo viejo
     const rawAssessmentTemplateId = getFormString(
       formData,
       "assessmentTemplateId"
@@ -589,18 +602,29 @@ export async function POST(req: NextRequest) {
     const assessmentTemplateId =
       rawAssessmentTemplateId.length > 0 ? rawAssessmentTemplateId : null;
 
-    // Validar existencia del template.
-    // Nota: aquí no se valida ownership por company porque el schema compartido
-    // no muestra con certeza ese campo en AssessmentTemplate.
-    if (assessmentTemplateId) {
-      const templateExists = await prisma.assessmentTemplate.findUnique({
-        where: { id: assessmentTemplateId },
+    if (assessmentTemplateIds.length === 0 && assessmentTemplateId) {
+      assessmentTemplateIds = [assessmentTemplateId];
+    }
+
+    // Deduplicar por si el frontend manda ids repetidos
+    assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
+
+    // Validar existencia de todos los templates seleccionados
+    if (assessmentTemplateIds.length > 0) {
+      const existingTemplates = await prisma.assessmentTemplate.findMany({
+        where: { id: { in: assessmentTemplateIds } },
         select: { id: true },
       });
 
-      if (!templateExists) {
+      const existingIds = new Set(existingTemplates.map((t) => t.id));
+      const missingIds = assessmentTemplateIds.filter((id) => !existingIds.has(id));
+
+      if (missingIds.length > 0) {
         return jsonNoStore(
-          { error: "El assessment template no existe" },
+          {
+            error: "Uno o más assessment templates no existen",
+            missingTemplateIds: missingIds,
+          },
           400
         );
       }
@@ -701,18 +725,15 @@ export async function POST(req: NextRequest) {
 
       await syncJobSkills(tx, createdJob.id, skillsJson);
 
-      // FIX: persistir la relación del assessment seleccionado.
-      // Uso createMany + skipDuplicates para hacerlo más defensivo.
-      if (assessmentTemplateId) {
+      if (assessmentTemplateIds.length > 0) {
         await tx.jobAssessment.createMany({
-          data: [
-            {
-              jobId: createdJob.id,
-              templateId: assessmentTemplateId,
-              isRequired: false,
-              minScore: null,
-            },
-          ],
+          data: assessmentTemplateIds.map((templateId) => ({
+            jobId: createdJob.id,
+            templateId,
+            isRequired: true,
+            minScore: null,
+            triggerAt: "AFTER_APPLY",
+          })),
           skipDuplicates: true,
         });
       }
@@ -747,7 +768,8 @@ export async function POST(req: NextRequest) {
         minDegree,
         skills: Array.isArray(skillsJson) ? skillsJson : [],
         certs: Array.isArray(certsJson) ? certsJson : [],
-        _v: 1,
+        assessmentTemplateIds,
+        _v: 2,
       };
 
       const existingTpl = await prisma.jobTemplate.findFirst({
