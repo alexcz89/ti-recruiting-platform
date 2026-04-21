@@ -60,7 +60,7 @@ export default function Step4Assessments({
       const creditsRes = await fetch("/api/billing/credits");
       if (creditsRes.ok) {
         const data = await creditsRes.json();
-        setCompanyCredits(data.balance?.available || 0);
+        setCompanyCredits(data.available || 0);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
