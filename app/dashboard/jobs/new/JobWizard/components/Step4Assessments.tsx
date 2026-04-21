@@ -23,7 +23,7 @@ interface AssessmentTemplate {
   totalQuestions: number;
   timeLimit: number;
   passingScore: number;
-  pricing: {
+  pricing?: {
     reserve: number;
     complete: number;
     total: number;
@@ -44,34 +44,47 @@ export default function Step4Assessments({
   const selectedTemplateId = watch("assessmentTemplateId");
 
   useEffect(() => {
-    fetchData();
+    void fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
-      // Fetch templates
       const templatesRes = await fetch("/api/assessments", { cache: "no-store" });
       if (templatesRes.ok) {
         const data = await templatesRes.json();
-        setTemplates(data.templates || []);
+
+        const normalizedTemplates: AssessmentTemplate[] = (data.templates || []).map(
+          (t: AssessmentTemplate) => ({
+            ...t,
+            pricing: t.pricing ?? getAssessmentCost(t.type, t.difficulty),
+          })
+        );
+
+        setTemplates(normalizedTemplates);
+      } else {
+        setTemplates([]);
       }
 
-      // Fetch company credits
-      const creditsRes = await fetch("/api/billing/credits");
+      const creditsRes = await fetch("/api/billing/credits", { cache: "no-store" });
       if (creditsRes.ok) {
         const data = await creditsRes.json();
-        setCompanyCredits(data.available || 0);
+        setCompanyCredits(Number(data.available ?? 0));
+      } else {
+        setCompanyCredits(0);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
+      setTemplates([]);
+      setCompanyCredits(0);
     } finally {
       setLoading(false);
     }
   };
 
   const filteredTemplates = useMemo(() => {
-    const query = searchQuery.toLowerCase();
+    const query = searchQuery.toLowerCase().trim();
     if (!query) return templates;
+
     return templates.filter(
       (t) =>
         t.title.toLowerCase().includes(query) ||
@@ -82,12 +95,16 @@ export default function Step4Assessments({
 
   const selectedTemplate = templates.find((t) => t.id === selectedTemplateId);
 
+  const selectedTemplateCost = selectedTemplate
+    ? selectedTemplate.pricing ??
+      getAssessmentCost(selectedTemplate.type, selectedTemplate.difficulty)
+    : null;
+
   const hasLowCredits = companyCredits < 5;
 
   return (
     <section className="p-6 lg:p-8">
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/20">
             <ClipboardCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
@@ -102,11 +119,10 @@ export default function Step4Assessments({
           </div>
         </div>
 
-        {/* Balance de Créditos */}
         <div className="rounded-xl border border-violet-200/70 bg-gradient-to-r from-violet-50/50 to-purple-50/50 p-4 dark:border-violet-800/70 dark:from-violet-900/10 dark:to-purple-900/10">
           <div className="flex items-center justify-between">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="mb-1 flex items-center gap-2">
                 <DollarSign className="h-4 w-4 text-violet-600 dark:text-violet-400" />
                 <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                   Balance de Créditos
@@ -125,20 +141,20 @@ export default function Step4Assessments({
           </div>
 
           {hasLowCredits && (
-            <div className="mt-3 p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800">
+            <div className="mt-3 rounded-lg border border-amber-200 bg-amber-100 p-2 dark:border-amber-800 dark:bg-amber-900/30">
               <div className="flex items-start gap-2 text-xs">
-                <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                 <div>
                   <p className="font-semibold text-amber-900 dark:text-amber-100">
                     Créditos Bajos
                   </p>
-                  <p className="text-amber-800 dark:text-amber-200 mt-0.5">
+                  <p className="mt-0.5 text-amber-800 dark:text-amber-200">
                     Tienes menos de 5 créditos. Los candidatos no recibirán evaluaciones.{" "}
                     <a
                       href="/dashboard/billing/credits"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="underline font-medium"
+                      className="font-medium underline"
                     >
                       Comprar más
                     </a>
@@ -149,74 +165,69 @@ export default function Step4Assessments({
           )}
         </div>
 
-        {/* Info Box */}
         <div className="rounded-xl border border-blue-200/70 bg-blue-50/50 p-4 dark:border-blue-800/70 dark:bg-blue-900/10">
           <div className="flex gap-3">
-            <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <AlertCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
             <div className="text-sm">
-              <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              <p className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
                 ¿Cómo funcionan las evaluaciones?
               </p>
-              <ul className="text-blue-800 dark:text-blue-200 space-y-1 text-xs">
+              <ul className="space-y-1 text-xs text-blue-800 dark:text-blue-200">
                 <li>• Se envían automáticamente cuando un candidato aplica</li>
                 <li>• Reserva: 0.5 créditos al enviar, resto al completar</li>
                 <li>• Si no completa en 7 días, se reembolsan los créditos</li>
-                <li>• MCQ: 1.0 crédito | Coding: 2.5-4.0 créditos por candidato</li>
+                <li>• MCQ: 1.0 crédito · Coding: 2.5-4.0 créditos por candidato</li>
               </ul>
             </div>
           </div>
         </div>
 
-        {/* Evaluación Seleccionada */}
-        {selectedTemplate && (
-          <div className="rounded-xl border-2 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-4">
+        {selectedTemplate && selectedTemplateCost && (
+          <div className="rounded-xl border-2 border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">
             <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">
-                    {selectedTemplate.type === "CODING" ? "💻" : "📝"}
-                  </span>
-                  <h4 className="font-semibold text-zinc-900 dark:text-zinc-100">
-                    {selectedTemplate.title}
-                  </h4>
-                </div>
+              <div>
+                <h4 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                  {selectedTemplate.title}
+                </h4>
                 {selectedTemplate.description && (
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-3">
+                  <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
                     {selectedTemplate.description}
                   </p>
                 )}
-                <div className="flex flex-wrap gap-2">
-                  <span className="px-2 py-1 rounded-md bg-white dark:bg-zinc-800 text-xs font-medium border">
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-md border bg-white px-2 py-1 text-xs font-medium dark:bg-zinc-800">
                     {selectedTemplate.type}
                   </span>
-                  <span className="px-2 py-1 rounded-md bg-white dark:bg-zinc-800 text-xs font-medium border">
+                  <span className="rounded-md border bg-white px-2 py-1 text-xs font-medium dark:bg-zinc-800">
                     {selectedTemplate.difficulty}
                   </span>
-                  <span className="px-2 py-1 rounded-md bg-white dark:bg-zinc-800 text-xs font-medium border">
+                  <span className="rounded-md border bg-white px-2 py-1 text-xs font-medium dark:bg-zinc-800">
                     {selectedTemplate.totalQuestions} preguntas
                   </span>
-                  <span className="px-2 py-1 rounded-md bg-white dark:bg-zinc-800 text-xs font-medium border">
+                  <span className="rounded-md border bg-white px-2 py-1 text-xs font-medium dark:bg-zinc-800">
                     {selectedTemplate.timeLimit} min
                   </span>
-                  <span className="px-2 py-1 rounded-md bg-white dark:bg-zinc-800 text-xs font-medium border">
+                  <span className="rounded-md border bg-white px-2 py-1 text-xs font-medium dark:bg-zinc-800">
                     Passing: {selectedTemplate.passingScore}%
                   </span>
                 </div>
               </div>
+
               <div className="ml-4 text-right">
                 <div className="mb-2">
                   <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-                    {formatCredits(selectedTemplate.pricing.total)}
+                    {formatCredits(selectedTemplateCost.total)}
                   </p>
                   <p className="text-xs text-zinc-500">créditos/candidato</p>
-                  <p className="text-xs text-zinc-400 mt-1">
-                    Reserva: {formatCredits(selectedTemplate.pricing.reserve)}
+                  <p className="mt-1 text-xs text-zinc-400">
+                    Reserva: {formatCredits(selectedTemplateCost.reserve)}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setValue("assessmentTemplateId", undefined)}
-                  className="text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium"
+                  className="text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                 >
                   Remover
                 </button>
@@ -225,7 +236,6 @@ export default function Step4Assessments({
           </div>
         )}
 
-        {/* Selector de Evaluación */}
         {!selectedTemplate && (
           <>
             <div className="mb-4">
@@ -234,17 +244,17 @@ export default function Step4Assessments({
                 placeholder="Buscar evaluaciones..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm focus:border-transparent focus:ring-2 focus:ring-emerald-500 dark:border-zinc-700 dark:bg-zinc-900"
               />
             </div>
 
             {loading ? (
-              <div className="text-center py-8 text-zinc-500">
-                <div className="inline-block w-6 h-6 border-2 border-zinc-300 border-t-violet-600 rounded-full animate-spin" />
+              <div className="py-8 text-center text-zinc-500">
+                <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-zinc-300 border-t-violet-600" />
                 <p className="mt-2 text-sm">Cargando evaluaciones...</p>
               </div>
             ) : filteredTemplates.length === 0 ? (
-              <div className="text-center py-8 text-zinc-500">
+              <div className="py-8 text-center text-zinc-500">
                 <p className="text-sm">
                   {searchQuery
                     ? "No se encontraron evaluaciones"
@@ -252,63 +262,72 @@ export default function Step4Assessments({
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+              <div className="max-h-96 space-y-3 overflow-y-auto pr-2">
                 {filteredTemplates.map((template) => {
-                  const cost = template.pricing;
+                  const cost =
+                    template.pricing ?? getAssessmentCost(template.type, template.difficulty);
                   const canAfford = companyCredits >= cost.reserve;
 
                   return (
                     <button
                       key={template.id}
                       type="button"
-                      onClick={() => canAfford && setValue("assessmentTemplateId", template.id)}
+                      onClick={() =>
+                        canAfford && setValue("assessmentTemplateId", template.id)
+                      }
                       disabled={!canAfford}
                       className={clsx(
-                        "w-full text-left p-4 rounded-xl border-2 transition-all",
+                        "w-full rounded-xl border-2 p-4 text-left transition-all",
                         canAfford
-                          ? "border-zinc-200 dark:border-zinc-700 hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md cursor-pointer"
-                          : "border-zinc-100 dark:border-zinc-800 opacity-50 cursor-not-allowed",
-                        "bg-white dark:bg-zinc-900"
+                          ? "border-zinc-200 hover:border-emerald-300 hover:bg-emerald-50/30 dark:border-zinc-800 dark:hover:border-emerald-700"
+                          : "cursor-not-allowed border-zinc-200 opacity-60 dark:border-zinc-800"
                       )}
                     >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">
-                              {template.type === "CODING" ? "💻" : "📝"}
-                            </span>
-                            <h4 className="font-semibold text-zinc-900 dark:text-zinc-100">
-                              {template.title}
-                            </h4>
-                          </div>
-                          {template.description && (
-                            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-3 line-clamp-2">
-                              {template.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-2">
-                            <span className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs font-medium">
-                              {template.type}
-                            </span>
-                            <span className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs font-medium">
-                              {template.difficulty}
-                            </span>
-                            <span className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs font-medium">
-                              {template.totalQuestions} preguntas
-                            </span>
-                            <span className="px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-xs font-medium">
-                              {template.timeLimit} min
-                            </span>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 rounded-lg bg-violet-100 p-2 dark:bg-violet-900/20">
+                              <ClipboardCheck className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h4 className="font-semibold text-zinc-900 dark:text-zinc-50">
+                                {template.title}
+                              </h4>
+                              {template.description && (
+                                <p className="mt-1 line-clamp-2 text-sm text-zinc-600 dark:text-zinc-400">
+                                  {template.description}
+                                </p>
+                              )}
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <span className="rounded-md border bg-zinc-50 px-2 py-1 text-xs font-medium dark:bg-zinc-900">
+                                  {template.type}
+                                </span>
+                                <span className="rounded-md border bg-zinc-50 px-2 py-1 text-xs font-medium dark:bg-zinc-900">
+                                  {template.difficulty}
+                                </span>
+                                <span className="rounded-md border bg-zinc-50 px-2 py-1 text-xs font-medium dark:bg-zinc-900">
+                                  {template.totalQuestions} preguntas
+                                </span>
+                                <span className="rounded-md border bg-zinc-50 px-2 py-1 text-xs font-medium dark:bg-zinc-900">
+                                  {template.timeLimit} min
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div className="ml-4 text-right flex-shrink-0">
-                          <p className="text-xl font-bold text-violet-600 dark:text-violet-400">
+
+                        <div className="text-right">
+                          <p className="text-lg font-bold text-violet-600 dark:text-violet-400">
                             {formatCredits(cost.total)}
                           </p>
-                          <p className="text-xs text-zinc-500 mb-1">créditos</p>
+                          <p className="text-xs text-zinc-500">total</p>
+                          <p className="mt-1 text-xs text-zinc-400">
+                            Reserva: {formatCredits(cost.reserve)}
+                          </p>
                           {!canAfford && (
-                            <p className="text-xs text-red-600 dark:text-red-400 font-medium">
-                              Sin créditos
+                            <p className="mt-2 text-xs font-medium text-red-600 dark:text-red-400">
+                              Sin créditos suficientes
                             </p>
                           )}
                         </div>
@@ -321,22 +340,34 @@ export default function Step4Assessments({
           </>
         )}
 
-        {/* Navigation */}
-        <div className="flex justify-between gap-4 pt-6 mt-6 border-t border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center justify-between border-t border-zinc-200 pt-6 dark:border-zinc-800">
           <button
             type="button"
-            className="rounded-lg border border-zinc-300 dark:border-zinc-700 px-6 py-3 text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
             onClick={onBack}
+            className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             Atrás
           </button>
-          <button
-            type="button"
-            className="rounded-lg bg-emerald-600 px-6 py-3 text-sm font-semibold text-white hover:bg-emerald-500 transition"
-            onClick={onNext}
-          >
-            {selectedTemplate ? "Continuar" : "Saltar por ahora"} →
-          </button>
+
+          <div className="flex items-center gap-3">
+            {selectedTemplate && selectedTemplateCost && (
+              <div className="text-right">
+                <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  Costo: {formatCredits(selectedTemplateCost.total)}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Reserva inicial: {formatCredits(selectedTemplateCost.reserve)}
+                </p>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={onNext}
+              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              Continuar
+            </button>
+          </div>
         </div>
       </div>
     </section>
