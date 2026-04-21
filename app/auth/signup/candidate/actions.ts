@@ -1,10 +1,12 @@
 // app/auth/signup/candidate/actions.ts
 "use server";
 
-import { prisma } from '@/lib/server/prisma';
+import { prisma } from "@/lib/server/prisma";
 import { hash } from "bcryptjs";
 import type { Role } from "@prisma/client";
-import { z } from 'zod';
+import { z } from "zod";
+import { createEmailVerifyToken } from "@/lib/server/tokens";
+import { sendVerificationEmail as sendVerificationEmailBase } from "@/lib/server/mailer";
 
 const ImprovedSignupSchema = z.object({
   firstName: z.string().min(2).max(50),
@@ -24,7 +26,7 @@ const ImprovedSignupSchema = z.object({
   admin1Norm: z.string().optional(),
   linkedin: z.string().url().optional(),
   github: z.string().url().optional(),
-  role: z.enum(['CANDIDATE', 'RECRUITER']).default('CANDIDATE'),
+  role: z.enum(["CANDIDATE", "RECRUITER"]).default("CANDIDATE"),
 });
 
 type ImprovedSignupInput = z.infer<typeof ImprovedSignupSchema>;
@@ -92,80 +94,28 @@ function parseMonthToDate(ym?: string | null): Date | null {
 }
 
 function normalize(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+  return text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 /**
- * Envía email de verificación
+ * Envía email de verificación usando el mailer central.
  */
-async function sendVerificationEmail(email: string, firstName?: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM;
-
-  // 👇 FIX: priorizar NEXTAUTH_URL que es la variable correcta en producción
+async function sendCandidateVerificationEmail(
+  email: string,
+  _firstName?: string
+) {
   const baseUrl = (
-    process.env.NEXTAUTH_URL ||
     process.env.NEXT_PUBLIC_BASE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.APP_URL ||
+    process.env.NEXTAUTH_URL ||
     "http://localhost:3000"
   ).replace(/\/$/, "");
 
-  if (!apiKey || !from) {
-    console.warn(
-      "[signup] Falta RESEND_API_KEY o EMAIL_FROM; no se envió correo de verificación."
-    );
-    return;
-  }
-
-  const { createEmailVerifyToken } = await import("@/lib/server/tokens");
   const token = await createEmailVerifyToken({ email }, 60);
+  const verifyUrl = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(
+    token
+  )}`;
 
-  const verifyUrl = `${baseUrl}/api/auth/verify?token=${token}`;
-
-  const name = firstName || "¡Hola!";
-
-  const subject = "Confirma tu correo en Bolsa TI";
-  const html = `
-    <div style="font-family: system-ui, -apple-system, sans-serif; padding:24px;">
-      <h1 style="font-size:20px; margin-bottom:12px;">${name}, confirma tu correo</h1>
-      <p style="font-size:14px; line-height:1.5; margin-bottom:16px;">
-        Gracias por crear tu cuenta en <strong>Bolsa TI</strong>.
-        Antes de empezar a usarla, necesitamos confirmar que este correo es tuyo.
-      </p>
-      <p style="text-align:center; margin:24px 0;">
-        <a href="${verifyUrl}"
-           style="display:inline-block; padding:10px 18px; border-radius:999px;
-                  background:#059669; color:#ffffff; text-decoration:none; font-size:14px;">
-          Verificar correo
-        </a>
-      </p>
-      <p style="font-size:12px; color:#6b7280; line-height:1.5; margin-top:24px;">
-        Si tú no creaste esta cuenta, puedes ignorar este mensaje. El enlace expira en 60 minutos.
-      </p>
-    </div>
-  `;
-
-  try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: email,
-        subject,
-        html,
-      }),
-    });
-  } catch (err) {
-    console.error("[signup] Error enviando correo de verificación:", err);
-  }
+  await sendVerificationEmailBase(email, verifyUrl);
 }
 
 async function importDraftToUser(userId: string, draft: CvDraft) {
@@ -315,7 +265,10 @@ export async function createCandidateImproved(
     let admin1Norm = data.admin1Norm || null;
 
     if (data.location && !city) {
-      const parts = data.location.split(",").map((p) => p.trim()).filter(Boolean);
+      const parts = data.location
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
       if (parts.length >= 1) city = parts[0];
       if (parts.length >= 3) admin1 = parts[parts.length - 2];
       else if (parts.length === 2) admin1 = parts[1];
@@ -337,7 +290,7 @@ export async function createCandidateImproved(
         maternalSurname: data.maternalSurname || null,
         name: [data.firstName, data.lastName, data.maternalSurname]
           .filter(Boolean)
-          .join(' '),
+          .join(" "),
         phone: data.phone || null,
         location: data.location || null,
         locationLat: data.locationLat || null,
@@ -353,8 +306,8 @@ export async function createCandidateImproved(
         onboardingStep: 3,
         profileCompleted: !!(data.phone && data.location),
         profileCompletion: calculateProfileCompletion(data),
-        signupSource: 'organic',
-        signupDevice: 'web',
+        signupSource: "organic",
+        signupDevice: "web",
       },
       select: { id: true, firstName: true, email: true },
     });
@@ -368,7 +321,7 @@ export async function createCandidateImproved(
       await importDraftToUser(user.id, cvDraft);
     }
 
-    await sendVerificationEmail(user.email, data.firstName);
+    await sendCandidateVerificationEmail(user.email, data.firstName);
 
     return { ok: true, emailVerificationSent: true };
   } catch (err) {
@@ -407,9 +360,9 @@ export async function createCandidateAction(
 
     const passwordHash = await hash(data.password, 10);
 
-    const nameParts = data.name.split(' ');
+    const nameParts = data.name.split(" ");
     const firstName = nameParts[0] || data.name;
-    const lastName = nameParts.slice(1).join(' ') || '';
+    const lastName = nameParts.slice(1).join(" ") || "";
 
     const user = await prisma.user.create({
       data: {
@@ -434,7 +387,7 @@ export async function createCandidateAction(
       await importDraftToUser(user.id, cvDraft);
     }
 
-    await sendVerificationEmail(user.email, firstName);
+    await sendCandidateVerificationEmail(user.email, firstName);
 
     return { ok: true, emailVerificationSent: true };
   } catch (err) {

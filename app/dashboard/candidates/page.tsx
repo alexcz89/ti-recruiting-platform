@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from '@/lib/server/prisma';
 
 export const metadata = { title: "Candidatos | Panel" };
+export const dynamic = "force-dynamic";
 
 export default async function CandidatesPage() {
   const users = await prisma.user.findMany({

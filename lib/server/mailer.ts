@@ -1,4 +1,4 @@
-import 'server-only';
+import "server-only";
 
 // lib/server/mailer.ts
 import type { Resend } from "resend";
@@ -23,12 +23,10 @@ function resolveBaseUrl() {
 
 const BASE_URL = resolveBaseUrl();
 
-const EMAIL_ENABLED = (process.env.EMAIL_ENABLED || "").toLowerCase() === "true";
+const EMAIL_ENABLED =
+  (process.env.EMAIL_ENABLED || "").toLowerCase() === "true";
 const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const RESEND_FROM =
-  process.env.RESEND_FROM ||
-  process.env.EMAIL_FROM ||
-  "Taskio <noreply@taskio.com.mx>";
+const RESEND_FROM = process.env.RESEND_FROM || process.env.EMAIL_FROM || "";
 
 let resend: Resend | null = null;
 
@@ -45,7 +43,7 @@ async function getResend(): Promise<Resend | null> {
 
 export type SendResult =
   | { ok: true; id?: string }
-  | { skipped: true }
+  | { skipped: true; reason?: string }
   | { error: string };
 
 function normalizeIdempotencyKey(key?: string) {
@@ -65,20 +63,24 @@ export async function sendEmail(opts: {
   from?: string;
   dedupeKey?: string;
 }): Promise<SendResult> {
+  const resolvedFrom = (opts.from || RESEND_FROM || "").trim();
+
   if (!EMAIL_ENABLED) {
     if (process.env.NODE_ENV !== "production") {
       console.log("📨 [MAIL:DRYRUN]", {
-        from: opts.from || RESEND_FROM,
+        from: resolvedFrom || "(missing)",
         to: opts.to,
         subject: opts.subject,
-        dedupeKey: opts.dedupeKey ? normalizeIdempotencyKey(opts.dedupeKey) : undefined,
+        dedupeKey: opts.dedupeKey
+          ? normalizeIdempotencyKey(opts.dedupeKey)
+          : undefined,
       });
     }
-    return { skipped: true };
+    return { skipped: true, reason: "EMAIL_ENABLED=false" };
   }
 
   if (!RESEND_API_KEY) return { error: "Missing RESEND_API_KEY" };
-  if (!RESEND_FROM && !opts.from) return { error: "Missing RESEND_FROM" };
+  if (!resolvedFrom) return { error: "Missing RESEND_FROM or EMAIL_FROM" };
 
   const client = await getResend();
   if (!client) return { error: "Email client not initialized" };
@@ -86,7 +88,7 @@ export async function sendEmail(opts: {
   const idempotencyKey = normalizeIdempotencyKey(opts.dedupeKey);
 
   const payload: any = {
-    from: opts.from || RESEND_FROM,
+    from: resolvedFrom,
     to: opts.to,
     subject: opts.subject,
     html: opts.html,
@@ -98,14 +100,18 @@ export async function sendEmail(opts: {
       payload,
       idempotencyKey ? { idempotencyKey } : undefined
     );
+
     if (error) return { error: error.message || "send failed" };
     return { ok: true, id: (data as any)?.id };
   } catch (e1: any) {
     try {
       const { data, error } = await (client.emails.send as any)({
         ...payload,
-        headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+        headers: idempotencyKey
+          ? { "Idempotency-Key": idempotencyKey }
+          : undefined,
       });
+
       if (error) return { error: error.message || "send failed" };
       return { ok: true, id: (data as any)?.id };
     } catch (e2: any) {
@@ -243,7 +249,7 @@ export async function sendVerificationEmail(to: string, verifyUrl: string) {
     subject,
     html,
     text,
-    dedupeKey: `verify:${to}:${Date.now()}`,
+    dedupeKey: `verify:${to}:${verifyUrl}`,
   });
 }
 
@@ -342,7 +348,9 @@ export async function sendAssessmentInviteEmail(params: {
     (params.expiresAt ? `Expira: ${formatDateTime(params.expiresAt)}\n` : "") +
     `\nAbrir evaluación:\n${params.inviteUrl}\n`;
 
-  const dedupeKey = params.dedupeKey ? `assessment-invite:${params.dedupeKey}` : undefined;
+  const dedupeKey = params.dedupeKey
+    ? `assessment-invite:${params.dedupeKey}`
+    : undefined;
 
   return sendEmail({ to: params.to, subject, html, text, dedupeKey });
 }
@@ -391,7 +399,9 @@ export async function sendApplicationEmail(params: {
     subject,
     html,
     text,
-    dedupeKey: params.applicationId ? `application:${params.applicationId}` : undefined,
+    dedupeKey: params.applicationId
+      ? `application:${params.applicationId}`
+      : undefined,
   });
 }
 
@@ -409,7 +419,9 @@ export async function sendNewMessageEmail(params: {
     ? `${BASE_URL}/dashboard/messages?applicationId=${encodeURIComponent(params.applicationId)}`
     : `${BASE_URL}/profile/messages?applicationId=${encodeURIComponent(params.applicationId)}`;
 
-  const safePreview = params.preview ? escapeHtml(truncate(params.preview, 200)) : "";
+  const safePreview = params.preview
+    ? escapeHtml(truncate(params.preview, 200))
+    : "";
 
   const html = htmlLayout({
     title: subject,
@@ -545,8 +557,6 @@ export async function sendPasswordResetEmail(params: {
 }
 
 /* ====================== Nueva aplicación → Reclutador ======================= */
-// ✅ NUEVO: Reemplaza el htmlLayout genérico que generaba el link roto
-//    "[undefined/dashboard/jobs/ID/applications]Ver aplicación"
 
 export async function sendNewApplicationToRecruiterEmail(params: {
   to: string;
@@ -560,18 +570,20 @@ export async function sendNewApplicationToRecruiterEmail(params: {
 }) {
   const subject = `Nueva aplicación: ${params.candidateName} → ${params.jobTitle}`;
 
-  // ✅ BUG FIX: usa BASE_URL para construir el link absoluto
   const applicationUrl = `${BASE_URL}/dashboard/jobs/${params.jobId}/applications`;
-  const safeUrl       = escapeHtml(applicationUrl);
-  const safeName      = escapeHtml(params.candidateName);
-  const safeJob       = escapeHtml(params.jobTitle);
-  const safeRecruiter = params.recruiterName ? escapeHtml(params.recruiterName) : "";
-  const safePreview   = params.coverLetterPreview
+  const safeUrl = escapeHtml(applicationUrl);
+  const safeName = escapeHtml(params.candidateName);
+  const safeJob = escapeHtml(params.jobTitle);
+  const safeRecruiter = params.recruiterName
+    ? escapeHtml(params.recruiterName)
+    : "";
+  const safePreview = params.coverLetterPreview
     ? escapeHtml(truncate(params.coverLetterPreview, 180))
     : "";
 
   const initials = params.candidateName
-    .split(" ").slice(0, 2)
+    .split(" ")
+    .slice(0, 2)
     .map((w) => w[0]?.toUpperCase() ?? "")
     .join("");
 
@@ -702,7 +714,9 @@ export async function sendNewApplicationToRecruiterEmail(params: {
     `Nueva aplicación recibida\n\n` +
     `${params.candidateName} aplicó a ${params.jobTitle}.\n` +
     (params.candidateEmail ? `Email: ${params.candidateEmail}\n` : "") +
-    (params.coverLetterPreview ? `\n"${truncate(params.coverLetterPreview, 180)}"\n` : "") +
+    (params.coverLetterPreview
+      ? `\n"${truncate(params.coverLetterPreview, 180)}"\n`
+      : "") +
     `\nVer aplicación: ${applicationUrl}\n\n` +
     `Correo automático de ${APP_NAME}.`;
 
@@ -717,10 +731,6 @@ export async function sendNewApplicationToRecruiterEmail(params: {
 
 /* ====================== helpers ======================= */
 
-/**
- * Layout base para emails secundarios (assessments, postulaciones, mensajes, reset).
- * Incluye el logo de TaskIO en el header.
- */
 function htmlLayout({ title, body }: { title: string; body: string }) {
   return `<!doctype html>
 <html lang="es">
