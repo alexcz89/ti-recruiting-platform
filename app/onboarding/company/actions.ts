@@ -1,4 +1,3 @@
-// app/onboarding/company/actions.ts
 "use server";
 
 import { getServerSession } from "next-auth";
@@ -11,7 +10,9 @@ import {
   type OnboardingCompanyStep2Input,
 } from "@/lib/shared/validation/recruiter/onboarding";
 
-/** Asegura que el usuario logueado sea RECRUITER/ADMIN y devuelve su id+companyId */
+/**
+ * Asegura que el usuario sea recruiter/admin
+ */
 async function requireRecruiter() {
   const session = await getServerSession(authOptions);
   const user = session?.user as any;
@@ -32,12 +33,14 @@ async function requireRecruiter() {
   };
 }
 
-/** Crea/actualiza Company con los campos mínimos y vincula al recruiterProfile si no lo está */
+/**
+ * STEP 1: Crear o actualizar empresa
+ */
 export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
   const { userId, companyId } = await requireRecruiter();
   const data = OnboardingCompanyStep1Schema.parse(input);
 
-  let company: { id: string };
+  let company: { id: string; name: string };
 
   if (companyId) {
     company = await prisma.company.update({
@@ -46,7 +49,7 @@ export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
         name: data.companyName,
         size: data.size as any,
       },
-      select: { id: true },
+      select: { id: true, name: true },
     });
   } else {
     company = await prisma.company.create({
@@ -54,18 +57,21 @@ export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
         name: data.companyName,
         size: data.size as any,
       },
-      select: { id: true },
+      select: { id: true, name: true },
     });
   }
 
+  // 🔴 CRÍTICO: sincronizar recruiterProfile SIEMPRE con companyName
   await prisma.recruiterProfile.upsert({
     where: { userId },
     update: {
       companyId: company.id,
+      companyName: company.name,
     },
     create: {
       userId,
       companyId: company.id,
+      companyName: company.name,
       phone: null,
       status: "PENDING",
     },
@@ -74,10 +80,15 @@ export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
   return { ok: true, companyId: company.id };
 }
 
-/** Completa metadatos de Company (ubicación, sitio, logo) */
+/**
+ * STEP 2: Completar datos de empresa
+ */
 export async function saveCompanyStep2(input: OnboardingCompanyStep2Input) {
   const { companyId } = await requireRecruiter();
-  if (!companyId) throw new Error("No hay compañía vinculada");
+
+  if (!companyId) {
+    throw new Error("No hay compañía vinculada");
+  }
 
   const data = OnboardingCompanyStep2Schema.parse(input);
 

@@ -104,11 +104,16 @@ async function seedDemoData() {
         role: Role.RECRUITER,
         recruiterProfile: {
           create: {
-            company: { connect: { id: company.id } },
+            companyName: "TaskIO", // 👈 AGREGA ESTO
+            company: {
+              connect: {
+                id: "cmo7j4cgt01igc3us63lmvbvz"
+              }
+            },
             phone: "+52 81 8162 2482",
-            status: RecruiterStatus.APPROVED,
-          },
-        },
+            status: "APPROVED",
+          }
+        }
       },
     });
   }

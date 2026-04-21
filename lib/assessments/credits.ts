@@ -1,4 +1,3 @@
-// lib/assessments/credits.ts
 import { prisma } from "@/lib/server/prisma";
 import type { AssessmentType, AssessmentDifficulty } from "@prisma/client";
 import {
@@ -33,12 +32,12 @@ export async function hasAvailableCredits(
 
 /**
  * Reservar créditos al enviar una invitación de evaluación
- * 
+ *
  * Flujo:
  * 1. Verifica que haya créditos disponibles
  * 2. Incrementa assessmentCreditsReserved
  * 3. Crea registro en AssessmentInviteChargeLedger con status RESERVED
- * 
+ *
  * @returns true si se reservó exitosamente, false si no hay créditos
  */
 export async function reserveCredits(
@@ -83,11 +82,13 @@ export async function reserveCredits(
           reservedAmount: pricing.reserve,
           assessmentType,
           difficulty,
-          meta: JSON.parse(JSON.stringify({
-            pricing,
-            reservedAt: new Date().toISOString(),
-            type: "RESERVE",
-          })),
+          meta: JSON.parse(
+            JSON.stringify({
+              pricing,
+              reservedAt: new Date().toISOString(),
+              type: "RESERVE",
+            })
+          ),
         },
       }),
     ]);
@@ -104,7 +105,7 @@ export async function reserveCredits(
 
 /**
  * Cobrar créditos adicionales cuando un candidato completa la evaluación
- * 
+ *
  * Flujo:
  * 1. Busca el registro RESERVED en el ledger
  * 2. Libera la reserva
@@ -171,12 +172,14 @@ export async function chargeCompletionCredits(
           status: "CHARGED",
           chargedAmount: pricing.total,
           amount: pricing.total,
-          meta: JSON.parse(JSON.stringify({
-            ...(ledger.meta as object),
-            chargedAt: new Date().toISOString(),
-            completionCharge: pricing.complete,
-            type: "CHARGE",
-          })),
+          meta: JSON.parse(
+            JSON.stringify({
+              ...(ledger.meta as object),
+              chargedAt: new Date().toISOString(),
+              completionCharge: pricing.complete,
+              type: "CHARGE",
+            })
+          ),
         },
       }),
     ]);
@@ -193,7 +196,7 @@ export async function chargeCompletionCredits(
 
 /**
  * Reembolsar créditos cuando una evaluación no se completa
- * 
+ *
  * Usado por:
  * - Cron job diario para invites no completadas en 7 días
  * - Cancelación manual de invitación
@@ -202,50 +205,72 @@ export async function refundReservedCredits(
   inviteId: string,
   reason: string = "No completada en 7 días"
 ): Promise<{ success: boolean; message?: string }> {
-  const ledger = await prisma.assessmentInviteChargeLedger.findFirst({
-    where: {
-      inviteId,
-      status: "RESERVED",
-    },
-  });
-
-  if (!ledger || !ledger.reservedAmount) {
-    return {
-      success: false,
-      message: "No se encontró la reserva de créditos",
-    };
-  }
-
   try {
-    await prisma.$transaction([
-      // 1. Liberar reserva (reembolsar)
-      prisma.company.update({
-        where: { id: ledger.companyId },
-        data: {
-          assessmentCreditsReserved: {
-            decrement: ledger.reservedAmount?.toNumber() ?? 0,
-          },
+    return await prisma.$transaction(async (tx) => {
+      const ledger = await tx.assessmentInviteChargeLedger.findFirst({
+        where: {
+          inviteId,
+          kind: "ASSESSMENT_INVITE",
+          status: "RESERVED",
         },
-      }),
+        select: {
+          id: true,
+          companyId: true,
+          status: true,
+          reservedAmount: true,
+          meta: true,
+          kind: true,
+          cycle: true,
+        },
+      });
 
-      // 2. Actualizar ledger a REFUNDED
-      prisma.assessmentInviteChargeLedger.update({
-        where: { id: ledger.id },
+      if (!ledger || !ledger.reservedAmount) {
+        return {
+          success: false,
+          message: "No se encontró la reserva de créditos",
+        };
+      }
+
+      const updated = await tx.assessmentInviteChargeLedger.updateMany({
+        where: {
+          inviteId,
+          kind: "ASSESSMENT_INVITE",
+          cycle: ledger.cycle,
+          status: "RESERVED",
+        },
         data: {
           status: "REFUNDED",
           refundedAmount: ledger.reservedAmount,
           amount: 0,
-          meta: JSON.parse(JSON.stringify({
-            ...(ledger.meta as object),
-            refundedAt: new Date().toISOString(),
-            reason,
-            type: "REFUND",
-          })),
+          meta: JSON.parse(
+            JSON.stringify({
+              ...(ledger.meta as object),
+              refundedAt: new Date().toISOString(),
+              reason,
+              type: "REFUND",
+            })
+          ),
         },
-      }),
-    ]);
+      });
 
-    return { success: true };
+      if (updated.count === 0) {
+        return {
+          success: false,
+          message: "No se pudo reembolsar; el ledger ya cambió de estado",
+        };
+      }
+
+      await tx.company.update({
+        where: { id: ledger.companyId },
+        data: {
+          assessmentCreditsReserved: {
+            decrement: Number(ledger.reservedAmount),
+          },
+        },
+      });
+
+      return { success: true };
+    });
   } catch (error) {
     console.error("[CREDITS] Failed to refund credits:", error);
     return {
@@ -257,14 +282,13 @@ export async function refundReservedCredits(
 
 /**
  * Cancelar una invitación y reembolsar créditos
- * 
+ *
  * Usado cuando el reclutador cancela manualmente una invitación
  */
 export async function cancelInviteAndRefund(
   inviteId: string
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    // 1. Reembolsar créditos
     const refundResult = await refundReservedCredits(
       inviteId,
       "Cancelada por el reclutador"
@@ -274,7 +298,6 @@ export async function cancelInviteAndRefund(
       return refundResult;
     }
 
-    // 2. Actualizar estado de la invitación
     await prisma.assessmentInvite.update({
       where: { id: inviteId },
       data: {
@@ -345,7 +368,8 @@ export async function getCreditBalance(companyId: string) {
     available: Number(company.assessmentCredits),
     reserved: Number(company.assessmentCreditsReserved),
     used: Number(company.assessmentCreditsUsed),
-    effectiveBalance: Number(company.assessmentCredits) - Number(company.assessmentCreditsReserved),
+    effectiveBalance:
+      Number(company.assessmentCredits) - Number(company.assessmentCreditsReserved),
     plan: company.assessmentPlan,
     planCreditsPerMonth: company.assessmentPlanCreditsPerMonth,
   };
@@ -378,8 +402,6 @@ export async function getCreditHistory(
           template: {
             select: {
               title: true,
-              type: true,
-              difficulty: true,
             },
           },
         },

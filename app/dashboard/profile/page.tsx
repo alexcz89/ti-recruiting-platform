@@ -12,8 +12,6 @@ import {
   Calendar,
   Building2,
   Briefcase,
-  PhoneCall,
-  Linkedin,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -74,6 +72,7 @@ export default async function ProfilePage() {
 
   const emailVerified = !!dbUser.emailVerified;
   const profileStatus = profile?.status || "PENDING";
+  const assessmentCredits = Number(company?.assessmentCredits ?? 0);
 
   const initials =
     dbUser.name
@@ -137,7 +136,7 @@ export default async function ProfilePage() {
                       Créditos
                     </div>
                     <div className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      {company?.assessmentCredits ?? 0} disponibles
+                      {assessmentCredits} disponibles
                     </div>
                   </div>
                 </div>
@@ -294,7 +293,7 @@ export default async function ProfilePage() {
                       name: company?.name || "",
                       size: company?.size || "",
                       logoUrl: company?.logoUrl || "",
-                      assessmentCredits: company?.assessmentCredits ?? 0,
+                      assessmentCredits: assessmentCredits,
                     }}
                   />
                 </div>

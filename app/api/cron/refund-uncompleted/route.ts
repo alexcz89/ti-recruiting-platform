@@ -2,68 +2,93 @@
 import { NextRequest, NextResponse } from "next/server";
 import { refundUncompletedInvites } from "@/lib/server/cron/refund-uncompleted";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+function jsonNoStore(data: unknown, status = 200) {
+  return NextResponse.json(data, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
 /**
  * Cron job endpoint para reembolsar créditos de evaluaciones no completadas
- * 
- * Configuración en vercel.json:
- * {
- *   "crons": [{
- *     "path": "/api/cron/refund-uncompleted",
- *     "schedule": "0 2 * * *"
- *   }]
- * }
- * 
- * Seguridad:
- * - Vercel Cron: Automáticamente incluye header `x-vercel-cron`
- * - Alternativa: Usar CRON_SECRET en env
+ *
+ * Vercel cron:
+ * - Incluye header `x-vercel-cron: true`
+ *
+ * Alternativa manual:
+ * - Authorization: Bearer <CRON_SECRET>
  */
 export async function GET(request: NextRequest) {
-  // Verificar autenticación del cron job
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
-  
-  // Opción 1: Vercel Cron (header automático)
+
   const isVercelCron = request.headers.get("x-vercel-cron") === "true";
-  
-  // Opción 2: Secret manual
-  const isAuthorized = cronSecret && authHeader === `Bearer ${cronSecret}`;
-  
-  if (!isVercelCron && !isAuthorized) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401 }
-    );
+  const isAuthorizedBySecret =
+    !!cronSecret && authHeader === `Bearer ${cronSecret}`;
+
+  if (!isVercelCron && !isAuthorizedBySecret) {
+    return jsonNoStore({ success: false, error: "Unauthorized" }, 401);
   }
 
   try {
     const result = await refundUncompletedInvites();
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true,
       ...result,
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
     console.error("[CRON] Refund job failed:", error);
-    return NextResponse.json(
+
+    return jsonNoStore(
       {
         success: false,
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      500
     );
   }
 }
 
-// Para testing manual (eliminar en producción)
+// Solo para testing manual fuera de producción
 export async function POST(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
-    return NextResponse.json(
-      { error: "Manual execution not allowed in production" },
-      { status: 403 }
+    return jsonNoStore(
+      { success: false, error: "Manual execution not allowed in production" },
+      403
     );
   }
 
-  const result = await refundUncompletedInvites();
-  return NextResponse.json(result);
+  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return jsonNoStore({ success: false, error: "Unauthorized" }, 401);
+  }
+
+  try {
+    const result = await refundUncompletedInvites();
+
+    return jsonNoStore({
+      success: true,
+      ...result,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[CRON][MANUAL] Refund job failed:", error);
+
+    return jsonNoStore(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      500
+    );
+  }
 }

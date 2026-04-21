@@ -2,49 +2,54 @@
 import { prisma } from "@/lib/server/prisma";
 import { refundReservedCredits } from "@/lib/assessments/credits";
 
-/**
- * Reembolsar créditos de evaluaciones no completadas después de 7 días
- * 
- * Ejecutar diariamente con cron job o Vercel Cron
- * 
- * Ejemplos de configuración:
- * 
- * 1. Vercel Cron (vercel.json):
- * {
- *   "crons": [{
- *     "path": "/api/cron/refund-uncompleted",
- *     "schedule": "0 2 * * *"
- *   }]
- * }
- * 
- * 2. Node-cron:
- * import cron from 'node-cron';
- * cron.schedule('0 2 * * *', () => refundUncompletedInvites());
- */
-export async function refundUncompletedInvites(): Promise<{
+type RefundSummary = {
   refunded: number;
   failed: number;
   totalAmount: number;
-}> {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+};
 
-  console.log(`[CRON] Checking for uncompleted invites before ${sevenDaysAgo.toISOString()}`);
+const REFUND_AFTER_DAYS = 7;
+const NON_COMPLETED_INVITE_STATUSES = ["SENT", "STARTED"] as const;
 
-  // Buscar invites con créditos reservados que no se han completado en 7 días
+/**
+ * Reembolsa créditos reservados de invites no completados
+ * después de REFUND_AFTER_DAYS días.
+ *
+ * Requiere que refundReservedCredits(inviteId, reason) sea idempotente
+ * y haga la transición RESERVED -> REFUNDED dentro de transacción.
+ */
+export async function refundUncompletedInvites(): Promise<RefundSummary> {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - REFUND_AFTER_DAYS);
+
+  console.log(
+    `[CRON] Checking uncompleted assessment invites before ${cutoff.toISOString()}`
+  );
+
   const uncompletedLedgers = await prisma.assessmentInviteChargeLedger.findMany({
     where: {
+      kind: "ASSESSMENT_INVITE",
+      cycle: 1,
       status: "RESERVED",
       createdAt: {
-        lt: sevenDaysAgo,
+        lt: cutoff,
+      },
+      invite: {
+        status: {
+          in: [...NON_COMPLETED_INVITE_STATUSES],
+        },
       },
     },
-    include: {
+    select: {
+      id: true,
+      inviteId: true,
+      reservedAmount: true,
+      createdAt: true,
       invite: {
         select: {
           id: true,
-          candidateId: true,
           status: true,
+          candidateId: true,
           candidate: {
             select: {
               email: true,
@@ -52,12 +57,23 @@ export async function refundUncompletedInvites(): Promise<{
               lastName: true,
             },
           },
+          job: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
         },
       },
     },
+    orderBy: {
+      createdAt: "asc",
+    },
   });
 
-  console.log(`[CRON] Found ${uncompletedLedgers.length} uncompleted invites to refund`);
+  console.log(
+    `[CRON] Found ${uncompletedLedgers.length} reserved ledgers eligible for refund`
+  );
 
   let refunded = 0;
   let failed = 0;
@@ -65,49 +81,57 @@ export async function refundUncompletedInvites(): Promise<{
 
   for (const ledger of uncompletedLedgers) {
     try {
+      const inviteStatus = String(ledger.invite.status ?? "").toUpperCase();
+
+      if (!NON_COMPLETED_INVITE_STATUSES.includes(inviteStatus as (typeof NON_COMPLETED_INVITE_STATUSES)[number])) {
+        console.warn(
+          `[CRON] Skipping invite ${ledger.inviteId}: unexpected invite status ${inviteStatus}`
+        );
+        continue;
+      }
+
       const result = await refundReservedCredits(
         ledger.inviteId,
-        `Auto-refund: No completada en 7 días (invitada el ${ledger.createdAt.toLocaleDateString()})`
+        `Auto-refund: invite no completado en ${REFUND_AFTER_DAYS} días (reservado el ${ledger.createdAt.toISOString()})`
       );
 
       if (result.success) {
         refunded++;
-        totalAmount += Number(ledger.reservedAmount || 0);
-        
+        totalAmount += Number(ledger.reservedAmount ?? 0);
+
         console.log(
-          `[CRON] ✓ Refunded ${ledger.reservedAmount} credits for invite ${ledger.inviteId} ` +
-          `(candidate: ${ledger.invite.candidate.email})`
+          `[CRON] Refunded ${Number(ledger.reservedAmount ?? 0)} credits for invite ${ledger.inviteId} ` +
+            `(candidate: ${ledger.invite.candidate.email}, status: ${inviteStatus})`
         );
       } else {
         failed++;
         console.error(
-          `[CRON] ✗ Failed to refund invite ${ledger.inviteId}: ${result.message}`
+          `[CRON] Failed to refund invite ${ledger.inviteId}: ${result.message}`
         );
       }
     } catch (error) {
       failed++;
-      console.error(`[CRON] ✗ Error refunding ledger ${ledger.id}:`, error);
+      console.error(`[CRON] Error refunding ledger ${ledger.id}:`, error);
     }
   }
 
-  const summary = {
+  const summary: RefundSummary = {
     refunded,
     failed,
-    totalAmount: Math.round(totalAmount * 10) / 10, // Redondear a 1 decimal
+    totalAmount: Math.round(totalAmount * 100) / 100,
   };
 
   console.log(
-    `[CRON] Refund job completed: ${refunded} refunded, ${failed} failed, ` +
-    `${summary.totalAmount} total credits returned`
+    `[CRON] Refund job completed: ${summary.refunded} refunded, ${summary.failed} failed, ` +
+      `${summary.totalAmount} total credits returned`
   );
 
   return summary;
 }
 
 /**
- * Enviar recordatorio a candidatos con invites pendientes (antes de que expire)
- * 
- * Se puede ejecutar antes del refund automático para dar una última oportunidad
+ * Enviar recordatorio a candidatos con invites pendientes
+ * antes del refund automático.
  */
 export async function sendReminderForPendingInvites(): Promise<number> {
   const fiveDaysAgo = new Date();
@@ -116,7 +140,6 @@ export async function sendReminderForPendingInvites(): Promise<number> {
   const sixDaysAgo = new Date();
   sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
 
-  // Invites entre 5 y 6 días sin completar
   const pendingInvites = await prisma.assessmentInvite.findMany({
     where: {
       status: "SENT",

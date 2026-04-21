@@ -218,10 +218,12 @@ export async function ensureUserCompanyByEmail(opts: {
     where: { userId: opts.userId },
     update: {
       companyId: company.id,
+      companyName: company.name,
     },
     create: {
       userId: opts.userId,
       companyId: company.id,
+      companyName: company.name,
       phone: null,
       status: "PENDING",
     },

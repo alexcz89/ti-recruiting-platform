@@ -120,7 +120,9 @@ export async function createRecruiterAction(
       data: {
         userId: user.id,
         companyId: company.id,
+        companyName: company.name,
         phone: null,
+        status: "PENDING",
       },
     });
 

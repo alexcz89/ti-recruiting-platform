@@ -1,7 +1,6 @@
 // app/api/ai/candidate-summary/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import type { Prisma } from "@prisma/client";
 import { createHash } from "crypto";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
@@ -27,16 +26,22 @@ function buildCacheKey(candidateId: string, jobId: string | null) {
   return `${candidateId}:${jobId ?? "general"}`;
 }
 
-function toPrismaJson(value: unknown): Prisma.InputJsonValue {
-  return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+function serializeSummary(value: unknown): string {
+  return JSON.stringify(value);
+}
+
+function parseSummary<T = unknown>(value: string): T | string {
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return value;
+  }
 }
 
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return Array.from(
-    new Set(
-      value.map((v) => String(v ?? "").trim()).filter(Boolean)
-    )
+    new Set(value.map((v) => String(v ?? "").trim()).filter(Boolean))
   );
 }
 
@@ -58,7 +63,11 @@ function mapAiProfileToSummary(aiProfile: any) {
   };
 }
 
-function buildAiFingerprint(aiProfile: any, candidateId: string, jobId: string | null) {
+function buildAiFingerprint(
+  aiProfile: any,
+  candidateId: string,
+  jobId: string | null
+) {
   return createHash("sha256")
     .update(
       JSON.stringify({
@@ -80,6 +89,7 @@ async function saveCache(
   fingerprint: string
 ) {
   const cacheKey = buildCacheKey(candidateId, jobId);
+  const serializedSummary = serializeSummary(summary);
 
   await prisma.candidateSummaryCache.upsert({
     where: { cacheKey },
@@ -89,10 +99,10 @@ async function saveCache(
       jobId,
       fingerprint,
       summaryVersion: SUMMARY_VERSION,
-      summaryJson: toPrismaJson(summary),
+      summaryJson: serializedSummary,
     },
     update: {
-      summaryJson: toPrismaJson(summary),
+      summaryJson: serializedSummary,
       fingerprint,
       summaryVersion: SUMMARY_VERSION,
       generatedAt: new Date(),
@@ -125,7 +135,7 @@ export async function GET(req: NextRequest) {
 
     if (cached) {
       return noStoreJson({
-        summary: cached.summaryJson,
+        summary: parseSummary(cached.summaryJson),
         fromCache: true,
         generatedAt: cached.generatedAt,
       });

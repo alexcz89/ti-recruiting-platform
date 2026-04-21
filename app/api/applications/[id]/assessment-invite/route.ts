@@ -9,15 +9,19 @@ import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { sendAssessmentInviteEmail } from "@/lib/server/mailer";
 import { NotificationService } from "@/lib/notifications/service";
+import { getCurrentBillingCycle } from "@/lib/assessments/pricing";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type EmailStatus = "sent" | "skipped" | "failed";
+
 type SessionUser = {
   id?: string | null;
   role?: string | null;
 };
+
+const ONE_CREDIT = new Prisma.Decimal(1);
 
 function json(status: number, body: unknown) {
   return NextResponse.json(body, {
@@ -138,7 +142,13 @@ export async function POST(
         id: true,
         jobId: true,
         candidateId: true,
-        candidate: { select: { id: true, email: true, name: true } },
+        candidate: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
         job: {
           select: {
             id: true,
@@ -214,10 +224,34 @@ export async function POST(
 
     const template = await prisma.assessmentTemplate.findUnique({
       where: { id: chosenTemplateId },
-      select: { id: true, title: true, timeLimit: true },
+      select: {
+        id: true,
+        title: true,
+        timeLimit: true,
+        type: true,
+        difficulty: true,
+      },
     });
 
-    if (!template) return json(404, { error: "Template no encontrado" });
+    if (!template) {
+      return json(404, { error: "Template no encontrado" });
+    }
+
+    const assessmentType = template.type;
+    const difficulty = template.difficulty;
+
+    let recruiterProfileId: string | null = null;
+
+    if (user.id) {
+      const recruiterProfile = await prisma.recruiterProfile.findUnique({
+        where: { userId: user.id },
+        select: { id: true, companyId: true },
+      });
+
+      if (recruiterProfile?.companyId === application.job.company.id) {
+        recruiterProfileId = recruiterProfile.id;
+      }
+    }
 
     let createdInvite = false;
     let reusedInvite = false;
@@ -226,18 +260,15 @@ export async function POST(
 
     const invite = await prisma.$transaction(async (tx) => {
       let localInvite = await tx.assessmentInvite.findFirst({
-        where: { applicationId: application.id, templateId: template.id },
+        where: {
+          applicationId: application.id,
+          templateId: template.id,
+        },
         select: selectInvite,
       });
 
       const enforceCredits = !isAdmin && isCreditsEnforced();
-      const availableCredits = application.job.company.assessmentCredits ?? 0;
-
-      if (!localInvite && enforceCredits) {
-        if (availableCredits <= 0) {
-          throw new Error("NO_CREDITS");
-        }
-      }
+      const companyId = application.job.company.id;
 
       if (!localInvite) {
         const token = crypto.randomBytes(32).toString("hex");
@@ -262,12 +293,41 @@ export async function POST(
           reusedInvite = false;
 
           if (enforceCredits) {
-            await tx.company.update({
-              where: { id: application.job.company.id },
+            const updated = await tx.company.updateMany({
+              where: {
+                id: companyId,
+                assessmentCredits: { gt: 0 },
+              },
               data: {
                 assessmentCredits: { decrement: 1 },
               },
             });
+
+            if (updated.count === 0) {
+              throw new Error("NO_CREDITS");
+            }
+
+            await tx.assessmentInviteChargeLedger.create({
+              data: {
+                inviteId: localInvite.id,
+                companyId,
+                kind: "ASSESSMENT_INVITE",
+                cycle: getCurrentBillingCycle(),
+                amount: ONE_CREDIT,
+                status: "RESERVED",
+                reservedAmount: ONE_CREDIT,
+                assessmentType,
+                difficulty,
+                meta: JSON.parse(
+                  JSON.stringify({
+                    reservedAt: new Date().toISOString(),
+                    type: "RESERVE",
+                    recruiterProfileId: recruiterProfileId ?? null,
+                  })
+                ),
+              },
+            });
+
             creditsCharged = true;
           }
         } catch (e: unknown) {
@@ -280,7 +340,10 @@ export async function POST(
           if (!isP2002) throw e;
 
           localInvite = await tx.assessmentInvite.findFirst({
-            where: { applicationId: application.id, templateId: template.id },
+            where: {
+              applicationId: application.id,
+              templateId: template.id,
+            },
             select: selectInvite,
           });
 
@@ -295,14 +358,6 @@ export async function POST(
       if (!isInviteReusable(localInvite, now)) {
         const rotatedToken = crypto.randomBytes(32).toString("hex");
         rotated = true;
-
-        await tx.assessmentAttempt.updateMany({
-          where: {
-            inviteId: localInvite.id,
-            status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
-          },
-          data: { inviteId: null },
-        });
 
         localInvite = await tx.assessmentInvite.update({
           where: { id: localInvite.id },

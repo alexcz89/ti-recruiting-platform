@@ -15,8 +15,8 @@ function json(body: unknown, status = 200) {
 export async function GET() {
   try {
     const companyId = await getSessionCompanyIdOrThrow();
+    const now = new Date();
 
-    // snapshot actual (rápido)
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: {
@@ -28,19 +28,14 @@ export async function GET() {
       return json({ error: "Company not found" }, 404);
     }
 
-    // invites activos (no completados)
     const activeInvites = await prisma.assessmentInvite.count({
       where: {
         job: { companyId },
         status: { in: ["SENT", "STARTED"] },
-        OR: [
-          { expiresAt: null },
-          { expiresAt: { gt: new Date() } },
-        ],
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
       },
     });
 
-    // attempts completados (consumo real)
     const completedAttempts = await prisma.assessmentAttempt.count({
       where: {
         invite: {
@@ -52,9 +47,14 @@ export async function GET() {
       },
     });
 
+    const available = company.assessmentCredits ?? 0;
+
     return json({
+      available,
+      activeInvites,
+      completedAttempts,
       snapshot: {
-        available: company.assessmentCredits ?? 0,
+        available,
       },
       derived: {
         activeInvites,
