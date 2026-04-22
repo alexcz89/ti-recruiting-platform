@@ -606,10 +606,9 @@ export async function POST(req: NextRequest) {
       assessmentTemplateIds = [assessmentTemplateId];
     }
 
-    // Deduplicar por si el frontend manda ids repetidos
     assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
 
-    // Validar existencia de todos los templates seleccionados
+    // Validar existencia de todos los templates
     if (assessmentTemplateIds.length > 0) {
       const existingTemplates = await prisma.assessmentTemplate.findMany({
         where: { id: { in: assessmentTemplateIds } },
