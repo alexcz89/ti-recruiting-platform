@@ -33,15 +33,23 @@ export default async function EditJobPage({ params }: PageProps) {
   ]);
 
   // Ownership estricto para RECRUITER
+  const jobInclude = {
+    company: true,
+    assessments: {
+      select: { templateId: true },
+      orderBy: { createdAt: "asc" as const },
+    },
+  } as const;
+
   const job =
     role === "RECRUITER"
       ? await prisma.job.findFirst({
           where: { id: params.id, companyId: sessionCompanyId ?? undefined },
-          include: { company: true },
+          include: jobInclude,
         })
       : await prisma.job.findUnique({
           where: { id: params.id },
-          include: { company: true },
+          include: jobInclude,
         });
 
   if (!job) notFound();
@@ -152,44 +160,61 @@ export default async function EditJobPage({ params }: PageProps) {
     ? [meta.languages]
     : [];
 
-  let locationType: "REMOTE" | "HYBRID" | "ONSITE" = "REMOTE";
-  let city = "";
-  if (!job.remote && job.location) {
-    if (job.location.startsWith("Híbrido")) {
-      locationType = "HYBRID";
-      city = job.location.split("·")[1]?.trim() || "";
-    } else {
-      locationType = "ONSITE";
-      city = job.location.split("·")[1]?.trim() || job.location;
-    }
+  // Usar campos modernos del schema (locationType, city) con fallback al campo legacy location
+  const locationType: "REMOTE" | "HYBRID" | "ONSITE" =
+    ((job as any).locationType as "REMOTE" | "HYBRID" | "ONSITE") ??
+    (job.remote ? "REMOTE" : "ONSITE");
+
+  let city = ((job as any).city as string | null) ?? "";
+  if (!city && !job.remote && job.location) {
+    // fallback legacy: parsear del string location
+    city = job.location.split("·")[1]?.trim() || job.location;
   }
+
+  // IDs de assessments ya asignados al job
+  const existingAssessmentIds: string[] = ((job as any).assessments ?? [])
+    .map((a: { templateId: string }) => a.templateId);
 
   const wizardInitial = {
     id: job.id,
     title: job.title,
-    companyMode: job.company?.name === "Confidencial" ? "confidential" : "own",
+    companyMode: job.companyConfidential ? "confidential" : "own",
     locationType,
     city,
+    // Campos modernos de ubicación
+    country: (job as any).country ?? "",
+    admin1: (job as any).admin1 ?? "",
+    cityNorm: (job as any).cityNorm ?? "",
+    admin1Norm: (job as any).admin1Norm ?? "",
+    locationLat: (job as any).locationLat ?? null,
+    locationLng: (job as any).locationLng ?? null,
+    // Compensación
     currency: job.currency || "MXN",
-    salaryMin: job.salaryMin ?? "",
-    salaryMax: job.salaryMax ?? "",
+    salaryMin: job.salaryMin ?? undefined,
+    salaryMax: job.salaryMax ?? undefined,
     showSalary,
-    employmentType:
-      (meta.employmentType as string) || job.employmentType || "FULL_TIME",
+    employmentType: job.employmentType || "FULL_TIME",
     schedule,
+    // Prestaciones
     showBenefits,
     benefitsJson,
+    // Descripción (campos modernos)
     description,
-    responsibilities: meta.responsibilities || "",
-    skills: deserializeSkills(job.skills),
+    descriptionHtml: (job as any).descriptionHtml ?? "",
+    // Skills
+    skills: Array.isArray((job as any).skillsJson)
+      ? (job as any).skillsJson
+      : deserializeSkills(job.skills),
     certs,
-    // Educación si ya la usas en el wizard
+    // Educación
     minDegree: (job as any).minDegree ?? null,
-    educationJson: Array.isArray((job as any).educationJson)
+    education: Array.isArray((job as any).educationJson)
       ? ((job as any).educationJson as any[])
       : [],
-    // 👇 idiomas iniciales para el JobWizard
+    // Idiomas
     languages,
+    // ✅ Assessments ya asignados
+    assessmentTemplateIds: existingAssessmentIds,
   };
 
   // ============= Server Action: UPDATE (nunca create) =============
@@ -236,10 +261,8 @@ export default async function EditJobPage({ params }: PageProps) {
     const certsJson = String(fd.get("certsJson") || "[]");
     const schedule = String(fd.get("schedule") || "");
 
-    const hasBenefitsField = fd.has("benefitsJson");
     const hasMinDegreeField = fd.has("minDegree");
     const minDegreeField = String(fd.get("minDegree") || "").trim();
-    const hasEducationField = fd.has("educationJson");
     const educationJsonStr = String(fd.get("educationJson") || "[]");
 
     // 👇 idiomas desde el form
@@ -248,29 +271,31 @@ export default async function EditJobPage({ params }: PageProps) {
     // ================================
     // MULTI ASSESSMENTS (FIX)
     // ================================
-    const assessmentRaw = String(fd.get("assessmentTemplateIds") || "[]");
-
+    // Parseo robusto: soporta fd.append por ID (formato B) y fd.set+JSON.stringify (formato A)
     let assessmentTemplateIds: string[] = [];
+    const fromGetAll = fd.getAll("assessmentTemplateIds") as string[];
 
-    try {
-      const parsed = JSON.parse(assessmentRaw);
-      if (Array.isArray(parsed)) {
-        assessmentTemplateIds = parsed
-          .filter((id) => typeof id === "string")
-          .map((id) => id.trim())
-          .filter(Boolean);
-      }
-    } catch {
-      return { error: "assessmentTemplateIds inválido" };
+    if (fromGetAll.length === 1 && fromGetAll[0].trim().startsWith("[")) {
+      // Formato A: JSON string
+      try {
+        const parsed = JSON.parse(fromGetAll[0]);
+        if (Array.isArray(parsed)) {
+          assessmentTemplateIds = parsed
+            .filter((id): id is string => typeof id === "string")
+            .map((id) => id.trim())
+            .filter(Boolean);
+        }
+      } catch { /* ignora - sigue con [] */ }
+    } else if (fromGetAll.length > 0) {
+      // Formato B: múltiples fd.append
+      assessmentTemplateIds = fromGetAll.filter((id) => typeof id === "string" && id.trim().length > 0).map((id) => id.trim());
     }
 
-    // fallback por si viene uno solo
+    // fallback campo singular
     const singleAssessment = String(fd.get("assessmentTemplateId") || "");
     if (assessmentTemplateIds.length === 0 && singleAssessment) {
       assessmentTemplateIds = [singleAssessment];
     }
-
-    // quitar duplicados
     assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
 
     if (!title || !description)
@@ -294,23 +319,19 @@ export default async function EditJobPage({ params }: PageProps) {
     }
 
     let parsedBenefits: Record<string, any> = {};
-    if (hasBenefitsField) {
-      try {
-        parsedBenefits = JSON.parse(benefitsJsonStr || "{}");
-      } catch {
-        parsedBenefits = {};
-      }
+    try {
+      parsedBenefits = JSON.parse(benefitsJsonStr || "{}");
+    } catch {
+      parsedBenefits = {};
     }
 
     const minDegree = minDegreeField || null;
 
     let educationJson: any[] = [];
-    if (hasEducationField) {
-      try {
-        educationJson = JSON.parse(educationJsonStr || "[]");
-      } catch {
-        educationJson = [];
-      }
+    try {
+      educationJson = JSON.parse(educationJsonStr || "[]");
+    } catch {
+      educationJson = [];
     }
 
     // 👇 parseo de idiomas
@@ -358,39 +379,33 @@ export default async function EditJobPage({ params }: PageProps) {
       companyConnect = { connect: { id: confId } };
     }
 
-    const descWithMeta =
-      description +
-      `\n\n---\n[Meta]\n` +
-      `showSalary=${showSalary}; currency=${currency}; salaryMin=${
-        salaryMin ?? ""
-      }; salaryMax=${salaryMax ?? ""}\n` +
-      `employmentType=${employmentType}; schedule=${schedule}\n` +
-      `showBenefits=${showBenefits}; benefits=${JSON.stringify(parsedBenefits)}\n` +
-      `responsibilities=${responsibilities}\n` +
-      `certifications=${JSON.stringify(certsArr)}\n` +
-      `languages=${JSON.stringify(languagesArr)}\n`;
-
     await prisma.$transaction(async (tx) => {
       await tx.job.update({
         where: { id: jobId },
         data: {
           title,
           location: loc,
+          locationType: locationType as any,
+          city: remote ? null : city || null,
           remote,
           employmentType: employmentType as any,
-          description: descWithMeta,
+          description,
+          descriptionHtml: String(fd.get("descriptionHtml") || "") || null,
           skills,
+          skillsJson: parsedSkills,
           salaryMin: salaryMin ?? undefined,
           salaryMax: salaryMax ?? undefined,
           currency,
           showSalary,
           schedule: schedule || null,
-          ...(hasBenefitsField ? { showBenefits, benefitsJson: parsedBenefits } : {}),
+          showBenefits,
+          benefitsJson: parsedBenefits,
           ...(hasMinDegreeField ? { minDegree: minDegree as any } : {}),
-          ...(hasEducationField ? { educationJson } : {}),
+          educationJson,
+          certsJson: certsArr,
           locationLat,
           locationLng,
-          recruiter: { connect: { id: (s.user as any)?.id } },
+          recruiterId: (s.user as any)?.id,
           ...(companyConnect ? { company: companyConnect } : {}),
         },
       });

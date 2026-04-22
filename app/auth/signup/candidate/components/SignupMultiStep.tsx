@@ -230,9 +230,9 @@ export default function SignupMultiStep({
   // ============================================
 
   return (
-    <div className="mx-auto mt-16 max-w-md rounded-2xl border glass-card p-4 md:p-6">
+    <div className="mx-auto w-full max-w-md rounded-2xl border glass-card p-4 md:p-5">
       {/* Header */}
-      <div className="mb-6 text-center">
+      <div className="mb-4 text-center">
         <h1 className="text-2xl font-semibold">Registro de Candidato</h1>
         {fromCvBuilder ? (
           <p className="mt-2 text-xs text-zinc-500">
@@ -249,7 +249,7 @@ export default function SignupMultiStep({
       <ProgressBar currentStep={currentStep} totalSteps={3} />
 
       {/* Steps */}
-      <div className="mt-6">
+      <div className="mt-4">
         {currentStep === 1 && (
           <Step1Basic
             data={{
@@ -293,10 +293,10 @@ export default function SignupMultiStep({
       </div>
 
       {/* Footer */}
-      <p className="mt-4 text-center text-[11px] text-zinc-400">
+      <p className="mt-3 text-center text-xs text-zinc-400">
         Al crear tu cuenta aceptas recibir notificaciones sobre tus
         postulaciones. Nada de spam.
       </p>
     </div>
   );
-}
+} 

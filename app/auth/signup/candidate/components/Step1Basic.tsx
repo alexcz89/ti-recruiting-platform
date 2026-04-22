@@ -75,10 +75,10 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
     emailAvailable === true;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       {/* Nombre */}
       <div>
-        <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
           Nombre(s) <span className="text-red-500">*</span>
         </label>
         <input
@@ -86,49 +86,49 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
           type="text"
           value={data.firstName}
           onChange={handleChange("firstName")}
-          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          className="w-full rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
           placeholder="Rogelio"
           autoComplete="given-name"
           required
         />
       </div>
 
-      {/* Apellido Paterno */}
-      <div>
-        <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
-          Apellido Paterno <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="lastName"
-          type="text"
-          value={data.lastName}
-          onChange={handleChange("lastName")}
-          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-          placeholder="Garza"
-          autoComplete="family-name"
-          required
-        />
-      </div>
-
-      {/* Apellido Materno */}
-      <div>
-        <label htmlFor="maternalSurname" className="block text-sm font-medium text-gray-700 mb-2">
-          Apellido Materno <span className="text-xs text-gray-400">(opcional)</span>
-        </label>
-        <input
-          id="maternalSurname"
-          type="text"
-          value={data.maternalSurname}
-          onChange={handleChange("maternalSurname")}
-          className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-          placeholder="Hernández"
-          autoComplete="additional-name"
-        />
+      {/* Apellidos en grid */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+            Ap. Paterno <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="lastName"
+            type="text"
+            value={data.lastName}
+            onChange={handleChange("lastName")}
+            className="w-full rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            placeholder="Garza"
+            autoComplete="family-name"
+            required
+          />
+        </div>
+        <div>
+          <label htmlFor="maternalSurname" className="block text-sm font-medium text-gray-700 mb-1">
+            Ap. Materno <span className="text-xs text-gray-400">(opc.)</span>
+          </label>
+          <input
+            id="maternalSurname"
+            type="text"
+            value={data.maternalSurname}
+            onChange={handleChange("maternalSurname")}
+            className="w-full rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            placeholder="Hernández"
+            autoComplete="additional-name"
+          />
+        </div>
       </div>
 
       {/* Email con validación */}
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
           Correo electrónico <span className="text-red-500">*</span>
         </label>
         <div className="relative">

@@ -55,10 +55,10 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
     passwordsMatch;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-3">
       {/* Contraseña */}
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
           Contraseña <span className="text-red-500">*</span>
         </label>
         <div className="relative">
@@ -67,7 +67,7 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
             type={showPassword ? "text" : "password"}
             value={data.password}
             onChange={handleChange("password")}
-            className="w-full rounded-lg border border-gray-300 px-4 py-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
             placeholder="Crea una contraseña segura"
             autoComplete="new-password"
             required
@@ -108,7 +108,7 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
 
       {/* Confirmar contraseña */}
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
           Confirmar contraseña <span className="text-red-500">*</span>
         </label>
         <div className="relative">
@@ -117,7 +117,7 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
             type={showConfirmPassword ? "text" : "password"}
             value={data.confirmPassword}
             onChange={handleChange("confirmPassword")}
-            className="w-full rounded-lg border border-gray-300 px-4 py-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
             placeholder="Repite tu contraseña"
             autoComplete="new-password"
             required
@@ -145,7 +145,7 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
       </div>
 
       {/* Requisitos de contraseña */}
-      <div className="rounded-lg bg-gray-50 p-3">
+      <div className="rounded-lg bg-gray-50 p-2.5">
         <p className="mb-2 text-xs font-semibold text-gray-700">
           Requisitos de contraseña:
         </p>
