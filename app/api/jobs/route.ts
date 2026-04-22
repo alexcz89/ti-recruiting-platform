@@ -462,8 +462,12 @@ export async function POST(req: NextRequest) {
       getFormString(formData, "assessmentTemplateId")
     );
     console.log(
-      "assessmentTemplateIds raw:",
+      "assessmentTemplateIds raw (fd.get):",
       getFormString(formData, "assessmentTemplateIds")
+    );
+    console.log(
+      "assessmentTemplateIds raw (fd.getAll):",
+      formData.getAll("assessmentTemplateIds")
     );
 
     const incomingJobId = getFormString(formData, "jobId");
@@ -579,33 +583,45 @@ export async function POST(req: NextRequest) {
     const companyMode = getFormString(formData, "companyMode");
     const companyConfidential = companyMode === "confidential";
 
-    const assessmentTemplateIdsParsed = getFormJSON<string[]>(
-      formData,
-      "assessmentTemplateIds"
-    );
-    if (!assessmentTemplateIdsParsed.ok) {
-      console.error("assessmentTemplateIds JSON inválido");
-      return jsonNoStore({ error: "assessmentTemplateIds inválido" }, 400);
+    // ─── Parseo robusto de assessmentTemplateIds ──────────────────────────────
+    // El wizard puede enviar los IDs de dos formas distintas:
+    //   A) fd.set("assessmentTemplateIds", JSON.stringify([id1, id2]))
+    //      → formData.get() devuelve un string JSON → parseamos con JSON.parse
+    //   B) assessmentTemplateIds.forEach(id => fd.append("assessmentTemplateIds", id))
+    //      → formData.getAll() devuelve string[] → los usamos directamente
+    // Soportamos ambos formatos para máxima compatibilidad.
+    let assessmentTemplateIds: string[] = [];
+
+    const fromGetAll = formData.getAll("assessmentTemplateIds") as string[];
+
+    if (fromGetAll.length === 1 && fromGetAll[0].trim().startsWith("[")) {
+      // Formato A: un único valor que es un JSON array string
+      try {
+        const parsed = JSON.parse(fromGetAll[0]);
+        if (Array.isArray(parsed)) {
+          assessmentTemplateIds = parsed
+            .filter((id): id is string => typeof id === "string")
+            .map((id) => id.trim())
+            .filter(Boolean);
+        }
+      } catch {
+        console.error("assessmentTemplateIds JSON inválido:", fromGetAll[0]);
+        // No retornamos error — simplemente quedará vacío y se continuará sin assessments
+      }
+    } else if (fromGetAll.length > 0) {
+      // Formato B: múltiples entradas individuales (fd.append por cada id)
+      assessmentTemplateIds = fromGetAll
+        .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+        .map((id) => id.trim());
     }
 
-    let assessmentTemplateIds: string[] = Array.isArray(
-      assessmentTemplateIdsParsed.value
-    )
-      ? assessmentTemplateIdsParsed.value
-          .filter((id): id is string => typeof id === "string")
-          .map((id) => id.trim())
-          .filter(Boolean)
-      : [];
-
+    // Fallback: campo singular assessmentTemplateId (compatibilidad con backend viejo)
     const rawAssessmentTemplateId = getFormString(
       formData,
       "assessmentTemplateId"
     );
-    const assessmentTemplateId =
-      rawAssessmentTemplateId.length > 0 ? rawAssessmentTemplateId : null;
-
-    if (assessmentTemplateIds.length === 0 && assessmentTemplateId) {
-      assessmentTemplateIds = [assessmentTemplateId];
+    if (assessmentTemplateIds.length === 0 && rawAssessmentTemplateId) {
+      assessmentTemplateIds = [rawAssessmentTemplateId];
     }
 
     assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));

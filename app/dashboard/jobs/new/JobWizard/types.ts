@@ -70,7 +70,8 @@ export const jobSchema = z
       )
       .optional(),
 
-    assessmentTemplateId: z.string().optional(),
+    assessmentTemplateIds: z.array(z.string()).default([]),
+    assessmentTemplateId: z.string().optional(), // compatibilidad legacy
   })
   .superRefine((data, ctx) => {
     const needsCity =

@@ -335,7 +335,9 @@ export default function JobWizard({
         ? [v.assessmentTemplateId]
         : [];
 
-      fd.set("assessmentTemplateIds", JSON.stringify(assessmentTemplateIds));
+      assessmentTemplateIds.forEach((id: string) => {
+        fd.append("assessmentTemplateIds", id);
+      });
 
       // Compatibilidad temporal con backend viejo
       if (assessmentTemplateIds.length > 0) {

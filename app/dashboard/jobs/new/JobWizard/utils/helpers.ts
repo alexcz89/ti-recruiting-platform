@@ -225,6 +225,11 @@ export function makeDefaultValues({
     aguinaldoDias,
     vacacionesDias,
     primaVacPct,
+    assessmentTemplateIds: Array.isArray(initial?.assessmentTemplateIds)
+      ? initial.assessmentTemplateIds
+      : initial?.assessmentTemplateId
+      ? [initial.assessmentTemplateId]
+      : [],
     assessmentTemplateId: initial?.assessmentTemplateId ?? undefined,
     descriptionHtml: html,
     descriptionPlain: plain,
@@ -298,7 +303,10 @@ function hasLanguageInfo(values: Partial<JobForm>) {
 }
 
 function hasAssessment(values: Partial<JobForm>) {
-  return !!values.assessmentTemplateId;
+  return (
+    (values.assessmentTemplateIds?.length ?? 0) > 0 ||
+    !!values.assessmentTemplateId
+  );
 }
 
 export function getJobQualitySummary(

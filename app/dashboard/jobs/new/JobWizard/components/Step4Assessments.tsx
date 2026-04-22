@@ -112,6 +112,7 @@ export default function Step4Assessments({
   }, 0);
 
   const hasLowCredits = companyCredits < 5;
+  const creditsAfterReserve = companyCredits - totalReserve;
 
   const toggleTemplate = (id: string) => {
     const exists = selectedTemplateIds.includes(id);
@@ -119,10 +120,11 @@ export default function Step4Assessments({
     if (exists) {
       setValue(
         "assessmentTemplateIds",
-        selectedTemplateIds.filter((templateId) => templateId !== id)
+        selectedTemplateIds.filter((templateId) => templateId !== id),
+        { shouldDirty: true }
       );
     } else {
-      setValue("assessmentTemplateIds", [...selectedTemplateIds, id]);
+      setValue("assessmentTemplateIds", [...selectedTemplateIds, id], { shouldDirty: true });
     }
   };
 
@@ -164,6 +166,11 @@ export default function Step4Assessments({
                 {formatCredits(companyCredits)}
               </p>
               <p className="text-xs text-zinc-500">disponibles</p>
+              {totalReserve > 0 && (
+                <p className="mt-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                  {formatCredits(creditsAfterReserve)} tras reserva
+                </p>
+              )}
             </div>
           </div>
 
@@ -332,7 +339,15 @@ export default function Step4Assessments({
                 template.pricing ??
                 getAssessmentCost(template.type, template.difficulty);
 
-              const canAfford = companyCredits >= cost.reserve;
+              // Créditos restantes descontando lo ya reservado por otros templates seleccionados
+              const alreadyReserved = selectedTemplates
+                .filter((t) => t.id !== template.id)
+                .reduce((acc, t) => {
+                  const c = t.pricing ?? getAssessmentCost(t.type, t.difficulty);
+                  return acc + c.reserve;
+                }, 0);
+              const remainingCredits = companyCredits - alreadyReserved;
+              const canAfford = isSelected(template.id) || remainingCredits >= cost.reserve;
               const selected = isSelected(template.id);
 
               return (

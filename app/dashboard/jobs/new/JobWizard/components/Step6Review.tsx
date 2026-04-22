@@ -1,14 +1,14 @@
 // app/dashboard/jobs/new/JobWizard/components/Step6Review.tsx
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useFormContext } from "react-hook-form";
 import {
   Briefcase,
   DollarSign,
   Gift,
   BookOpen,
-  FileText,
+  ClipboardCheck,
   Globe,
   AlertTriangle,
 } from "lucide-react";
@@ -137,6 +137,26 @@ export default function Step6Review({
   const { watch } = useFormContext<JobForm>();
   const v = watch();
   const [showPublishWarningModal, setShowPublishWarningModal] = useState(false);
+
+  // Cargar títulos de los assessments seleccionados para mostrarlos en el review
+  const [assessmentTitles, setAssessmentTitles] = useState<Record<string, string>>({});
+  const assessmentIds: string[] = Array.isArray((v as any).assessmentTemplateIds)
+    ? (v as any).assessmentTemplateIds
+    : [];
+
+  useEffect(() => {
+    if (assessmentIds.length === 0) return;
+    fetch("/api/assessments", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.templates) return;
+        const map: Record<string, string> = {};
+        for (const t of data.templates) map[t.id] = t.title;
+        setAssessmentTitles(map);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assessmentIds.join(",")]);
 
   // FIX: ref al botón submit real
   const submitBtnRef = useRef<HTMLButtonElement>(null);
@@ -343,16 +363,30 @@ export default function Step6Review({
           )}
         </ReviewCard>
 
-        {v.assessmentTemplateId && (
+        {(v.assessmentTemplateIds?.length ?? 0) > 0 && (
           <ReviewCard
-            icon={<FileText className="h-5 w-5 text-emerald-500" />}
-            title="Evaluación técnica"
-            onEdit={() => onEditStep(5)}
+            icon={<ClipboardCheck className="h-5 w-5 text-emerald-500" />}
+            title="Evaluaciones técnicas"
+            onEdit={() => onEditStep(4)}
           >
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Evaluación seleccionada — ID:{" "}
-              <span className="font-mono text-xs">{v.assessmentTemplateId}</span>
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                {v.assessmentTemplateIds.length} evaluación
+                {v.assessmentTemplateIds.length !== 1 ? "es" : ""} asignada
+                {v.assessmentTemplateIds.length !== 1 ? "s" : ""}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {v.assessmentTemplateIds.map((id: string) => (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100"
+                  >
+                    <ClipboardCheck className="h-3 w-3" />
+                    {assessmentTitles[id] ?? <span className="font-mono text-[10px] opacity-60">{id.slice(0, 8)}…</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
           </ReviewCard>
         )}
 
