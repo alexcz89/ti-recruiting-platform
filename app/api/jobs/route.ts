@@ -463,6 +463,24 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
 
+    // ================================
+    // DEBUG FORM DATA
+    // ================================
+    console.log("========== DEBUG POST /api/jobs ==========");
+    const debugEntries = Array.from(formData.entries()).map(([key, value]) => [
+      key,
+      typeof value === "string" ? value : `[File:${value.name}]`,
+    ]);
+    console.log("FormData entries:", Object.fromEntries(debugEntries));
+    console.log(
+      "assessmentTemplateId raw:",
+      getFormString(formData, "assessmentTemplateId")
+    );
+    console.log(
+      "assessmentTemplateIds raw:",
+      getFormString(formData, "assessmentTemplateIds")
+    );
+
     const incomingJobId = getFormString(formData, "jobId");
     if (incomingJobId) {
       return jsonNoStore(
@@ -582,6 +600,7 @@ export async function POST(req: NextRequest) {
       "assessmentTemplateIds"
     );
     if (!assessmentTemplateIdsParsed.ok) {
+      console.error("assessmentTemplateIds JSON inválido");
       return jsonNoStore({ error: "assessmentTemplateIds inválido" }, 400);
     }
 
@@ -606,17 +625,28 @@ export async function POST(req: NextRequest) {
       assessmentTemplateIds = [assessmentTemplateId];
     }
 
+    // Deduplicar por si el frontend manda ids repetidos
     assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
 
-    // Validar existencia de todos los templates
+    console.log(
+      "assessmentTemplateIds parsed/final:",
+      assessmentTemplateIds,
+      "count:",
+      assessmentTemplateIds.length
+    );
+
+    // Validar existencia de todos los templates seleccionados
     if (assessmentTemplateIds.length > 0) {
       const existingTemplates = await prisma.assessmentTemplate.findMany({
         where: { id: { in: assessmentTemplateIds } },
-        select: { id: true },
+        select: { id: true, title: true },
       });
 
       const existingIds = new Set(existingTemplates.map((t) => t.id));
       const missingIds = assessmentTemplateIds.filter((id) => !existingIds.has(id));
+
+      console.log("existing template ids:", existingTemplates);
+      console.log("missing template ids:", missingIds);
 
       if (missingIds.length > 0) {
         return jsonNoStore(
@@ -646,6 +676,7 @@ export async function POST(req: NextRequest) {
     });
 
     if (existing) {
+      console.log("deduped existing job:", existing.id);
       return jsonNoStore({ ok: true, id: existing.id, deduped: true });
     }
 
@@ -719,12 +750,21 @@ export async function POST(req: NextRequest) {
           companyId,
           recruiterId: userId,
         },
-        select: { id: true },
+        select: { id: true, title: true },
       });
+
+      console.log("createdJob:", createdJob);
 
       await syncJobSkills(tx, createdJob.id, skillsJson);
 
       if (assessmentTemplateIds.length > 0) {
+        console.log(
+          "about to createMany JobAssessment for job:",
+          createdJob.id,
+          "templates:",
+          assessmentTemplateIds
+        );
+
         await tx.jobAssessment.createMany({
           data: assessmentTemplateIds.map((templateId) => ({
             jobId: createdJob.id,
@@ -735,7 +775,22 @@ export async function POST(req: NextRequest) {
           })),
           skipDuplicates: true,
         });
+      } else {
+        console.log("no assessmentTemplateIds to persist");
       }
+
+      const persistedAssessments = await tx.jobAssessment.findMany({
+        where: { jobId: createdJob.id },
+        select: {
+          id: true,
+          jobId: true,
+          templateId: true,
+          isRequired: true,
+          triggerAt: true,
+        },
+      });
+
+      console.log("persisted jobAssessments:", persistedAssessments);
 
       return createdJob;
     });
@@ -800,6 +855,7 @@ export async function POST(req: NextRequest) {
       console.warn("[POST /api/jobs] JobTemplate save skipped:", tplErr);
     }
 
+    console.log("========== END DEBUG POST /api/jobs ==========");
     return jsonNoStore({ ok: true, id: job.id });
   } catch (err) {
     console.error("[POST /api/jobs]", err);
