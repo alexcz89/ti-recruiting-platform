@@ -245,6 +245,34 @@ export default async function EditJobPage({ params }: PageProps) {
     // 👇 idiomas desde el form
     const languagesJson = String(fd.get("languagesJson") || "[]");
 
+    // ================================
+    // MULTI ASSESSMENTS (FIX)
+    // ================================
+    const assessmentRaw = String(fd.get("assessmentTemplateIds") || "[]");
+
+    let assessmentTemplateIds: string[] = [];
+
+    try {
+      const parsed = JSON.parse(assessmentRaw);
+      if (Array.isArray(parsed)) {
+        assessmentTemplateIds = parsed
+          .filter((id) => typeof id === "string")
+          .map((id) => id.trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return { error: "assessmentTemplateIds inválido" };
+    }
+
+    // fallback por si viene uno solo
+    const singleAssessment = String(fd.get("assessmentTemplateId") || "");
+    if (assessmentTemplateIds.length === 0 && singleAssessment) {
+      assessmentTemplateIds = [singleAssessment];
+    }
+
+    // quitar duplicados
+    assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
+
     if (!title || !description)
       return { error: "Faltan campos obligatorios (título y descripción)." };
 
@@ -342,28 +370,47 @@ export default async function EditJobPage({ params }: PageProps) {
       `certifications=${JSON.stringify(certsArr)}\n` +
       `languages=${JSON.stringify(languagesArr)}\n`;
 
-    await prisma.job.update({
-      where: { id: jobId },
-      data: {
-        title,
-        location: loc,
-        remote,
-        employmentType: employmentType as any,
-        description: descWithMeta,
-        skills,
-        salaryMin: salaryMin ?? undefined,
-        salaryMax: salaryMax ?? undefined,
-        currency,
-        showSalary,
-        schedule: schedule || null,
-        ...(hasBenefitsField ? { showBenefits, benefitsJson: parsedBenefits } : {}),
-        ...(hasMinDegreeField ? { minDegree: minDegree as any } : {}),
-        ...(hasEducationField ? { educationJson } : {}),
-        locationLat,
-        locationLng,
-        recruiter: { connect: { id: (s.user as any)?.id } },
-        ...(companyConnect ? { company: companyConnect } : {}),
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.job.update({
+        where: { id: jobId },
+        data: {
+          title,
+          location: loc,
+          remote,
+          employmentType: employmentType as any,
+          description: descWithMeta,
+          skills,
+          salaryMin: salaryMin ?? undefined,
+          salaryMax: salaryMax ?? undefined,
+          currency,
+          showSalary,
+          schedule: schedule || null,
+          ...(hasBenefitsField ? { showBenefits, benefitsJson: parsedBenefits } : {}),
+          ...(hasMinDegreeField ? { minDegree: minDegree as any } : {}),
+          ...(hasEducationField ? { educationJson } : {}),
+          locationLat,
+          locationLng,
+          recruiter: { connect: { id: (s.user as any)?.id } },
+          ...(companyConnect ? { company: companyConnect } : {}),
+        },
+      });
+
+      // 🔥 BORRAR assessments anteriores
+      await tx.jobAssessment.deleteMany({
+        where: { jobId },
+      });
+
+      // 🔥 INSERTAR nuevos
+      if (assessmentTemplateIds.length > 0) {
+        await tx.jobAssessment.createMany({
+          data: assessmentTemplateIds.map((templateId) => ({
+            jobId,
+            templateId,
+            isRequired: true,
+            triggerAt: "AFTER_APPLY",
+          })),
+        });
+      }
     });
 
     revalidatePath(`/dashboard/jobs/${jobId}`);
