@@ -2,11 +2,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { syncJobSkills } from "@/lib/server/syncJobSkills";
-import { getSessionOrThrow, getSessionCompanyId } from "@/lib/server/session";
+import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import {
   EmploymentType,
-  JobStatus,
   EducationLevel,
+  JobStatus,
   LocationType,
   type Prisma,
 } from "@prisma/client";
@@ -139,6 +139,8 @@ function normalizeEducationLevel(
     PRIMARIA: "PRIMARY",
     SECUNDARIA: "SECONDARY",
     BACHILLERATO: "HIGH_SCHOOL",
+    PREPARATORIA: "HIGH_SCHOOL",
+    PREPA: "HIGH_SCHOOL",
     TECNICO: "TECHNICAL",
     TECNICA: "TECHNICAL",
     "LICENCIATURA / INGENIERIA": "BACHELOR",
@@ -161,26 +163,26 @@ function normalizeEducationLevel(
   };
 
   if (aliases[normalized]) return aliases[normalized];
-
-  if (isEducationLevel(normalized)) {
-    return normalized;
-  }
+  if (isEducationLevel(normalized)) return normalized;
 
   if (
     normalized.includes("LICENCIATURA") ||
     normalized.includes("INGENIERIA")
-  )
+  ) {
     return "BACHELOR";
+  }
   if (normalized.includes("MAESTRIA")) return "MASTER";
   if (normalized.includes("DOCTORADO")) return "DOCTORATE";
   if (
     normalized.includes("BACHILLERATO") ||
     normalized.includes("PREPARATORIA") ||
     normalized.includes("PREPA")
-  )
+  ) {
     return "HIGH_SCHOOL";
-  if (normalized.includes("TECNICO") || normalized.includes("TECNICA"))
+  }
+  if (normalized.includes("TECNICO") || normalized.includes("TECNICA")) {
     return "TECHNICAL";
+  }
   if (normalized.includes("SECUNDARIA")) return "SECONDARY";
   if (normalized.includes("PRIMARIA")) return "PRIMARY";
 
@@ -201,7 +203,7 @@ function sanitizeCoordinate(
 }
 
 // -------------------------------
-// GET
+// GET /api/jobs/[id]
 // -------------------------------
 export async function GET(
   _req: NextRequest,
@@ -257,6 +259,27 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         companyConfidential: true,
+        assessments: {
+          select: {
+            templateId: true,
+            isRequired: true,
+            minScore: true,
+            triggerAt: true,
+            template: {
+              select: {
+                id: true,
+                title: true,
+                description: true,
+                type: true,
+                difficulty: true,
+                totalQuestions: true,
+                timeLimit: true,
+                passingScore: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
       },
     });
 
@@ -264,17 +287,22 @@ export async function GET(
       return jsonNoStore({ error: "Vacante no encontrada" }, 404);
     }
 
-    return jsonNoStore(job);
+    return jsonNoStore({
+      job: {
+        ...job,
+        assessmentTemplateIds: job.assessments.map((a) => a.templateId),
+      },
+    });
   } catch (err) {
     console.error("[GET /api/jobs/[id]]", err);
-    return jsonNoStore({ error: "Error al obtener la vacante" }, 500);
+    return jsonNoStore({ error: "Internal Server Error" }, 500);
   }
 }
 
 // -------------------------------
-// PATCH
+// PUT /api/jobs/[id]
 // -------------------------------
-export async function PATCH(
+export async function PUT(
   req: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -283,7 +311,7 @@ export async function PATCH(
     const companyId = await getSessionCompanyId();
 
     if (!companyId) {
-      return jsonNoStore({ error: "Sin empresa asociada" }, 401);
+      return jsonNoStore({ error: "Unauthorized" }, 401);
     }
 
     const role = session.user?.role;
@@ -296,286 +324,240 @@ export async function PATCH(
       return jsonNoStore({ error: "Unauthorized" }, 401);
     }
 
+    const jobId = params.id;
+    const formData = await req.formData();
+
     const existingJob = await prisma.job.findFirst({
       where: {
-        id: params.id,
+        id: jobId,
         companyId,
       },
-      select: {
-        id: true,
-        status: true,
-      },
+      select: { id: true },
     });
 
     if (!existingJob) {
-      return jsonNoStore(
-        { error: "Vacante no encontrada o sin permisos" },
-        404
-      );
+      return jsonNoStore({ error: "Vacante no encontrada" }, 404);
     }
 
-    const contentType = req.headers.get("content-type") || "";
-    const isJsonRequest = contentType.includes("application/json");
-
-    // PATCH ligero: solo status
-    if (isJsonRequest) {
-      const body = await req.json().catch(() => null);
-      const status = body?.status;
-
-      if (!status || typeof status !== "string" || !isJobStatus(status)) {
-        return jsonNoStore({ error: "Estado inválido" }, 400);
-      }
-
-      await prisma.job.update({
-        where: { id: existingJob.id },
-        data: {
-          status,
-          updatedAt: new Date(),
-        },
-      });
-
-      return jsonNoStore({ ok: true });
-    }
-
-    const fd = await req.formData();
-
-    const title = getStr(fd, "title");
-    const description = getStr(fd, "description");
-    const descriptionHtml = getStr(fd, "descriptionHtml");
+    const title = getStr(formData, "title");
+    const description = getStr(formData, "description");
+    const descriptionHtml = getStr(formData, "descriptionHtml");
 
     if (!title || !description) {
       return jsonNoStore({ error: "Faltan campos obligatorios" }, 400);
     }
 
-    const rawLocationType = getStr(fd, "locationType") || "ONSITE";
+    const rawLocationType = getStr(formData, "locationType") || "ONSITE";
     if (!isLocationType(rawLocationType)) {
       return jsonNoStore({ error: "locationType inválido" }, 400);
     }
     const locationType: LocationType = rawLocationType;
 
-    const rawEmploymentType = getStr(fd, "employmentType") || "FULL_TIME";
+    const rawEmploymentType =
+      getStr(formData, "employmentType") || "FULL_TIME";
     if (!isEmploymentType(rawEmploymentType)) {
       return jsonNoStore({ error: "employmentType inválido" }, 400);
     }
     const employmentType: EmploymentType = rawEmploymentType;
 
-    const rawMinDegree = getStr(fd, "minDegree");
+    const rawMinDegree = getStr(formData, "minDegree");
     const normalizedMinDegree = normalizeEducationLevel(rawMinDegree);
-
     if (normalizedMinDegree === undefined) {
       return jsonNoStore({ error: "minDegree inválido" }, 400);
     }
-
     const minDegree = normalizedMinDegree;
 
-    const city = getStr(fd, "city") || null;
-    const country = getStr(fd, "country") || null;
-    const admin1 = getStr(fd, "admin1") || null;
-    const cityNorm = getStr(fd, "cityNorm") || null;
-    const admin1Norm = getStr(fd, "admin1Norm") || null;
+    const rawStatus = getStr(formData, "status");
+    if (rawStatus && !isJobStatus(rawStatus)) {
+      return jsonNoStore({ error: "status inválido" }, 400);
+    }
+    const status: JobStatus | undefined = rawStatus
+      ? (rawStatus as JobStatus)
+      : undefined;
 
-    const lat = sanitizeCoordinate(getNum(fd, "locationLat"), "lat");
-    const lng = sanitizeCoordinate(getNum(fd, "locationLng"), "lng");
+    const city = getStr(formData, "city");
+    const country = getStr(formData, "country") || null;
+    const admin1 = getStr(formData, "admin1") || null;
+    const cityNorm = getStr(formData, "cityNorm") || null;
+    const admin1Norm = getStr(formData, "admin1Norm") || null;
+
+    const locationLat = getNum(formData, "locationLat");
+    const locationLng = getNum(formData, "locationLng");
+    const safeLat = sanitizeCoordinate(locationLat, "lat");
+    const safeLng = sanitizeCoordinate(locationLng, "lng");
+
     const remote = locationType === "REMOTE";
-
-    const salaryMin = getNum(fd, "salaryMin");
-    const salaryMax = getNum(fd, "salaryMax");
-    const showSalary = getBool(fd, "showSalary");
-    const currency = getStr(fd, "currency") || "MXN";
+    const currency = getStr(formData, "currency") || "MXN";
+    const salaryMin = getNum(formData, "salaryMin");
+    const salaryMax = getNum(formData, "salaryMax");
+    const showSalary = getBool(formData, "showSalary");
 
     if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
       return jsonNoStore(
-        { error: "El sueldo mínimo no puede ser mayor que el máximo" },
+        {
+          error: "El sueldo mínimo no puede ser mayor que el sueldo máximo.",
+        },
         400
       );
     }
 
-    const schedule = getStr(fd, "schedule") || null;
-    const showBenefits = getBool(fd, "showBenefits");
+    const schedule = getStr(formData, "schedule") || null;
+    const showBenefits = getBool(formData, "showBenefits");
 
-    const benefitsJsonParsed = getJson<Prisma.JsonValue>(fd, "benefitsJson");
+    const benefitsJsonParsed = getJson<Prisma.JsonValue>(
+      formData,
+      "benefitsJson"
+    );
     if (!benefitsJsonParsed.ok) {
       return jsonNoStore({ error: "benefitsJson inválido" }, 400);
     }
     const benefitsJson = benefitsJsonParsed.value;
 
-    const educationJsonParsed = getJson<Prisma.JsonValue>(fd, "educationJson");
+    const educationJsonParsed = getJson<Prisma.JsonValue>(
+      formData,
+      "educationJson"
+    );
     if (!educationJsonParsed.ok) {
       return jsonNoStore({ error: "educationJson inválido" }, 400);
     }
     const educationJson = educationJsonParsed.value;
 
-    const skillsJsonParsed = getJson<JobSkillInput[]>(fd, "skillsJson");
+    const skillsJsonParsed = getJson<JobSkillInput[]>(
+      formData,
+      "skillsJson"
+    );
     if (!skillsJsonParsed.ok) {
       return jsonNoStore({ error: "skillsJson inválido" }, 400);
     }
     const skillsJson = skillsJsonParsed.value;
 
-    const certsJsonParsed = getJson<Prisma.JsonValue>(fd, "certsJson");
+    const certsJsonParsed = getJson<Prisma.JsonValue>(formData, "certsJson");
     if (!certsJsonParsed.ok) {
       return jsonNoStore({ error: "certsJson inválido" }, 400);
     }
     const certsJson = certsJsonParsed.value;
 
-    const skillsList =
-      Array.isArray(skillsJson)
-        ? skillsJson
-            .map((s) =>
-              s?.name ? `${s.required ? "Req" : "Dese"}: ${s.name}` : ""
-            )
-            .filter(Boolean)
-        : [];
+    const skillsList: string[] = Array.isArray(skillsJson)
+      ? skillsJson
+          .map((s) =>
+            typeof s?.name === "string"
+              ? `${s.required ? "Req" : "Dese"}: ${s.name}`
+              : ""
+          )
+          .filter(Boolean)
+      : [];
 
-    const companyConfidential = getStr(fd, "companyMode") === "confidential";
+    const companyMode = getStr(formData, "companyMode");
+    const companyConfidential = companyMode === "confidential";
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const assessmentTemplateIdsParsed = getJson<string[]>(
+      formData,
+      "assessmentTemplateIds"
+    );
+    if (!assessmentTemplateIdsParsed.ok) {
+      return jsonNoStore({ error: "assessmentTemplateIds inválido" }, 400);
+    }
+
+    let assessmentTemplateIds: string[] = Array.isArray(
+      assessmentTemplateIdsParsed.value
+    )
+      ? assessmentTemplateIdsParsed.value
+          .filter((id): id is string => typeof id === "string")
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : [];
+
+    // Compatibilidad temporal
+    const rawAssessmentTemplateId = getStr(formData, "assessmentTemplateId");
+    if (assessmentTemplateIds.length === 0 && rawAssessmentTemplateId) {
+      assessmentTemplateIds = [rawAssessmentTemplateId];
+    }
+
+    assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
+
+    if (assessmentTemplateIds.length > 0) {
+      const existingTemplates = await prisma.assessmentTemplate.findMany({
+        where: { id: { in: assessmentTemplateIds } },
+        select: { id: true },
+      });
+
+      const existingIds = new Set(existingTemplates.map((t) => t.id));
+      const missingIds = assessmentTemplateIds.filter((id) => !existingIds.has(id));
+
+      if (missingIds.length > 0) {
+        return jsonNoStore(
+          {
+            error: "Uno o más assessment templates no existen",
+            missingTemplateIds: missingIds,
+          },
+          400
+        );
+      }
+    }
+
+    const job = await prisma.$transaction(async (tx) => {
       const updatedJob = await tx.job.update({
-        where: { id: params.id },
+        where: { id: jobId },
         data: {
           title,
           description,
           descriptionHtml: descriptionHtml || undefined,
-
           location: remote ? "Remoto" : city || "—",
           locationType,
-          locationLat: lat ?? undefined,
-          locationLng: lng ?? undefined,
+          locationLat: safeLat ?? undefined,
+          locationLng: safeLng ?? undefined,
           country: country ?? undefined,
           admin1: admin1 ?? undefined,
           city: city ?? undefined,
           cityNorm: cityNorm ?? undefined,
           admin1Norm: admin1Norm ?? undefined,
-
           remote,
           employmentType,
-
+          schedule,
+          benefitsJson: benefitsJson ?? undefined,
+          showBenefits,
+          educationJson: educationJson ?? undefined,
+          minDegree,
+          skillsJson: skillsJson ?? undefined,
+          certsJson: certsJson ?? undefined,
+          skills: skillsList,
           salaryMin: salaryMin ?? undefined,
           salaryMax: salaryMax ?? undefined,
           currency,
           showSalary,
-
-          schedule,
-          showBenefits,
-          benefitsJson: benefitsJson ?? undefined,
-
-          educationJson: educationJson ?? undefined,
-          minDegree,
-
-          skillsJson: skillsJson ?? undefined,
-          certsJson: certsJson ?? undefined,
-          skills: skillsList,
-
           companyConfidential,
-          status: existingJob.status,
-          updatedAt: new Date(),
+          ...(status ? { status } : {}),
+          recruiterId: userId,
         },
         select: { id: true },
       });
 
-      await syncJobSkills(tx, existingJob.id, skillsJson);
+      await syncJobSkills(tx, updatedJob.id, skillsJson);
+
+      // Reemplazo completo de assessments en edición
+      await tx.jobAssessment.deleteMany({
+        where: { jobId: updatedJob.id },
+      });
+
+      if (assessmentTemplateIds.length > 0) {
+        await tx.jobAssessment.createMany({
+          data: assessmentTemplateIds.map((templateId) => ({
+            jobId: updatedJob.id,
+            templateId,
+            isRequired: true,
+            minScore: null,
+            triggerAt: "AFTER_APPLY",
+          })),
+          skipDuplicates: true,
+        });
+      }
 
       return updatedJob;
     });
 
-    try {
-      const payload = {
-        title,
-        locationType,
-        city,
-        country,
-        admin1,
-        cityNorm,
-        admin1Norm,
-        locationLat: lat,
-        locationLng: lng,
-        currency,
-        salaryMin,
-        salaryMax,
-        showSalary,
-        employmentType,
-        schedule,
-        benefitsJson: benefitsJson ?? {},
-        description,
-        descriptionHtml: descriptionHtml || null,
-        education: educationJson ?? [],
-        minDegree,
-        skills: skillsJson ?? [],
-        certs: certsJson ?? [],
-        _v: 1,
-      };
-
-      const existingTpl = await prisma.jobTemplate.findFirst({
-        where: {
-          companyId,
-          title,
-        },
-        select: { id: true },
-      });
-
-      if (existingTpl) {
-        await prisma.jobTemplate.update({
-          where: { id: existingTpl.id },
-          data: { payload, lastUsedAt: new Date() },
-        });
-      } else {
-        await prisma.jobTemplate.create({
-          data: {
-            companyId,
-            title,
-            payload,
-            creatorId: userId,
-            lastUsedAt: new Date(),
-          },
-        });
-      }
-    } catch (err) {
-      console.warn("[PATCH /api/jobs/[id]] JobTemplate update skipped:", err);
-    }
-
-    return jsonNoStore({ ok: true, id: updated.id });
+    return jsonNoStore({ ok: true, id: job.id });
   } catch (err) {
-    console.error("[PATCH /api/jobs/[id]]", err);
+    console.error("[PUT /api/jobs/[id]]", err);
     return jsonNoStore({ error: "Error al actualizar la vacante" }, 500);
-  }
-}
-
-// -------------------------------
-// DELETE
-// -------------------------------
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const session = await getSessionOrThrow();
-    const companyId = await getSessionCompanyId();
-
-    if (!companyId) {
-      return jsonNoStore({ error: "Sin empresa asociada" }, 401);
-    }
-
-    const role = session.user?.role;
-    if (role !== "RECRUITER" && role !== "ADMIN") {
-      return jsonNoStore({ error: "Forbidden" }, 403);
-    }
-
-    const exists = await prisma.job.findFirst({
-      where: { id: params.id, companyId },
-      select: { id: true },
-    });
-
-    if (!exists) {
-      return jsonNoStore(
-        { error: "Vacante no encontrada o sin permisos" },
-        404
-      );
-    }
-
-    await prisma.job.delete({ where: { id: exists.id } });
-
-    return jsonNoStore({ ok: true });
-  } catch (err) {
-    console.error("[DELETE /api/jobs/[id]]", err);
-    return jsonNoStore({ error: "Error al eliminar la vacante" }, 500);
   }
 }
