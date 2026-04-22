@@ -46,9 +46,6 @@ const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
 };
 
-/* -------------------------------------------------
-   Helpers
---------------------------------------------------*/
 function jsonPublic(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: PUBLIC_CACHE_HEADERS });
 }
@@ -130,37 +127,28 @@ function normalizeEducationLevel(
     NINGUNO: "NONE",
     NINGUNA: "NONE",
     SIN_ESTUDIOS: "NONE",
-
     PRIMARY: "PRIMARY",
     PRIMARIA: "PRIMARY",
-
     SECONDARY: "SECONDARY",
     SECUNDARIA: "SECONDARY",
-
     HIGH_SCHOOL: "HIGH_SCHOOL",
     HIGHSCHOOL: "HIGH_SCHOOL",
     BACHILLERATO: "HIGH_SCHOOL",
     PREPARATORIA: "HIGH_SCHOOL",
     PREPA: "HIGH_SCHOOL",
-
     TECHNICAL: "TECHNICAL",
     TECNICO: "TECHNICAL",
     TECNICA: "TECHNICAL",
-
     BACHELOR: "BACHELOR",
     LICENCIATURA: "BACHELOR",
     INGENIERIA: "BACHELOR",
     UNIVERSIDAD: "BACHELOR",
-
     MASTER: "MASTER",
     MAESTRIA: "MASTER",
-
     DOCTORATE: "DOCTORATE",
     DOCTORADO: "DOCTORATE",
-
     OTHER: "OTHER",
     OTRO: "OTHER",
-
     "0": "NONE",
     "1": "PRIMARY",
     "2": "SECONDARY",
@@ -463,9 +451,6 @@ export async function POST(req: NextRequest) {
 
     const formData = await req.formData();
 
-    // ================================
-    // DEBUG FORM DATA
-    // ================================
     console.log("========== DEBUG POST /api/jobs ==========");
     const debugEntries = Array.from(formData.entries()).map(([key, value]) => [
       key,
@@ -594,7 +579,6 @@ export async function POST(req: NextRequest) {
     const companyMode = getFormString(formData, "companyMode");
     const companyConfidential = companyMode === "confidential";
 
-    // Nuevo: soportar múltiples assessments
     const assessmentTemplateIdsParsed = getFormJSON<string[]>(
       formData,
       "assessmentTemplateIds"
@@ -613,7 +597,6 @@ export async function POST(req: NextRequest) {
           .filter(Boolean)
       : [];
 
-    // Fallback temporal para compatibilidad con el campo viejo
     const rawAssessmentTemplateId = getFormString(
       formData,
       "assessmentTemplateId"
@@ -625,7 +608,6 @@ export async function POST(req: NextRequest) {
       assessmentTemplateIds = [assessmentTemplateId];
     }
 
-    // Deduplicar por si el frontend manda ids repetidos
     assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
 
     console.log(
@@ -635,7 +617,6 @@ export async function POST(req: NextRequest) {
       assessmentTemplateIds.length
     );
 
-    // Validar existencia de todos los templates seleccionados
     if (assessmentTemplateIds.length > 0) {
       const existingTemplates = await prisma.assessmentTemplate.findMany({
         where: { id: { in: assessmentTemplateIds } },
@@ -659,9 +640,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    /* -------------------------------------------------
-       🔁 ANTI-DUPLICADOS (best-effort)
-    --------------------------------------------------*/
     const threeMinutesAgo = new Date(Date.now() - 3 * 60 * 1000);
 
     const existing = await prisma.job.findFirst({
@@ -680,9 +658,6 @@ export async function POST(req: NextRequest) {
       return jsonNoStore({ ok: true, id: existing.id, deduped: true });
     }
 
-    /* -------------------------------------------------
-       🔐 LÍMITE DE VACANTES POR PLAN
-    --------------------------------------------------*/
     const company = await prisma.company.findUnique({
       where: { id: companyId },
       select: { billingPlan: true },
@@ -713,9 +688,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    /* -------------------------------------------------
-       Crear vacante + syncJobSkills + JobAssessment en transacción
-    --------------------------------------------------*/
     const job = await prisma.$transaction(async (tx) => {
       const createdJob = await tx.job.create({
         data: {
@@ -795,9 +767,6 @@ export async function POST(req: NextRequest) {
       return createdJob;
     });
 
-    /* -------------------------------------------------
-       Guardar plantilla (JobTemplate)
-    --------------------------------------------------*/
     try {
       const payloadForTemplate = {
         title,
