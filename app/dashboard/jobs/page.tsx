@@ -5,7 +5,7 @@ import { getSessionCompanyId } from '@/lib/server/session';
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
 import AssignTemplateModalTrigger from "@/components/dashboard/AssignTemplateModalTrigger";
-import { Briefcase, Users, Clock, CheckCircle2, Plus } from "lucide-react";
+import { Briefcase, Users, Clock, CheckCircle2, Plus, ClipboardCheck, Pencil, MapPin } from "lucide-react";
 
 export const metadata = { title: "Vacantes | Panel" };
 
@@ -287,10 +287,10 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           Vacante{sortIndicator(sp, "title")}
                         </Link>
                       </th>
-                      <th className="py-3 px-4">Evaluación</th>
+                      <th className="py-3 px-4">Assessments</th>
                       <th className="py-3 px-4 text-center">
                         <Link href={toggleSortLink(sp, "total")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200">
-                          Postulaciones{sortIndicator(sp, "total")}
+                          Aplics.{sortIndicator(sp, "total")}
                         </Link>
                       </th>
                       <th className="py-3 px-4 text-center">
@@ -299,8 +299,8 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                         </Link>
                       </th>
                       <th className="py-3 px-4">
-                        <Link href={toggleSortLink(sp, "createdAt")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200">
-                          Fecha{sortIndicator(sp, "createdAt")}
+                        <Link href={toggleSortLink(sp, "createdAt")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200" title="Fecha de publicación">
+                          Publicada{sortIndicator(sp, "createdAt")}
                         </Link>
                       </th>
                       <th className="py-3 px-4">Estatus</th>
@@ -314,7 +314,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                       const assignedCount = j.assessments?.length ?? 0;
 
                       return (
-                        <tr key={j.id} className="hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors">
+                        <tr key={j.id} className={`hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors ${
+                          j.status === "OPEN" && total === 0 && new Date(j.createdAt) < new Date(Date.now() - 15 * 86400000)
+                            ? "bg-amber-50/40 dark:bg-amber-950/10"
+                            : ""
+                        }`}>
                           <td className="py-3 px-4">
                             <Link
                               href={`/dashboard/jobs/${j.id}/applications`}
@@ -343,19 +347,23 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           </td>
 
                           <td className="py-3 px-4 text-center">
-                            <span className="inline-flex min-w-[2rem] justify-center rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2.5 py-0.5 text-xs font-semibold text-zinc-800 dark:text-zinc-100">
-                              {total}
-                            </span>
+                            {total > 0 ? (
+                              <Link href={`/dashboard/jobs/${j.id}/applications`} className="inline-flex min-w-[2rem] justify-center rounded-full border border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 transition">
+                                {total}
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-300 dark:text-zinc-600 text-sm">—</span>
+                            )}
                           </td>
 
                           <td className="py-3 px-4 text-center">
-                            <span className={`inline-flex min-w-[2rem] justify-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
-                              pending > 0
-                                ? "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/60 dark:bg-amber-500/15 dark:text-amber-200"
-                                : "border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400"
-                            }`}>
-                              {pending}
-                            </span>
+                            {pending > 0 ? (
+                              <Link href={`/dashboard/jobs/${j.id}/applications?status=SUBMITTED`} className="inline-flex min-w-[2rem] justify-center rounded-full border border-amber-200 bg-amber-50 dark:border-amber-500/60 dark:bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:bg-amber-100 transition">
+                                {pending}
+                              </Link>
+                            ) : (
+                              <span className="text-zinc-300 dark:text-zinc-600 text-sm">—</span>
+                            )}
                           </td>
 
                           <td className="py-3 px-4 text-xs text-zinc-600 dark:text-zinc-300 whitespace-nowrap">
@@ -369,7 +377,23 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           </td>
 
                           <td className="py-3 px-4 text-right">
-                            <JobActionsMenu jobId={j.id} currentStatus={j.status} />
+                            <div className="inline-flex items-center gap-1">
+                              <Link
+                                href={`/dashboard/jobs/${j.id}/edit`}
+                                className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition"
+                                title="Editar vacante"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Link>
+                              <Link
+                                href={`/dashboard/jobs/${j.id}/applications`}
+                                className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition"
+                                title="Ver candidatos"
+                              >
+                                <Users className="h-3.5 w-3.5" />
+                              </Link>
+                              <JobActionsMenu jobId={j.id} currentStatus={j.status} />
+                            </div>
                           </td>
                         </tr>
                       );
@@ -394,7 +418,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                 return (
                   <div key={j.id} className="rounded-2xl border border-zinc-200/80 bg-white/90 dark:border-zinc-800/50 dark:bg-zinc-900/80 shadow-sm overflow-hidden">
                     {/* Top accent by status */}
-                    <div className={`h-1 w-full ${j.status === "OPEN" ? "bg-emerald-500" : j.status === "PAUSED" ? "bg-yellow-400" : "bg-zinc-300"}`} />
+                    <div className={`h-1 w-full ${j.status === "OPEN" && total === 0 && new Date(j.createdAt) < new Date(Date.now() - 15 * 86400000) ? "bg-amber-400" : j.status === "OPEN" ? "bg-emerald-500" : j.status === "PAUSED" ? "bg-yellow-400" : "bg-zinc-300"}`} />
 
                     <div className="p-4 space-y-3">
                       {/* Título + estatus */}
@@ -414,6 +438,13 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[j.status] || STATUS_STYLE.CLOSED}`}>
                             {STATUS_LABEL[j.status] || j.status}
                           </span>
+                          <Link
+                            href={`/dashboard/jobs/${j.id}/edit`}
+                            className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition"
+                            title="Editar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Link>
                           <JobActionsMenu jobId={j.id} currentStatus={j.status} />
                         </div>
                       </div>
@@ -421,15 +452,15 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                       {/* Métricas */}
                       <div className="grid grid-cols-3 gap-2">
                         <div className="flex flex-col items-center rounded-xl bg-zinc-50 dark:bg-zinc-800/50 py-2">
-                          <p className="text-lg font-black text-zinc-900 dark:text-zinc-100">{total}</p>
-                          <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Postulaciones</p>
+                          <p className="text-lg font-black text-zinc-900 dark:text-zinc-100">{total > 0 ? total : <span className="text-zinc-300 dark:text-zinc-600">—</span>}</p>
+                          <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Aplics.</p>
                         </div>
                         <div className={`flex flex-col items-center rounded-xl py-2 ${
                           pending > 0
                             ? "bg-amber-50 dark:bg-amber-950/30"
                             : "bg-zinc-50 dark:bg-zinc-800/50"
                         }`}>
-                          <p className={`text-lg font-black ${pending > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-900 dark:text-zinc-100"}`}>{pending}</p>
+                          <p className={`text-lg font-black ${pending > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-300 dark:text-zinc-600"}`}>{pending > 0 ? pending : "—"}</p>
                           <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Por revisar</p>
                         </div>
                         <div className="flex flex-col items-center rounded-xl bg-zinc-50 dark:bg-zinc-800/50 py-2">
