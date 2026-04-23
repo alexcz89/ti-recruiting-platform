@@ -12,8 +12,6 @@ import {
   Send,
   ClipboardCopy,
   CheckCircle2,
-  RotateCcw,
-  Clock,
   X,
 } from "lucide-react";
 import {
@@ -27,7 +25,12 @@ type AssessmentMeta =
   | { enabled: false }
   | {
       enabled: true;
+      // templateId: primer template (compatibilidad)
       templateId: string;
+      // templateIds: todos los templates del job
+      templateIds?: string[];
+      // títulos de los templates (para mostrar en el modal)
+      templateTitles?: Record<string, string>;
       state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
       token?: string | null;
       attemptId?: string | null;
@@ -80,6 +83,19 @@ export default function ActionsMenu(props: Props) {
     candidatePhone,
     assessment,
   } = props;
+
+  // Todos los templateIds del job (para el modal multi-select)
+  const allTemplateIds: string[] =
+    assessment?.enabled && assessment.templateIds?.length
+      ? assessment.templateIds
+      : assessment?.enabled && assessment.templateId
+      ? [assessment.templateId]
+      : [];
+
+  const templateTitles: Record<string, string> =
+    (assessment?.enabled && assessment.templateTitles) || {};
+
+  const assessmentCount = allTemplateIds.length;
 
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -203,24 +219,20 @@ export default function ActionsMenu(props: Props) {
 
   const handleSendAssessment = async () => {
     startTransition(async () => {
-      if (assessment?.enabled && assessment.templateId) {
-        const mode =
-          assessment.state === "EXPIRED" ? "resend" : "send";
-        await sendAssessmentInvite(assessment.templateId, mode);
-        return;
-      }
-
-      const assessments = await fetchAvailableAssessments();
-      if (assessments.length === 0) {
+      // Sin assessments configurados
+      if (allTemplateIds.length === 0) {
         toastError("Este job no tiene assessments configurados");
         return;
       }
 
-      if (assessments.length === 1) {
-        await sendAssessmentInvite(assessments[0].id, "send");
+      // Un solo assessment — enviar directo sin modal
+      if (allTemplateIds.length === 1) {
+        const mode = assessment?.enabled && assessment.state === "EXPIRED" ? "resend" : "send";
+        await sendAssessmentInvite(allTemplateIds[0], mode);
         return;
       }
 
+      // Múltiples assessments — mostrar modal con todos pre-seleccionados
       setShowAssessmentModal(true);
     });
   };
@@ -333,36 +345,25 @@ export default function ActionsMenu(props: Props) {
   };
 
   const assessmentLabel = (() => {
-    if (!assessment || !assessment.enabled) return "Enviar assessment";
-    if (assessment.state === "COMPLETED") return "Ver resultados del assessment";
-    if (assessment.state === "SENT") return "Assessment enviado · Copiar link";
-    if (assessment.state === "STARTED") return "Assessment en progreso · Copiar link";
-    if (assessment.state === "EXPIRED") return "Reenviar assessment";
-    return "Enviar assessment";
+    if (!assessment?.enabled || assessment.state === "NONE") {
+      if (assessmentCount === 0) return "Sin evaluaciones asignadas";
+      if (assessmentCount === 1) return "Enviar evaluación";
+      return `Enviar evaluaciones (${assessmentCount})`;
+    }
+    if (assessment.state === "COMPLETED") return "Ver resultados";
+    if (assessment.state === "SENT") return "Enviado · Copiar link";
+    if (assessment.state === "STARTED") return "En progreso · Copiar link";
+    if (assessment.state === "EXPIRED") return "Reenviar evaluación";
+    return "Enviar evaluación";
   })();
 
   const AssessmentIcon = (() => {
     if (!assessment || !assessment.enabled) return Send;
     if (assessment.state === "COMPLETED") return CheckCircle2;
-    if (assessment.state === "SENT") return Clock;
-    if (assessment.state === "STARTED") return ClipboardCopy;
-    if (assessment.state === "EXPIRED") return RotateCcw;
+    if (assessment.state === "SENT" || assessment.state === "STARTED") {
+      return ClipboardCopy;
+    }
     return Send;
-  })();
-
-  // Color del ícono de assessment según estado
-  const assessmentIconColor = (() => {
-    if (!assessment?.enabled || assessment.state === "NONE")
-      return "bg-violet-50 text-violet-600 group-hover:bg-violet-100 group-hover:text-violet-700 dark:bg-violet-500/10 dark:text-violet-300 dark:group-hover:bg-violet-500/20";
-    if (assessment.state === "COMPLETED")
-      return "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 group-hover:text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300";
-    if (assessment.state === "SENT")
-      return "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-blue-700 dark:bg-blue-500/10 dark:text-blue-300";
-    if (assessment.state === "STARTED")
-      return "bg-sky-50 text-sky-600 group-hover:bg-sky-100 group-hover:text-sky-700 dark:bg-sky-500/10 dark:text-sky-300";
-    if (assessment.state === "EXPIRED")
-      return "bg-amber-50 text-amber-600 group-hover:bg-amber-100 group-hover:text-amber-700 dark:bg-amber-500/10 dark:text-amber-300";
-    return "bg-violet-50 text-violet-600 group-hover:bg-violet-100 group-hover:text-violet-700 dark:bg-violet-500/10 dark:text-violet-300";
   })();
 
   return (
@@ -372,41 +373,47 @@ export default function ActionsMenu(props: Props) {
           disabled={pending}
           aria-label="Acciones de la postulación"
           className="
-            inline-flex h-8 w-8 items-center justify-center
-            rounded-full border border-zinc-200 bg-white
-            text-zinc-500 shadow-sm transition-all
-            hover:bg-zinc-100 hover:text-zinc-800 hover:border-zinc-300
-            active:scale-[0.96]
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50
+            inline-flex h-7 w-7 items-center justify-center
+            rounded-full border border-zinc-200/80 bg-white/85
+            text-zinc-600 shadow-sm
+            hover:bg-zinc-50 hover:text-zinc-800
+            active:scale-[0.97]
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70
             disabled:opacity-60
-            dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400
-            dark:hover:bg-zinc-800 dark:hover:text-zinc-100
+            dark:border-zinc-700/80 dark:bg-zinc-900/85 dark:text-zinc-300
+            dark:hover:bg-zinc-800/80 dark:hover:text-zinc-50
           "
         >
-          <MoreHorizontal className="h-4 w-4" />
+          <MoreHorizontal className="h-3.5 w-3.5" />
         </DropdownMenuTrigger>
 
         <DropdownMenuContent
           align="end"
           className="
-            min-w-[220px] rounded-xl border border-zinc-200
-            bg-white p-1 shadow-xl
-            dark:border-zinc-700/80 dark:bg-zinc-900
+            min-w-[190px] rounded-md border border-zinc-200/80
+            bg-white/97 px-0.5 py-0 shadow-lg backdrop-blur-md
+            dark:border-zinc-700/80 dark:bg-zinc-900/98
           "
         >
           <DropdownMenuItem
             onClick={handleAssessmentAction}
             disabled={pending}
             className="
-              group flex cursor-pointer items-center gap-2.5 rounded-lg
-              px-3 py-2.5 text-sm min-h-[44px]
+              group flex cursor-pointer items-center gap-2 rounded-[6px]
+              px-2 py-2 text-xs
               text-zinc-800 hover:bg-zinc-50
               disabled:cursor-not-allowed disabled:opacity-60
               dark:text-zinc-100 dark:hover:bg-zinc-800/80
             "
           >
             <span
-              className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${assessmentIconColor}`}
+              className="
+                inline-flex h-5 w-5 items-center justify-center rounded-full
+                bg-violet-50 text-violet-600
+                group-hover:bg-violet-100 group-hover:text-violet-700
+                dark:bg-violet-500/10 dark:text-violet-300
+                dark:group-hover:bg-violet-500/20
+              "
             >
               <AssessmentIcon className="h-3.5 w-3.5" />
             </span>
@@ -417,8 +424,8 @@ export default function ActionsMenu(props: Props) {
             onClick={handleOpenResume}
             disabled={pending || !resumeUrl}
             className="
-              group flex cursor-pointer items-center gap-2.5 rounded-lg
-              px-3 py-2.5 text-sm min-h-[44px]
+              group flex cursor-pointer items-center gap-2 rounded-[6px]
+              px-2 py-2 text-xs
               text-zinc-800 hover:bg-zinc-50
               disabled:cursor-not-allowed disabled:opacity-60
               dark:text-zinc-100 dark:hover:bg-zinc-800/80
@@ -426,7 +433,7 @@ export default function ActionsMenu(props: Props) {
           >
             <span
               className="
-                inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full
+                inline-flex h-5 w-5 items-center justify-center rounded-full
                 bg-emerald-50 text-emerald-600
                 group-hover:bg-emerald-100 group-hover:text-emerald-700
                 dark:bg-emerald-500/10 dark:text-emerald-300
@@ -442,8 +449,8 @@ export default function ActionsMenu(props: Props) {
             onClick={handleSendWhatsApp}
             disabled={pending || !candidatePhone}
             className="
-              group flex cursor-pointer items-center gap-2.5 rounded-lg
-              px-3 py-2.5 text-sm min-h-[44px]
+              group flex cursor-pointer items-center gap-2 rounded-[6px]
+              px-2 py-2 text-xs
               text-zinc-800 hover:bg-zinc-50
               disabled:cursor-not-allowed disabled:opacity-60
               dark:text-zinc-100 dark:hover:bg-zinc-800/80
@@ -451,7 +458,7 @@ export default function ActionsMenu(props: Props) {
           >
             <span
               className="
-                inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full
+                inline-flex h-5 w-5 items-center justify-center rounded-full
                 bg-green-50 text-green-600
                 group-hover:bg-green-100 group-hover:text-green-700
                 dark:bg-green-500/10 dark:text-green-300
@@ -467,8 +474,8 @@ export default function ActionsMenu(props: Props) {
             onClick={handleDelete}
             disabled={pending}
             className="
-              group flex cursor-pointer items-center gap-2.5 rounded-lg
-              px-3 py-2.5 text-sm min-h-[44px]
+              group flex cursor-pointer items-center gap-2 rounded-[6px]
+              px-2 py-2 text-xs
               text-red-700 hover:bg-red-50
               disabled:cursor-not-allowed disabled:opacity-60
               dark:text-red-300 dark:hover:bg-red-950/40
@@ -476,7 +483,7 @@ export default function ActionsMenu(props: Props) {
           >
             <span
               className="
-                inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full
+                inline-flex h-5 w-5 items-center justify-center rounded-full
                 bg-red-50 text-red-600
                 group-hover:bg-red-100 group-hover:text-red-700
                 dark:bg-red-500/10 dark:text-red-300

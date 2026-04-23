@@ -159,8 +159,13 @@ export default async function JobApplicationsPage({
   });
   if (!job) notFound();
 
-  const chosenTemplateId = job.assessments?.[0]?.templateId ?? null;
-  const assessmentEnabled = Boolean(chosenTemplateId);
+  const jobAssessmentTemplates = job.assessments ?? [];
+  const chosenTemplateId = jobAssessmentTemplates[0]?.templateId ?? null;
+  const assessmentEnabled = jobAssessmentTemplates.length > 0;
+  const allJobTemplateIds = jobAssessmentTemplates.map(a => a.templateId);
+  const jobTemplateTitles: Record<string, string> = Object.fromEntries(
+    jobAssessmentTemplates.map(a => [a.templateId, (a as any).template?.title ?? a.templateId])
+  );
 
   const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
     termId: rs.term.id,
@@ -219,6 +224,8 @@ export default async function JobApplicationsPage({
   type AssessmentRowMeta = {
     enabled: boolean;
     templateId: string;
+    templateIds?: string[];
+    templateTitles?: Record<string, string>;
     state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
     token: string | null;
     attemptId: string | null;
@@ -295,6 +302,8 @@ export default async function JobApplicationsPage({
         assessmentByAppId.set(appId, {
           enabled: true,
           templateId: chosenTemplateId,
+          templateIds: allJobTemplateIds,
+          templateTitles: jobTemplateTitles,
           state: "EXPIRED",
           token: iv?.token ?? null,
           attemptId: at?.id ?? null,
@@ -1066,6 +1075,8 @@ export default async function JobApplicationsPage({
                                 ? ({
                                     enabled: true,
                                     templateId: chosenTemplateId,
+                                    templateIds: allJobTemplateIds,
+                                    templateTitles: jobTemplateTitles,
                                     state: (assessMeta?.state ?? "NONE") as any,
                                     token: assessMeta?.token ?? null,
                                     attemptId: assessMeta?.attemptId ?? null,
