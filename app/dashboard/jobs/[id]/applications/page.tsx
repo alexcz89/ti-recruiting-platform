@@ -150,7 +150,7 @@ export default async function JobApplicationsPage({
       },
       assessments: {
         orderBy: { createdAt: "asc" },
-        select: { templateId: true },
+        select: { templateId: true, template: { select: { title: true } } },
       },
       location: true,
       createdAt: true,
