@@ -5,7 +5,7 @@ import { getSessionCompanyId } from '@/lib/server/session';
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
 import AssignTemplateModalTrigger from "@/components/dashboard/AssignTemplateModalTrigger";
-import { Briefcase, Users, Clock, CheckCircle2, Plus, ClipboardCheck, Pencil, MapPin } from "lucide-react";
+import { Briefcase, Users, Clock, CheckCircle2, Plus, ClipboardCheck } from "lucide-react";
 
 export const metadata = { title: "Vacantes | Panel" };
 
@@ -115,7 +115,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       id: true, title: true, location: true, remote: true,
       createdAt: true, status: true,
       _count: { select: { applications: true } },
-      assessments: { select: { templateId: true } },
+      assessments: { select: { templateId: true, template: { select: { title: true } } } },
     },
   });
 
@@ -283,23 +283,23 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                   <thead className="bg-zinc-50 dark:bg-zinc-800/60 text-left text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                     <tr>
                       <th className="py-3 px-4 w-[38%]">
-                        <Link href={toggleSortLink(sp, "title")} className="inline-flex items-center hover:text-zinc-700 dark:hover:text-zinc-200">
+                        <Link href={toggleSortLink(sp, "title")} className="inline-flex items-center hover:text-zinc-700 dark:hover:text-zinc-200 whitespace-nowrap">
                           Vacante{sortIndicator(sp, "title")}
                         </Link>
                       </th>
-                      <th className="py-3 px-4">Assessments</th>
+                      <th className="py-3 px-4 whitespace-nowrap">Assessments</th>
                       <th className="py-3 px-4 text-center">
-                        <Link href={toggleSortLink(sp, "total")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200">
+                        <Link href={toggleSortLink(sp, "total")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200 whitespace-nowrap">
                           Aplics.{sortIndicator(sp, "total")}
                         </Link>
                       </th>
                       <th className="py-3 px-4 text-center">
-                        <Link href={toggleSortLink(sp, "pending")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200">
+                        <Link href={toggleSortLink(sp, "pending")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200 whitespace-nowrap">
                           Por revisar{sortIndicator(sp, "pending")}
                         </Link>
                       </th>
                       <th className="py-3 px-4">
-                        <Link href={toggleSortLink(sp, "createdAt")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200" title="Fecha de publicación">
+                        <Link href={toggleSortLink(sp, "createdAt")} className="inline-flex items-center gap-1 hover:text-zinc-700 dark:hover:text-zinc-200 whitespace-nowrap" title="Fecha de publicación">
                           Publicada{sortIndicator(sp, "createdAt")}
                         </Link>
                       </th>
@@ -312,6 +312,9 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                       const total   = j._count.applications || 0;
                       const pending = pendingMap.get(j.id) || 0;
                       const assignedCount = j.assessments?.length ?? 0;
+                      const assessmentTitles = (j.assessments ?? [])
+                        .map(a => a.template?.title ?? a.templateId)
+                        .join("\n");
 
                       return (
                         <tr key={j.id} className={`hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors ${
@@ -333,7 +336,10 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
 
                           <td className="py-3 px-4">
                             {assignedCount > 0 ? (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
+                              <span
+                                title={assessmentTitles}
+                                className="inline-flex cursor-help items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap"
+                              >
                                 ✓ {assignedCount} template{assignedCount > 1 ? "s" : ""}
                               </span>
                             ) : (
@@ -377,23 +383,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           </td>
 
                           <td className="py-3 px-4 text-right">
-                            <div className="inline-flex items-center gap-1">
-                              <Link
-                                href={`/dashboard/jobs/${j.id}/edit`}
-                                className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition"
-                                title="Editar vacante"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Link>
-                              <Link
-                                href={`/dashboard/jobs/${j.id}/applications`}
-                                className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition"
-                                title="Ver candidatos"
-                              >
-                                <Users className="h-3.5 w-3.5" />
-                              </Link>
-                              <JobActionsMenu jobId={j.id} currentStatus={j.status} />
-                            </div>
+                            <JobActionsMenu jobId={j.id} currentStatus={j.status} />
                           </td>
                         </tr>
                       );
@@ -414,6 +404,9 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                 const total         = j._count.applications || 0;
                 const pending       = pendingMap.get(j.id) || 0;
                 const assignedCount = j.assessments?.length ?? 0;
+                const assessmentTitles = (j.assessments ?? [])
+                  .map(a => a.template?.title ?? a.templateId)
+                  .join("\n");
 
                 return (
                   <div key={j.id} className="rounded-2xl border border-zinc-200/80 bg-white/90 dark:border-zinc-800/50 dark:bg-zinc-900/80 shadow-sm overflow-hidden">
@@ -438,13 +431,6 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${STATUS_STYLE[j.status] || STATUS_STYLE.CLOSED}`}>
                             {STATUS_LABEL[j.status] || j.status}
                           </span>
-                          <Link
-                            href={`/dashboard/jobs/${j.id}/edit`}
-                            className="rounded-lg p-1.5 text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition"
-                            title="Editar"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Link>
                           <JobActionsMenu jobId={j.id} currentStatus={j.status} />
                         </div>
                       </div>
@@ -475,7 +461,10 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                       <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Evaluación</span>
                         {assignedCount > 0 ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                          <span
+                            title={assessmentTitles}
+                            className="inline-flex cursor-help items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
+                          >
                             ✓ {assignedCount} template{assignedCount > 1 ? "s" : ""}
                           </span>
                         ) : (
