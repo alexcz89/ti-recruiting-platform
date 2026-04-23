@@ -1,5 +1,4 @@
 // app/api/applications/route.ts
-import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { type Prisma } from "@prisma/client";
@@ -9,7 +8,6 @@ import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { sendApplicationEmail } from "@/lib/server/mailer";
 import { NotificationService } from "@/lib/notifications/service";
-import { reserveCredits, hasAvailableCredits } from "@/lib/assessments/credits";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -26,17 +24,11 @@ type NotificationMetadata = {
   jobTitle: string;
   jobId: string;
   applicationId: string;
-  assessmentInvited?: boolean;
 };
 
 type PostResponse = {
   ok: true;
   applicationId: string;
-  assessment?: {
-    invited: boolean;
-    warning: string | null;
-  };
-  message?: string;
 };
 
 function noStoreJson(body: unknown, status = 200) {
@@ -120,7 +112,7 @@ export async function GET(req: NextRequest) {
 // Candidatos: deben estar logueados para poder aplicar
 // Body JSON o formData: { jobId, coverLetter?, resumeUrl? }
 //
-// Ahora envía evaluaciones automáticamente si la vacante las tiene
+// Los assessments se envían manualmente por el reclutador
 // ==============================
 export async function POST(req: NextRequest) {
   try {
@@ -199,21 +191,6 @@ export async function POST(req: NextRequest) {
         companyId: true,
         recruiterId: true,
         company: { select: { name: true } },
-        assessments: {
-          where: { isRequired: true },
-          include: {
-            template: {
-              select: {
-                id: true,
-                title: true,
-                type: true,
-                difficulty: true,
-                timeLimit: true,
-              },
-            },
-          },
-          take: 1,
-        },
       },
     });
 
@@ -262,70 +239,9 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
 
-    const hasAssessment = job.assessments.length > 0;
-    const assessment = hasAssessment ? job.assessments[0] : null;
-    let assessmentInvited = false;
-    let assessmentWarning: string | null = null;
-
-    if (hasAssessment && assessment) {
-      const hasCredits = await hasAvailableCredits(job.companyId, 0.5);
-
-      if (hasCredits) {
-        try {
-          const token = `inv_${randomUUID()}`;
-          const expiresAt = new Date(
-            Date.now() + 7 * 24 * 60 * 60 * 1000
-          );
-
-          const invite = await prisma.assessmentInvite.create({
-            data: {
-              token,
-              applicationId: app.id,
-              jobId: job.id,
-              candidateId,
-              templateId: assessment.templateId,
-              invitedById: job.recruiterId || undefined,
-              status: "SENT",
-              sentAt: new Date(),
-              expiresAt,
-            },
-          });
-
-          const reserveResult = await reserveCredits(
-            job.companyId,
-            invite.id,
-            assessment.template.type,
-            assessment.template.difficulty
-          );
-
-          if (reserveResult.success) {
-            assessmentInvited = true;
-            console.log(
-              `[POST /api/applications] ✓ Assessment invite created and credits reserved ` +
-                `(application: ${app.id}, invite: ${invite.id})`
-            );
-          } else {
-            await prisma.assessmentInvite.delete({ where: { id: invite.id } });
-            assessmentWarning =
-              reserveResult.message || "Error al reservar créditos";
-            console.error(
-              `[POST /api/applications] ✗ Failed to reserve credits, invite deleted: ${assessmentWarning}`
-            );
-          }
-        } catch (assessmentErr) {
-          console.error(
-            "[POST /api/applications] Assessment invite error:",
-            assessmentErr
-          );
-          assessmentWarning = "Error al crear invitación de evaluación";
-        }
-      } else {
-        assessmentWarning = "La empresa no tiene créditos disponibles";
-        console.warn(
-          `[POST /api/applications] ⚠️ Company ${job.companyId} has no credits for assessment`
-        );
-      }
-    }
+    // Los assessments se envían MANUALMENTE por el reclutador
+    // desde /dashboard/jobs/[id]/applications → menú de acciones
+    // No se crean invites automáticamente al aplicar
 
     const postSideEffects = [];
 
@@ -355,10 +271,6 @@ export async function POST(req: NextRequest) {
         applicationId: app.id,
       };
 
-      if (assessmentInvited) {
-        metadata.assessmentInvited = true;
-      }
-
       postSideEffects.push(
         NotificationService.create({
           userId: job.recruiterId,
@@ -380,19 +292,7 @@ export async function POST(req: NextRequest) {
       applicationId: app.id,
     };
 
-    if (hasAssessment) {
-      response.assessment = {
-        invited: assessmentInvited,
-        warning: assessmentWarning,
-      };
 
-      if (assessmentInvited) {
-        response.message =
-          "Aplicación enviada. Recibirás un correo con la evaluación técnica.";
-      } else if (assessmentWarning) {
-        response.message = `Aplicación enviada. ${assessmentWarning}`;
-      }
-    }
 
     return noStoreJson(response, 201);
   } catch (err: unknown) {
