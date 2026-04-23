@@ -5,6 +5,7 @@ import { getSessionCompanyId } from '@/lib/server/session';
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
 import AssignTemplateModalTrigger from "@/components/dashboard/AssignTemplateModalTrigger";
+import AssessmentsBadge from "@/components/dashboard/AssessmentsBadge";
 import { Briefcase, Users, Clock, CheckCircle2, Plus, ClipboardCheck } from "lucide-react";
 
 export const metadata = { title: "Vacantes | Panel" };
@@ -312,9 +313,8 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                       const total   = j._count.applications || 0;
                       const pending = pendingMap.get(j.id) || 0;
                       const assignedCount = j.assessments?.length ?? 0;
-                      const assessmentTitles = (j.assessments ?? [])
-                        .map(a => a.template?.title ?? a.templateId)
-                        .join("\n");
+                      const assessmentNames = (j.assessments ?? [])
+                        .map(a => a.template?.title ?? a.templateId);
 
                       return (
                         <tr key={j.id} className={`hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors ${
@@ -336,12 +336,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
 
                           <td className="py-3 px-4">
                             {assignedCount > 0 ? (
-                              <span
-                                title={assessmentTitles}
-                                className="inline-flex cursor-help items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 whitespace-nowrap"
-                              >
-                                ✓ {assignedCount} template{assignedCount > 1 ? "s" : ""}
-                              </span>
+                              <AssessmentsBadge titles={assessmentNames} />
                             ) : (
                               <Link
                                 href="/dashboard/assessments/templates"
@@ -404,9 +399,8 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                 const total         = j._count.applications || 0;
                 const pending       = pendingMap.get(j.id) || 0;
                 const assignedCount = j.assessments?.length ?? 0;
-                const assessmentTitles = (j.assessments ?? [])
-                  .map(a => a.template?.title ?? a.templateId)
-                  .join("\n");
+                const assessmentNames = (j.assessments ?? [])
+                  .map(a => a.template?.title ?? a.templateId);
 
                 return (
                   <div key={j.id} className="rounded-2xl border border-zinc-200/80 bg-white/90 dark:border-zinc-800/50 dark:bg-zinc-900/80 shadow-sm overflow-hidden">
@@ -461,12 +455,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                       <div className="flex items-center justify-between pt-1 border-t border-zinc-100 dark:border-zinc-800">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Evaluación</span>
                         {assignedCount > 0 ? (
-                          <span
-                            title={assessmentTitles}
-                            className="inline-flex cursor-help items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300"
-                          >
-                            ✓ {assignedCount} template{assignedCount > 1 ? "s" : ""}
-                          </span>
+                          <AssessmentsBadge titles={assessmentNames} />
                         ) : (
                           <Link
                             href="/dashboard/assessments/templates"
