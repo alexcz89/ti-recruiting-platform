@@ -2,6 +2,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, XCircle, TrendingUp, Clock, Award, Info } from 'lucide-react';
@@ -9,6 +10,10 @@ import { CheckCircle2, XCircle, TrendingUp, Clock, Award, Info } from 'lucide-re
 export default function AssessmentResultsPage() {
   const params = useParams();
   const attemptId = params.attemptId as string;
+  const { data: session } = useSession();
+  const role = (session?.user as any)?.role;
+  const dashboardHref = role === 'CANDIDATE' ? '/profile/summary' : '/dashboard/overview';
+  const dashboardLabel = role === 'CANDIDATE' ? 'Ver mis postulaciones' : 'Volver al dashboard';
 
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<any>(null);
@@ -31,6 +36,23 @@ export default function AssessmentResultsPage() {
 
     loadResults();
   }, [attemptId]);
+
+  const [pendingInvites, setPendingInvites] = useState<any[]>([]);
+  useEffect(() => {
+    if (!result?.attempt?.applicationId) return;
+    fetch(`/api/candidate/assessment-invites?applicationId=${result.attempt.applicationId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (Array.isArray(data?.invites)) {
+          // Solo los pendientes (no el actual)
+          const pending = data.invites.filter(
+            (inv: any) => inv.templateId !== result?.template?.id && inv.status === 'SENT'
+          );
+          setPendingInvites(pending);
+        }
+      })
+      .catch(() => {});
+  }, [result]);
 
   const canSeeSolutions = useMemo(() => {
     if (!result) return false;
@@ -318,9 +340,23 @@ export default function AssessmentResultsPage() {
         </div>
 
         {/* Acciones */}
-        <div className="text-center">
-          <Link href="/dashboard" className="btn btn-primary">
-            Volver al dashboard
+        <div className="flex flex-col items-center gap-3">
+          {/* Si hay otras evaluaciones pendientes de esta misma aplicación */}
+          {pendingInvites.map((inv: any) => (
+            <Link
+              key={inv.id}
+              href={`/assessments/${encodeURIComponent(inv.templateId)}?token=${encodeURIComponent(inv.token)}`}
+              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm"
+            >
+              <span>Iniciar siguiente evaluación: {inv.templateTitle ?? inv.templateId}</span>
+              <span>→</span>
+            </Link>
+          ))}
+          <Link
+            href={dashboardHref}
+            className="inline-flex items-center gap-2 rounded-xl border border-zinc-300 px-6 py-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800 transition-colors"
+          >
+            {dashboardLabel}
           </Link>
         </div>
       </div>
