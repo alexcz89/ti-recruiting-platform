@@ -818,26 +818,28 @@ export default async function JobApplicationsPage({
                     </div>
 
                     {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                      <span
-                        className={[
-                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                          assessMeta.state === "COMPLETED"
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
-                            : assessMeta.state === "STARTED"
-                              ? "border-sky-200 bg-sky-50 text-sky-700"
-                              : assessMeta.state === "EXPIRED"
-                                ? "border-amber-200 bg-amber-50 text-amber-800"
-                                : "border-violet-200 bg-violet-50 text-violet-700",
-                        ].join(" ")}
-                      >
-                        {assessMeta.state === "COMPLETED"
-                          ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}`
-                          : assessMeta.state === "STARTED"
-                            ? "Assessment: iniciado"
-                            : assessMeta.state === "EXPIRED"
-                              ? "Assessment: expirado"
-                              : "Assessment: enviado"}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {(assessMeta.perTemplateState?.filter(t => t.state === "COMPLETED") ?? []).length > 0
+                          ? assessMeta.perTemplateState!.filter(t => t.state === "COMPLETED").map(t => (
+                              <span key={t.templateId} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200">
+                                {t.title.length > 18 ? t.title.slice(0, 18) + "…" : t.title}
+                                {typeof t.score === "number" && <span className="ml-1 font-bold">{t.score}%</span>}
+                              </span>
+                            ))
+                          : (
+                              <span className={[
+                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
+                                  : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
+                                  : "border-violet-200 bg-violet-50 text-violet-700",
+                              ].join(" ")}>
+                                {assessMeta.state === "STARTED" ? "Assessment: iniciado"
+                                  : assessMeta.state === "EXPIRED" ? "Assessment: expirado"
+                                  : "Assessment: enviado"}
+                              </span>
+                            )
+                        }
+                      </div>
                     )}
                   </div>
                 );
@@ -940,26 +942,28 @@ export default async function JobApplicationsPage({
                             </div>
 
                             {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                              <span
-                                className={[
-                                  "mt-0.5 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                  assessMeta.state === "COMPLETED"
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                    : assessMeta.state === "STARTED"
-                                      ? "border-sky-200 bg-sky-50 text-sky-700"
-                                      : assessMeta.state === "EXPIRED"
-                                        ? "border-amber-200 bg-amber-50 text-amber-800"
-                                        : "border-violet-200 bg-violet-50 text-violet-700",
-                                ].join(" ")}
-                              >
-                                {assessMeta.state === "COMPLETED"
-                                  ? `Assessment: ${typeof assessMeta.score === "number" ? `${assessMeta.score}%` : "OK"}`
-                                  : assessMeta.state === "STARTED"
-                                    ? "Iniciado"
-                                    : assessMeta.state === "EXPIRED"
-                                      ? "Expirado"
-                                      : "Enviado"}
-                              </span>
+                              <div className="mt-0.5 flex flex-wrap gap-1">
+                                {(assessMeta.perTemplateState?.filter(t => t.state === "COMPLETED") ?? []).length > 0
+                                  ? assessMeta.perTemplateState!.filter(t => t.state === "COMPLETED").map(t => (
+                                      <span key={t.templateId} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200">
+                                        {t.title.length > 16 ? t.title.slice(0, 16) + "…" : t.title}
+                                        {typeof t.score === "number" && <span className="ml-1 font-bold">{t.score}%</span>}
+                                      </span>
+                                    ))
+                                  : (
+                                      <span className={[
+                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                                        assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
+                                          : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
+                                          : "border-violet-200 bg-violet-50 text-violet-700",
+                                      ].join(" ")}>
+                                        {assessMeta.state === "STARTED" ? "Iniciado"
+                                          : assessMeta.state === "EXPIRED" ? "Expirado"
+                                          : "Enviado"}
+                                      </span>
+                                    )
+                                }
+                              </div>
                             )}
                           </div>
                         </td>
