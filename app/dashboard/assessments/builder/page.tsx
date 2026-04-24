@@ -2,7 +2,6 @@
 
 // app/dashboard/assessments/builder/page.tsx
 import { useState, useCallback } from "react";
-import AIQuestionGenerator from "@/components/dashboard/assessments/AIQuestionGenerator";
 import { useRouter } from "next/navigation";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Save,
@@ -15,18 +14,8 @@ const DIFFICULTIES = ["JUNIOR", "MID", "SENIOR"] as const;
 const LANGUAGES = [
   { value: "", label: "Sin lenguaje (genérico)" },
   { value: "javascript", label: "JavaScript" },
-  { value: "typescript", label: "TypeScript" },
   { value: "python", label: "Python" },
-  { value: "java", label: "Java" },
   { value: "cpp", label: "C++" },
-  { value: "csharp", label: "C#" },
-  { value: "go", label: "Go" },
-  { value: "rust", label: "Rust" },
-  { value: "sql", label: "SQL" },
-  { value: "php", label: "PHP" },
-  { value: "ruby", label: "Ruby" },
-  { value: "swift", label: "Swift" },
-  { value: "kotlin", label: "Kotlin" },
 ];
 
 type QuestionType = "MULTIPLE_CHOICE" | "CODING";
@@ -104,7 +93,9 @@ export default function AssessmentBuilderPage() {
   });
 
   const [questions, setQuestions] = useState<Question[]>([emptyMCQ()]);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ [questions[0].id]: true });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>(
+    questions[0]?.id ? { [questions[0].id]: true } : {}
+  );
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -116,27 +107,7 @@ export default function AssessmentBuilderPage() {
     setExpanded(e => ({ ...e, [id]: !e[id] }));
 
   // ── question helpers ──
-  const addQuestionsFromAI = (generated: any[]) => {
-    for (const q of generated) {
-      const isCoding = Array.isArray(q.testCases);
-      const uid = () => Math.random().toString(36).slice(2);
-      const base = {
-        id: uid(),
-        type: isCoding ? "CODING" as const : "MULTIPLE_CHOICE" as const,
-        questionText: q.questionText ?? "",
-        section: q.section ?? "General",
-        difficulty: (q.difficulty ?? "MID") as any,
-        explanation: q.explanation ?? "",
-        options: (isCoding ? [] : (q.options ?? []).map((o: any) => ({ id: uid(), text: o.text ?? "", isCorrect: Boolean(o.isCorrect) }))) as { id: string; text: string; isCorrect: boolean }[],
-        allowMultiple: false,
-        codeSnippet: isCoding ? (q.codeSnippet ?? "") : "",
-        testCases: (isCoding ? (q.testCases ?? []).map((tc: any) => ({ input: tc.input ?? "", expectedOutput: tc.expectedOutput ?? "", isHidden: Boolean(tc.isHidden) })) : []) as { input: string; expectedOutput: string; isHidden: boolean }[],
-      };
-      setQuestions(prev => [...prev, base]);
-    }
-  };
-
-    const addQuestion = (type: QuestionType) => {
+  const addQuestion = (type: QuestionType) => {
     if (questions.length >= MAX_QUESTIONS) return;
     const q = type === "MULTIPLE_CHOICE" ? emptyMCQ() : emptyCoding();
     setQuestions(qs => [...qs, q]);
@@ -145,6 +116,7 @@ export default function AssessmentBuilderPage() {
 
   const removeQuestion = (id: string) => {
     setQuestions(qs => qs.filter(q => q.id !== id));
+    setExpanded(prev => { const next = { ...prev }; delete next[id]; return next; });
   };
 
   const updateQuestion = useCallback((id: string, patch: Partial<Question>) => {
@@ -441,6 +413,14 @@ export default function AssessmentBuilderPage() {
             </h2>
           </div>
 
+          {questions.length === 0 && (
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 p-8 text-center">
+              <p className="text-sm text-zinc-400 dark:text-zinc-500">
+                No hay preguntas. Agrega una manualmente o usa el generador AI.
+              </p>
+            </div>
+          )}
+
           {questions.map((q, idx) => (
             <QuestionCard
               key={q.id}
@@ -479,13 +459,6 @@ export default function AssessmentBuilderPage() {
                 <Code2 className="h-4 w-4 shrink-0" />
                 Agregar pregunta de código
               </button>
-
-              <AIQuestionGenerator
-                onAddQuestions={addQuestionsFromAI}
-                currentLanguage={form.language}
-                currentDifficulty={form.difficulty}
-                currentType={form.type}
-              />
             </div>
           )}
           {!canAddMore && (
