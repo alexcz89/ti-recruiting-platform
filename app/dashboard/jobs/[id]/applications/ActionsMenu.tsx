@@ -32,6 +32,14 @@ type AssessmentMeta =
       templateIds?: string[];
       templateTitles?: Record<string, string>;
       state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
+      perTemplateState?: Array<{
+        templateId: string;
+        title: string;
+        state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
+        token: string | null;
+        attemptId: string | null;
+        score: number | null;
+      }>;
       token?: string | null;
       attemptId?: string | null;
     };
@@ -83,6 +91,14 @@ export default function ActionsMenu(props: Props) {
     (assessment?.enabled && assessment.templateTitles) || {};
 
   const assessmentCount = allTemplateIds.length;
+
+  // Estados individuales por template
+  const perTemplateState = assessment?.enabled
+    ? (assessment.perTemplateState ?? [])
+    : [];
+
+  const completedTemplates = perTemplateState.filter(t => t.state === "COMPLETED");
+  const hasMultipleCompleted = completedTemplates.length > 1;
 
   // Estado del primero para derivar el label global
   const assessmentState = assessment?.enabled ? assessment.state : "NONE";
@@ -260,17 +276,74 @@ export default function ActionsMenu(props: Props) {
           align="end"
           className="min-w-[200px] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700/80 dark:bg-zinc-900"
         >
-          {/* Assessment */}
-          <DropdownMenuItem
-            onClick={handleAssessmentAction}
-            disabled={pending || assessmentCount === 0}
-            className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
-          >
-            <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${iconColor}`}>
-              <AssessmentIcon className="h-3 w-3" />
-            </span>
-            <span>{pending ? "..." : assessmentLabel}</span>
-          </DropdownMenuItem>
+          {/* Assessment — un item por template completado, o acción global si no */}
+          {hasMultipleCompleted ? (
+            <>
+              {completedTemplates.map((t) => (
+                <DropdownMenuItem
+                  key={t.templateId}
+                  onClick={() => {
+                    if (t.attemptId) {
+                      window.open(
+                        `/dashboard/assessments/attempts/${encodeURIComponent(t.attemptId)}/results`,
+                        "_blank", "noopener,noreferrer"
+                      );
+                    }
+                  }}
+                  className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
+                >
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3 w-3" />
+                  </span>
+                  <span className="truncate max-w-[140px]" title={t.title}>
+                    {t.title.length > 22 ? t.title.slice(0, 22) + "…" : t.title}
+                    {typeof t.score === "number" && (
+                      <span className="ml-1 font-semibold text-emerald-700 dark:text-emerald-400">
+                        {t.score}%
+                      </span>
+                    )}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+              {/* Evaluaciones pendientes */}
+              {perTemplateState.filter(t => t.state !== "COMPLETED").map((t) => (
+                <DropdownMenuItem
+                  key={t.templateId}
+                  onClick={() => {
+                    startTransition(async () => {
+                      try {
+                        await sendInvite(t.templateId);
+                        router.refresh();
+                      } catch (err: any) {
+                        toastError(err?.message || "No se pudo enviar");
+                      }
+                    });
+                  }}
+                  disabled={pending || t.state === "SENT" || t.state === "STARTED"}
+                  className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
+                >
+                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400">
+                    <Send className="h-3 w-3" />
+                  </span>
+                  <span className="truncate max-w-[140px]" title={t.title}>
+                    {t.state === "SENT" ? "Enviado: " : t.state === "STARTED" ? "En progreso: " : "Enviar: "}
+                    {t.title.length > 18 ? t.title.slice(0, 18) + "…" : t.title}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </>
+          ) : (
+            <DropdownMenuItem
+              onClick={handleAssessmentAction}
+              disabled={pending || assessmentCount === 0}
+              className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
+            >
+              <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${iconColor}`}>
+                <AssessmentIcon className="h-3 w-3" />
+              </span>
+              <span>{pending ? "..." : assessmentLabel}</span>
+            </DropdownMenuItem>
+          )}
 
           {/* Ver CV */}
           <DropdownMenuItem

@@ -221,6 +221,15 @@ export default async function JobApplicationsPage({
     },
   });
 
+  type TemplateState = {
+    templateId: string;
+    title: string;
+    state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
+    token: string | null;
+    attemptId: string | null;
+    score: number | null;
+  };
+
   type AssessmentRowMeta = {
     enabled: boolean;
     templateId: string;
@@ -230,6 +239,8 @@ export default async function JobApplicationsPage({
     token: string | null;
     attemptId: string | null;
     score: number | null;
+    // Estado por cada template del job
+    perTemplateState?: TemplateState[];
   };
 
   const assessmentByAppId = new Map<string, AssessmentRowMeta>();
@@ -240,14 +251,14 @@ export default async function JobApplicationsPage({
 
     const [invites, attempts] = await Promise.all([
       prisma.assessmentInvite.findMany({
-        where: { applicationId: { in: applicationIds }, templateId: chosenTemplateId },
+        where: { applicationId: { in: applicationIds }, templateId: { in: allJobTemplateIds } },
         orderBy: { updatedAt: "desc" },
-        select: { applicationId: true, token: true, status: true, expiresAt: true, updatedAt: true },
+        select: { applicationId: true, templateId: true, token: true, status: true, expiresAt: true, updatedAt: true },
       }),
       prisma.assessmentAttempt.findMany({
-        where: { applicationId: { in: applicationIds }, templateId: chosenTemplateId },
+        where: { applicationId: { in: applicationIds }, templateId: { in: allJobTemplateIds } },
         orderBy: { updatedAt: "desc" },
-        select: { id: true, applicationId: true, status: true, totalScore: true, updatedAt: true, expiresAt: true },
+        select: { id: true, applicationId: true, templateId: true, status: true, totalScore: true, updatedAt: true, expiresAt: true },
       }),
     ]);
 
@@ -264,113 +275,83 @@ export default async function JobApplicationsPage({
       return v === "SUBMITTED" || v === "EVALUATED" || v === "COMPLETED";
     };
 
-    const attemptMap = new Map<string, (typeof attempts)[number]>();
+    // Indexar por "appId:templateId" para soportar múltiples templates
+    const attemptByKey = new Map<string, (typeof attempts)[number]>();
     for (const a of attempts) {
-      if (!a.applicationId) continue;
-      const prev = attemptMap.get(a.applicationId);
+      if (!a.applicationId || !a.templateId) continue;
+      const key = `${a.applicationId}:${a.templateId}`;
+      const prev = attemptByKey.get(key);
       if (!prev || statusRank(a.status) >= statusRank(prev.status)) {
-        attemptMap.set(a.applicationId, a);
+        attemptByKey.set(key, a);
       }
     }
 
-    const inviteMap = new Map<string, (typeof invites)[number]>();
+    const inviteByKey = new Map<string, (typeof invites)[number]>();
     for (const inv of invites) {
-      if (inv.applicationId && !inviteMap.has(inv.applicationId)) {
-        inviteMap.set(inv.applicationId, inv);
-      }
+      if (!inv.applicationId || !inv.templateId) continue;
+      const key = `${inv.applicationId}:${inv.templateId}`;
+      if (!inviteByKey.has(key)) inviteByKey.set(key, inv);
     }
 
-    for (const appId of applicationIds) {
-      const at = attemptMap.get(appId);
-      const iv = inviteMap.get(appId);
+    // Función helper: estado de un template específico para una aplicación
+    const getTemplateState = (appId: string, templateId: string) => {
+      const key = `${appId}:${templateId}`;
+      const at = attemptByKey.get(key);
+      const iv = inviteByKey.get(key);
       const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
       const inviteExpired = !!iv?.expiresAt && new Date(iv.expiresAt) <= now;
 
       if (at && (at.status === "SUBMITTED" || at.status === "EVALUATED" || at.status === "COMPLETED")) {
-        assessmentByAppId.set(appId, {
-          enabled: true,
-          templateId: chosenTemplateId,
-          state: "COMPLETED",
-          token: iv?.token ?? null,
-          attemptId: at.id,
-          score: at.totalScore ?? null,
-        });
-        continue;
+        return { state: "COMPLETED" as const, token: iv?.token ?? null, attemptId: at.id, score: at.totalScore ?? null };
       }
-
       if (attemptExpired || inviteExpired) {
-        assessmentByAppId.set(appId, {
-          enabled: true,
-          templateId: chosenTemplateId,
-          templateIds: allJobTemplateIds,
-          templateTitles: jobTemplateTitles,
-          state: "EXPIRED",
-          token: iv?.token ?? null,
-          attemptId: at?.id ?? null,
-          score: null,
-        });
-        continue;
+        return { state: "EXPIRED" as const, token: iv?.token ?? null, attemptId: at?.id ?? null, score: null };
       }
-
       if (at && at.status === "IN_PROGRESS") {
-        assessmentByAppId.set(appId, {
-          enabled: true,
-          templateId: chosenTemplateId,
-          state: "STARTED",
-          token: iv?.token ?? null,
-          attemptId: at.id,
-          score: null,
-        });
-        continue;
+        return { state: "STARTED" as const, token: iv?.token ?? null, attemptId: at.id, score: null };
       }
-
       if (iv) {
-        const invStatus = String(iv.status || "").toUpperCase();
+        const s = String(iv.status || "").toUpperCase();
+        if (s === "CANCELLED" || s === "REVOKED") return { state: "EXPIRED" as const, token: iv.token ?? null, attemptId: at?.id ?? null, score: null };
+        if (isFinalInvite(iv.status)) return { state: "COMPLETED" as const, token: iv.token ?? null, attemptId: at?.id ?? null, score: at?.totalScore ?? null };
 
-        if (invStatus === "CANCELLED" || invStatus === "REVOKED") {
-          assessmentByAppId.set(appId, {
-            enabled: true,
-            templateId: chosenTemplateId,
-            state: "EXPIRED",
-            token: iv.token ?? null,
-            attemptId: at?.id ?? null,
-            score: null,
-          });
-          continue;
-        }
-
-        if (isFinalInvite(iv.status)) {
-          assessmentByAppId.set(appId, {
-            enabled: true,
-            templateId: chosenTemplateId,
-            state: "COMPLETED",
-            token: iv.token ?? null,
-            attemptId: at?.id ?? null,
-            score: at?.totalScore ?? null,
-          });
-          continue;
-        }
-
-        assessmentByAppId.set(appId, {
-          enabled: true,
-          templateId: chosenTemplateId,
-          state: invStatus === "STARTED" ? "STARTED" : "SENT",
-          token: iv.token ?? null,
-          attemptId: null,
-          score: null,
-        });
-        continue;
+        const invState = s === "STARTED" ? "STARTED" as const : "SENT" as const;
+        return { state: invState, token: iv.token ?? null, attemptId: null, score: null };
       }
+      return { state: "NONE" as const, token: null, attemptId: null, score: null };
+    };
+
+    for (const appId of applicationIds) {
+      // Calcular estado por cada template
+      const perTemplateState = allJobTemplateIds.map((templateId) => ({
+        templateId,
+        title: jobTemplateTitles[templateId] ?? templateId,
+        ...getTemplateState(appId, templateId),
+      }));
+
+      // Estado global = el más avanzado de todos los templates
+      // Prioridad: COMPLETED > STARTED > SENT > EXPIRED > NONE
+      const statePriority = { COMPLETED: 5, STARTED: 4, SENT: 3, EXPIRED: 2, NONE: 1 };
+      const primaryTemplate = perTemplateState.reduce((best, t) =>
+        (statePriority[t.state] ?? 0) >= (statePriority[best.state] ?? 0) ? t : best,
+        perTemplateState[0]
+      );
 
       assessmentByAppId.set(appId, {
         enabled: true,
-        templateId: chosenTemplateId,
-        state: "NONE",
-        token: null,
-        attemptId: null,
-        score: null,
+        templateId: primaryTemplate?.templateId ?? chosenTemplateId,
+        templateIds: allJobTemplateIds,
+        templateTitles: jobTemplateTitles,
+        state: primaryTemplate?.state ?? "NONE",
+        token: primaryTemplate?.token ?? null,
+        attemptId: primaryTemplate?.attemptId ?? null,
+        score: primaryTemplate?.score ?? null,
+        perTemplateState,
       });
     }
+
+
+
   }
 
   const counters: Record<InterestKey, number> = { REVIEW: 0, MAYBE: 0, ACCEPTED: 0, REJECTED: 0 };
@@ -1074,12 +1055,13 @@ export default async function JobApplicationsPage({
                               assessmentEnabled && chosenTemplateId
                                 ? ({
                                     enabled: true,
-                                    templateId: chosenTemplateId,
+                                    templateId: assessMeta?.templateId ?? chosenTemplateId,
                                     templateIds: allJobTemplateIds,
                                     templateTitles: jobTemplateTitles,
                                     state: (assessMeta?.state ?? "NONE") as any,
                                     token: assessMeta?.token ?? null,
                                     attemptId: assessMeta?.attemptId ?? null,
+                                    perTemplateState: assessMeta?.perTemplateState,
                                   } as any)
                                 : ({ enabled: false } as any)
                             }
