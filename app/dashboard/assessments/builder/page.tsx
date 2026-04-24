@@ -118,7 +118,12 @@ function emptyCoding(): Question {
     explanation: "",
     options: [], allowMultiple: false,
     codeSnippet: "",
-    testCases: [{ input: "", expectedOutput: "", isHidden: false }],
+    testCases: [
+      { input: "", expectedOutput: "", isHidden: false },
+      { input: "", expectedOutput: "", isHidden: false },
+      { input: "", expectedOutput: "", isHidden: true },
+      { input: "", expectedOutput: "", isHidden: true },
+    ],
   };
 }
 
@@ -385,6 +390,9 @@ export default function AssessmentBuilderPage() {
             {/* Lenguaje */}
             <div>
               <label className="block text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-1">Lenguaje</label>
+              {form.type === "CODING" && !form.language && (
+                <p className="mb-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">⚠️ Selecciona el lenguaje — obligatorio para assessments de código</p>
+              )}
               <select
                 value={form.language}
                 onChange={e => setField("language", e.target.value)}
@@ -722,7 +730,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                 <textarea
                   value={q.codeSnippet}
                   onChange={e => onUpdate({ codeSnippet: e.target.value })}
-                  placeholder="function solution(input) {\n  // código aquí\n}"
+                  placeholder="// Código base que verá el candidato (opcional)"
                   rows={4}
                   className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-950 text-green-400 font-mono px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y"
                 />
@@ -731,6 +739,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-[10px] font-semibold text-zinc-400 uppercase">Casos de prueba *</label>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 mb-2">Inputs y outputs exactos — Judge0 compara caracter por caracter. Casos marcados como <strong>Oculto</strong>: el candidato no los ve.</p>
                   {q.testCases.length < 10 && (
                     <button onClick={onAddTestCase} className="text-xs text-violet-600 hover:underline">+ Caso</button>
                   )}

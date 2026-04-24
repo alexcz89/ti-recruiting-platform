@@ -386,7 +386,7 @@ export default function AIQuestionGenerator({
             {/* Footer */}
             <div className="flex items-center justify-between border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
               <p className="text-[10px] text-zinc-400">
-                ✨ Powered by Claude AI · Revisa siempre las preguntas antes de publicar
+                ✨ Powered by AI · Revisa siempre las preguntas antes de publicar
               </p>
               <div className="flex gap-2">
                 {preview.length === 0 ? (
