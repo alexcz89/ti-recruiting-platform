@@ -2,6 +2,7 @@
 
 // app/dashboard/assessments/builder/page.tsx
 import { useState, useCallback } from "react";
+import AIQuestionGenerator from "@/components/dashboard/assessments/AIQuestionGenerator";
 import { useRouter } from "next/navigation";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Save,
@@ -13,9 +14,49 @@ const MAX_QUESTIONS = 20;
 const DIFFICULTIES = ["JUNIOR", "MID", "SENIOR"] as const;
 const LANGUAGES = [
   { value: "", label: "Sin lenguaje (genérico)" },
-  { value: "javascript", label: "JavaScript" },
+  // ── Más populares en reclutamiento TI ──
+  { value: "javascript", label: "JavaScript (Node.js)" },
+  { value: "typescript", label: "TypeScript" },
   { value: "python", label: "Python" },
+  { value: "java", label: "Java" },
   { value: "cpp", label: "C++" },
+  { value: "c", label: "C" },
+  { value: "csharp", label: "C#" },
+  { value: "go", label: "Go" },
+  { value: "rust", label: "Rust" },
+  { value: "kotlin", label: "Kotlin" },
+  { value: "swift", label: "Swift" },
+  { value: "sql", label: "SQL (SQLite)" },
+  { value: "php", label: "PHP" },
+  { value: "ruby", label: "Ruby" },
+  { value: "scala", label: "Scala" },
+  { value: "r", label: "R" },
+  // ── Scripting y shell ──
+  { value: "bash", label: "Bash" },
+  { value: "perl", label: "Perl" },
+  { value: "lua", label: "Lua" },
+  // ── Funcionales y académicos ──
+  { value: "haskell", label: "Haskell" },
+  { value: "elixir", label: "Elixir" },
+  { value: "erlang", label: "Erlang" },
+  { value: "clojure", label: "Clojure" },
+  { value: "fsharp", label: "F#" },
+  { value: "ocaml", label: "OCaml" },
+  { value: "commonlisp", label: "Common Lisp" },
+  // ── Otros ──
+  { value: "objectivec", label: "Objective-C" },
+  { value: "pascal", label: "Pascal" },
+  { value: "prolog", label: "Prolog" },
+  { value: "cobol", label: "COBOL" },
+  { value: "fortran", label: "Fortran" },
+  { value: "d", label: "D" },
+  { value: "groovy", label: "Groovy" },
+  { value: "nim", label: "Nim" },
+  { value: "octave", label: "Octave" },
+  { value: "vbnet", label: "Visual Basic .NET" },
+  { value: "assembly", label: "Assembly (NASM)" },
+  { value: "basic", label: "Basic" },
+  { value: "javafx", label: "JavaFX" },
 ];
 
 type QuestionType = "MULTIPLE_CHOICE" | "CODING";
@@ -92,21 +133,44 @@ export default function AssessmentBuilderPage() {
     maxAttempts: 1,
   });
 
-  const [questions, setQuestions] = useState<Question[]>([emptyMCQ()]);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>(
-    questions[0]?.id ? { [questions[0].id]: true } : {}
-  );
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
   // ── form helpers ──
-  const setField = (k: keyof TemplateForm, v: any) =>
+  const setField = (k: keyof TemplateForm, v: any) => {
     setForm(f => ({ ...f, [k]: v }));
+    if (k === "type") {
+      if (v === "MCQ") setQuestions(qs => qs.filter(q => q.type === "MULTIPLE_CHOICE"));
+      else if (v === "CODING") setQuestions(qs => qs.filter(q => q.type === "CODING"));
+    }
+  };
 
   const toggleExpanded = (id: string) =>
     setExpanded(e => ({ ...e, [id]: !e[id] }));
 
   // ── question helpers ──
+  const addQuestionsFromAI = (generated: any[]) => {
+    for (const q of generated) {
+      const isCoding = Array.isArray(q.testCases);
+      const uid = () => Math.random().toString(36).slice(2);
+      const base = {
+        id: uid(),
+        type: isCoding ? "CODING" as const : "MULTIPLE_CHOICE" as const,
+        questionText: q.questionText ?? "",
+        section: q.section ?? "General",
+        difficulty: (q.difficulty ?? "MID") as any,
+        explanation: q.explanation ?? "",
+        options: (isCoding ? [] : (q.options ?? []).map((o: any) => ({ id: uid(), text: o.text ?? "", isCorrect: Boolean(o.isCorrect) }))) as { id: string; text: string; isCorrect: boolean }[],
+        allowMultiple: false,
+        codeSnippet: isCoding ? (q.codeSnippet ?? "") : "",
+        testCases: (isCoding ? (q.testCases ?? []).map((tc: any) => ({ input: tc.input ?? "", expectedOutput: tc.expectedOutput ?? "", isHidden: Boolean(tc.isHidden) })) : []) as { input: string; expectedOutput: string; isHidden: boolean }[],
+      };
+      setQuestions(prev => [...prev, base]);
+    }
+  };
+
   const addQuestion = (type: QuestionType) => {
     if (questions.length >= MAX_QUESTIONS) return;
     const q = type === "MULTIPLE_CHOICE" ? emptyMCQ() : emptyCoding();
@@ -116,7 +180,6 @@ export default function AssessmentBuilderPage() {
 
   const removeQuestion = (id: string) => {
     setQuestions(qs => qs.filter(q => q.id !== id));
-    setExpanded(prev => { const next = { ...prev }; delete next[id]; return next; });
   };
 
   const updateQuestion = useCallback((id: string, patch: Partial<Question>) => {
@@ -414,9 +477,10 @@ export default function AssessmentBuilderPage() {
           </div>
 
           {questions.length === 0 && (
-            <div className="rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 p-8 text-center">
-              <p className="text-sm text-zinc-400 dark:text-zinc-500">
-                No hay preguntas. Agrega una manualmente o usa el generador AI.
+            <div className="rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 p-8 text-center space-y-2">
+              <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Sin preguntas aún</p>
+              <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                Usa <span className="font-semibold text-violet-600">✨ Generar con AI</span> para crearlas automáticamente, o agrégalas manualmente abajo.
               </p>
             </div>
           )}
@@ -443,22 +507,34 @@ export default function AssessmentBuilderPage() {
           {/* Botones agregar pregunta */}
           {canAddMore && (
             <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                onClick={() => addQuestion("MULTIPLE_CHOICE")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-emerald-300 dark:border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition"
-              >
-                <Plus className="h-4 w-4 shrink-0" />
-                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                Agregar opción múltiple
-              </button>
-              <button
-                onClick={() => addQuestion("CODING")}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-700 px-4 py-2.5 text-sm font-semibold text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition"
-              >
-                <Plus className="h-4 w-4 shrink-0" />
-                <Code2 className="h-4 w-4 shrink-0" />
-                Agregar pregunta de código
-              </button>
+              {/* Mostrar botón MCQ solo si el tipo no es exclusivamente CODING */}
+              {form.type !== "CODING" && (
+                <button
+                  onClick={() => addQuestion("MULTIPLE_CHOICE")}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-emerald-300 dark:border-emerald-700 px-4 py-2.5 text-sm font-semibold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition"
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  Agregar opción múltiple
+                </button>
+              )}
+              {/* Mostrar botón CODING solo si el tipo no es exclusivamente MCQ */}
+              {form.type !== "MCQ" && (
+                <button
+                  onClick={() => addQuestion("CODING")}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-700 px-4 py-2.5 text-sm font-semibold text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition"
+                >
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <Code2 className="h-4 w-4 shrink-0" />
+                  Agregar pregunta de código
+                </button>
+              )}
+              <AIQuestionGenerator
+                onAddQuestions={addQuestionsFromAI}
+                currentLanguage={form.language}
+                currentDifficulty={form.difficulty}
+                currentType={form.type}
+              />
             </div>
           )}
           {!canAddMore && (

@@ -28,9 +28,22 @@ type Props = {
 };
 
 const LANGUAGE_LABELS: Record<string, string> = {
-  python: "Python", javascript: "JavaScript", typescript: "TypeScript",
-  java: "Java", cpp: "C++", csharp: "C#", go: "Go", rust: "Rust",
-  sql: "SQL", php: "PHP", ruby: "Ruby", swift: "Swift", kotlin: "Kotlin",
+  // Más populares
+  javascript: "JavaScript (Node.js)", typescript: "TypeScript",
+  python: "Python", java: "Java", cpp: "C++", c: "C",
+  csharp: "C#", go: "Go", rust: "Rust", kotlin: "Kotlin",
+  swift: "Swift", sql: "SQL (SQLite)", php: "PHP", ruby: "Ruby",
+  scala: "Scala", r: "R",
+  // Scripting
+  bash: "Bash", perl: "Perl", lua: "Lua",
+  // Funcionales
+  haskell: "Haskell", elixir: "Elixir", erlang: "Erlang",
+  clojure: "Clojure", fsharp: "F#", ocaml: "OCaml", commonlisp: "Common Lisp",
+  // Otros
+  objectivec: "Objective-C", pascal: "Pascal", prolog: "Prolog",
+  cobol: "COBOL", fortran: "Fortran", d: "D", groovy: "Groovy",
+  nim: "Nim", octave: "Octave", vbnet: "Visual Basic .NET",
+  assembly: "Assembly (NASM)", basic: "Basic", javafx: "JavaFX",
 };
 
 const EXAMPLE_PROMPTS: Record<string, string[]> = {
