@@ -520,7 +520,7 @@ export default function AIQuestionGenerator({
               )}
 
               {/* Config */}
-              <div className={`grid gap-3 ${isCoding ? "grid-cols-3" : "grid-cols-2"}`}>
+              <div className={`grid gap-3 ${isCoding ? "grid-cols-2" : "grid-cols-1"}`}>
                 {isCoding && (
                   <div>
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Lenguaje</label>
@@ -532,22 +532,23 @@ export default function AIQuestionGenerator({
                     </select>
                   </div>
                 )}
-                <div className={isCoding ? "" : "col-span-1"}>
-                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Nivel</label>
-                  <select value={difficulty} onChange={e => setDifficulty(e.target.value as any)}
-                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500">
-                    <option value="JUNIOR">Junior</option>
-                    <option value="MID">Mid Level</option>
-                    <option value="SENIOR">Senior</option>
-                  </select>
-                </div>
                 <div>
-                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Cantidad</label>
+                  <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">
+                    Cuántas preguntas generar
+                  </label>
                   <select value={count} onChange={e => setCount(Number(e.target.value))}
                     className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500">
                     {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} pregunta{n>1?"s":""}</option>)}
                   </select>
                 </div>
+              </div>
+              {/* Nivel heredado del template — mostrar como badge informativo */}
+              <div className="flex items-center gap-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 px-3 py-2">
+                <span className="text-[10px] text-zinc-400">Nivel:</span>
+                <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-300">
+                  {difficulty === "JUNIOR" ? "Junior" : difficulty === "SENIOR" ? "Senior" : "Mid Level"}
+                </span>
+                <span className="text-[10px] text-zinc-400 ml-1">— heredado del template</span>
               </div>
 
               {/* Prompt */}
@@ -621,7 +622,24 @@ export default function AIQuestionGenerator({
                             </div>
                           )}
                           {q.codeSnippet && (
-                            <pre className="mt-1.5 rounded bg-zinc-900 px-2 py-1.5 text-[10px] text-green-400 font-mono line-clamp-2 overflow-hidden">{q.codeSnippet}</pre>
+                            <pre className="mt-1.5 rounded bg-zinc-900 px-2 py-1.5 text-[10px] text-green-400 font-mono line-clamp-3 overflow-hidden">{q.codeSnippet}</pre>
+                          )}
+                          {q.testCases && q.testCases.length > 0 && (
+                            <div className="mt-1.5 space-y-1">
+                              {q.testCases.filter(tc => !tc.isHidden).slice(0, 2).map((tc, ti) => (
+                                <div key={ti} className="flex items-start gap-2 rounded bg-zinc-100 dark:bg-zinc-800 px-2 py-1 text-[10px] font-mono">
+                                  <span className="text-zinc-400 shrink-0">in:</span>
+                                  <span className="text-zinc-700 dark:text-zinc-300 truncate">{tc.input}</span>
+                                  <span className="text-zinc-400 shrink-0 ml-1">→</span>
+                                  <span className="text-emerald-600 dark:text-emerald-400 truncate">{tc.expectedOutput}</span>
+                                </div>
+                              ))}
+                              {q.testCases.filter(tc => tc.isHidden).length > 0 && (
+                                <p className="text-[10px] text-zinc-400 italic">
+                                  + {q.testCases.filter((tc: any) => tc.isHidden).length} casos ocultos (el candidato no los ve)
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
