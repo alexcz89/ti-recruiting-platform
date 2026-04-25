@@ -38,77 +38,85 @@ export async function POST(req: NextRequest) {
       : difficulty === "SENIOR" ? "Senior (avanzado)"
       : "Mid Level (intermedio)";
 
-    const schema = isCoding
-      ? `{
-  "questions": [
-    {
-      "questionText": "enunciado claro del problema",
-      "section": "sección temática",
+    // Generar N items de ejemplo en el schema para que el modelo entienda cuántos debe generar
+    const schemaCodingItem = (i: number) => `    {
+      "questionText": "enunciado del problema ${i} — diferente a los demás",
+      "section": "sección temática relevante",
       "difficulty": "${difficulty || "MID"}",
-      "explanation": "explicación de la solución con el código correcto",
-      "codeSnippet": "función esqueleto que el candidato debe completar",
+      "explanation": "explicación detallada con la solución completa en ${language || "python"}",
+      "codeSnippet": "esqueleto de la función que el candidato debe completar",
       "allowedLanguages": ["${language || "python"}"],
       "testCases": [
-        { "input": "valor exacto de entrada", "expectedOutput": "valor exacto de salida", "isHidden": false },
-        { "input": "otro input", "expectedOutput": "otro output", "isHidden": false },
-        { "input": "caso edge", "expectedOutput": "resultado edge", "isHidden": true },
-        { "input": "caso difícil", "expectedOutput": "resultado difícil", "isHidden": true }
+        { "input": "input visible 1", "expectedOutput": "output exacto 1", "isHidden": false },
+        { "input": "input visible 2", "expectedOutput": "output exacto 2", "isHidden": false },
+        { "input": "edge case oculto", "expectedOutput": "resultado exacto", "isHidden": true },
+        { "input": "caso difícil oculto", "expectedOutput": "resultado exacto", "isHidden": true }
       ]
-    }
-  ]
-}`
-      : `{
-  "questions": [
-    {
-      "questionText": "pregunta clara y técnicamente precisa",
-      "section": "sección temática",
+    }`;
+
+    const schemaMCQItem = (i: number) => `    {
+      "questionText": "pregunta técnica ${i} — diferente a las demás",
+      "section": "sección temática relevante",
       "difficulty": "${difficulty || "MID"}",
-      "explanation": "explicación de por qué cada opción es correcta o incorrecta",
+      "explanation": "por qué cada opción es correcta o incorrecta",
       "options": [
         { "text": "opción correcta", "isCorrect": true },
-        { "text": "opción incorrecta plausible", "isCorrect": false },
-        { "text": "opción incorrecta plausible", "isCorrect": false },
-        { "text": "opción incorrecta plausible", "isCorrect": false }
+        { "text": "distractor plausible A", "isCorrect": false },
+        { "text": "distractor plausible B", "isCorrect": false },
+        { "text": "distractor plausible C", "isCorrect": false }
       ]
-    }
+    }`;
+
+    const schemaItems = Array.from({ length: clampedCount }, (_, i) =>
+      isCoding ? schemaCodingItem(i + 1) : schemaMCQItem(i + 1)
+    ).join(",\n");
+
+    const schema = `{
+  "questions": [
+${schemaItems}
   ]
 }`;
 
     const systemContent = `Eres un experto en evaluaciones técnicas de reclutamiento IT especializado en México y Latinoamérica.
 Generas preguntas técnicas de alta calidad para assessments de candidatos.
-Responde ÚNICAMENTE con JSON válido. Sin texto adicional, sin markdown, sin backticks.
-El JSON debe seguir exactamente el schema proporcionado.`;
+REGLAS ESTRICTAS:
+1. Responde ÚNICAMENTE con JSON válido. Sin texto adicional, sin markdown, sin backticks.
+2. El array "questions" debe contener EXACTAMENTE ${clampedCount} elemento(s) — ni más ni menos.
+3. Sigue el schema exactamente como se muestra.`;
 
     const userContent = isCoding
-      ? `Genera ${clampedCount} pregunta(s) de código en ${language || "python"}, nivel ${difficultyLabel}.
+      ? `Genera EXACTAMENTE ${clampedCount} pregunta(s) DISTINTAS de código en ${language || "python"}, nivel ${difficultyLabel}.
 
-Descripción: "${prompt}"
+Descripción del tema: "${prompt}"
 
-Requisitos:
-- El enunciado debe describir un problema real con contexto claro
-- El codeSnippet debe ser el esqueleto de la función (sin implementar), con comentarios de orientación
-- Incluir exactamente 2 test cases visibles (isHidden: false) y 2 ocultos (isHidden: true)
-- Los inputs y outputs deben ser valores exactos y verificables por el juez automático
-- La explanation debe incluir la solución completa correcta
+REQUISITOS OBLIGATORIOS:
+- Devuelve EXACTAMENTE ${clampedCount} objeto(s) en el array "questions"
+- Cada pregunta debe ser DIFERENTE — distintos contextos, funciones y test cases
+- El enunciado debe describir un problema real con contexto de negocio
+- El codeSnippet debe ser el esqueleto de la función (sin implementar)
+- Los inputs/outputs deben ser valores exactos que Ruby pueda comparar directamente
+- IMPORTANTE: Los inputs para ${language || "python"} deben ser valores que el programa lee de STDIN (no como argumentos)
+- La explanation debe incluir la solución completa funcional
 
-Schema esperado:
+Schema con ${clampedCount} pregunta(s):
 ${schema}`
-      : `Genera ${clampedCount} pregunta(s) de opción múltiple nivel ${difficultyLabel}${language ? ` sobre ${language}` : ""}.
+      : `Genera EXACTAMENTE ${clampedCount} pregunta(s) DISTINTAS de opción múltiple, nivel ${difficultyLabel}${language ? ` sobre ${language}` : ""}.
 
-Descripción: "${prompt}"
+Descripción del tema: "${prompt}"
 
-Requisitos:
+REQUISITOS OBLIGATORIOS:
+- Devuelve EXACTAMENTE ${clampedCount} objeto(s) en el array "questions"
+- Cada pregunta debe ser DIFERENTE — distintos conceptos y escenarios
 - Exactamente 4 opciones por pregunta, exactamente 1 correcta
-- Las opciones incorrectas deben ser técnicamente plausibles (no obvias)
-- Preguntas basadas en situaciones reales de desarrollo
+- Los distractores deben ser técnicamente plausibles (no obviamente incorrectos)
 
-Schema esperado:
+Schema con ${clampedCount} pregunta(s):
 ${schema}`;
 
     const completion = await openai.chat.completions.create({
       model: AI_MODEL_SMART,
       temperature: 0.7,
-      max_tokens: 4000,
+      max_tokens: Math.min(1000 + clampedCount * 1500, 8000),
       messages: [
         { role: "system", content: systemContent },
         { role: "user", content: userContent },
