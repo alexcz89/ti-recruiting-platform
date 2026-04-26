@@ -3,11 +3,12 @@
 // app/dashboard/assessments/builder/page.tsx
 import { useState, useCallback } from "react";
 import AIQuestionGenerator from "@/components/dashboard/assessments/AIQuestionGenerator";
+import AssessmentPreviewModal from "@/components/dashboard/assessments/AssessmentPreviewModal";
 import { useRouter } from "next/navigation";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Save,
   Code2, CheckCircle2, GripVertical, AlertCircle,
-  Clock, BarChart3, BookOpen, ArrowLeft,
+  Clock, BarChart3, BookOpen, ArrowLeft, Eye,
 } from "lucide-react";
 
 const MAX_QUESTIONS = 20;
@@ -142,6 +143,7 @@ export default function AssessmentBuilderPage() {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
 
   // ── form helpers ──
   const setField = (k: keyof TemplateForm, v: any) => {
@@ -311,6 +313,14 @@ export default function AssessmentBuilderPage() {
           </button>
           <div className="flex-1" />
           <span className="text-xs text-zinc-400">{questions.length}/{MAX_QUESTIONS} preguntas</span>
+          {questions.length > 0 && (
+            <button
+              onClick={() => setShowPreview(true)}
+              className="flex items-center gap-1.5 rounded-xl border border-amber-300 dark:border-amber-700 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition"
+            >
+              <Eye className="h-3.5 w-3.5" /> Vista previa
+            </button>
+          )}
         </div>
 
         <div>
@@ -571,6 +581,15 @@ export default function AssessmentBuilderPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Preview Modal ── */}
+      {showPreview && (
+        <AssessmentPreviewModal
+          form={form}
+          questions={questions}
+          onClose={() => setShowPreview(false)}
+        />
+      )}
     </div>
   );
 }
