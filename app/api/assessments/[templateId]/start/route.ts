@@ -344,7 +344,7 @@ export async function POST(
     }
 
     const tmplTimeLimit = template.timeLimit ?? null;
-    const tmplShuffleQuestions = Boolean(template.shuffleQuestions);
+    const tmplShuffleQuestions = true;
     const tmplAllowRetry = Boolean(template.allowRetry);
     const tmplMaxAttempts = template.maxAttempts ?? 1;
 
