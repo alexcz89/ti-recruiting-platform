@@ -561,3 +561,41 @@ export async function PUT(
     return jsonNoStore({ error: "Error al actualizar la vacante" }, 500);
   }
 }
+
+// -------------------------------
+// DELETE /api/jobs/[id]
+// -------------------------------
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getSessionOrThrow();
+    const companyId = await getSessionCompanyId();
+
+    if (!companyId) {
+      return jsonNoStore({ error: "Unauthorized" }, 401);
+    }
+
+    const role = session.user?.role;
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
+
+    const job = await prisma.job.findFirst({
+      where: { id: params.id, companyId },
+      select: { id: true },
+    });
+
+    if (!job) {
+      return jsonNoStore({ error: "Vacante no encontrada" }, 404);
+    }
+
+    await prisma.job.delete({ where: { id: params.id } });
+
+    return jsonNoStore({ ok: true });
+  } catch (err) {
+    console.error("[DELETE /api/jobs/[id]]", err);
+    return jsonNoStore({ error: "Error al eliminar la vacante" }, 500);
+  }
+}
