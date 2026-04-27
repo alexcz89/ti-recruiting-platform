@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
           type: q.type || "MULTIPLE_CHOICE",
           options: q.options || [],
           codeSnippet: q.codeSnippet || null,
+          testCases: q.testCases || [],
           allowMultiple: q.allowMultiple || false,
           explanation: q.explanation || null,
           isActive: true,

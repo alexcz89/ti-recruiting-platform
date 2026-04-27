@@ -223,7 +223,7 @@ export default function AssessmentQuestion({
         {options.map((option, idx) => {
           const optionKey = keyOfOption(option);
           const isSelected = selectedOptions.includes(optionKey);
-          const label = option.id ?? option.value ?? String(idx + 1);
+          const label = String.fromCharCode(65 + idx);
           const text = option.text ?? optionKey;
 
           return (
