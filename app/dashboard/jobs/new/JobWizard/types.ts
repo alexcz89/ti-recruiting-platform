@@ -150,4 +150,4 @@ export type JobWizardProps = {
   initial?: Partial<JobForm> & {
     id?: string;
   };
-};
+};  
