@@ -2,8 +2,6 @@
 
 // app/dashboard/jobs/[id]/applications/ShareLinkedInButton.tsx
 
-import { useState } from "react";
-
 type Props = {
   jobId: string;
   jobTitle: string;
@@ -11,22 +9,10 @@ type Props = {
 };
 
 export default function ShareLinkedInButton({ jobId, jobTitle, jobLocation }: Props) {
-  const [copied, setCopied] = useState(false);
-
   const handleShare = () => {
-    const url = `${window.location.origin}/jobs/${jobId}`;
-    const text = [
-      `🚀 Estamos contratando: ${jobTitle}`,
-      jobLocation ? `📍 ${jobLocation}` : null,
-      ``,
-      `¿Conoces a alguien que encaje? Aplica aquí:`,
-      url,
-    ]
-      .filter((l) => l !== null)
-      .join("\n");
-
+    const jobUrl = `${window.location.origin}/jobs/${jobId}`;
     window.open(
-      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(text)}`,
+      `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(jobUrl)}`,
       "_blank",
       "noopener,noreferrer"
     );
@@ -56,7 +42,6 @@ export default function ShareLinkedInButton({ jobId, jobTitle, jobLocation }: Pr
         sm:px-4
       "
     >
-      {/* LinkedIn icon */}
       <svg
         className="h-3.5 w-3.5 shrink-0"
         fill="currentColor"
