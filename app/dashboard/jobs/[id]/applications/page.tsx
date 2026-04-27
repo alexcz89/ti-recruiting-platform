@@ -6,7 +6,8 @@ import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
 import ActionsMenu from "./ActionsMenu";
-import { Phone, FileText as FileTextIcon, Search, Lock, SlidersHorizontal } from "lucide-react";
+import { Phone, FileText as FileTextIcon, Search, Lock, SlidersHorizontal, ArrowLeft, MapPin, Calendar, Eye as EyeIcon, BarChart2, Users } from "lucide-react";
+import ShareLinkedInButton from "./ShareLinkedInButton";
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import MatchScorePopover from "@/components/dashboard/MatchScorePopover";
 import MatchBreakdownMini from "@/components/jobs/MatchBreakdownMini";
@@ -508,24 +509,64 @@ export default async function JobApplicationsPage({
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-5 px-4 py-5 sm:space-y-6 sm:px-6 sm:py-8 lg:px-10">
         <header className="space-y-3">
           <div>
-            <h1 className="text-xl font-bold leading-tight sm:text-2xl">{job.title}</h1>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {job.company?.name ?? "—"}
-              {job.location ? ` · ${job.location}` : ""} · {fromNow(job.createdAt)}
-              {seniorityLabel && (
-                <span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">{seniorityLabel}</span>
-              )}
-              {job.minYearsExperience != null && (
-                <span className="ml-1 rounded-full bg-zinc-100 px-2 py-0.5 text-xs dark:bg-zinc-800">
-                  {job.minYearsExperience}+ años
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-bold leading-tight sm:text-2xl">{job.title}</h1>
+              {/* Status badge */}
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                job.status === "OPEN"
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                  : job.status === "PAUSED"
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${
+                  job.status === "OPEN" ? "bg-emerald-500"
+                  : job.status === "PAUSED" ? "bg-amber-500"
+                  : "bg-zinc-400"
+                }`} />
+                {job.status === "OPEN" ? "Abierta" : job.status === "PAUSED" ? "Pausada" : "Cerrada"}
+              </span>
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+              <span className="flex items-center gap-1">
+                {job.company?.name ?? "—"}
+              </span>
+              {job.location && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3" />
+                  {job.location}
                 </span>
               )}
-            </p>
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {fromNow(job.createdAt)}
+              </span>
+              {seniorityLabel && (
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">{seniorityLabel}</span>
+              )}
+              {job.minYearsExperience != null && (
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
+                  {job.minYearsExperience}+ años exp.
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex flex-row flex-wrap items-center gap-2">
-            <Link href={`/dashboard/jobs/${job.id}`} className={headerBtnClasses}>Pipeline</Link>
-            <Link href={`/jobs/${job.id}`} target="_blank" className={headerBtnClasses}>Ver vacante</Link>
-            <Link href="/dashboard/jobs" className={headerBtnClasses}>← Vacantes</Link>
+
+          {/* Botones — en mobile se hacen scroll horizontal */}
+          <div className="flex flex-row items-center gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
+            <Link href="/dashboard/jobs" className={`${headerBtnClasses} shrink-0`}>
+              <ArrowLeft className="h-3.5 w-3.5" />
+            </Link>
+            <Link href={`/dashboard/jobs/${job.id}`} className={`${headerBtnClasses} shrink-0`}>
+              <BarChart2 className="h-3.5 w-3.5" />
+              Pipeline
+            </Link>
+            <Link href={`/jobs/${job.id}`} target="_blank" className={`${headerBtnClasses} shrink-0`}>
+              <EyeIcon className="h-3.5 w-3.5" />
+              Ver vacante
+            </Link>
+            <ShareLinkedInButton jobId={job.id} jobTitle={job.title} jobLocation={job.location} />
             <JobActionsMenu jobId={job.id} currentStatus={job.status} />
           </div>
         </header>
@@ -639,18 +680,31 @@ export default async function JobApplicationsPage({
         </section>
 
         {apps.length === 0 ? (
-          <div className="glass-card rounded-2xl border border-dashed p-6 text-center">
-            <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              {activeFiltersCount > 0
-                ? "Ningún candidato coincide con los filtros."
-                : chosenInterest
-                  ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
-                  : "Aún no hay postulaciones."}
-            </p>
-            {activeFiltersCount > 0 && (
-              <Link href={buildHref({ match: undefined, cv: undefined })} className="mt-2 inline-block text-sm text-emerald-600 underline hover:no-underline">
+          <div className="glass-card rounded-2xl border border-dashed p-8 text-center space-y-3">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <Users className="h-6 w-6 text-zinc-400" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
+                {activeFiltersCount > 0
+                  ? "Ningún candidato coincide con los filtros."
+                  : chosenInterest
+                    ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
+                    : "Aún no hay postulaciones."}
+              </p>
+              {!activeFiltersCount && !chosenInterest && (
+                <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                  Comparte la vacante para atraer candidatos
+                </p>
+              )}
+            </div>
+            {activeFiltersCount > 0 ? (
+              <Link href={buildHref({ match: undefined, cv: undefined })}
+                className="inline-block text-sm text-emerald-600 underline hover:no-underline">
                 Limpiar filtros
               </Link>
+            ) : !chosenInterest && (
+              <ShareLinkedInButton jobId={job.id} jobTitle={job.title} jobLocation={job.location} />
             )}
           </div>
         ) : (
