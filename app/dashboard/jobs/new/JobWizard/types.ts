@@ -44,6 +44,12 @@ export const jobSchema = z
     vacacionesDias: z.number(),
     primaVacPct: z.number(),
 
+    // Monto mensual de vales de despensa
+    valesMonto: z.number().nullable().optional(),
+
+    // Items personalizados de "Otros" — lista de strings
+    otrosItems: z.array(z.string()).default([]),
+
     descriptionHtml: z.string(),
     descriptionPlain: z.string(),
 
@@ -71,7 +77,7 @@ export const jobSchema = z
       .optional(),
 
     assessmentTemplateIds: z.array(z.string()).default([]),
-    assessmentTemplateId: z.string().optional(), // compatibilidad legacy
+    assessmentTemplateId: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     const needsCity =

@@ -119,6 +119,8 @@ export function makeDefaultValues({
   let aguinaldoDias = 15;
   let vacacionesDias = 12;
   let primaVacPct = 25;
+  let valesMonto: number | null = null;
+  let otrosItems: string[] = [];
 
   if (initial?.benefitsJson && typeof initial.benefitsJson === "object") {
     const b = initial.benefitsJson as Record<string, unknown>;
@@ -133,11 +135,18 @@ export function makeDefaultValues({
     if (typeof b.aguinaldoDias === "number") aguinaldoDias = b.aguinaldoDias;
     if (typeof b.vacacionesDias === "number") vacacionesDias = b.vacacionesDias;
     if (typeof b.primaVacPct === "number") primaVacPct = b.primaVacPct;
+    if (typeof b.valesMonto === "number") valesMonto = b.valesMonto;
+    if (Array.isArray(b.otrosItems)) {
+      otrosItems = (b.otrosItems as unknown[])
+        .filter((x): x is string => typeof x === "string" && x.trim() !== "");
+    }
   } else if (initial?.benefits && typeof initial.benefits === "object") {
     benefitsJson = {
       ...benefitsBase,
       ...initial.benefits,
     };
+    if (typeof initial.valesMonto === "number") valesMonto = initial.valesMonto;
+    if (Array.isArray(initial.otrosItems)) otrosItems = initial.otrosItems;
   }
 
   const plainFromInitial = initial?.descriptionPlain || initial?.description || "";
@@ -225,6 +234,8 @@ export function makeDefaultValues({
     aguinaldoDias,
     vacacionesDias,
     primaVacPct,
+    valesMonto,
+    otrosItems,
     assessmentTemplateIds: Array.isArray(initial?.assessmentTemplateIds)
       ? initial.assessmentTemplateIds
       : initial?.assessmentTemplateId
