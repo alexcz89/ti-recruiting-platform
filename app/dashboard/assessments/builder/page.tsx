@@ -1,10 +1,10 @@
 "use client";
 
 // app/dashboard/assessments/builder/page.tsx
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import AIQuestionGenerator from "@/components/dashboard/assessments/AIQuestionGenerator";
 import AssessmentPreviewModal from "@/components/dashboard/assessments/AssessmentPreviewModal";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Save,
   Code2, CheckCircle2, GripVertical, AlertCircle,
@@ -128,9 +128,28 @@ function emptyCoding(): Question {
   };
 }
 
+// Suspense wrapper — requerido por Next.js 14 cuando se usa useSearchParams()
 export default function AssessmentBuilderPage() {
-  const router = useRouter();
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="h-8 w-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-zinc-500">Cargando...</p>
+        </div>
+      </div>
+    }>
+      <BuilderInner />
+    </Suspense>
+  );
+}
 
+function BuilderInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("edit"); // null = create, string = edit mode
+
+  const [loading, setLoading] = useState(false);
   const [form, setForm] = useState<TemplateForm>({
     title: "", description: "",
     type: "MCQ", difficulty: "JUNIOR",
@@ -144,6 +163,54 @@ export default function AssessmentBuilderPage() {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [showPreview, setShowPreview] = useState(false);
+
+  // ── hydrate from existing template when ?edit=ID ──
+  useEffect(() => {
+    if (!editId) return;
+    setLoading(true);
+    fetch(`/api/dashboard/assessments/templates/${editId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data || data.error) {
+          setErrors([data?.error || "No se pudo cargar el template"]);
+          return;
+        }
+        // Populate form fields
+        setForm({
+          title: data.title ?? "",
+          description: data.description ?? "",
+          type: data.type ?? "MCQ",
+          difficulty: data.difficulty ?? "JUNIOR",
+          language: data.language ?? "",
+          passingScore: data.passingScore ?? 70,
+          timeLimit: data.timeLimit ?? 30,
+          allowRetry: data.allowRetry ?? false,
+          maxAttempts: data.maxAttempts ?? 1,
+        });
+        // Map DB questions → local Question shape
+        const mapped: Question[] = (data.questions ?? []).map((q: any) => ({
+          id: q.id,
+          type: q.type === "CODING" ? "CODING" : "MULTIPLE_CHOICE",
+          questionText: q.questionText ?? "",
+          section: q.section ?? "General",
+          difficulty: q.difficulty ?? "JUNIOR",
+          explanation: q.explanation ?? "",
+          options: Array.isArray(q.options)
+            ? q.options.map((o: any) => ({ id: o.id ?? uid(), text: o.text ?? "", isCorrect: Boolean(o.isCorrect) }))
+            : [],
+          allowMultiple: Boolean(q.allowMultiple),
+          codeSnippet: q.codeSnippet ?? q.starterCode ?? "",
+          testCases: (q.testCases ?? []).map((tc: any) => ({
+            input: tc.input ?? "",
+            expectedOutput: tc.expectedOutput ?? "",
+            isHidden: Boolean(tc.isHidden),
+          })),
+        }));
+        setQuestions(mapped);
+      })
+      .catch(() => setErrors(["Error de conexión al cargar el template"]))
+      .finally(() => setLoading(false));
+  }, [editId]);
 
   // ── form helpers ──
   const setField = (k: keyof TemplateForm, v: any) => {
@@ -274,7 +341,7 @@ export default function AssessmentBuilderPage() {
     return errs;
   }
 
-  // ── submit ──
+  // ── submit: POST (create) or PUT (edit) ──
   async function handleSave() {
     const errs = validate();
     setErrors(errs);
@@ -282,8 +349,13 @@ export default function AssessmentBuilderPage() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/dashboard/assessments/templates", {
-        method: "POST",
+      const url = editId
+        ? `/api/dashboard/assessments/templates/${editId}`
+        : "/api/dashboard/assessments/templates";
+      const method = editId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, questions }),
       });
@@ -298,6 +370,18 @@ export default function AssessmentBuilderPage() {
   }
 
   const canAddMore = questions.length < MAX_QUESTIONS;
+
+  // ── loading state ──
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="h-8 w-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm text-zinc-500">Cargando template...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -324,8 +408,8 @@ export default function AssessmentBuilderPage() {
         </div>
 
         <div>
-          <h1 className="text-2xl font-black text-zinc-900 dark:text-white">Crear template de evaluación</h1>
-          <p className="text-sm text-zinc-500 mt-1">Solo visible para tu empresa.</p>
+          <h1 className="text-2xl font-black text-zinc-900 dark:text-white">{editId ? "Editar template de evaluación" : "Crear template de evaluación"}</h1>
+          <p className="text-sm text-zinc-500 mt-1">{editId ? "Editando template existente." : "Solo visible para tu empresa."}</p>
         </div>
 
         {/* ── Errores ── */}
@@ -577,7 +661,7 @@ export default function AssessmentBuilderPage() {
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-violet-500/20 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <Save className="h-4 w-4" />
-            {saving ? "Guardando..." : "Guardar template"}
+            {saving ? "Guardando..." : editId ? "Actualizar template" : "Guardar template"}
           </button>
         </div>
       </div>
