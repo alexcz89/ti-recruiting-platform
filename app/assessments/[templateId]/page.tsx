@@ -628,6 +628,7 @@ export default function AssessmentPage() {
           disabled={expired}
           attemptId={attemptId || undefined}
           onCodeSubmit={() => handleCodeSubmitted(currentQuestion.id)}
+          templateLanguage={template?.language || 'javascript'}
         />
 
         {/* Navegación — NO-CODING */}

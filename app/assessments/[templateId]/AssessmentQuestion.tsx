@@ -67,6 +67,7 @@ type Props = {
   disabled?: boolean;
   attemptId?: string;
   onCodeSubmit?: (code: string, language: string) => void;
+  templateLanguage?: string;
 };
 
 function keyOfOption(option: Option): string {
@@ -145,6 +146,7 @@ export default function AssessmentQuestion({
   disabled = false,
   attemptId,
   onCodeSubmit,
+  templateLanguage,
 }: Props) {
   const options = normalizeOptions(question.options);
 
@@ -169,8 +171,8 @@ export default function AssessmentQuestion({
           attemptId={attemptId}
           questionText={question.questionText}
           initialCode={question.starterCode || ''}
-          language={question.language || 'javascript'}
-          allowedLanguages={question.allowedLanguages || ['javascript']}
+          language={question.language || templateLanguage || 'javascript'}
+          allowedLanguages={question.allowedLanguages || (templateLanguage ? [templateLanguage] : ['javascript'])}
           testCases={question.testCases || []}
           points={question.points || 10}
           onSubmit={onCodeSubmit}
