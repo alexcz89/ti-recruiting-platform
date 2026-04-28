@@ -176,14 +176,18 @@ export class Judge0Service {
     memoryUsedMb?: number;
   }> {
     try {
-      // ✅ CAMBIO CLAVE: concatenar código del candidato + runner del test case
-      const fullCode = `${code}\n\n${input}`;
+      // Para JS/TS: concatenar runner al código (función + invocación)
+      // Para otros lenguajes (Java, Python, etc.): usar stdin
+      const JS_LANGUAGES = [63, 74]; // JavaScript, TypeScript
+      const isJsLike = JS_LANGUAGES.includes(languageId);
+      const fullCode = isJsLike ? `${code}\n\n${input}` : code;
+      const stdin = isJsLike ? '' : input;
 
       // Create submission
       const submissionResponse = await this.createSubmission({
         source_code: fullCode,
         language_id: languageId,
-        stdin: '',                          // stdin vacío — el runner está en el código
+        stdin,
         expected_output: expectedOutput,
         cpu_time_limit: timeoutMs / 1000,   // Convert to seconds
         memory_limit: memoryLimitMb * 1024, // Convert to KB
