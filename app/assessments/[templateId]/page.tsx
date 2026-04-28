@@ -79,7 +79,7 @@ function normalizeQuestions(raw: any[]): Question[] {
       type: q.type || 'MULTIPLE_CHOICE',
       language: q.language,
       allowedLanguages: q.allowedLanguages ? JSON.parse(q.allowedLanguages) : undefined,
-      starterCode: q.starterCode,
+      starterCode: q.starterCode || q.codeSnippet || undefined,
       testCases: q.testCases || [],
       points: typeof q.points === 'number' ? q.points : 10,
     };
@@ -332,7 +332,7 @@ export default function AssessmentPage() {
     if (!template) return;
     if (started || starting) return;
 
-    if (inviteToken || attemptIdQS) {
+    if (attemptIdQS) {
       autoStartOnceRef.current = true;
       handleStart();
     }
