@@ -29,9 +29,9 @@ export async function GET(req: NextRequest) {
     const companyId = (session.user as any).companyId as string | undefined;
 
     const { searchParams } = new URL(req.url);
-    const typeFilter   = searchParams.get("type");     // "MCQ" | "CODING" | "MIXED"
-    const langFilter   = searchParams.get("language"); // "javascript" | "python" | "cpp"
-    const scopeFilter  = searchParams.get("scope");    // "global" | "custom" | undefined = all
+    const typeFilter  = searchParams.get("type");
+    const langFilter  = searchParams.get("language");
+    const scopeFilter = searchParams.get("scope");
 
     const where: any = {
       isActive: true,
@@ -89,17 +89,19 @@ export async function POST(req: NextRequest) {
     if (!difficulty)           return json(400, { error: "La dificultad es requerida" });
     if (!questions?.length)    return json(400, { error: "Agrega al menos una pregunta" });
     if (questions.length > MAX_QUESTIONS) return json(400, { error: `Máximo ${MAX_QUESTIONS} preguntas` });
-    if (!passingScore || passingScore < 1 || passingScore > 100) return json(400, { error: "El puntaje mínimo debe ser entre 1 y 100" });
-    if (!timeLimit || timeLimit < 5 || timeLimit > 180)          return json(400, { error: "El tiempo debe ser entre 5 y 180 minutos" });
+    if (!passingScore || passingScore < 1 || passingScore > 100)
+      return json(400, { error: "El puntaje mínimo debe ser entre 1 y 100" });
+    if (!timeLimit || timeLimit < 5 || timeLimit > 180)
+      return json(400, { error: "El tiempo debe ser entre 5 y 180 minutos" });
 
-    // Slug único basado en título + companyId + timestamp
+    // Slug único
     const slugBase = title.toLowerCase()
       .replace(/[^a-z0-9\s-]/g, "")
       .replace(/\s+/g, "-")
       .slice(0, 40);
     const slug = `${slugBase}-${companyId.slice(-6)}-${Date.now()}`;
 
-    // Agrupar preguntas en secciones
+    // Agrupar secciones
     const sectionMap: Record<string, number> = {};
     for (const q of questions) {
       const sec = q.section || "General";
@@ -131,6 +133,9 @@ export async function POST(req: NextRequest) {
 
     // Crear preguntas
     for (const q of questions) {
+      const isCoding = q.type === "CODING";
+      const testCasesRaw: any[] = Array.isArray(q.testCases) ? q.testCases : [];
+
       await prisma.assessmentQuestion.create({
         data: {
           templateId: template.id,
@@ -141,10 +146,22 @@ export async function POST(req: NextRequest) {
           type: q.type || "MULTIPLE_CHOICE",
           options: q.options || [],
           codeSnippet: q.codeSnippet || null,
-          testCases: q.testCases || [],
           allowMultiple: q.allowMultiple || false,
           explanation: q.explanation || null,
           isActive: true,
+          // testCases es una relación — solo para preguntas CODING con casos definidos
+          ...(isCoding && testCasesRaw.length > 0
+            ? {
+                testCases: {
+                  create: testCasesRaw.map((tc: any) => ({
+                    input: String(tc.input ?? ""),
+                    expectedOutput: String(tc.expectedOutput ?? ""),
+                    isHidden: Boolean(tc.isHidden ?? false),
+                    points: Number(tc.points ?? 10),
+                  })),
+                },
+              }
+            : {}),
         },
       });
     }

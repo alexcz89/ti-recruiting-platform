@@ -50,7 +50,7 @@ export default function AssessmentsBadge({ titles }: Props) {
           />
 
           <div className="
-            absolute left-0 z-50 mt-2
+            absolute left-0 z-50 bottom-full mb-2
             w-[calc(100vw-2rem)] max-w-[260px]
             rounded-xl border border-zinc-200 bg-white
             dark:border-zinc-700 dark:bg-zinc-900
