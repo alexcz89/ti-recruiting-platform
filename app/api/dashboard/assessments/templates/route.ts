@@ -16,6 +16,8 @@ function json(status: number, body: any) {
   });
 }
 
+// ── GET /api/dashboard/assessments/templates ──
+// Lista todos los templates accesibles para el recruiter (globales + los de su empresa)
 export async function GET(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -66,7 +68,8 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ── POST: crear template personalizado del reclutador ──
+// ── POST /api/dashboard/assessments/templates ──
+// Crea un template personalizado para la empresa del recruiter
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -149,15 +152,19 @@ export async function POST(req: NextRequest) {
           allowMultiple: q.allowMultiple || false,
           explanation: q.explanation || null,
           isActive: true,
-          // testCases es una relación — solo para preguntas CODING con casos definidos
+          // ✅ FIX Bug #6: propagar language del template a cada pregunta CODING
+          // Sin esto, allowedLanguages queda null y Judge0 recibe javascript por default
+          language: isCoding ? (language || null) : null,
+          allowedLanguages: isCoding && language ? JSON.stringify([language]) : null,
           ...(isCoding && testCasesRaw.length > 0
             ? {
                 testCases: {
-                  create: testCasesRaw.map((tc: any) => ({
+                  create: testCasesRaw.map((tc: any, idx: number) => ({
                     input: String(tc.input ?? ""),
                     expectedOutput: String(tc.expectedOutput ?? ""),
                     isHidden: Boolean(tc.isHidden ?? false),
                     points: Number(tc.points ?? 10),
+                    orderIndex: idx,
                   })),
                 },
               }
