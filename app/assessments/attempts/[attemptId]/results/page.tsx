@@ -102,11 +102,11 @@ export default function AssessmentResultsPage() {
 
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[1200px] px-6 lg:px-10 py-12">
+      <div className="mx-auto max-w-[1200px] px-4 lg:px-8 py-4">
         {/* Header con resultado */}
         <div
           className={`
-            text-center p-8 md:p-12 rounded-2xl border mb-8
+            text-center p-4 md:p-6 rounded-2xl border mb-4
             ${
               passed
                 ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-900/20'
@@ -114,27 +114,27 @@ export default function AssessmentResultsPage() {
             }
           `}
         >
-          <div className="mb-4">
+          <div className="mb-2">
             {passed ? (
-              <Award className="h-16 w-16 text-emerald-600 dark:text-emerald-400 mx-auto" />
+              <Award className="h-10 w-10 text-emerald-600 dark:text-emerald-400 mx-auto" />
             ) : (
-              <TrendingUp className="h-16 w-16 text-amber-600 dark:text-amber-400 mx-auto" />
+              <TrendingUp className="h-10 w-10 text-amber-600 dark:text-amber-400 mx-auto" />
             )}
           </div>
 
-          <h1 className="text-4xl font-bold mb-2">
+          <h1 className="text-2xl font-bold mb-1">
             {passed ? '¡Felicidades! 🎉' : 'Evaluación completada'}
           </h1>
 
-          <p className="text-xl mb-6">
+          <p className="text-base mb-3">
             {passed
               ? `Aprobaste con ${attempt.totalScore}%`
               : `Obtuviste ${attempt.totalScore}% (necesitas ${template.passingScore}% para aprobar)`}
           </p>
 
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white dark:bg-zinc-900">
-            <span className="text-6xl font-bold text-emerald-600">{attempt.totalScore}</span>
-            <span className="text-2xl text-muted">/100</span>
+            <span className="text-4xl font-bold text-emerald-600">{attempt.totalScore}</span>
+            <span className="text-lg text-muted">/100</span>
           </div>
 
           {!canSeeSolutions && (
@@ -149,50 +149,50 @@ export default function AssessmentResultsPage() {
 
         {/* Stats generales */}
         {canSeeSolutions ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-            <div className="p-6 rounded-2xl border glass-card text-center">
-              <CheckCircle2 className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-default">{correctAnswers ?? 0}</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="p-3 rounded-xl border glass-card text-center">
+              <CheckCircle2 className="h-6 w-6 text-emerald-600 mx-auto mb-1" />
+              <p className="text-xl font-bold text-default">{correctAnswers ?? 0}</p>
               <p className="text-sm text-muted">Correctas</p>
             </div>
 
-            <div className="p-6 rounded-2xl border glass-card text-center">
-              <XCircle className="h-8 w-8 text-red-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-default">{incorrectAnswers ?? 0}</p>
+            <div className="p-3 rounded-xl border glass-card text-center">
+              <XCircle className="h-6 w-6 text-red-600 mx-auto mb-1" />
+              <p className="text-xl font-bold text-default">{incorrectAnswers ?? 0}</p>
               <p className="text-sm text-muted">Incorrectas</p>
             </div>
 
-            <div className="p-6 rounded-2xl border glass-card text-center">
-              <TrendingUp className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-default">{accuracy ?? 0}%</p>
+            <div className="p-3 rounded-xl border glass-card text-center">
+              <TrendingUp className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+              <p className="text-xl font-bold text-default">{accuracy ?? 0}%</p>
               <p className="text-sm text-muted">Precisión</p>
             </div>
 
-            <div className="p-6 rounded-2xl border glass-card text-center">
-              <Clock className="h-8 w-8 text-violet-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-default">
+            <div className="p-3 rounded-xl border glass-card text-center">
+              <Clock className="h-6 w-6 text-violet-600 mx-auto mb-1" />
+              <p className="text-xl font-bold text-default">
                 {Math.floor((attempt.timeSpent || 0) / 60)}
               </p>
               <p className="text-sm text-muted">Minutos</p>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="p-6 rounded-2xl border glass-card text-center">
-              <TrendingUp className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-default">{answeredQuestions}</p>
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="p-3 rounded-xl border glass-card text-center">
+              <TrendingUp className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+              <p className="text-xl font-bold text-default">{answeredQuestions}</p>
               <p className="text-sm text-muted">Respondidas</p>
             </div>
 
-            <div className="p-6 rounded-2xl border glass-card text-center">
-              <Award className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-default">{attempt.totalScore}</p>
+            <div className="p-3 rounded-xl border glass-card text-center">
+              <Award className="h-6 w-6 text-emerald-600 mx-auto mb-1" />
+              <p className="text-xl font-bold text-default">{attempt.totalScore}</p>
               <p className="text-sm text-muted">Score</p>
             </div>
 
-            <div className="p-6 rounded-2xl border glass-card text-center">
-              <Clock className="h-8 w-8 text-violet-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-default">
+            <div className="p-3 rounded-xl border glass-card text-center">
+              <Clock className="h-6 w-6 text-violet-600 mx-auto mb-1" />
+              <p className="text-xl font-bold text-default">
                 {Math.floor((attempt.timeSpent || 0) / 60)}
               </p>
               <p className="text-sm text-muted">Minutos</p>
@@ -201,7 +201,7 @@ export default function AssessmentResultsPage() {
         )}
 
         {/* Scores por sección */}
-        <div className="mb-8 p-6 rounded-2xl border glass-card">
+        <div className="mb-4 p-4 rounded-xl border glass-card">
           <h2 className="text-lg font-semibold mb-4">📊 Resultados por sección</h2>
           <div className="space-y-4">
             {Object.entries(sectionScores).map(([section, score]) => (
@@ -227,7 +227,7 @@ export default function AssessmentResultsPage() {
         </div>
 
         {/* Desglose de respuestas */}
-        <div className="mb-8 p-6 rounded-2xl border glass-card">
+        <div className="mb-4 p-4 rounded-xl border glass-card">
           <h2 className="text-lg font-semibold mb-4">📝 Desglose de respuestas</h2>
           <div className="space-y-6">
             {(Array.isArray(answers) ? answers : []).map((answer: any, idx: number) => {

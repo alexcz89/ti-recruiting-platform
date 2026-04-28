@@ -182,6 +182,8 @@ export default function CodeEditor({
   const [activeTab, setActiveTab] = useState<'problem' | 'results'>('problem');
   // ✅ NUEVO: trackear si ejecutó tests antes de enviar
   const [hasRunTests, setHasRunTests] = useState(false);
+  // ✅ NUEVO: trackear si ya envió la solución (auto-submit)
+  const [solutionSubmitted, setSolutionSubmitted] = useState(false);
 
   const editorRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -251,6 +253,15 @@ export default function CodeEditor({
       const results = (data as any)?.result?.testResults;
       setTestResults(Array.isArray(results) ? results : []);
       setHasRunTests(true); // ✅ marcar que ejecutó tests
+
+      // ✅ AUTO-SUBMIT: si todos los tests públicos pasaron, enviar automáticamente
+      if (Array.isArray(results)) {
+        const publicResults = results.filter((r: any) => !r.hidden);
+        const allPublicPassed = publicResults.length > 0 && publicResults.every((r: any) => r.passed);
+        if (allPublicPassed && !solutionSubmitted) {
+          await handleAutoSubmit(code, selectedLanguage);
+        }
+      }
     } catch (err) {
       console.error('Error running tests:', err);
       setError('Error de conexión. Intenta de nuevo.');
@@ -259,19 +270,37 @@ export default function CodeEditor({
     }
   };
 
+  // ✅ NUEVO: auto-submit silencioso cuando todos los tests públicos pasan
+  const handleAutoSubmit = async (currentCode: string, currentLanguage: string) => {
+    if (isSubmitting || solutionSubmitted) return;
+    setIsSubmitting(true);
+    try {
+      const response = await fetch('/api/assessments/code/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          attemptId,
+          questionId,
+          code: currentCode,
+          language: currentLanguage,
+          isSubmission: true,
+        }),
+      });
+      if (response.ok) {
+        setSolutionSubmitted(true);
+        onSubmit?.(currentCode, currentLanguage);
+      }
+    } catch (err) {
+      console.error('Error auto-submitting:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (isSubmitting || isRunning || readOnly) return;
     if (!code.trim()) return;
-
-    // ✅ Advertir si no ha ejecutado tests
-    if (!hasRunTests) {
-      const proceed = confirm(
-        '⚠️ No has ejecutado los tests todavía.\n¿Seguro que quieres enviar sin probar tu solución?'
-      );
-      if (!proceed) return;
-    } else {
-      if (!confirm('¿Estás seguro de enviar tu solución? No podrás modificarla después.')) return;
-    }
+    if (solutionSubmitted) return; // ya fue enviada automáticamente
     setIsSubmitting(true);
     setError(null);
     setTestResults(null);
@@ -301,6 +330,7 @@ export default function CodeEditor({
       const results = (data as any)?.result?.testResults;
       setTestResults(Array.isArray(results) ? results : []);
 
+      setSolutionSubmitted(true);
       onSubmit?.(code, selectedLanguage);
     } catch (err) {
       console.error('Error submitting code:', err);
@@ -740,7 +770,7 @@ export default function CodeEditor({
             <div className="flex gap-3">
               <button
                 onClick={handleRunTests}
-                disabled={isRunning || isSubmitting || !code.trim()}
+                disabled={isRunning || isSubmitting || !code.trim() || solutionSubmitted}
                 className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50 dark:bg-slate-800 dark:hover:shadow-violet-500/20"
               >
                 {isRunning ? (
@@ -756,23 +786,29 @@ export default function CodeEditor({
                 )}
               </button>
 
-              <button
-                onClick={handleSubmit}
-                disabled={isRunning || isSubmitting || !code.trim()}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-violet-500/30 transition-all hover:scale-105 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:hover:scale-100"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Enviando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4" />
-                    <span>Enviar Solución</span>
-                  </>
-                )}
-              </button>
+              {solutionSubmitted ? (
+                // ✅ Estado: solución ya enviada automáticamente
+                <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-emerald-500/30">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Solución enviada ✓</span>
+                </div>
+              ) : isSubmitting ? (
+                // ✅ Estado: enviando
+                <div className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-violet-500/30">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Enviando...</span>
+                </div>
+              ) : (
+                // ✅ Estado: botón manual de envío (fallback si no todos los tests pasaron)
+                <button
+                  onClick={handleSubmit}
+                  disabled={isRunning || isSubmitting || !code.trim()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-violet-500/30 transition-all hover:scale-105 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  <Send className="h-4 w-4" />
+                  <span>Enviar Solución</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
