@@ -119,32 +119,17 @@ export async function POST(
         id: true,
         section: true,
         type: true,
-        testCases: {
-          select: {
-            points: true,
-          },
-        },
       },
     });
 
-    const questionMaxPoints = activeQuestions.map((question) => {
-      if (question.type === "CODING" && question.testCases.length > 0) {
-        return {
-          id: question.id,
-          section: question.section,
-          maxPts: question.testCases.reduce(
-            (sum, testCase) => sum + (Number(testCase.points) || 0),
-            0
-          ),
-        };
-      }
-
-      return {
-        id: question.id,
-        section: question.section,
-        maxPts: 1,
-      };
-    });
+    // Opción A: todas las preguntas valen 1 punto independientemente del tipo.
+    // Esto garantiza scores en múltiplos limpios (0%, 20%, 40%... con 5 preguntas)
+    // y evita que las preguntas CODING pesen más que las MCQ por tener más test cases.
+    const questionMaxPoints = activeQuestions.map((question) => ({
+      id: question.id,
+      section: question.section,
+      maxPts: 1,
+    }));
 
     const totalMaxPoints = questionMaxPoints.reduce(
       (sum, question) => sum + question.maxPts,

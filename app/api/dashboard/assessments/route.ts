@@ -203,7 +203,7 @@ export async function GET(request: Request) {
       const attemptFinal =
         attempt && ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(String(attempt.status ?? "").toUpperCase());
 
-      const resultsUrl = attemptFinal ? `/assessments/attempts/${attempt.id}/results` : null;
+      const resultsUrl = attemptFinal ? `/dashboard/assessments/attempts/${attempt.id}/results` : null;
 
       const templateIdStr = String(inv.template?.id ?? inv.templateId ?? "");
       const token = String(inv.token ?? "");
