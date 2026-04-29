@@ -736,8 +736,9 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
         <div className="px-4 pb-4 pt-1 space-y-4 border-t border-zinc-100 dark:border-zinc-800">
 
           {/* Metadatos — solo para opción múltiple */}
+          {/* El nivel de la pregunta hereda el nivel general del template — no se muestra por separado */}
           {!isCoding && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[10px] font-semibold text-zinc-400 uppercase mb-1">Sección</label>
                 <input
@@ -746,16 +747,6 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                   placeholder="General"
                   className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
                 />
-              </div>
-              <div>
-                <label className="block text-[10px] font-semibold text-zinc-400 uppercase mb-1">Nivel</label>
-                <select
-                  value={q.difficulty}
-                  onChange={e => onUpdate({ difficulty: e.target.value as Difficulty })}
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
-                >
-                  {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
-                </select>
               </div>
             </div>
           )}
