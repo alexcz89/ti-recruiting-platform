@@ -368,6 +368,14 @@ export default function AssessmentPage() {
 
   const handleNext = () => {
     if (expired) return;
+    // ⚠️ Warning si la pregunta actual es CODING y no ha sido enviada
+    const q = questions[currentIndex];
+    if (q?.type === 'CODING' && !codingSubmitted[q.id]) {
+      const proceed = confirm(
+        `⚠️ No has enviado tu solución en la Pregunta ${currentIndex + 1}.\n\nPara que cuente, debes:\n1. Escribir tu código\n2. Hacer clic en "Ejecutar Tests"\n3. Esperar que pasen los tests (se envía automáticamente)\n\n¿Avanzar sin enviar? Tu respuesta quedará en 0 puntos.`
+      );
+      if (!proceed) return;
+    }
     if (currentIndex < total - 1) setCurrentIndex((i) => i + 1);
   };
 
@@ -614,6 +622,29 @@ export default function AssessmentPage() {
           </div>
         )}
 
+        {/* ✅ Banner instrucciones CODING — solo si no ha enviado aún */}
+        {isCodingQuestion && !codingSubmitted[currentQuestion.id] && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-200">
+            <span className="text-lg leading-none mt-0.5">💡</span>
+            <div>
+              <p className="font-semibold mb-1">¿Cómo resolver esta pregunta?</p>
+              <ol className="list-decimal list-inside space-y-0.5 text-blue-700 dark:text-blue-300">
+                <li>Escribe tu solución en el editor de código</li>
+                <li>Presiona <strong>&quot;Ejecutar Tests&quot;</strong> (o Ctrl+Enter)</li>
+                <li>Si los tests pasan ✅, tu solución se envía automáticamente</li>
+              </ol>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Banner de confirmación cuando ya fue enviada */}
+        {isCodingQuestion && codingSubmitted[currentQuestion.id] && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-200">
+            <span className="text-lg leading-none">✅</span>
+            <p className="font-semibold">Solución enviada correctamente. Puedes continuar con la siguiente pregunta.</p>
+          </div>
+        )}
+
         {/* Question */}
         <AssessmentQuestion
           question={{
@@ -672,9 +703,15 @@ export default function AssessmentPage() {
                 <button
                   onClick={handleNext}
                   disabled={expired}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-700 hover:border-violet-400 hover:text-violet-700 disabled:opacity-40 transition-all dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  className={[
+                    "inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-40",
+                    // Si CODING sin enviar → color ámbar para indicar que hay algo pendiente
+                    isCodingQuestion && !codingSubmitted[currentQuestion.id]
+                      ? "border-amber-400 bg-amber-50 text-amber-700 hover:border-amber-500 dark:border-amber-600/50 dark:bg-amber-900/20 dark:text-amber-300"
+                      : "border-zinc-300 bg-white text-zinc-700 hover:border-violet-400 hover:text-violet-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  ].join(' ')}
                 >
-                  Siguiente →
+                  {isCodingQuestion && !codingSubmitted[currentQuestion.id] ? '⚠️ Siguiente →' : 'Siguiente →'}
                 </button>
               )}
 

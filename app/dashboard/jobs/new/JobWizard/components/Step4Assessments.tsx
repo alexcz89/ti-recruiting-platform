@@ -49,7 +49,7 @@ export default function Step4Assessments({
 
   const fetchData = async () => {
     try {
-      const templatesRes = await fetch("/api/assessments", { cache: "no-store" });
+      const templatesRes = await fetch("/api/dashboard/assessments/templates", { cache: "no-store" });
 
       if (templatesRes.ok) {
         const data = await templatesRes.json();
