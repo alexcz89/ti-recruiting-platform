@@ -11,7 +11,9 @@ import {
   FileText,
   Receipt,
   BookOpen,
+  Shield,
 } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 type NavItem = {
   href: string;
@@ -37,6 +39,8 @@ const NAV_ITEMS: NavItem[] = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as any)?.role === "ADMIN";
 
   // ✅ BUG FIX: usa el campo "match" de cada item en lugar de siempre startsWith
   function isActive(item: NavItem): boolean {
@@ -70,6 +74,20 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             );
           })}
+          {isAdmin && (
+            <Link
+              href="/dashboard/admin"
+              aria-current={pathname.startsWith("/dashboard/admin") ? "page" : undefined}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium whitespace-nowrap transition shrink-0
+                ${pathname.startsWith("/dashboard/admin")
+                  ? "bg-red-600 text-white shadow-sm"
+                  : "border border-red-200 dark:border-red-800/50 text-red-600 dark:text-red-400 bg-white/80 dark:bg-zinc-900/60 hover:bg-red-50 dark:hover:bg-red-900/20"
+                }`}
+            >
+              <Shield className="shrink-0 h-4 w-4" />
+              Admin
+            </Link>
+          )}
         </div>
       </nav>
 
@@ -118,6 +136,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </div>
                 );
               })}
+              {/* Admin link — solo visible para ADMIN */}
+              {isAdmin && (
+                <div>
+                  <div className="my-1.5 mx-2 h-px bg-zinc-200 dark:bg-zinc-700/70" />
+                  <Link
+                    href="/dashboard/admin"
+                    aria-current={pathname.startsWith("/dashboard/admin") ? "page" : undefined}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition
+                      ${pathname.startsWith("/dashboard/admin")
+                        ? "bg-red-600 text-white shadow-sm"
+                        : "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      }`}
+                  >
+                    <Shield className="flex-shrink-0 h-4 w-4" />
+                    <span className="flex-1">Admin</span>
+                    {pathname.startsWith("/dashboard/admin") && (
+                      <span aria-hidden className="inline-block h-2 w-2 rounded-full bg-white/90" />
+                    )}
+                  </Link>
+                </div>
+              )}
             </nav>
 
           </div>
