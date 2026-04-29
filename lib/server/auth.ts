@@ -124,7 +124,8 @@ export const authOptions: AuthOptions = {
             matches: dbUser.role === intendedRole,
           });
 
-          if (dbUser.role !== intendedRole) {
+          // ADMIN puede autenticarse desde el tab de Reclutador
+          if (dbUser.role !== intendedRole && dbUser.role !== "ADMIN") {
             console.log("[AUTH] role mismatch");
             return null;
           }
