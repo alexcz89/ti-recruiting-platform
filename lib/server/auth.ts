@@ -314,8 +314,10 @@ export const authOptions: AuthOptions = {
         });
 
         if (existingUser) {
+          // Usuario existente — solo CANDIDATE puede entrar por Google
           if (existingUser.role !== "CANDIDATE") return false;
 
+          // Auto-verificar email si aún no está verificado
           if (!existingUser.emailVerified) {
             await prisma.user.update({
               where: { email },
@@ -325,7 +327,21 @@ export const authOptions: AuthOptions = {
           return true;
         }
 
-        return "/auth/signin?error=google_no_account";
+        // ✅ Usuario nuevo → crear automáticamente como CANDIDATE
+        // Google ya verificó el email, no necesitamos confirmación adicional
+        const googleName = user.name ?? email.split("@")[0];
+        await prisma.user.create({
+          data: {
+            email,
+            name: googleName,
+            role: "CANDIDATE",
+            emailVerified: new Date(), // Google garantiza el email
+            passwordHash: null,        // Sin contraseña — acceso solo via Google
+          },
+        });
+
+        console.log("[AUTH] google signIn newUser created", { email, name: googleName });
+        return true;
       }
 
       return true;
