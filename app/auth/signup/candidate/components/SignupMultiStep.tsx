@@ -223,21 +223,18 @@ export default function SignupMultiStep({
       <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm shadow-xl shadow-zinc-900/5 dark:shadow-zinc-900/30 overflow-hidden">
 
         {/* Header */}
-        <div className="px-6 pt-8 pb-6 text-center border-b border-zinc-100 dark:border-zinc-800">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/30 mb-4">
-            <Sparkles className="h-6 w-6 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+        <div className="px-6 pt-6 pb-4 text-center border-b border-zinc-100 dark:border-zinc-800">
+          <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
             {fromCvBuilder ? "Guarda tu CV gratis" : "Crea tu cuenta"}
           </h1>
-          <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {fromCvBuilder
               ? "Registra tu cuenta para guardar y compartir tu CV"
               : "Encuentra tu próximo reto profesional en TI"}
           </p>
         </div>
 
-        <div className="px-6 py-6 space-y-5">
+        <div className="px-6 py-5 space-y-4">
           {/* ── Botón Google — solo en paso 1 ── */}
           {currentStep === 1 && (
             <div className="space-y-4">
@@ -266,7 +263,7 @@ export default function SignupMultiStep({
                   <div className="w-full border-t border-zinc-200 dark:border-zinc-700" />
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="bg-white dark:bg-zinc-900 px-3 text-zinc-400 dark:text-zinc-500 font-medium">
+                  <span className="bg-white/90 dark:bg-zinc-900/90 px-3 text-zinc-400 dark:text-zinc-500 font-medium">
                     o regístrate con tu correo
                   </span>
                 </div>
