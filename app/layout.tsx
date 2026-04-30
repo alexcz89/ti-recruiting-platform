@@ -20,6 +20,10 @@ export const metadata: Metadata = {
   },
   description:
     "Encuentra las mejores vacantes de tecnología en México. Conectamos talento TI con empresas líderes.",
+  // ✅ FIX: Canonical explícito — resuelve "Duplicate without user-selected canonical"
+  alternates: {
+    canonical: "/",
+  },
   openGraph: {
     siteName: "TaskIO",
     locale: "es_MX",
