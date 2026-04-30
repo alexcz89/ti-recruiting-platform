@@ -110,7 +110,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (!job) return {};
 
   const companyName = job.company?.name ?? null;
-  const title = companyName ? `${job.title} — ${companyName}` : job.title;
+  // SEO: incluir ciudad y marca para keywords long-tail
+  // Ej: "Desarrollador Salesforce — Acme Corp | CDMX | TaskIO"
+  const locationPart = job.city ? ` | ${job.city}` : "";
+  const title = companyName
+    ? `${job.title} — ${companyName}${locationPart} | TaskIO`
+    : `${job.title}${locationPart} | TaskIO`;
   const description = buildDescription(job);
   const url = `${APP_URL}/jobs/${job.id}`;
   const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}&v=${job.updatedAt.getTime()}`;
