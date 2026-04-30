@@ -495,7 +495,7 @@ export default function JobDetailPanel({
         setTimeout(() => setCopied(false), 1800);
       }
     } catch {}
-  }, [jobId, job?.title, showCompanyName, companyName]);
+  }, [jobId, job, showCompanyName, companyName]);
 
   const applyAction = React.useCallback(async (): Promise<ApplyResult> => {
     if (!jobId) return { error: "UNKNOWN", message: "Vacante inválida" };
@@ -555,7 +555,7 @@ export default function JobDetailPanel({
         message: "No se pudo conectar con el servidor",
       };
     }
-  }, [jobId, applicationHref]);
+  }, [jobId, applicationHref, job]);
 
   const sanitizedHtml = React.useMemo(() => {
     if (!descHtml) return "";
@@ -567,7 +567,7 @@ export default function JobDetailPanel({
       return encodeURIComponent(window.location.pathname + window.location.search);
     }
     return encodeURIComponent(jobId ? `/jobs/${(job as any)?.slug ?? jobId}` : "/jobs");
-  }, [jobId]);
+  }, [jobId, job]);
 
   const signinHref = React.useMemo(
     () => `/auth/signin?role=CANDIDATE&callbackUrl=${callbackUrl}`,
