@@ -1,5 +1,5 @@
 // app/sitemap.ts
-export const dynamic = "force-dynamic"; // ← evita prerender en build time
+export const dynamic = "force-dynamic";
 
 import { MetadataRoute } from "next";
 import { prisma } from "@/lib/server/prisma";
@@ -35,16 +35,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ];
 
-  // Vacantes activas
+  // ✅ Vacantes activas — usar slug si existe, fallback a id
   const jobs = await prisma.job.findMany({
     where: { status: "OPEN" as any },
-    select: { id: true, updatedAt: true },
+    select: { id: true, slug: true, updatedAt: true },
     orderBy: { updatedAt: "desc" },
     take: 5000,
   });
 
   const jobPages: MetadataRoute.Sitemap = jobs.map((job) => ({
-    url: `${APP_URL}/jobs/${job.id}`,
+    url: `${APP_URL}/jobs/${job.slug ?? job.id}`,
     lastModified: job.updatedAt,
     changeFrequency: "weekly" as const,
     priority: 0.8,

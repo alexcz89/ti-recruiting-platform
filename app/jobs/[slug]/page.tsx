@@ -1,0 +1,461 @@
+// app/jobs/[slug]/page.tsx
+import { prisma } from "@/lib/server/prisma";
+import { notFound, redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
+import JobDetailPanel from "@/components/jobs/JobDetailPanel";
+import AssessmentRequirement from "./AssessmentRequirement";
+import CandidateMatchCard from "@/components/jobs/CandidateMatchCard";
+import {
+  computeMatchScore,
+  hasMatchSignals,
+  type JobSkillInput,
+  type CandidateSkillInput,
+  type SeniorityLevel,
+} from "@/lib/ai/matchScore";
+import type { Metadata } from "next";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+// ⚠️ El param se llama "slug" pero puede llegar un ID antiguo (cuid)
+// → detectamos y hacemos redirect 301 al slug real
+type Params = { params: { slug: string } };
+
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
+const SITE_NAME = "TaskIO";
+
+function excerpt(text: string | null | undefined, max = 160) {
+  const t = (text || "").replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  return t.length > max ? t.slice(0, max - 1) + "…" : t;
+}
+
+function stripHtml(html: string | null | undefined) {
+  if (!html) return "";
+  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function labelEmploymentType(type: string | null | undefined) {
+  switch (type) {
+    case "FULL_TIME": return "Tiempo completo";
+    case "PART_TIME": return "Medio tiempo";
+    case "CONTRACT": return "Por periodo";
+    case "INTERNSHIP": return "Prácticas profesionales";
+    default: return null;
+  }
+}
+
+function buildDescription(job: {
+  title: string;
+  description?: string | null;
+  descriptionHtml?: string | null;
+  city?: string | null;
+  employmentType?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  currency?: string | null;
+  company?: { name?: string | null } | null;
+}): string {
+  const parts: string[] = [];
+  if (job.company?.name) parts.push(job.company.name);
+  if (job.city) parts.push(job.city);
+
+  const empLabel = labelEmploymentType(job.employmentType);
+  if (empLabel) parts.push(empLabel);
+
+  if (job.salaryMin || job.salaryMax) {
+    const currency = job.currency ?? "MXN";
+    const fmt = (n: number) =>
+      new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(n);
+
+    if (job.salaryMin && job.salaryMax) {
+      parts.push(`${currency} ${fmt(job.salaryMin)} – ${fmt(job.salaryMax)}`);
+    } else if (job.salaryMin) {
+      parts.push(`Desde ${currency} ${fmt(job.salaryMin)}`);
+    } else if (job.salaryMax) {
+      parts.push(`Hasta ${currency} ${fmt(job.salaryMax)}`);
+    }
+  }
+
+  const header = parts.join(" · ");
+  const rawDesc = job.description || stripHtml(job.descriptionHtml || "");
+  const desc = excerpt(rawDesc, 120);
+
+  return header && desc ? `${header} — ${desc}` : header || desc || `Vacante: ${job.title}`;
+}
+
+/**
+ * Busca el job por slug primero, luego por ID (para backward compat).
+ * Si encuentra por ID y tiene slug → redirect 301 al slug.
+ */
+async function findJob(slugOrId: string) {
+  // 1. Buscar por slug
+  const bySlug = await prisma.job.findUnique({
+    where: { slug: slugOrId },
+    select: { id: true, slug: true },
+  });
+  if (bySlug) return { job: bySlug, shouldRedirect: false };
+
+  // 2. Buscar por ID (URLs antiguas)
+  const byId = await prisma.job.findUnique({
+    where: { id: slugOrId },
+    select: { id: true, slug: true },
+  });
+  if (!byId) return { job: null, shouldRedirect: false };
+
+  // Si tiene slug → redirect 301
+  if (byId.slug) return { job: byId, shouldRedirect: true };
+
+  // Si no tiene slug aún → servir por ID sin redirect
+  return { job: byId, shouldRedirect: false };
+}
+
+export async function generateMetadata({ params }: Params): Promise<Metadata> {
+  const { job: found } = await findJob(params.slug);
+  if (!found) return {};
+
+  const job = await prisma.job.findUnique({
+    where: { id: found.id },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      description: true,
+      descriptionHtml: true,
+      city: true,
+      employmentType: true,
+      salaryMin: true,
+      salaryMax: true,
+      currency: true,
+      updatedAt: true,
+      company: { select: { name: true } },
+    },
+  });
+
+  if (!job) return {};
+
+  const companyName = job.company?.name ?? null;
+  const locationPart = job.city ? ` | ${job.city}` : "";
+  const title = companyName
+    ? `${job.title} — ${companyName}${locationPart} | TaskIO`
+    : `${job.title}${locationPart} | TaskIO`;
+  const description = buildDescription(job);
+
+  // ✅ Canonical apunta siempre al slug (o al ID si no tiene slug aún)
+  const canonicalPath = job.slug ?? job.id;
+  const url = `${APP_URL}/jobs/${canonicalPath}`;
+  const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}&v=${job.updatedAt.getTime()}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: SITE_NAME,
+      locale: "es_MX",
+      type: "website",
+      images: [{ url: ogImage, width: 630, height: 630, alt: title }],
+    },
+    twitter: {
+      card: "summary",
+      title,
+      description,
+      images: [ogImage],
+    },
+  };
+}
+
+function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
+  return null;
+}
+
+export default async function JobDetail({ params }: Params) {
+  // ✅ Redirect 301 de IDs viejos → slug nuevo
+  const { job: found, shouldRedirect } = await findJob(params.slug);
+
+  if (!found) notFound();
+  if (shouldRedirect && found!.slug) {
+    redirect(`/jobs/${found!.slug}`); // Next.js redirect es 307 por default en RSC; usar permanentRedirect para 308
+  }
+
+  let session = null;
+  try {
+    session = await getServerSession(authOptions);
+  } catch {
+    // scraper o error de sesión → continúa como usuario anónimo
+  }
+
+  const user = (session?.user as any) || null;
+  const role =
+    (user?.role as "CANDIDATE" | "RECRUITER" | "ADMIN" | undefined) ?? undefined;
+
+  const isCandidate = role === "CANDIDATE";
+  const isRecruiterOrAdmin = role === "RECRUITER" || role === "ADMIN";
+
+  const job = await prisma.job.findUnique({
+    where: { id: found!.id },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      location: true,
+      city: true,
+      employmentType: true,
+      remote: true,
+      description: true,
+      descriptionHtml: true,
+      skills: true,
+      seniority: true,
+      minYearsExperience: true,
+      requiredSkills: {
+        select: {
+          must: true,
+          weight: true,
+          term: { select: { id: true, label: true } },
+        },
+      },
+      salaryMin: true,
+      salaryMax: true,
+      currency: true,
+      createdAt: true,
+      updatedAt: true,
+      companyId: true,
+      company: { select: { name: true } },
+      status: true,
+      assessments: {
+        where: { isRequired: true },
+        orderBy: { createdAt: "asc" },
+        take: 1,
+        select: {
+          id: true,
+          isRequired: true,
+          minScore: true,
+          templateId: true,
+          template: {
+            select: {
+              id: true,
+              title: true,
+              difficulty: true,
+              totalQuestions: true,
+              timeLimit: true,
+              passingScore: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  if (!job) notFound();
+
+  let canEdit = false;
+  if (isRecruiterOrAdmin) {
+    const myCompanyId = await getSessionCompanyId().catch(() => null);
+    canEdit = !!myCompanyId && job.companyId === myCompanyId;
+  }
+
+  const requiredAssessment = job.assessments?.[0] ?? null;
+
+  const userAttempt =
+    isCandidate && user?.id && requiredAssessment?.templateId
+      ? await prisma.assessmentAttempt.findFirst({
+          where: {
+            candidateId: user.id,
+            templateId: requiredAssessment.templateId,
+            status: { in: ["SUBMITTED", "EVALUATED"] },
+          },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, status: true, totalScore: true, passed: true },
+        })
+      : null;
+
+  const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
+    termId: rs.term.id,
+    label: rs.term.label,
+    must: rs.must,
+    weight: rs.weight,
+  }));
+
+  const jobSeniorityForEngine = toSeniorityLevel(job.seniority);
+
+  const hasJobMatchSignals = hasMatchSignals({
+    jobSkills: jobSkillsForEngine,
+    jobSeniority: jobSeniorityForEngine,
+    jobMinYearsExperience: job.minYearsExperience ?? null,
+  });
+
+  let candidateMatchResult = null;
+
+  if (isCandidate && user?.id) {
+    const candidateRaw = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        seniority: true,
+        yearsExperience: true,
+        candidateSkills: {
+          select: {
+            level: true,
+            term: { select: { id: true, label: true } },
+          },
+        },
+      },
+    });
+
+    if (candidateRaw && hasJobMatchSignals) {
+      const candidateSkillsForEngine: CandidateSkillInput[] =
+        candidateRaw.candidateSkills.map((cs) => ({
+          termId: cs.term.id,
+          label: cs.term.label,
+          level: cs.level,
+        }));
+
+      candidateMatchResult = computeMatchScore({
+        jobSkills: jobSkillsForEngine,
+        candidateSkills: candidateSkillsForEngine,
+        jobSeniority: jobSeniorityForEngine,
+        candidateSeniority: toSeniorityLevel(candidateRaw.seniority as string | null),
+        jobMinYearsExperience: job.minYearsExperience ?? null,
+        candidateYearsExperience: candidateRaw.yearsExperience ?? null,
+      });
+    }
+  }
+
+  let alreadyApplied = false;
+  let applicationHref: string | undefined = undefined;
+
+  if (isCandidate && user?.id) {
+    const existingApplication = await prisma.application.findFirst({
+      where: { candidateId: user.id, jobId: job.id },
+      select: { id: true },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existingApplication) {
+      alreadyApplied = true;
+      applicationHref = "/jobs?applied=1";
+    }
+  }
+
+  const panelJob = {
+    id: job.id,
+    title: job.title,
+    company: job.company?.name ?? null,
+    location: job.location,
+    remote: job.remote,
+    employmentType: job.employmentType,
+    description: job.description,
+    descriptionHtml: job.descriptionHtml,
+    skills: job.skills ?? [],
+    salaryMin: job.salaryMin ?? null,
+    salaryMax: job.salaryMax ?? null,
+    currency: job.currency ?? "MXN",
+    createdAt: job.createdAt,
+    updatedAt: job.updatedAt,
+  };
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    title: job.title,
+    hiringOrganization: {
+      "@type": "Organization",
+      name: job.company?.name ?? "Empresa confidencial",
+    },
+    jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
+    jobLocation: job.remote
+      ? undefined
+      : [
+          {
+            "@type": "Place",
+            address: {
+              "@type": "PostalAddress",
+              addressLocality: job.location || "México",
+              addressCountry: "MX",
+            },
+          },
+        ],
+    description:
+      job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
+    datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
+    employmentType: job.employmentType,
+    identifier: {
+      "@type": "PropertyValue",
+      name: job.company?.name ?? "Confidencial",
+      value: job.id,
+    },
+  };
+
+  const canApply = !isRecruiterOrAdmin;
+  const hasJobSignalsForAnon = hasJobMatchSignals;
+
+  return (
+    <main className="mx-auto max-w-[1100px] space-y-6 px-6 py-8 lg:px-10 xl:max-w-[1200px]">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
+      {requiredAssessment && (
+        <AssessmentRequirement
+          assessment={requiredAssessment as any}
+          userAttempt={userAttempt as any}
+        />
+      )}
+
+      {isCandidate && candidateMatchResult && (
+        <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
+      )}
+
+      {!session && hasJobSignalsForAnon && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-700/40 dark:bg-emerald-950/20">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+                ¿Cuánto encajas con esta vacante?
+              </p>
+              <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">
+                Crea tu perfil o inicia sesión para ver tu score de compatibilidad con esta vacante.
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2">
+              <a
+                href={`/auth/signin?role=CANDIDATE&callbackUrl=${encodeURIComponent(
+                  `/jobs/${job.slug ?? job.id}`
+                )}`}
+                className="inline-flex items-center rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600/50 dark:bg-transparent dark:text-emerald-300"
+              >
+                Iniciar sesión
+              </a>
+              <a
+                href={`/auth/signup/candidate?callbackUrl=${encodeURIComponent(
+                  `/jobs/${job.slug ?? job.id}`
+                )}`}
+                className="inline-flex items-center rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+              >
+                Crear cuenta gratis →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <JobDetailPanel
+        job={panelJob as any}
+        canApply={canApply}
+        isAuthed={Boolean(session)}
+        role={role}
+        editHref={canEdit ? `/dashboard/jobs/${job.id}/edit` : undefined}
+        alreadyApplied={alreadyApplied}
+        applicationHref={applicationHref}
+      />
+    </main>
+  );
+}

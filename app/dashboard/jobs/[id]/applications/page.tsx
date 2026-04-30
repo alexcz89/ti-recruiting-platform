@@ -136,6 +136,7 @@ export default async function JobApplicationsPage({
     where: { id: params.id, companyId },
     select: {
       id: true,
+      slug: true,
       title: true,
       status: true,
       seniority: true,
@@ -562,7 +563,7 @@ export default async function JobApplicationsPage({
               <BarChart2 className="h-3.5 w-3.5" />
               Pipeline
             </Link>
-            <Link href={`/jobs/${job.id}`} target="_blank" className={`${headerBtnClasses} shrink-0`}>
+            <Link href={`/jobs/${job.slug ?? job.id}`} target="_blank" className={`${headerBtnClasses} shrink-0`}>
               <EyeIcon className="h-3.5 w-3.5" />
               Ver vacante
             </Link>

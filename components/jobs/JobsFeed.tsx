@@ -328,7 +328,7 @@ export default function JobsFeed({
                   onActivate();
                 }
               }}
-              onMouseEnter={() => router.prefetch?.(`/jobs/${j.id}`)}
+              onMouseEnter={() => router.prefetch?.(`/jobs/${j.slug ?? j.id}`)}
               className={[
                 "group relative cursor-pointer transition",
                 isSelected

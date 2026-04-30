@@ -46,6 +46,7 @@ type EduItem = { name: string; required: boolean };
 
 type Job = {
   id: string;
+  slug?: string | null;
   title: string;
   company?: string | null;
   location?: string | null;
@@ -476,7 +477,7 @@ export default function JobDetailPanel({
     if (!jobId) return;
     const url =
       typeof window !== "undefined"
-        ? `${window.location.origin}/jobs/${jobId}`
+        ? `${window.location.origin}/jobs/${(job as any)?.slug ?? jobId}`
         : "";
     const shareData = {
       title: job?.title || "Vacante",
@@ -510,7 +511,7 @@ export default function JobDetailPanel({
         const callback =
           typeof window !== "undefined"
             ? encodeURIComponent(window.location.pathname + window.location.search)
-            : encodeURIComponent(`/jobs/${jobId}`);
+            : encodeURIComponent(`/jobs/${(job as any)?.slug ?? jobId}`)
         return {
           error: "AUTH",
           signinUrl: `/auth/signin?role=CANDIDATE&callbackUrl=${callback}`,
@@ -541,7 +542,7 @@ export default function JobDetailPanel({
             applicationHref ||
             (typeof window !== "undefined"
               ? `${window.location.pathname}?applied=1`
-              : `/jobs/${jobId}`),
+              : `/jobs/${(job as any)?.slug ?? jobId}`),
         };
       }
 
@@ -565,7 +566,7 @@ export default function JobDetailPanel({
     if (typeof window !== "undefined") {
       return encodeURIComponent(window.location.pathname + window.location.search);
     }
-    return encodeURIComponent(jobId ? `/jobs/${jobId}` : "/jobs");
+    return encodeURIComponent(jobId ? `/jobs/${(job as any)?.slug ?? jobId}` : "/jobs");
   }, [jobId]);
 
   const signinHref = React.useMemo(

@@ -47,6 +47,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
         where: { id: params.id },
         select: {
           id: true,
+          slug: true,
           title: true,
           location: true,
           companyId: true, // ✅ NUEVO: Necesario para créditos
@@ -58,6 +59,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
           where: { id: params.id, companyId: scopedCompanyId },
           select: {
             id: true,
+            slug: true,
             title: true,
             location: true,
             companyId: true, // ✅ NUEVO: Necesario para créditos
@@ -75,6 +77,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
       template: {
         select: {
           id: true,
+          slug: true,
           title: true,
           type: true, // ✅ NUEVO: Para calcular costos
           difficulty: true,
@@ -121,7 +124,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
             </Link>
 
             <Link
-              href={`/jobs/${job.id}`}
+              href={`/jobs/${job.slug ?? job.id}`}
               target="_blank"
               rel="noreferrer noopener"
               className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"

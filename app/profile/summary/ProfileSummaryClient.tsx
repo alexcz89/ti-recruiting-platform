@@ -92,6 +92,7 @@ export type Application = {
   id: string;
   createdAt: string;
   jobId: string;
+  jobSlug?: string | null;
   jobTitle: string;
   companyName: string;
 };
@@ -1712,7 +1713,7 @@ export default function ProfileSummaryClient({
                         <p className="text-sm font-medium truncate">{a.jobTitle} — {a.companyName}</p>
                         <p className="text-xs text-muted">{fromNowSimple(a.createdAt)}</p>
                     </div>
-                    <a href={`/jobs/${a.jobId}`} className="btn-ghost text-xs whitespace-nowrap shrink-0">Ver</a>
+                    <a href={`/jobs/${a.jobSlug ?? a.jobId}`} className="btn-ghost text-xs whitespace-nowrap shrink-0">Ver</a>
                     </li>
                 ))}
                 </ul>

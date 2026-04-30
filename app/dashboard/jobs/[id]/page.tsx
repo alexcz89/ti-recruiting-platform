@@ -43,6 +43,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     where: { id: params.id, companyId },
     select: {
       id: true,
+      slug: true,
       title: true,
       location: true,
       company: { select: { name: true } },
@@ -171,7 +172,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
             {/* 👇 Nuevo botón: ver la vacante pública */}
             <Link
-              href={`/jobs/${job.id}`}
+              href={`/jobs/${job.slug ?? job.id}`}
               target="_blank"
               className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
             >

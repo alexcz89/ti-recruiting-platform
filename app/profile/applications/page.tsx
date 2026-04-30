@@ -98,6 +98,7 @@ export default async function MyApplicationsPage({
       job: {
         select: {
           id: true,
+          slug: true,
           title: true,
           location: true,
           employmentType: true,
@@ -231,7 +232,7 @@ export default async function MyApplicationsPage({
                       <div className="flex flex-wrap items-start gap-2">
                         {a.job ? (
                           <Link
-                            href={`/jobs/${a.job.id}`}
+                            href={`/jobs/${a.job.slug ?? a.job.id}`}
                             className="line-clamp-2 min-w-0 text-base font-semibold text-zinc-900 hover:underline dark:text-zinc-50"
                           >
                             {a.job.title}
@@ -285,7 +286,7 @@ export default async function MyApplicationsPage({
 
                       {a.job && (
                         <Link
-                          href={`/jobs/${a.job.id}`}
+                          href={`/jobs/${a.job.slug ?? a.job.id}`}
                           className="inline-flex w-full items-center justify-center rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/60 sm:w-auto whitespace-nowrap"
                         >
                           Ver vacante

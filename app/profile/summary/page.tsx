@@ -85,7 +85,7 @@ export default async function ProfileSummaryPage({
     take: 20,
     include: {
       job: {
-        select: { id: true, title: true, company: { select: { name: true } }, updatedAt: true },
+        select: { id: true, slug: true, title: true, company: { select: { name: true } }, updatedAt: true },
       },
     },
   });
@@ -211,6 +211,7 @@ export default async function ProfileSummaryPage({
         id: a.id,
         createdAt: a.createdAt.toISOString(),
         jobId: a.job?.id ?? "",
+        jobSlug: a.job?.slug ?? null,
         jobTitle: a.job?.title ?? "—",
         companyName: a.job?.company?.name ?? "—",
       }))}

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { syncJobSkills } from "@/lib/server/syncJobSkills";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import { PLANS, type PlanId } from "@/config/plans";
+import { generateJobSlug } from "@/lib/utils/slugify"; // ← NUEVO
 import {
   EmploymentType,
   JobStatus,
@@ -162,24 +163,11 @@ function normalizeEducationLevel(
   if (aliases[normalized]) return aliases[normalized];
   if (isEducationLevel(normalized)) return normalized;
 
-  if (
-    normalized.includes("LICENCIATURA") ||
-    normalized.includes("INGENIERIA")
-  ) {
-    return "BACHELOR";
-  }
+  if (normalized.includes("LICENCIATURA") || normalized.includes("INGENIERIA")) return "BACHELOR";
   if (normalized.includes("MAESTRIA")) return "MASTER";
   if (normalized.includes("DOCTORADO")) return "DOCTORATE";
-  if (
-    normalized.includes("BACHILLERATO") ||
-    normalized.includes("PREPARATORIA") ||
-    normalized.includes("PREPA")
-  ) {
-    return "HIGH_SCHOOL";
-  }
-  if (normalized.includes("TECNICO") || normalized.includes("TECNICA")) {
-    return "TECHNICAL";
-  }
+  if (normalized.includes("BACHILLERATO") || normalized.includes("PREPARATORIA") || normalized.includes("PREPA")) return "HIGH_SCHOOL";
+  if (normalized.includes("TECNICO") || normalized.includes("TECNICA")) return "TECHNICAL";
   if (normalized.includes("SECUNDARIA")) return "SECONDARY";
   if (normalized.includes("PRIMARIA")) return "PRIMARY";
 
@@ -196,10 +184,7 @@ function normalizeSort(raw: string | null): "recent" | "updated" {
   return raw === "updated" ? "updated" : "recent";
 }
 
-function sanitizeCoordinate(
-  value: number | null,
-  type: "lat" | "lng"
-): number | null {
+function sanitizeCoordinate(value: number | null, type: "lat" | "lng"): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   if (type === "lat") return value >= -90 && value <= 90 ? value : null;
   return value >= -180 && value <= 180 ? value : null;
@@ -254,23 +239,16 @@ export async function GET(req: NextRequest) {
       const companyObj = job.companyConfidential
         ? null
         : job.company
-        ? {
-            name: job.company.name ?? null,
-            logoUrl: job.company.logoUrl ?? null,
-          }
+        ? { name: job.company.name ?? null, logoUrl: job.company.logoUrl ?? null }
         : null;
 
       return jsonPublic({
         job: {
           id: job.id,
           title: job.title,
-          company: job.companyConfidential
-            ? "Confidencial"
-            : companyObj?.name ?? null,
+          company: job.companyConfidential ? "Confidencial" : companyObj?.name ?? null,
           companyObj,
-          companyLogoUrl: job.companyConfidential
-            ? null
-            : companyObj?.logoUrl ?? null,
+          companyLogoUrl: job.companyConfidential ? null : companyObj?.logoUrl ?? null,
           logoUrl: job.companyConfidential ? null : companyObj?.logoUrl ?? null,
           location: job.location,
           locationType: job.locationType,
@@ -308,17 +286,9 @@ export async function GET(req: NextRequest) {
     const location = (searchParams.get("location") || "").trim();
     const remoteParam = searchParams.get("remote");
     const remote =
-      remoteParam === "true"
-        ? true
-        : remoteParam === "false"
-        ? false
-        : undefined;
-    const employmentTypeParam = (
-      searchParams.get("employmentType") || ""
-    ).trim();
-    const employmentType = isEmploymentType(employmentTypeParam)
-      ? employmentTypeParam
-      : undefined;
+      remoteParam === "true" ? true : remoteParam === "false" ? false : undefined;
+    const employmentTypeParam = (searchParams.get("employmentType") || "").trim();
+    const employmentType = isEmploymentType(employmentTypeParam) ? employmentTypeParam : undefined;
     const sort = normalizeSort(searchParams.get("sort"));
 
     const andFilters: Prisma.JobWhereInput[] = [{ status: JobStatus.OPEN }];
@@ -361,6 +331,7 @@ export async function GET(req: NextRequest) {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
+        slug: true, // ← NUEVO
         title: true,
         location: true,
         locationType: true,
@@ -392,14 +363,11 @@ export async function GET(req: NextRequest) {
 
       return {
         id: j.id,
+        slug: j.slug ?? null, // ← NUEVO
         title: j.title,
-        company: j.companyConfidential
-          ? "Confidencial"
-          : companyObj?.name ?? null,
+        company: j.companyConfidential ? "Confidencial" : companyObj?.name ?? null,
         companyObj,
-        companyLogoUrl: j.companyConfidential
-          ? null
-          : companyObj?.logoUrl ?? null,
+        companyLogoUrl: j.companyConfidential ? null : companyObj?.logoUrl ?? null,
         logoUrl: j.companyConfidential ? null : companyObj?.logoUrl ?? null,
         location: j.location,
         locationType: j.locationType,
@@ -457,25 +425,14 @@ export async function POST(req: NextRequest) {
       typeof value === "string" ? value : `[File:${value.name}]`,
     ]);
     console.log("FormData entries:", Object.fromEntries(debugEntries));
-    console.log(
-      "assessmentTemplateId raw:",
-      getFormString(formData, "assessmentTemplateId")
-    );
-    console.log(
-      "assessmentTemplateIds raw (fd.get):",
-      getFormString(formData, "assessmentTemplateIds")
-    );
-    console.log(
-      "assessmentTemplateIds raw (fd.getAll):",
-      formData.getAll("assessmentTemplateIds")
-    );
+    console.log("assessmentTemplateId raw:", getFormString(formData, "assessmentTemplateId"));
+    console.log("assessmentTemplateIds raw (fd.get):", getFormString(formData, "assessmentTemplateIds"));
+    console.log("assessmentTemplateIds raw (fd.getAll):", formData.getAll("assessmentTemplateIds"));
 
     const incomingJobId = getFormString(formData, "jobId");
     if (incomingJobId) {
       return jsonNoStore(
-        {
-          error: "Esta operación es de edición. Usa el endpoint de actualización.",
-        },
+        { error: "Esta operación es de edición. Usa el endpoint de actualización." },
         409
       );
     }
@@ -494,8 +451,7 @@ export async function POST(req: NextRequest) {
     }
     const locationType: LocationType = rawLocationType;
 
-    const rawEmploymentType =
-      getFormString(formData, "employmentType") || "FULL_TIME";
+    const rawEmploymentType = getFormString(formData, "employmentType") || "FULL_TIME";
     if (!isEmploymentType(rawEmploymentType)) {
       return jsonNoStore({ error: "employmentType inválido" }, 400);
     }
@@ -527,9 +483,7 @@ export async function POST(req: NextRequest) {
 
     if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
       return jsonNoStore(
-        {
-          error: "El sueldo mínimo no puede ser mayor que el sueldo máximo.",
-        },
+        { error: "El sueldo mínimo no puede ser mayor que el sueldo máximo." },
         400
       );
     }
@@ -537,45 +491,26 @@ export async function POST(req: NextRequest) {
     const schedule = getFormString(formData, "schedule") || null;
     const showBenefits = getFormBool(formData, "showBenefits");
 
-    const benefitsJsonParsed = getFormJSON<Prisma.JsonValue>(
-      formData,
-      "benefitsJson"
-    );
-    if (!benefitsJsonParsed.ok) {
-      return jsonNoStore({ error: "benefitsJson inválido" }, 400);
-    }
+    const benefitsJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "benefitsJson");
+    if (!benefitsJsonParsed.ok) return jsonNoStore({ error: "benefitsJson inválido" }, 400);
     const benefitsJson = benefitsJsonParsed.value;
 
-    const educationJsonParsed = getFormJSON<Prisma.JsonValue>(
-      formData,
-      "educationJson"
-    );
-    if (!educationJsonParsed.ok) {
-      return jsonNoStore({ error: "educationJson inválido" }, 400);
-    }
+    const educationJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "educationJson");
+    if (!educationJsonParsed.ok) return jsonNoStore({ error: "educationJson inválido" }, 400);
     const educationJson = educationJsonParsed.value;
 
-    const skillsJsonParsed = getFormJSON<JobSkillInput[]>(
-      formData,
-      "skillsJson"
-    );
-    if (!skillsJsonParsed.ok) {
-      return jsonNoStore({ error: "skillsJson inválido" }, 400);
-    }
+    const skillsJsonParsed = getFormJSON<JobSkillInput[]>(formData, "skillsJson");
+    if (!skillsJsonParsed.ok) return jsonNoStore({ error: "skillsJson inválido" }, 400);
     const skillsJson = skillsJsonParsed.value;
 
     const certsJsonParsed = getFormJSON<Prisma.JsonValue>(formData, "certsJson");
-    if (!certsJsonParsed.ok) {
-      return jsonNoStore({ error: "certsJson inválido" }, 400);
-    }
+    if (!certsJsonParsed.ok) return jsonNoStore({ error: "certsJson inválido" }, 400);
     const certsJson = certsJsonParsed.value;
 
     const skillsList: string[] = Array.isArray(skillsJson)
       ? skillsJson
           .map((s) =>
-            typeof s?.name === "string"
-              ? `${s.required ? "Req" : "Dese"}: ${s.name}`
-              : ""
+            typeof s?.name === "string" ? `${s.required ? "Req" : "Dese"}: ${s.name}` : ""
           )
           .filter(Boolean)
       : [];
@@ -584,18 +519,10 @@ export async function POST(req: NextRequest) {
     const companyConfidential = companyMode === "confidential";
 
     // ─── Parseo robusto de assessmentTemplateIds ──────────────────────────────
-    // El wizard puede enviar los IDs de dos formas distintas:
-    //   A) fd.set("assessmentTemplateIds", JSON.stringify([id1, id2]))
-    //      → formData.get() devuelve un string JSON → parseamos con JSON.parse
-    //   B) assessmentTemplateIds.forEach(id => fd.append("assessmentTemplateIds", id))
-    //      → formData.getAll() devuelve string[] → los usamos directamente
-    // Soportamos ambos formatos para máxima compatibilidad.
     let assessmentTemplateIds: string[] = [];
-
     const fromGetAll = formData.getAll("assessmentTemplateIds") as string[];
 
     if (fromGetAll.length === 1 && fromGetAll[0].trim().startsWith("[")) {
-      // Formato A: un único valor que es un JSON array string
       try {
         const parsed = JSON.parse(fromGetAll[0]);
         if (Array.isArray(parsed)) {
@@ -606,32 +533,21 @@ export async function POST(req: NextRequest) {
         }
       } catch {
         console.error("assessmentTemplateIds JSON inválido:", fromGetAll[0]);
-        // No retornamos error — simplemente quedará vacío y se continuará sin assessments
       }
     } else if (fromGetAll.length > 0) {
-      // Formato B: múltiples entradas individuales (fd.append por cada id)
       assessmentTemplateIds = fromGetAll
         .filter((id): id is string => typeof id === "string" && id.trim().length > 0)
         .map((id) => id.trim());
     }
 
-    // Fallback: campo singular assessmentTemplateId (compatibilidad con backend viejo)
-    const rawAssessmentTemplateId = getFormString(
-      formData,
-      "assessmentTemplateId"
-    );
+    const rawAssessmentTemplateId = getFormString(formData, "assessmentTemplateId");
     if (assessmentTemplateIds.length === 0 && rawAssessmentTemplateId) {
       assessmentTemplateIds = [rawAssessmentTemplateId];
     }
 
     assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
 
-    console.log(
-      "assessmentTemplateIds parsed/final:",
-      assessmentTemplateIds,
-      "count:",
-      assessmentTemplateIds.length
-    );
+    console.log("assessmentTemplateIds parsed/final:", assessmentTemplateIds, "count:", assessmentTemplateIds.length);
 
     if (assessmentTemplateIds.length > 0) {
       const existingTemplates = await prisma.assessmentTemplate.findMany({
@@ -647,10 +563,7 @@ export async function POST(req: NextRequest) {
 
       if (missingIds.length > 0) {
         return jsonNoStore(
-          {
-            error: "Uno o más assessment templates no existen",
-            missingTemplateIds: missingIds,
-          },
+          { error: "Uno o más assessment templates no existen", missingTemplateIds: missingIds },
           400
         );
       }
@@ -743,15 +656,17 @@ export async function POST(req: NextRequest) {
 
       console.log("createdJob:", createdJob);
 
+      // ✅ NUEVO: Generar y guardar el slug después de tener el ID
+      const slug = generateJobSlug(createdJob.title, city || null, createdJob.id);
+      await tx.job.update({
+        where: { id: createdJob.id },
+        data: { slug },
+      });
+
       await syncJobSkills(tx, createdJob.id, skillsJson);
 
       if (assessmentTemplateIds.length > 0) {
-        console.log(
-          "about to createMany JobAssessment for job:",
-          createdJob.id,
-          "templates:",
-          assessmentTemplateIds
-        );
+        console.log("about to createMany JobAssessment for job:", createdJob.id, "templates:", assessmentTemplateIds);
 
         await tx.jobAssessment.createMany({
           data: assessmentTemplateIds.map((templateId) => ({
@@ -769,13 +684,7 @@ export async function POST(req: NextRequest) {
 
       const persistedAssessments = await tx.jobAssessment.findMany({
         where: { jobId: createdJob.id },
-        select: {
-          id: true,
-          jobId: true,
-          templateId: true,
-          isRequired: true,
-          triggerAt: true,
-        },
+        select: { id: true, jobId: true, templateId: true, isRequired: true, triggerAt: true },
       });
 
       console.log("persisted jobAssessments:", persistedAssessments);
@@ -819,11 +728,7 @@ export async function POST(req: NextRequest) {
       if (existingTpl) {
         await prisma.jobTemplate.update({
           where: { id: existingTpl.id },
-          data: {
-            title,
-            payload: payloadForTemplate,
-            lastUsedAt: new Date(),
-          },
+          data: { title, payload: payloadForTemplate, lastUsedAt: new Date() },
         });
       } else {
         await prisma.jobTemplate.create({
