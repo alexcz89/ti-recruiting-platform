@@ -1,4 +1,6 @@
 // app/sitemap.ts
+export const dynamic = "force-dynamic"; // ← evita prerender en build time
+
 import { MetadataRoute } from "next";
 import { prisma } from "@/lib/server/prisma";
 
