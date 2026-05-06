@@ -16,7 +16,9 @@ export default async function AdminUsersPage() {
   if (!session?.user) redirect("/auth/signin");
   if ((session.user as any)?.role !== "ADMIN") redirect("/");
 
+  // ✅ Excluir usuarios con soft delete de la lista
   const users = await prisma.user.findMany({
+    where: { deletedAt: null },
     orderBy: { createdAt: "desc" },
     select: {
       id: true, name: true, email: true, role: true, createdAt: true,
@@ -32,9 +34,11 @@ export default async function AdminUsersPage() {
     const userId = String(fd.get("userId") || "");
     if (!userId) return { error: "ID inválido" };
 
+    // ✅ Soft delete correcto — usar deletedAt como campo de control
     await prisma.user.update({
       where: { id: userId },
       data: {
+        deletedAt: new Date(),
         email: `deleted_${userId}@deleted.invalid`,
         name: "Usuario eliminado",
         passwordHash: null,
@@ -118,7 +122,8 @@ export default async function AdminUsersPage() {
                       {new Date(user.createdAt).toLocaleDateString("es-MX")}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {user.role !== "ADMIN" && !user.email.includes("deleted") && (
+                      {/* ✅ Solo mostrar botón en no-admins — deletedAt: null ya filtrado en query */}
+                      {user.role !== "ADMIN" && (
                         <UserActionsClient
                           userId={user.id}
                           userName={user.name || user.email}

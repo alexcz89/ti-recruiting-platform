@@ -7,7 +7,7 @@ import { Trash2 } from "lucide-react";
 type Props = {
   userId: string;
   userName: string;
-  onDelete: (fd: FormData) => Promise<{ ok?: boolean; error?: string }>;
+  onDelete: (fd: FormData) => Promise<{ ok?: boolean; error?: string } | void>;
 };
 
 export function UserActionsClient({ userId, userName, onDelete }: Props) {
@@ -21,7 +21,8 @@ export function UserActionsClient({ userId, userName, onDelete }: Props) {
     fd.set("userId", userId);
     const res = await onDelete(fd);
     setDeleting(false);
-    if (res.error) setMsg(res.error);
+    // ✅ acceso seguro — res puede ser void
+    if (res && res.error) setMsg(res.error);
     else setMsg("✅ Eliminado");
   }
 
