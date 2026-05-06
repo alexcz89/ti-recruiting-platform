@@ -331,15 +331,14 @@ export const authOptions: AuthOptions = {
         }
 
         // ✅ Usuario nuevo → crear automáticamente como CANDIDATE
-        // Google ya verificó el email, no necesitamos confirmación adicional
         const googleName = user.name ?? email.split("@")[0];
         await prisma.user.create({
           data: {
             email,
             name: googleName,
             role: "CANDIDATE",
-            emailVerified: new Date(), // Google garantiza el email
-            passwordHash: null,        // Sin contraseña — acceso solo via Google
+            emailVerified: new Date(),
+            passwordHash: null,
             onboardingStep: 0,
             profileCompleted: false,
           },
@@ -446,6 +445,14 @@ export const authOptions: AuthOptions = {
       });
 
       return session;
+    },
+
+    // ✅ Redirigir Google OAuth al onboarding
+    // El Server Component decide si ya completó onboarding → /jobs
+    async redirect({ url, baseUrl }) {
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (url.startsWith(baseUrl)) return url;
+      return `${baseUrl}/onboarding/candidate`;
     },
   },
 
