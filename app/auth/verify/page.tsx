@@ -79,7 +79,7 @@ function VerifyContent() {
 
         if (result?.ok) {
           await new Promise((r) => setTimeout(r, 400));
-          router.replace(callbackUrl || dashboardUrl);
+          router.replace(callbackUrl || (role === "CANDIDATE" ? "/onboarding/candidate" : dashboardUrl));
         } else {
           setState("success");
         }

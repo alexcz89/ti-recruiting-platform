@@ -337,6 +337,8 @@ export const authOptions: AuthOptions = {
             role: "CANDIDATE",
             emailVerified: new Date(), // Google garantiza el email
             passwordHash: null,        // Sin contraseña — acceso solo via Google
+            onboardingStep: 0,
+            profileCompleted: false,
           },
         });
 
