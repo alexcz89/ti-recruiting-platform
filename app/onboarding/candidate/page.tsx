@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/server/skills";
 import CandidateOnboardingPage from "./PageClient";
 
 export const dynamic = "force-dynamic";
@@ -14,23 +15,27 @@ export default async function OnboardingCandidateServerPage() {
   if (!user) redirect("/auth/signin");
   if (user.role !== "CANDIDATE") redirect("/dashboard");
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    select: {
-      name: true,
-      onboardingStep: true,
-      profileCompleted: true,
-      phone: true,
-      candidateSkills: {
-        select: { term: { select: { label: true } } }, // ← label, no name
-        take: 30,
+  const [dbUser, skillOptions, certOptions] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        name: true,
+        onboardingStep: true,
+        profileCompleted: true,
+        phone: true,
+        candidateSkills: {
+          select: { term: { select: { label: true } } },
+          take: 30,
+        },
+        candidateCredentials: {
+          select: { term: { select: { label: true } } },
+          take: 20,
+        },
       },
-      candidateCredentials: {
-        select: { term: { select: { label: true } } }, // ← label, no name
-        take: 20,
-      },
-    },
-  });
+    }),
+    getSkillsFromDB(),
+    getCertificationsFromDB(),
+  ]);
 
   if (!dbUser) redirect("/auth/signin");
   if (dbUser.profileCompleted) redirect("/jobs");
@@ -41,8 +46,10 @@ export default async function OnboardingCandidateServerPage() {
         userName={dbUser.name ?? ""}
         initialStep={dbUser.onboardingStep ?? 1}
         initialPhone={dbUser.phone ?? ""}
-        initialSkills={dbUser.candidateSkills.map((s) => s.term.label)}       // ← label
-        initialCerts={dbUser.candidateCredentials.map((c) => c.term.label)}   // ← label
+        initialSkills={dbUser.candidateSkills.map((s) => s.term.label)}
+        initialCerts={dbUser.candidateCredentials.map((c) => c.term.label)}
+        skillOptions={skillOptions}
+        certOptions={certOptions}
       />
     </div>
   );

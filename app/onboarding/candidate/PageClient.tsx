@@ -1,7 +1,7 @@
 // app/onboarding/candidate/PageClient.tsx
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +9,6 @@ import { X, Plus, Sparkles, FileText, Loader2, CheckCircle2 } from "lucide-react
 import {
   OnboardingCandidateStep2Schema,
   OnboardingCandidateStep3Schema,
-  POPULAR_SKILLS,
   type OnboardingCandidateStep2Input,
   type OnboardingCandidateStep3Input,
 } from "@/lib/shared/validation/candidate/onboarding";
@@ -19,6 +18,8 @@ import {
   saveCandidateStep3,
 } from "./actions";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import PhoneInputField from "@/components/PhoneInputField";
+import { StepSkills } from "./StepSkills";
 
 type Step = 1 | 2 | 3 | 4;
 
@@ -28,6 +29,8 @@ interface Props {
   initialSkills?: string[];
   initialPhone?: string;
   initialCerts?: string[];
+  skillOptions?: string[];
+  certOptions?: string[];
 }
 
 export default function CandidateOnboardingPage({
@@ -36,6 +39,8 @@ export default function CandidateOnboardingPage({
   initialSkills = [],
   initialPhone = "",
   initialCerts = [],
+  skillOptions = [],
+  certOptions = [],
 }: Props) {
   const router = useRouter();
   const [step, setStep] = useState<Step>(
@@ -43,8 +48,8 @@ export default function CandidateOnboardingPage({
   );
   const [pending, startTransition] = useTransition();
   const [cvState, setCvState] = useState<"idle" | "parsing" | "done">("idle");
-  const [skillInput, setSkillInput] = useState("");
   const [certInput, setCertInput] = useState("");
+  const [certDropdownOpen, setCertDropdownOpen] = useState(false);
 
   const firstName = userName.split(" ")[0];
 
@@ -55,25 +60,6 @@ export default function CandidateOnboardingPage({
   });
   const selectedSkills: string[] = form2.watch("skills") ?? [];
 
-  function toggleSkill(sk: string) {
-    const current = form2.getValues("skills") ?? [];
-    if (current.includes(sk)) {
-      form2.setValue("skills", current.filter((s) => s !== sk));
-    } else {
-      form2.setValue("skills", [...current, sk]);
-    }
-  }
-
-  function addCustomSkill() {
-    const val = skillInput.trim();
-    if (!val) return;
-    const current = form2.getValues("skills") ?? [];
-    if (!current.includes(val)) {
-      form2.setValue("skills", [...current, val]);
-    }
-    setSkillInput("");
-  }
-
   // ── Step 3: Contact ──
   const form3 = useForm<OnboardingCandidateStep3Input>({
     resolver: zodResolver(OnboardingCandidateStep3Schema),
@@ -81,18 +67,31 @@ export default function CandidateOnboardingPage({
   });
   const certs: string[] = form3.watch("certs") ?? [];
 
-  function addCert() {
-    const val = certInput.trim();
+  // ── Cert autocomplete ──
+  const filteredCerts = useMemo(() => {
+    const q = certInput.trim().toLowerCase();
+    const chosen = new Set(certs.map((c) => c.toLowerCase()));
+    return (q ? certOptions.filter((c) => c.toLowerCase().includes(q)) : certOptions)
+      .filter((c) => !chosen.has(c.toLowerCase()))
+      .slice(0, 20);
+  }, [certInput, certOptions, certs]);
+
+  function addCert(label?: string) {
+    const val = (label ?? certInput).trim();
     if (!val) return;
     const current = form3.getValues("certs") ?? [];
-    if (!current.includes(val)) {
+    if (!current.map((c) => c.toLowerCase()).includes(val.toLowerCase())) {
       form3.setValue("certs", [...current, val]);
     }
     setCertInput("");
+    setCertDropdownOpen(false);
   }
 
   function removeCert(cert: string) {
-    form3.setValue("certs", (form3.getValues("certs") ?? []).filter((c) => c !== cert));
+    form3.setValue(
+      "certs",
+      (form3.getValues("certs") ?? []).filter((c) => c !== cert)
+    );
   }
 
   // ── Handlers ──
@@ -141,51 +140,47 @@ export default function CandidateOnboardingPage({
     });
   };
 
-// DESPUÉS
-    async function simulateParse(file: File) {
+  async function parseCv(file: File) {
     setCvState("parsing");
     try {
-        const formData = new FormData();
-        formData.append("file", file);
+      const formData = new FormData();
+      formData.append("file", file);
 
-        const res = await fetch("/api/ai/cv/upload-and-parse", {
+      const res = await fetch("/api/ai/cv/upload-and-parse", {
         method: "POST",
         body: formData,
-        });
+      });
 
-        if (!res.ok) {
+      if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toastError(err?.error || "Error al analizar el CV. Intenta de nuevo.");
         setCvState("idle");
         return;
-        }
+      }
 
-        const data = await res.json();
+      const data = await res.json();
 
-        // Pre-seleccionar skills detectadas por el parser
-        if (Array.isArray(data.analysis?.skills) && data.analysis.skills.length > 0) {
+      if (Array.isArray(data.analysis?.skills) && data.analysis.skills.length > 0) {
         const current = form2.getValues("skills") ?? [];
         const merged = [...new Set([...current, ...data.analysis.skills])];
         form2.setValue("skills", merged);
-        }
+      }
 
-        // Pre-llenar teléfono si el parser lo detectó y el campo está vacío
-        if (data.analysis?.phonePrimary && !form3.getValues("phone")) {
+      if (data.analysis?.phonePrimary && !form3.getValues("phone")) {
         form3.setValue("phone", data.analysis.phonePrimary);
-        }
+      }
 
-        // Mostrar warning si detectó más de un teléfono
-        if (data.analysis?.phoneWarning) {
+      if (data.analysis?.phoneWarning) {
         toastError(data.analysis.phoneWarning);
-        }
+      }
 
-        setCvState("done");
-        handleCvParsed(data.url);
+      setCvState("done");
+      handleCvParsed(data.url);
     } catch {
-        toastError("Error al analizar el CV. Intenta de nuevo.");
-        setCvState("idle");
+      toastError("Error al analizar el CV. Intenta de nuevo.");
+      setCvState("idle");
     }
-    }
+  }
 
   return (
     <div className="mx-auto max-w-lg py-10 px-4">
@@ -235,7 +230,7 @@ export default function CandidateOnboardingPage({
             onDrop={(e) => {
               e.preventDefault();
               const file = e.dataTransfer.files?.[0];
-              if (file && cvState === "idle") simulateParse(file);
+              if (file && cvState === "idle") parseCv(file);
             }}
             className={`
               flex flex-col items-center justify-center gap-3
@@ -256,7 +251,7 @@ export default function CandidateOnboardingPage({
               disabled={cvState !== "idle"}
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) simulateParse(file);
+                if (file) parseCv(file);
               }}
             />
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors
@@ -272,7 +267,9 @@ export default function CandidateOnboardingPage({
             </div>
             <div className="text-center">
               <p className={`text-sm font-medium mb-0.5 ${
-                cvState === "done" ? "text-emerald-700 dark:text-emerald-400" : "text-zinc-700 dark:text-zinc-300"
+                cvState === "done"
+                  ? "text-emerald-700 dark:text-emerald-400"
+                  : "text-zinc-700 dark:text-zinc-300"
               }`}>
                 {cvState === "idle" && "Arrastra o toca para subir"}
                 {cvState === "parsing" && "Analizando tu CV…"}
@@ -308,72 +305,33 @@ export default function CandidateOnboardingPage({
           onSubmit={form2.handleSubmit(submitStep2)}
           className="rounded-2xl border glass-card p-4 md:p-6"
         >
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">
-            Seleccionadas
-          </p>
-          <div className="min-h-[44px] bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2.5 flex flex-wrap gap-1.5 mb-4">
-            {selectedSkills.length === 0 ? (
-              <span className="text-xs text-zinc-400 self-center px-1">
-                Toca una skill para agregarla
-              </span>
-            ) : (
-              selectedSkills.map((sk) => (
-                <span key={sk} className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-full text-xs font-medium">
-                  {sk}
-                  <button type="button" onClick={() => toggleSkill(sk)} className="text-emerald-400 hover:text-emerald-600 transition">
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))
-            )}
-          </div>
-
-          <p className="text-xs font-medium text-zinc-400 uppercase tracking-wider mb-2">
-            Populares en TI
-          </p>
-          <div className="flex flex-wrap gap-1.5 mb-4">
-            {POPULAR_SKILLS.map((sk) => (
-              <button
-                key={sk}
-                type="button"
-                onClick={() => toggleSkill(sk)}
-                className={`px-3 py-1.5 rounded-full text-xs border transition ${
-                  selectedSkills.includes(sk)
-                    ? "border-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-medium"
-                    : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-emerald-300 hover:text-emerald-600"
-                }`}
-              >
-                {sk}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex gap-2 mb-6">
-            <input
-              value={skillInput}
-              onChange={(e) => setSkillInput(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCustomSkill())}
-              placeholder="Agregar otra skill…"
-              className="flex-1 rounded-lg border px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
-            />
-            <button
-              type="button"
-              onClick={addCustomSkill}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition"
-            >
-              + Agregar
-            </button>
-          </div>
+          <StepSkills
+            skills={selectedSkills}
+            onChange={(s) => form2.setValue("skills", s)}
+            skillOptions={skillOptions}
+          />
 
           <div className="flex items-center justify-between gap-3">
-            <button type="button" onClick={() => setStep(1)} className="rounded-lg border px-4 py-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setStep(1)}
+              className="rounded-lg border px-4 py-2 text-sm"
+            >
               Atrás
             </button>
             <div className="flex items-center gap-3">
-              <button type="button" onClick={() => setStep(3)} className="rounded-lg px-4 py-2 text-sm text-zinc-500 hover:underline">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                className="rounded-lg px-4 py-2 text-sm text-zinc-500 hover:underline"
+              >
                 Saltar por ahora
               </button>
-              <button type="submit" disabled={pending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={pending}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
                 {pending ? "Guardando…" : "Continuar"}
               </button>
             </div>
@@ -388,49 +346,84 @@ export default function CandidateOnboardingPage({
           className="rounded-2xl border glass-card p-4 md:p-6"
         >
           <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Teléfono <span className="text-xs font-normal text-zinc-400">(opcional)</span>
-              </label>
-              <div className="flex gap-2">
-                <div className="flex items-center gap-1.5 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-sm text-zinc-500 shrink-0">
-                  🇲🇽 +52
-                </div>
-                <input
-                  {...form3.register("phone")}
-                  type="tel"
-                  placeholder="818 162 2482"
-                  className="flex-1 rounded-lg border px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
-                />
-              </div>
-            </div>
 
+            {/* Teléfono con selector de lada */}
+            <PhoneInputField
+              label="Teléfono"
+              helperText="Para que empresas puedan contactarte por WhatsApp"
+              value={form3.watch("phone") ?? ""}
+              onChange={(val) => form3.setValue("phone", val)}
+              error={form3.formState.errors.phone?.message}
+            />
+
+            {/* Certificaciones con autocomplete */}
             <div>
               <label className="mb-1 block text-sm font-medium">
-                Certificaciones <span className="text-xs font-normal text-zinc-400">(opcional)</span>
+                Certificaciones{" "}
+                <span className="text-xs font-normal text-zinc-400">(opcional)</span>
               </label>
+
               {certs.length > 0 && (
                 <div className="flex flex-col gap-1.5 mb-2">
                   {certs.map((c) => (
-                    <div key={c} className="flex items-center gap-2 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 rounded-lg text-sm">
+                    <div
+                      key={c}
+                      className="flex items-center gap-2 px-3 py-2 bg-zinc-50 dark:bg-zinc-800 rounded-lg text-sm"
+                    >
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                       <span className="flex-1 text-zinc-700 dark:text-zinc-300">{c}</span>
-                      <button type="button" onClick={() => removeCert(c)} className="text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 transition">
+                      <button
+                        type="button"
+                        onClick={() => removeCert(c)}
+                        className="text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 transition"
+                      >
                         <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))}
                 </div>
               )}
-              <div className="flex gap-2">
-                <input
-                  value={certInput}
-                  onChange={(e) => setCertInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCert())}
-                  placeholder="ej. AWS Solutions Architect"
-                  className="flex-1 rounded-lg border px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
-                />
-                <button type="button" onClick={addCert} className="rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition">
+
+              {/* Input con dropdown predictivo */}
+              <div className="relative flex gap-2">
+                <div className="relative flex-1">
+                  <input
+                    value={certInput}
+                    onChange={(e) => {
+                      setCertInput(e.target.value);
+                      setCertDropdownOpen(true);
+                    }}
+                    onFocus={() => setCertDropdownOpen(true)}
+                    onBlur={() => setTimeout(() => setCertDropdownOpen(false), 150)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && (e.preventDefault(), addCert())
+                    }
+                    placeholder="ej. AWS Solutions Architect"
+                    className="w-full rounded-lg border px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  />
+
+                  {certDropdownOpen && filteredCerts.length > 0 && (
+                    <ul className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg">
+                      {filteredCerts.map((c) => (
+                        <li key={c}>
+                          <button
+                            type="button"
+                            onMouseDown={() => addCert(c)}
+                            className="w-full px-3 py-2 text-left text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                          >
+                            {c}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => addCert()}
+                  className="rounded-lg border px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                >
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
@@ -438,14 +431,26 @@ export default function CandidateOnboardingPage({
           </div>
 
           <div className="mt-6 flex items-center justify-between gap-3">
-            <button type="button" onClick={() => setStep(2)} className="rounded-lg border px-4 py-2 text-sm">
+            <button
+              type="button"
+              onClick={() => setStep(2)}
+              className="rounded-lg border px-4 py-2 text-sm"
+            >
               Atrás
             </button>
             <div className="flex items-center gap-3">
-              <button type="button" onClick={() => submitStep3({ phone: "", certs: [] })} className="rounded-lg px-4 py-2 text-sm text-zinc-500 hover:underline">
+              <button
+                type="button"
+                onClick={() => submitStep3({ phone: "", certs: [] })}
+                className="rounded-lg px-4 py-2 text-sm text-zinc-500 hover:underline"
+              >
                 Saltar por ahora
               </button>
-              <button type="submit" disabled={pending} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+              <button
+                type="submit"
+                disabled={pending}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
                 {pending ? "Guardando…" : "Finalizar"}
               </button>
             </div>
