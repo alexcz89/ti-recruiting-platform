@@ -78,6 +78,19 @@ function FallbackAvatar({
 
 // ---------- Helpers de UI ----------
 
+// Traduce employmentType de enum a español
+function labelEmploymentType(type: string | null | undefined): string | null {
+  switch (type) {
+    case "FULL_TIME":    return "Tiempo completo";
+    case "PART_TIME":   return "Medio tiempo";
+    case "CONTRACT":    return "Por contrato";
+    case "INTERNSHIP":  return "Prácticas";
+    default:            return type ?? null;
+  }
+}
+
+
+
 const chipBase =
   "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium";
 const chipBlue =
@@ -111,7 +124,13 @@ function getSkillLabels(j: any): string[] {
     for (const item of src) pushLabel(item);
   }
 
-  return labels.slice(0, 6);
+  // Limpiar prefijos técnicos "Req:", "Nice:", "Dese:" para mostrar solo el skill
+  const cleaned = labels.map((l) =>
+    l.replace(/^(req|nice|dese|required|deseable)\s*:\s*/i, "").trim()
+  ).filter(Boolean);
+
+  // Deduplicar después de limpiar
+  return [...new Set(cleaned)].slice(0, 5);
 }
 
 function isEnglishRequired(j: any): boolean {
@@ -231,10 +250,12 @@ export default function JobsFeed({
     );
   };
 
-  const TypeChip = ({ j }: { j: any }) =>
-    j.employmentType ? (
-      <span className={`${chipBase} ${chipBlue}`}>{j.employmentType}</span>
+  const TypeChip = ({ j }: { j: any }) => {
+    const label = labelEmploymentType(j.employmentType);
+    return label ? (
+      <span className={`${chipBase} ${chipBlue}`}>{label}</span>
     ) : null;
+  };
 
   const ModeChip = ({ j }: { j: any }) => (
     <span className={`${chipBase} ${chipEmerald}`}>
@@ -394,19 +415,26 @@ export default function JobsFeed({
 
                   {skillLabels.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {skillLabels.map((label) => (
+                      {/* En móvil mostramos máx 3 skills para no apilar demasiado */}
+                      {skillLabels.slice(0, typeof window !== "undefined" && window.innerWidth < 640 ? 3 : 5).map((label) => (
                         <span
                           key={label}
-                          className="inline-flex items-center rounded-full border border-zinc-200/70 dark:border-zinc-700/60 bg-zinc-100/80 dark:bg-zinc-800/70 px-2 py-0.5 text-[10px] text-muted"
+                          className="inline-flex items-center rounded-full border border-zinc-200/70 dark:border-zinc-700/60 bg-zinc-100/80 dark:bg-zinc-800/70 px-2 py-0.5 text-[10px] text-muted whitespace-nowrap"
                         >
                           {label}
                         </span>
                       ))}
+                      {skillLabels.length > 3 && (
+                        <span className="sm:hidden inline-flex items-center rounded-full border border-zinc-200/70 dark:border-zinc-700/60 bg-zinc-100/80 dark:bg-zinc-800/70 px-2 py-0.5 text-[10px] text-muted">
+                          +{skillLabels.length - 3}
+                        </span>
+                      )}
                     </div>
                   )}
 
+                  {/* Descripción oculta en móvil — se ve en el panel de detalle */}
                   {j.description ? (
-                    <p className="text-xs text-muted mt-2 line-clamp-2">
+                    <p className="hidden sm:block text-xs text-muted mt-2 line-clamp-2">
                       {String(j.description).replace(/\s+/g, " ").trim()}
                     </p>
                   ) : null}
