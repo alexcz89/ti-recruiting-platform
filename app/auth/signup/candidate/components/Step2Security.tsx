@@ -15,50 +15,54 @@ interface Props {
   onBack: () => void;
 }
 
+// Clases reutilizables
+const inputClass =
+  "w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-3 pr-10 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-colors";
+
+const labelClass =
+  "block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1";
+
 export default function Step2Security({ data, onChange, onNext, onBack }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const handleChange = (field: keyof Props["data"]) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    onChange({ [field]: e.target.value });
-  };
+  const handleChange =
+    (field: keyof Props["data"]) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange({ [field]: e.target.value });
+    };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onNext();
   };
 
-  // Calcular fortaleza de la contraseña
   const strength = calculatePasswordStrength(data.password);
   const requirements = getPasswordRequirements(data.password);
-  
+
   const strengthColors = {
-    0: { bg: "bg-gray-200", text: "text-gray-600", label: "" },
-    1: { bg: "bg-red-500", text: "text-red-600", label: "Débil" },
-    2: { bg: "bg-orange-500", text: "text-orange-600", label: "Regular" },
-    3: { bg: "bg-yellow-500", text: "text-yellow-600", label: "Buena" },
-    4: { bg: "bg-emerald-500", text: "text-emerald-600", label: "Fuerte" },
+    0: { bg: "bg-zinc-200 dark:bg-zinc-700", text: "text-zinc-500 dark:text-zinc-400", label: "" },
+    1: { bg: "bg-red-500", text: "text-red-600 dark:text-red-400", label: "Débil" },
+    2: { bg: "bg-orange-500", text: "text-orange-600 dark:text-orange-400", label: "Regular" },
+    3: { bg: "bg-yellow-500", text: "text-yellow-600 dark:text-yellow-400", label: "Buena" },
+    4: { bg: "bg-emerald-500", text: "text-emerald-600 dark:text-emerald-400", label: "Fuerte" },
   };
 
   const strengthColor = strengthColors[strength as keyof typeof strengthColors];
 
-  // Validar que las contraseñas coincidan
-  const passwordsMatch = 
-    data.password && 
-    data.confirmPassword && 
+  const passwordsMatch =
+    data.password &&
+    data.confirmPassword &&
     data.password === data.confirmPassword;
 
-  const isFormValid = 
-    strength >= 3 && // Al menos "Buena"
-    passwordsMatch;
+  const isFormValid = strength >= 3 && passwordsMatch;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+
       {/* Contraseña */}
       <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="password" className={labelClass}>
           Contraseña <span className="text-red-500">*</span>
         </label>
         <div className="relative">
@@ -67,7 +71,7 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
             type={showPassword ? "text" : "password"}
             value={data.password}
             onChange={handleChange("password")}
-            className="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className={inputClass}
             placeholder="Crea una contraseña segura"
             autoComplete="new-password"
             required
@@ -75,14 +79,10 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
+            className="absolute inset-y-0 right-3 flex items-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
             aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
           >
-            {showPassword ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
 
@@ -93,8 +93,8 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
               {[1, 2, 3, 4].map((level) => (
                 <div
                   key={level}
-                  className={`h-1 flex-1 rounded ${
-                    level <= strength ? strengthColor.bg : "bg-gray-200"
+                  className={`h-1 flex-1 rounded transition-colors ${
+                    level <= strength ? strengthColor.bg : "bg-zinc-200 dark:bg-zinc-700"
                   }`}
                 />
               ))}
@@ -108,7 +108,7 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
 
       {/* Confirmar contraseña */}
       <div>
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="confirmPassword" className={labelClass}>
           Confirmar contraseña <span className="text-red-500">*</span>
         </label>
         <div className="relative">
@@ -117,7 +117,7 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
             type={showConfirmPassword ? "text" : "password"}
             value={data.confirmPassword}
             onChange={handleChange("confirmPassword")}
-            className="w-full rounded-lg border border-gray-300 px-3 py-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className={inputClass}
             placeholder="Repite tu contraseña"
             autoComplete="new-password"
             required
@@ -125,28 +125,24 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute inset-y-0 right-3 flex items-center text-gray-400 hover:text-gray-600"
+            className="absolute inset-y-0 right-3 flex items-center text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
             aria-label={showConfirmPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
           >
-            {showConfirmPassword ? (
-              <EyeOff className="h-4 w-4" />
-            ) : (
-              <Eye className="h-4 w-4" />
-            )}
+            {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           </button>
         </div>
 
         {/* Indicador de coincidencia */}
         {data.confirmPassword && (
-          <p className={`mt-1 text-xs ${passwordsMatch ? "text-emerald-600" : "text-red-600"}`}>
+          <p className={`mt-1 text-xs ${passwordsMatch ? "text-emerald-600 dark:text-emerald-400" : "text-red-500 dark:text-red-400"}`}>
             {passwordsMatch ? "✓ Las contraseñas coinciden" : "✗ Las contraseñas no coinciden"}
           </p>
         )}
       </div>
 
       {/* Requisitos de contraseña */}
-      <div className="rounded-lg bg-gray-50 p-2.5">
-        <p className="mb-2 text-xs font-semibold text-gray-700">
+      <div className="rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-100 dark:border-zinc-700/50 p-2.5">
+        <p className="mb-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
           Requisitos de contraseña:
         </p>
         <ul className="space-y-1">
@@ -154,7 +150,9 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
             <li
               key={index}
               className={`flex items-center gap-2 text-xs ${
-                req.met ? "text-emerald-600" : "text-gray-500"
+                req.met
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-zinc-500 dark:text-zinc-400"
               }`}
             >
               <span>{req.met ? "✓" : "○"}</span>
@@ -169,14 +167,14 @@ export default function Step2Security({ data, onChange, onNext, onBack }: Props)
         <button
           type="button"
           onClick={onBack}
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+          className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
         >
           ← Atrás
         </button>
         <button
           type="submit"
           disabled={!isFormValid}
-          className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600"
+          className="flex-1 rounded-lg px-4 py-3 text-sm font-semibold transition-colors bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600 dark:disabled:hover:bg-emerald-500"
         >
           Continuar →
         </button>

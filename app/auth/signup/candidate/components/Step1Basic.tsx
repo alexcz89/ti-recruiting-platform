@@ -15,6 +15,13 @@ interface Props {
   onNext: () => void;
 }
 
+// Clases reutilizables para consistencia y dark mode
+const inputClass =
+  "w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-colors";
+
+const labelClass =
+  "block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1";
+
 export default function Step1Basic({ data, onChange, onNext }: Props) {
   const [emailChecking, setEmailChecking] = useState(false);
   const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
@@ -27,12 +34,8 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
       return;
     }
 
-    // Limpiar timeout anterior
-    if (emailCheckTimeout) {
-      clearTimeout(emailCheckTimeout);
-    }
+    if (emailCheckTimeout) clearTimeout(emailCheckTimeout);
 
-    // Establecer nuevo timeout
     const timeout = setTimeout(async () => {
       setEmailChecking(true);
       try {
@@ -51,24 +54,22 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
 
     setEmailCheckTimeout(timeout);
 
-    return () => {
-      if (timeout) clearTimeout(timeout);
-    };
+    return () => { if (timeout) clearTimeout(timeout); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.email]);
 
-  const handleChange = (field: keyof Props["data"]) => (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    onChange({ [field]: e.target.value });
-  };
+  const handleChange =
+    (field: keyof Props["data"]) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      onChange({ [field]: e.target.value });
+    };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onNext();
   };
 
-  const isFormValid = 
+  const isFormValid =
     data.firstName.trim().length >= 2 &&
     data.lastName.trim().length >= 2 &&
     data.email.includes("@") &&
@@ -76,9 +77,10 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
+
       {/* Nombre */}
       <div>
-        <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="firstName" className={labelClass}>
           Nombre(s) <span className="text-red-500">*</span>
         </label>
         <input
@@ -86,7 +88,7 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
           type="text"
           value={data.firstName}
           onChange={handleChange("firstName")}
-          className="w-full rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+          className={inputClass}
           placeholder="Rogelio"
           autoComplete="given-name"
           required
@@ -96,7 +98,7 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
       {/* Apellidos en grid */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="lastName" className={labelClass}>
             Ap. Paterno <span className="text-red-500">*</span>
           </label>
           <input
@@ -104,22 +106,23 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
             type="text"
             value={data.lastName}
             onChange={handleChange("lastName")}
-            className="w-full rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className={inputClass}
             placeholder="Garza"
             autoComplete="family-name"
             required
           />
         </div>
         <div>
-          <label htmlFor="maternalSurname" className="block text-sm font-medium text-gray-700 mb-1">
-            Ap. Materno <span className="text-xs text-gray-400">(opc.)</span>
+          <label htmlFor="maternalSurname" className={labelClass}>
+            Ap. Materno{" "}
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">(opc.)</span>
           </label>
           <input
             id="maternalSurname"
             type="text"
             value={data.maternalSurname}
             onChange={handleChange("maternalSurname")}
-            className="w-full rounded-lg border border-gray-300 px-3 py-3 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className={inputClass}
             placeholder="Hernández"
             autoComplete="additional-name"
           />
@@ -128,7 +131,7 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
 
       {/* Email con validación */}
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="email" className={labelClass}>
           Correo electrónico <span className="text-red-500">*</span>
         </label>
         <div className="relative">
@@ -137,16 +140,16 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
             type="email"
             value={data.email}
             onChange={handleChange("email")}
-            className="w-full rounded-lg border border-gray-300 px-4 py-3 pr-10 text-sm focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className={`${inputClass} pr-10`}
             placeholder="tu@email.com"
             autoComplete="email"
             required
           />
-          
+
           {/* Indicador de validación */}
           <div className="absolute inset-y-0 right-3 flex items-center">
             {emailChecking && (
-              <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
             )}
             {!emailChecking && emailAvailable === true && (
               <CheckCircle className="h-4 w-4 text-emerald-500" />
@@ -157,27 +160,38 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
           </div>
         </div>
 
-        {/* Mensaje de disponibilidad */}
+        {/* Mensajes de validación */}
         {emailAvailable === false && (
-          <p className="mt-1 text-xs text-red-600">
+          <p className="mt-1 text-xs text-red-500 dark:text-red-400">
             Este email ya está registrado.{" "}
-            <a href="/auth/signin" className="underline hover:text-red-700">
+            <a
+              href="/auth/signin"
+              className="underline hover:text-red-600 dark:hover:text-red-300 transition-colors"
+            >
               Iniciar sesión
             </a>
           </p>
         )}
         {emailAvailable === true && (
-          <p className="mt-1 text-xs text-emerald-600">
+          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
             ✓ Email disponible
           </p>
         )}
       </div>
 
-      {/* Botón Continuar */}
+      {/* Botón Continuar — contraste corregido en dark mode */}
       <button
         type="submit"
         disabled={!isFormValid}
-        className="w-full rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-emerald-600"
+        className="
+          w-full rounded-lg px-4 py-3 text-sm font-semibold
+          bg-emerald-600 hover:bg-emerald-700
+          dark:bg-emerald-500 dark:hover:bg-emerald-400
+          text-white dark:text-zinc-900
+          transition-colors
+          disabled:cursor-not-allowed disabled:opacity-50
+          disabled:hover:bg-emerald-600 dark:disabled:hover:bg-emerald-500
+        "
       >
         Continuar →
       </button>

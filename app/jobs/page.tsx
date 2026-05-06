@@ -5,6 +5,7 @@ import JobSearchBar from "@/components/JobSearchBar";
 import ClientSplitView from "@/components/jobs/ClientSplitView";
 import { redirect } from "next/navigation";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
+import Footer from "@/components/Footer";
 
 export const metadata = { title: "Vacantes | Bolsa TI" };
 
@@ -45,21 +46,24 @@ export default async function PublicJobsPage({ searchParams }: { searchParams: S
   };
 
   return (
-    <main className="max-w-[1600px] 2xl:max-w-[1800px] mx-auto px-6 lg:px-10 py-6 space-y-4">
-      <JobSearchBar />
+    <>
+      <main className="max-w-[1600px] 2xl:max-w-[1800px] mx-auto px-6 lg:px-10 py-6 space-y-4">
+        <JobSearchBar />
 
-      {/* Chips de filtros activos */}
-      <ActiveFilterChips />
+        {/* Chips de filtros activos */}
+        <ActiveFilterChips />
 
-      <header className="space-y-1 pt-2">
-        <h1 className="text-3xl font-bold">Vacantes disponibles</h1>
-        <p className="text-sm text-zinc-600">
-          Selecciona una vacante de la lista para ver los detalles.
-        </p>
-      </header>
+        <header className="space-y-1 pt-2">
+          <h1 className="text-3xl font-bold">Vacantes disponibles</h1>
+          <p className="text-sm text-zinc-600">
+            Selecciona una vacante de la lista para ver los detalles.
+          </p>
+        </header>
 
-      {/* ✅ isCandidate eliminado */}
-      <ClientSplitView filters={filters} />
-    </main>
+        {/* ✅ isCandidate eliminado */}
+        <ClientSplitView filters={filters} />
+      </main>
+      <Footer />
+    </>
   );
 }

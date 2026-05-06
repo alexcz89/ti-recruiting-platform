@@ -15,6 +15,7 @@ import {
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import type { Metadata } from "next";
+import Footer from "@/components/Footer";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -397,7 +398,8 @@ export default async function JobDetail({ params }: Params) {
   const hasJobSignalsForAnon = hasJobMatchSignals;
 
   return (
-    <main className="mx-auto max-w-[1100px] space-y-6 px-6 py-8 lg:px-10 xl:max-w-[1200px]">
+    <>
+      <main className="mx-auto max-w-[1100px] space-y-6 px-6 py-8 lg:px-10 xl:max-w-[1200px]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -457,5 +459,7 @@ export default async function JobDetail({ params }: Params) {
         applicationHref={applicationHref}
       />
     </main>
+      <Footer />
+    </>
   );
 }
