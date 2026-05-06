@@ -50,9 +50,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             {children}
           </main>
 
-          <footer className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 py-8 text-sm text-zinc-500 dark:text-zinc-400 border-t border-zinc-200/60 dark:border-zinc-800/60">
-            © {new Date().getFullYear()} TaskIO. Todos los derechos reservados.
-          </footer>
         </Providers>
       </body>
     </html>
