@@ -35,11 +35,14 @@ async function findOrCreateTerm(kind: "SKILL" | "CERTIFICATION", label: string) 
   });
 }
 
-export async function saveCandidateStep1() {
+export async function saveCandidateStep1(cvUrl?: string) {
   const { userId } = await requireCandidate();
   await prisma.user.update({
     where: { id: userId },
-    data: { onboardingStep: 1 },
+    data: {
+      onboardingStep: 1,
+      ...(cvUrl ? { resumeUrl: cvUrl } : {}),
+    },
   });
   return { ok: true };
 }

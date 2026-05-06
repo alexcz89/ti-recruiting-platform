@@ -96,9 +96,9 @@ export default function CandidateOnboardingPage({
   }
 
   // ── Handlers ──
-  function handleCvParsed() {
+  function handleCvParsed(cvUrl?: string) {
     startTransition(async () => {
-      const res = await saveCandidateStep1().catch((e) => ({
+      const res = await saveCandidateStep1(cvUrl).catch((e) => ({
         ok: false,
         error: e?.message,
       }));
@@ -141,14 +141,51 @@ export default function CandidateOnboardingPage({
     });
   };
 
-  // TODO: reemplazar setTimeout con fetch real a /api/ai/cv/parse
-  function simulateParse(file: File) {
+// DESPUÉS
+    async function simulateParse(file: File) {
     setCvState("parsing");
-    setTimeout(() => {
-      setCvState("done");
-      handleCvParsed();
-    }, 2000);
-  }
+    try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/ai/cv/upload-and-parse", {
+        method: "POST",
+        body: formData,
+        });
+
+        if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toastError(err?.error || "Error al analizar el CV. Intenta de nuevo.");
+        setCvState("idle");
+        return;
+        }
+
+        const data = await res.json();
+
+        // Pre-seleccionar skills detectadas por el parser
+        if (Array.isArray(data.analysis?.skills) && data.analysis.skills.length > 0) {
+        const current = form2.getValues("skills") ?? [];
+        const merged = [...new Set([...current, ...data.analysis.skills])];
+        form2.setValue("skills", merged);
+        }
+
+        // Pre-llenar teléfono si el parser lo detectó y el campo está vacío
+        if (data.analysis?.phonePrimary && !form3.getValues("phone")) {
+        form3.setValue("phone", data.analysis.phonePrimary);
+        }
+
+        // Mostrar warning si detectó más de un teléfono
+        if (data.analysis?.phoneWarning) {
+        toastError(data.analysis.phoneWarning);
+        }
+
+        setCvState("done");
+        handleCvParsed(data.url);
+    } catch {
+        toastError("Error al analizar el CV. Intenta de nuevo.");
+        setCvState("idle");
+    }
+    }
 
   return (
     <div className="mx-auto max-w-lg py-10 px-4">
