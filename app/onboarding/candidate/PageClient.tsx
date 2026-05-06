@@ -167,22 +167,41 @@ export default function CandidateOnboardingPage({
 
       const data = await res.json();
 
+      // ── Pre-seleccionar skills ──
       if (Array.isArray(data.analysis?.skills) && data.analysis.skills.length > 0) {
         const current = form2.getValues("skills") ?? [];
         const merged = [...new Set([...current, ...data.analysis.skills])];
         form2.setValue("skills", merged);
       }
 
+      // ── Pre-llenar teléfono ──
       if (data.analysis?.phonePrimary && !form3.getValues("phone")) {
         form3.setValue("phone", data.analysis.phonePrimary);
       }
 
+      // ── Pre-llenar ubicación ──
       if (data.analysis?.location && !form3.getValues("location")) {
         form3.setValue("location", data.analysis.location);
       }
 
+      // ── Warning de múltiples teléfonos ──
       if (data.analysis?.phoneWarning) {
         toastError(data.analysis.phoneWarning);
+      }
+
+      // ── Sincronizar experiencia y educación — fire and forget ──
+      if (
+        Array.isArray(data.analysis?.experiences) ||
+        Array.isArray(data.analysis?.education)
+      ) {
+        fetch("/api/profile/cv-sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            experiences: data.analysis?.experiences ?? [],
+            education: data.analysis?.education ?? [],
+          }),
+        }).catch(() => {});
       }
 
       setCvState("done");
