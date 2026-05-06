@@ -31,10 +31,10 @@ interface Props {
 
 // Clases reutilizables
 const inputClass =
-  "w-full rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-colors";
+  "w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-3 text-sm text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 dark:placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-colors";
 
 const labelClass =
-  "block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1";
+  "block text-sm font-medium text-zinc-700 dark:text-zinc-200 mb-1";
 
 export default function Step3Professional({
   data,
