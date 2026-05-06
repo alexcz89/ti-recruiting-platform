@@ -112,7 +112,7 @@ export default function SignupMultiStep({
   // ── Google OAuth ──────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
-    await signIn("google", { callbackUrl: "/profile/summary" });
+    await signIn("google", { callbackUrl: "/onboarding/candidate" });
   };
 
   // ── Navegación entre pasos ────────────────────────────────
