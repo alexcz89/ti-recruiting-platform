@@ -9,7 +9,8 @@ import { z } from "zod";
 const SkillSchema = z.object({
   termId: z.string().min(1),
   label:  z.string().min(1),
-  level:  z.number().int().min(1).max(5),
+  // level puede llegar null desde el cliente si no seleccionó nivel — usamos 1 como default
+  level:  z.number().int().min(1).max(5).nullable().default(1),
 });
 
 export async function PATCH(req: Request) {
@@ -54,7 +55,7 @@ export async function PATCH(req: Request) {
             data: skills.map((s) => ({
               userId: me.id,
               termId: s.termId,
-              level:  s.level as any,
+              level:  (s.level ?? 1) as any, // fallback a 1 si level es null
             })),
           });
         }
