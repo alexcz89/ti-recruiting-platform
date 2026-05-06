@@ -332,7 +332,7 @@ export default function ProfileForm({
         termId: l.termId, label: l.label, level: l.level,
       })),
       skillsDetailed: (initial.skillsDetailed ?? []).map((s) => ({
-        termId: s.termId, label: s.label, level: s.level,
+        termId: s.termId, label: s.label, level: s.level ?? 3, // fallback a 3 (Intermedio) si viene null
       })),
       education: (initial.education ?? []).map((ed, i) => ({
         id: ed.id, level: ed.level ?? null, status: "COMPLETED",
@@ -389,7 +389,7 @@ export default function ProfileForm({
         termId: l.termId, label: l.label, level: l.level,
       })),
       skillsDetailed: (initial.skillsDetailed ?? []).map((s) => ({
-        termId: s.termId, label: s.label, level: s.level,
+        termId: s.termId, label: s.label, level: s.level ?? 3, // fallback a 3 (Intermedio)
       })),
       education: (initial.education ?? []).map((ed, i) => ({
         id: ed.id, level: ed.level ?? null, status: "COMPLETED",
@@ -766,7 +766,12 @@ export default function ProfileForm({
     fd.set("certifications", (vals.certifications || []).join(", "));
     fd.set("experiences", JSON.stringify(exps));
     fd.set("languages", JSON.stringify(vals.languages || []));
-    fd.set("skillsDetailed", JSON.stringify(vals.skillsDetailed || []));
+    // Sanitizar level null antes de enviar al servidor
+    const sanitizedSkills = (vals.skillsDetailed || []).map((s: any) => ({
+      ...s,
+      level: s.level ?? 3,
+    }));
+    fd.set("skillsDetailed", JSON.stringify(sanitizedSkills));
     fd.set("resumeUrl", currentResumeUrl);
 
     const eduPayload = JSON.stringify(edu);
@@ -1394,7 +1399,8 @@ function SectionSkills({
       ) : (
         <ul className="space-y-2">
           {skillsDetailed.map((s: any, idx: number) => {
-            const pct = Math.round((s.level / 5) * 100);
+            const level = s.level ?? 3; // fallback visual si level es null
+            const pct = Math.round((level / 5) * 100);
             return (
               <li
                 key={s.termId}
@@ -1430,7 +1436,7 @@ function SectionSkills({
                 </div>
                 <div className="mt-2 h-1 w-full rounded-full bg-zinc-200 dark:bg-zinc-700">
                   <div
-                    className={`h-1 rounded-full transition-all ${SKILL_BAR_COLORS[s.level] ?? "bg-emerald-500"}`}
+                    className={`h-1 rounded-full transition-all ${SKILL_BAR_COLORS[level] ?? "bg-emerald-500"}`}
                     style={{ width: `${pct}%` }}
                   />
                 </div>
