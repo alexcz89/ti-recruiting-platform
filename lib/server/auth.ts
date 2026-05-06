@@ -303,7 +303,7 @@ export const authOptions: AuthOptions = {
 
         const existingUser = await prisma.user.findUnique({
           where: { email },
-          select: { id: true, role: true, emailVerified: true },
+          select: { id: true, role: true, emailVerified: true, deletedAt: true },
         });
 
         console.log("[AUTH] google signIn existingUser", {
@@ -316,6 +316,9 @@ export const authOptions: AuthOptions = {
         if (existingUser) {
           // Usuario existente — solo CANDIDATE puede entrar por Google
           if (existingUser.role !== "CANDIDATE") return false;
+
+          // ✅ Bloquear usuarios eliminados (soft delete)
+          if (existingUser.deletedAt !== null) return false;
 
           // Auto-verificar email si aún no está verificado
           if (!existingUser.emailVerified) {
