@@ -23,6 +23,7 @@ export default async function OnboardingCandidateServerPage() {
         onboardingStep: true,
         profileCompleted: true,
         phone: true,
+        location: true, // ← agregar
         candidateSkills: {
           select: { term: { select: { label: true } } },
           take: 30,
@@ -46,6 +47,7 @@ export default async function OnboardingCandidateServerPage() {
         userName={dbUser.name ?? ""}
         initialStep={dbUser.onboardingStep ?? 1}
         initialPhone={dbUser.phone ?? ""}
+        initialLocation={dbUser.location ?? ""} // ← agregar
         initialSkills={dbUser.candidateSkills.map((s) => s.term.label)}
         initialCerts={dbUser.candidateCredentials.map((c) => c.term.label)}
         skillOptions={skillOptions}

@@ -19,6 +19,7 @@ import {
 } from "./actions";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import PhoneInputField from "@/components/PhoneInputField";
+import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { StepSkills } from "./StepSkills";
 
 type Step = 1 | 2 | 3 | 4;
@@ -29,6 +30,7 @@ interface Props {
   initialSkills?: string[];
   initialPhone?: string;
   initialCerts?: string[];
+  initialLocation?: string;
   skillOptions?: string[];
   certOptions?: string[];
 }
@@ -39,6 +41,7 @@ export default function CandidateOnboardingPage({
   initialSkills = [],
   initialPhone = "",
   initialCerts = [],
+  initialLocation = "",
   skillOptions = [],
   certOptions = [],
 }: Props) {
@@ -63,9 +66,13 @@ export default function CandidateOnboardingPage({
   // ── Step 3: Contact ──
   const form3 = useForm<OnboardingCandidateStep3Input>({
     resolver: zodResolver(OnboardingCandidateStep3Schema),
-    defaultValues: { phone: initialPhone, certs: initialCerts },
+    defaultValues: { phone: initialPhone, certs: initialCerts, location: initialLocation },
   });
-  const certs: string[] = form3.watch("certs") ?? [];
+  const certs: string[] = useMemo(
+    () => form3.watch("certs") ?? [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [form3.watch("certs")]
+  );
 
   // ── Cert autocomplete ──
   const filteredCerts = useMemo(() => {
@@ -170,6 +177,10 @@ export default function CandidateOnboardingPage({
         form3.setValue("phone", data.analysis.phonePrimary);
       }
 
+      if (data.analysis?.location && !form3.getValues("location")) {
+        form3.setValue("location", data.analysis.location);
+      }
+
       if (data.analysis?.phoneWarning) {
         toastError(data.analysis.phoneWarning);
       }
@@ -192,13 +203,13 @@ export default function CandidateOnboardingPage({
         <h1 className="text-2xl font-semibold">
           {step === 1 && (firstName ? `Hola, ${firstName}. Sube tu CV` : "Sube tu CV")}
           {step === 2 && "Tus skills"}
-          {step === 3 && "Contacto y certificaciones"}
+          {step === 3 && "Contacto y ubicación"}
           {step === 4 && "¡Perfil listo!"}
         </h1>
         <p className="mt-1 text-sm text-zinc-500">
           {step === 1 && "La IA extrae tu experiencia y skills automáticamente."}
           {step === 2 && "Los reclutadores filtran por tecnología. Sé específico."}
-          {step === 3 && "Para que los reclutadores te contacten por WhatsApp."}
+          {step === 3 && "Para que los reclutadores te contacten y encuentren vacantes cerca de ti."}
           {step === 4 && "Puedes editar todo desde tu perfil en cualquier momento."}
         </p>
       </div>
@@ -339,7 +350,7 @@ export default function CandidateOnboardingPage({
         </form>
       )}
 
-      {/* ── STEP 3: Contact + Certs ── */}
+      {/* ── STEP 3: Contact + Location + Certs ── */}
       {step === 3 && (
         <form
           onSubmit={form3.handleSubmit(submitStep3)}
@@ -355,6 +366,23 @@ export default function CandidateOnboardingPage({
               onChange={(val) => form3.setValue("phone", val)}
               error={form3.formState.errors.phone?.message}
             />
+
+            {/* Ubicación */}
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                Ubicación{" "}
+                <span className="text-xs font-normal text-zinc-400">(opcional)</span>
+              </label>
+              <LocationAutocomplete
+                value={form3.watch("location") ?? ""}
+                onChange={(val) => form3.setValue("location", val)}
+                placeholder="Ciudad o estado"
+                className="w-full rounded-lg border px-3 py-2 text-sm dark:bg-zinc-900 dark:border-zinc-700"
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Te mostraremos vacantes cerca de ti y opciones remotas
+              </p>
+            </div>
 
             {/* Certificaciones con autocomplete */}
             <div>
@@ -384,7 +412,6 @@ export default function CandidateOnboardingPage({
                 </div>
               )}
 
-              {/* Input con dropdown predictivo */}
               <div className="relative flex gap-2">
                 <div className="relative flex-1">
                   <input
@@ -441,7 +468,7 @@ export default function CandidateOnboardingPage({
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={() => submitStep3({ phone: "", certs: [] })}
+                onClick={() => submitStep3({ phone: "", certs: [], location: "" })}
                 className="rounded-lg px-4 py-2 text-sm text-zinc-500 hover:underline"
               >
                 Saltar por ahora

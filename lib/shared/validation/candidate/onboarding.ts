@@ -13,6 +13,7 @@ export const OnboardingCandidateStep2Schema = z.object({
 export const OnboardingCandidateStep3Schema = z.object({
   phone: z.string().optional(),
   certs: z.array(z.string().min(1)).default([]),
+  location: z.string().optional(), 
 });
 
 export type OnboardingCandidateStep1Input = z.infer<typeof OnboardingCandidateStep1Schema>;

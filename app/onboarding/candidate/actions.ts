@@ -1,3 +1,4 @@
+// app/onboarding/candidate/actions.ts
 "use server";
 
 import { getServerSession } from "next-auth";
@@ -74,12 +75,13 @@ export async function saveCandidateStep2(input: OnboardingCandidateStep2Input) {
 
 export async function saveCandidateStep3(input: OnboardingCandidateStep3Input) {
   const { userId } = await requireCandidate();
-  const { phone, certs } = OnboardingCandidateStep3Schema.parse(input);
+  const { phone, certs, location } = OnboardingCandidateStep3Schema.parse(input);
 
   await prisma.user.update({
     where: { id: userId },
     data: {
       phone: phone || null,
+      location: location || null,
       onboardingStep: 3,
       profileCompleted: true,
       profileLastUpdated: new Date(),
@@ -92,7 +94,6 @@ export async function saveCandidateStep3(input: OnboardingCandidateStep3Input) {
     for (const label of certs) {
       const term = await findOrCreateTerm("CERTIFICATION", label);
 
-      // CandidateCredential no tiene @@unique — usar findFirst + create
       const exists = await prisma.candidateCredential.findFirst({
         where: { userId, termId: term.id },
         select: { id: true },
