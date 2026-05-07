@@ -244,33 +244,22 @@ export default function JobsFeed({
     const max =
       j.salaryMax != null ? Number(j.salaryMax).toLocaleString("es-MX") : "—";
     return (
-      <span className={`${chipBase} ${chipEmerald} whitespace-nowrap`}>
-        {min}–{max} <span className="hidden sm:inline">{currency}</span>
+      <span className={`${chipBase} ${chipEmerald}`}>
+        {min} – {max} {currency}
       </span>
     );
   };
 
   const TypeChip = ({ j }: { j: any }) => {
     const label = labelEmploymentType(j.employmentType);
-    // En móvil usamos abreviación para que quepan en una línea
-    const labelShort: Record<string, string> = {
-      "Tiempo completo": "Full time",
-      "Medio tiempo": "Part time",
-      "Por contrato": "Contrato",
-      "Prácticas": "Prácticas",
-    };
     return label ? (
-      <span className={`${chipBase} ${chipBlue} whitespace-nowrap`}>
-        <span className="sm:hidden">{labelShort[label] ?? label}</span>
-        <span className="hidden sm:inline">{label}</span>
-      </span>
+      <span className={`${chipBase} ${chipBlue}`}>{label}</span>
     ) : null;
   };
 
   const ModeChip = ({ j }: { j: any }) => (
     <span className={`${chipBase} ${chipEmerald} whitespace-nowrap`}>
-      <span className="sm:hidden">{j.remote ? "Remoto" : "Presencial"}</span>
-      <span className="hidden sm:inline">{j.remote ? "Remoto" : "Presencial / Híbrido"}</span>
+      {j.remote ? "Remoto" : "Híbrido"}
     </span>
   );
 
@@ -394,7 +383,7 @@ export default function JobsFeed({
                     Antes: truncate (1 línea, corta en móvil)
                     Ahora: line-clamp-2 en móvil, line-clamp-1 en sm+
                   */}
-                  <h3 className="font-semibold text-default leading-snug line-clamp-2 sm:line-clamp-1 hyphens-none break-words">
+                  <h3 className="font-semibold text-default leading-snug line-clamp-2 sm:line-clamp-1">
                     {j.title ?? "Sin título"}
                   </h3>
 
@@ -403,18 +392,17 @@ export default function JobsFeed({
                     Antes: `{displayCompany(j)} — {j.location ?? "—"}`
                     Ahora: empresa en su propia línea, ubicación con ícono debajo
                   */}
-                  <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0 mt-0.5">
-                    <p className="text-sm text-muted truncate">{displayCompany(j)}</p>
-                    {location && (
-                      <p className="inline-flex items-center gap-1 text-xs text-muted">
-                        <span className="text-muted">·</span>
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {location}
-                      </p>
-                    )}
-                  </div>
+                  <p className="text-sm text-muted truncate mt-0.5">
+                    {displayCompany(j)}
+                  </p>
+                  {location && (
+                    <p className="inline-flex items-center gap-1 text-xs text-muted mt-0.5">
+                      <MapPin className="h-3 w-3 shrink-0" />
+                      {location}
+                    </p>
+                  )}
 
-                  <div className="mt-1.5 flex flex-nowrap items-center gap-1.5 overflow-x-auto scrollbar-none sm:flex-wrap sm:gap-2">
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     <TypeChip j={j} />
                     <ModeChip j={j} />
                     <SalaryBadge j={j} />
@@ -444,12 +432,7 @@ export default function JobsFeed({
                     </div>
                   )}
 
-                  {/* Descripción oculta en móvil — se ve en el panel de detalle */}
-                  {j.description ? (
-                    <p className="hidden sm:block text-xs text-muted mt-2 line-clamp-2">
-                      {String(j.description).replace(/\s+/g, " ").trim()}
-                    </p>
-                  ) : null}
+                  {/* Descripción removida — se ve completa en el panel de detalle */}
                 </div>
 
                 <time
