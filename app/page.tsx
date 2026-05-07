@@ -92,7 +92,7 @@ export default async function Home() {
               {/* Botón primario — MUY visible */}
               <Link
                 href="/unete"
-                className="group relative inline-flex items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 dark:bg-emerald-500 px-8 py-4 text-base font-bold text-white shadow-xl shadow-emerald-600/30 dark:shadow-emerald-500/20 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-400 hover:shadow-2xl hover:shadow-emerald-600/40 hover:-translate-y-0.5 active:translate-y-0 sm:px-10 sm:py-5 sm:text-lg"
+                className="group relative inline-flex items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 dark:bg-emerald-400 px-8 py-4 text-base font-bold text-white dark:text-zinc-900 shadow-xl shadow-emerald-600/30 dark:shadow-emerald-400/30 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-300 hover:shadow-2xl hover:shadow-emerald-600/40 hover:-translate-y-0.5 active:translate-y-0 sm:px-10 sm:py-5 sm:text-lg"
               >
                 <UserCircle className="h-5 w-5 sm:h-6 sm:w-6 shrink-0" />
                 Crear cuenta gratis
@@ -185,7 +185,7 @@ export default async function Home() {
 
                 <Link
                   href="/unete"
-                  className="group mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-500 px-6 py-4 text-base font-bold text-white shadow-lg shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-400 hover:shadow-xl hover:shadow-emerald-600/30 hover:-translate-y-0.5 active:translate-y-0"
+                  className="group mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-400 px-6 py-4 text-base font-bold text-white dark:text-zinc-900 shadow-lg shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-300 hover:shadow-xl hover:shadow-emerald-600/30 hover:-translate-y-0.5 active:translate-y-0"
                 >
                   <UserCircle className="h-5 w-5" />
                   Crear cuenta gratis
@@ -402,7 +402,7 @@ export default async function Home() {
           <div className="mt-10 flex flex-col w-full gap-3 sm:flex-row sm:items-center sm:justify-center">
             <Link
               href="/unete"
-              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-500 px-8 py-4 text-base font-bold text-white shadow-xl shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-400 hover:shadow-2xl hover:-translate-y-0.5 sm:px-10 sm:py-5 sm:text-lg"
+              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-400 px-8 py-4 text-base font-bold text-white dark:text-zinc-900 shadow-xl shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-300 hover:shadow-2xl hover:-translate-y-0.5 sm:px-10 sm:py-5 sm:text-lg"
             >
               <UserCircle className="h-5 w-5 sm:h-6 sm:w-6" />
               Crear cuenta gratis
