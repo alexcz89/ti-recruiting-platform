@@ -188,7 +188,8 @@ function splitSkills(skills?: string[] | null) {
   for (const raw of skills) {
     const s = String(raw || "").trim();
     const mReq = s.match(/^req\s*:\s*(.+)$/i);
-    const mNice = s.match(/^nice\s*:\s*(.+)$/i);
+    // "nice:" y "dese:" son equivalentes — skill deseable
+    const mNice = s.match(/^(?:nice|dese|deseable)\s*:\s*(.+)$/i);
     if (mReq && mReq[1]) req.push(mReq[1].trim());
     else if (mNice && mNice[1]) nice.push(mNice[1].trim());
     else nice.push(s);
@@ -210,6 +211,18 @@ function labelDegree(d?: DegreeLevel | null) {
       return "Doctorado";
     default:
       return "—";
+  }
+}
+
+
+// Traduce employmentType de enum a español
+function labelEmploymentType(type: string | null | undefined): string {
+  switch (type) {
+    case "FULL_TIME":   return "Tiempo completo";
+    case "PART_TIME":   return "Medio tiempo";
+    case "CONTRACT":    return "Por contrato";
+    case "INTERNSHIP":  return "Prácticas";
+    default:            return type ?? "—";
   }
 }
 
@@ -695,7 +708,7 @@ export default function JobDetailPanel({
 
           <div className="flex flex-wrap gap-2">
             {(meta?.employmentType || job.employmentType) && (
-              <Chip tone="blue">{meta?.employmentType || job.employmentType}</Chip>
+              <Chip tone="blue">{labelEmploymentType(meta?.employmentType || job.employmentType)}</Chip>
             )}
             {job.seniority && <Chip tone="violet">{job.seniority}</Chip>}
             <Chip tone="emerald">{job.remote ? "Remoto" : "Presencial / Híbrido"}</Chip>
@@ -783,7 +796,7 @@ export default function JobDetailPanel({
               <div className="min-w-0">
                 <p className="text-[11px] text-muted">Tipo</p>
                 <p className="truncate text-sm font-medium text-default">
-                  {meta?.employmentType || job.employmentType || "—"}
+                  {labelEmploymentType(meta?.employmentType || job.employmentType)}
                 </p>
               </div>
             </div>
