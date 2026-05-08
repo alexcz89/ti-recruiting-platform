@@ -2,6 +2,8 @@
 import Link from "next/link";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/server/auth";
 import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
@@ -128,9 +130,13 @@ export default async function JobApplicationsPage({
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { billingPlan: true },
+    select: { billingPlan: true, name: true },
   });
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
+
+  // Nombre del reclutador para el mensaje de WhatsApp (solo primer nombre)
+  const session = await getServerSession(authOptions);
+  const recruiterName = session?.user?.name?.trim().split(/\s+/)[0] ?? null;
 
   const job = await prisma.job.findFirst({
     where: { id: params.id, companyId },
@@ -857,6 +863,10 @@ export default async function JobApplicationsPage({
                           resumeUrl={resumeUrl ?? null}
                           candidateEmail={a.candidate?.email ?? ""}
                           candidatePhone={phone ?? null}
+                          candidateName={a._fullName ?? null}
+                          recruiterName={recruiterName}
+                          jobTitle={job.title}
+                          companyName={company?.name ?? null}
                           assessment={
                             assessmentEnabled && chosenTemplateId
                               ? ({
@@ -1110,6 +1120,10 @@ export default async function JobApplicationsPage({
                             resumeUrl={resumeUrl ?? null}
                             candidateEmail={a.candidate?.email ?? ""}
                             candidatePhone={phone ?? null}
+                            candidateName={a._fullName ?? null}
+                            recruiterName={recruiterName}
+                            jobTitle={job.title}
+                            companyName={company?.name ?? null}
                             assessment={
                               assessmentEnabled && chosenTemplateId
                                 ? ({
