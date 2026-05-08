@@ -406,6 +406,16 @@ function filterLanguageOptions(
   return [...starts, ...contains].slice(0, 8);
 }
 
+/* ==================== Tabs ==================== */
+const TABS = [
+  { label: "Perfil", key: "perfil" },
+  { label: "Experiencia", key: "experiencia" },
+  { label: "Educación", key: "educacion" },
+  { label: "Skills", key: "skills" },
+  { label: "Idiomas", key: "idiomas" },
+  { label: "Vista previa", key: "preview" },
+] as const;
+
 /* ==================== Componente ==================== */
 export default function CvBuilder({
   initial,
@@ -462,8 +472,10 @@ export default function CvBuilder({
   const [syncingProfile, setSyncingProfile] = useState(false);
   const [showProfileSyncBanner, setShowProfileSyncBanner] = useState(false);
 
-  // ✅ NUEVO: modal preview
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [aiUploading, setAiUploading] = useState(false);
+  const [aiParseError, setAiParseError] = useState<string | null>(null);
+  const [aiParseSuccess, setAiParseSuccess] = useState(false);
 
   const loadedDraftKeyRef = useRef<string | null>(null);
   const cvPrintRef = useRef<HTMLDivElement>(null);
@@ -529,6 +541,68 @@ export default function CvBuilder({
       }
     } finally {
       setSyncingProfile(false);
+    }
+  };
+
+  // ====== Importar CV con IA ======
+  const handleAiUpload = async (file: File) => {
+    setAiUploading(true);
+    setAiParseError(null);
+    setAiParseSuccess(false);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/ai/cv/upload-and-parse", {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Error ${res.status}`);
+      }
+      const { analysis } = await res.json();
+      if (!analysis) throw new Error("Respuesta inválida del servidor");
+      setIdentity((prev) =>
+        mergeIdentityWithDraft(prev, {
+          linkedin: analysis.linkedin || "",
+          github: analysis.github || "",
+          location: analysis.location || "",
+          phone: analysis.phonePrimary || "",
+        })
+      );
+      if (Array.isArray(analysis.experiences) && analysis.experiences.length) {
+        setExperiences(normalizeDraftExperiences(analysis.experiences));
+      }
+      if (Array.isArray(analysis.education) && analysis.education.length) {
+        setEducation(normalizeDraftEducation(analysis.education));
+      }
+      if (Array.isArray(analysis.skillsMatched) && analysis.skillsMatched.length) {
+        setSkills(
+          analysis.skillsMatched.map((s: { termId: string; label: string }) => ({
+            termId: s.termId,
+            label: s.label,
+            level: 3 as const,
+          }))
+        );
+      }
+      if (Array.isArray(analysis.languages) && analysis.languages.length) {
+        const matched: CvLanguage[] = analysis.languages
+          .map((l: { label: string; level: string }) => {
+            const opt = languageOptions.find(
+              (o) => o.label.toLowerCase() === l.label.toLowerCase()
+            );
+            return opt
+              ? { termId: opt.termId, label: opt.label, level: l.level as CvLanguage["level"] }
+              : null;
+          })
+          .filter((x: CvLanguage | null): x is CvLanguage => x !== null);
+        if (matched.length) setLanguages(matched);
+      }
+      setAiParseSuccess(true);
+    } catch (err) {
+      setAiParseError(err instanceof Error ? err.message : "Error al analizar el CV");
+    } finally {
+      setAiUploading(false);
     }
   };
 
@@ -722,16 +796,6 @@ export default function CvBuilder({
     }
   }, [openSkillIndex, openLanguageIndex]);
 
-  // ✅ Cerrar modal con ESC
-  useEffect(() => {
-    if (!previewOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setPreviewOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [previewOpen]);
-
   // ====== Guardar en servidor ======
   const handleSave = async () => {
     if (!isCandidate) {
@@ -891,6 +955,48 @@ export default function CvBuilder({
     }
     return entries;
   }, [previewExperiences]);
+
+  // ====== Completitud por sección ======
+  const sectionComplete = useMemo(() => ({
+    perfil: hasMeaningfulIdentity(identity),
+    experiencia: hasMeaningfulExperiences(experiences),
+    educacion: hasMeaningfulEducation(education),
+    skills: hasMeaningfulSkills(skills),
+    idiomas: hasMeaningfulLanguages(languages),
+  }), [identity, experiences, education, skills, languages]);
+
+  const completionPct = useMemo(() => {
+    const vals = Object.values(sectionComplete);
+    return Math.round((vals.filter(Boolean).length / vals.length) * 100);
+  }, [sectionComplete]);
+
+  // ====== Sugerencias de skills según experiencia ======
+  const suggestedSkills = useMemo((): SkillOption[] => {
+    const currentLabels = new Set(skills.map((s) => s.label.toLowerCase()));
+    const roleText = experiences.map((e) => `${e.role} ${e.company}`).join(" ").toLowerCase();
+    const map: Record<string, string[]> = {
+      "react|frontend|front-end": ["React", "TypeScript", "JavaScript", "CSS", "Redux"],
+      "node|express|backend|back-end": ["Node.js", "Express", "PostgreSQL", "REST API", "MongoDB"],
+      "python|django|flask|data scientist": ["Python", "Django", "Pandas", "SQL", "FastAPI"],
+      "java|spring": ["Java", "Spring Boot", "Maven", "MySQL"],
+      "devops|docker|kubernetes|aws|gcp|azure|cloud": ["Docker", "Kubernetes", "AWS", "CI/CD", "Terraform"],
+      "mobile|android|ios|flutter": ["Flutter", "React Native", "Firebase", "Swift", "Kotlin"],
+      "angular": ["Angular", "TypeScript", "RxJS"],
+      "vue": ["Vue.js", "TypeScript", "Nuxt.js"],
+    };
+    const suggested: SkillOption[] = [];
+    for (const [keysStr, skillNames] of Object.entries(map)) {
+      if (keysStr.split("|").some((k) => roleText.includes(k))) {
+        for (const name of skillNames) {
+          if (!currentLabels.has(name.toLowerCase())) {
+            const opt = skillOptions.find((o) => o.label.toLowerCase() === name.toLowerCase());
+            if (opt) suggested.push(opt);
+          }
+        }
+      }
+    }
+    return [...new Map(suggested.map((s) => [s.termId, s])).values()].slice(0, 8);
+  }, [experiences, skills, skillOptions]);
 
   // ✅ Nuevo: contenido único para PDF + modal (mismo markup)
   function CvPreviewContent() {
@@ -1151,144 +1257,158 @@ export default function CvBuilder({
   return (
     <div className="cv-builder-root min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-100 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 py-6 md:py-8 px-0 sm:px-4">
       <div className="w-full md:max-w-4xl md:mx-auto">
-        {/* ====== Header con título y botones de acción ====== */}
-        <div className="bg-white dark:bg-zinc-900 md:rounded-2xl md:shadow-lg md:border md:border-zinc-200 md:dark:border-zinc-800 p-4 md:p-6 mb-4 md:mb-6">
+        {/* ====== BARRA DE COMPLETITUD ====== */}
+        <div className="bg-white dark:bg-zinc-900 md:rounded-t-2xl md:shadow-sm md:border md:border-b-0 md:border-zinc-200 md:dark:border-zinc-800 px-4 md:px-6 pt-4 pb-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Completitud del CV</span>
+            <span className={`text-xs font-bold ${completionPct === 100 ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-600 dark:text-zinc-300"}`}>{completionPct}%</span>
+          </div>
+          <div className="w-full h-2 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
+              style={{ width: `${completionPct}%` }}
+            />
+          </div>
+          {completionPct === 100 && (
+            <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">¡CV completo! Listo para descargar.</p>
+          )}
+        </div>
+
+        {/* ====== NAVEGACIÓN POR TABS ====== */}
+        <div className="bg-white dark:bg-zinc-900 md:shadow-sm md:border-x md:border-zinc-200 md:dark:border-zinc-800 overflow-x-auto">
+          <nav className="flex min-w-max border-b border-zinc-200 dark:border-zinc-700" role="tablist">
+            {TABS.map((tab, i) => {
+              const done = sectionComplete[tab.key as keyof typeof sectionComplete];
+              const isActive = activeTab === i;
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(i)}
+                  className={`relative flex items-center gap-1.5 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap transition-all border-b-2 ${
+                    isActive
+                      ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20"
+                      : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                  }`}
+                >
+                  {done && i < 5 && !isActive && (
+                    <svg className="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        {/* ====== PANEL PRINCIPAL ====== */}
+        <div className="bg-white dark:bg-zinc-900 md:rounded-b-2xl md:shadow-lg md:border md:border-t-0 md:border-zinc-200 md:dark:border-zinc-800 p-4 md:p-6">
+          {/* Indicador de guardado + botones de acción */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-xl font-bold text-zinc-900 dark:text-white hyphens-none">CV Builder</h1>
+              {autoSaving ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  Guardando...
+                </span>
+              ) : lastSaved ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
+                  <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Guardado
+                </span>
+              ) : null}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {profileHasMeaningfulData && (
+                <button type="button" onClick={() => handleSyncFromProfile()} disabled={syncingProfile}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 disabled:opacity-60 transition-all"
+                >
+                  {syncingProfile ? "Actualizando..." : "Sincronizar perfil"}
+                </button>
+              )}
+              <button type="button" onClick={handleDownloadPdf} disabled={downloadingPdf}
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                {downloadingPdf ? "Generando..." : "Descargar PDF"}
+              </button>
+              {isCandidate && (
+                <button onClick={handleSave} disabled={saving}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {saving ? "Guardando..." : "Guardar en cuenta"}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Banner de sincronización de perfil */}
           {showProfileSyncBanner && (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
+            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-100">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="font-semibold">Detectamos información en tu perfil.</p>
-                  <p className="text-emerald-800/90 dark:text-emerald-200/90">
-                    Puedes importar esos datos al CV Builder si hiciste cambios en tu perfil y quieres reflejarlos aquí.
-                  </p>
+                  <p className="text-emerald-800/90 dark:text-emerald-200/90 text-xs mt-0.5">Puedes importar esos datos al CV Builder si hiciste cambios en tu perfil.</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleSyncFromProfile()}
-                  disabled={syncingProfile}
-                  title="Reemplazar la información actual del CV Builder con la información de tu perfil"
-                  className="inline-flex min-h-10 items-center justify-center rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/40"
+                <button type="button" onClick={() => handleSyncFromProfile()} disabled={syncingProfile}
+                  className="inline-flex min-h-9 items-center justify-center rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-sm font-medium text-emerald-800 hover:bg-emerald-100 disabled:opacity-60 transition dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100 dark:hover:bg-emerald-900/40"
                 >
                   {syncingProfile ? "Actualizando..." : "Actualizar desde mi perfil"}
                 </button>
               </div>
             </div>
           )}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-bold text-zinc-900 dark:text-white break-words hyphens-none">
-                  CV Builder
-                </h1>
-                {/* 💾 Indicador de guardado automático */}
-                {autoSaving ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+
+          {/* ==================== TAB 0: PERFIL ==================== */}
+          {activeTab === 0 && (
+            <div className="space-y-6">
+              {/* Banner AI parsing */}
+              <div className="rounded-xl border border-blue-200 bg-blue-50 dark:border-blue-900/60 dark:bg-blue-950/30 p-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-600 text-white shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                     </svg>
-                    Guardando...
-                  </span>
-                ) : lastSaved ? (
-                  <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                    <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    💾 Guardado hace {Math.floor((new Date().getTime() - lastSaved.getTime()) / 1000)}s
-                  </span>
-                ) : null}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">¿Ya tienes un CV en PDF?</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">Súbelo y completaremos automáticamente tu información con IA.</p>
+                    {aiParseError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{aiParseError}</p>}
+                    {aiParseSuccess && <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">✓ CV importado. Revisa y ajusta los datos.</p>}
+                  </div>
+                  <label className={`inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 cursor-pointer transition-all shrink-0 ${aiUploading ? "opacity-60 pointer-events-none" : ""}`}>
+                    {aiUploading ? (
+                      <>
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        Analizando...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        Subir CV
+                      </>
+                    )}
+                    <input type="file" accept=".pdf,.doc,.docx" className="sr-only" disabled={aiUploading}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAiUpload(f); e.target.value = ""; }}
+                    />
+                  </label>
+                </div>
               </div>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
-                {isCandidate
-                  ? "Completa tu CV y descárgalo. Si quieres guardarlo en tu cuenta y postularte en un clic, al final podrás crear tu cuenta gratis."
-                  : "Sin registro: completa tu CV y descárgalo. Si quieres guardarlo en tu cuenta y postularte en un clic, al final podrás crear tu cuenta gratis."}
-              </p>
-            </div>
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap">
-              {profileHasMeaningfulData && (
-                <button
-                  type="button"
-                  onClick={() => handleSyncFromProfile()}
-                  disabled={syncingProfile}
-                  title="Actualizar los datos del CV usando la información guardada en tu perfil"
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-zinc-900 dark:text-white shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 transition-all"
-                >
-                  {syncingProfile ? "Actualizando..." : "Actualizar desde mi perfil"}
-                </button>
-              )}
-              {/* ✅ NUEVO: botón abre modal */}
-              <button
-                type="button"
-                onClick={() => setPreviewOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-5 py-2.5 text-sm font-semibold text-zinc-900 dark:text-white shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 transition-all"
-              >
-                👁️ Vista previa completa
-              </button>
-
-              <button
-                type="button"
-                onClick={handleDownloadPdf}
-                disabled={downloadingPdf}
-                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
-              >
-                {downloadingPdf ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Generando...
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                      />
-                    </svg>
-                    📄 Descargar PDF
-                  </>
-                )}
-              </button>
-
-              {isCandidate && (
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                >
-                  {saving ? "Guardando..." : "Guardar en mi cuenta"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* ✅ CAMBIO: quitar columna de preview, dejar solo formulario */}
-        <div className="grid grid-cols-1 gap-6">
-          {/* ====== COLUMNA IZQUIERDA: FORMULARIO ====== */}
-          <div className="space-y-6">
-            {/* Datos personales */}
+              {/* Datos personales */}
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
               <div className="flex items-center gap-3 mb-6">
                 <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/30">
@@ -1425,8 +1545,12 @@ export default function CvBuilder({
                 </div>
               </div>
             </section>
+            </div>
+          )}
 
-            {/* Experiencia (más reciente arriba) */}
+          {/* ==================== TAB 1: EXPERIENCIA ==================== */}
+          {activeTab === 1 && (
+            <div className="space-y-6">
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -1674,8 +1798,12 @@ export default function CvBuilder({
                 )}
               </div>
             </section>
+            </div>
+          )}
 
-            {/* Educación */}
+          {/* ==================== TAB 2: EDUCACIÓN ==================== */}
+          {activeTab === 2 && (
+            <div className="space-y-6">
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -1831,8 +1959,12 @@ export default function CvBuilder({
                 )}
               </div>
             </section>
+            </div>
+          )}
 
-            {/* Skills */}
+          {/* ==================== TAB 3: SKILLS ==================== */}
+          {activeTab === 3 && (
+            <div className="space-y-6">
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -1962,9 +2094,32 @@ export default function CvBuilder({
                   </div>
                 )}
               </div>
-            </section>
 
-            {/* Idiomas */}
+              {/* Sugerencias contextuales de skills */}
+              {suggestedSkills.length > 0 && (
+                <div className="mt-4 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 p-4">
+                  <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 mb-3">Sugeridas según tu experiencia:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedSkills.map((opt) => (
+                      <button
+                        key={opt.termId}
+                        type="button"
+                        onClick={() => setSkills((prev) => [...prev, { termId: opt.termId, label: opt.label, level: 3 }])}
+                        className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 dark:border-emerald-800 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                      >
+                        + {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+            </div>
+          )}
+
+          {/* ==================== TAB 4: IDIOMAS ==================== */}
+          {activeTab === 4 && (
+            <div className="space-y-6">
             <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -2092,9 +2247,12 @@ export default function CvBuilder({
                 )}
               </div>
             </section>
+            </div>
+          )}
 
-            {/* Certificaciones */}
-            <section className="bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
+          {/* Certificaciones — parte de TAB 2: Educación */}
+          {activeTab === 2 && (
+            <section className="mt-6 bg-white dark:bg-zinc-900 rounded-2xl shadow-lg border border-zinc-200 dark:border-zinc-800 p-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 text-white shadow-lg shadow-amber-500/30">
@@ -2103,92 +2261,38 @@ export default function CvBuilder({
                     </svg>
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-                      Certificaciones
-                    </h2>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                      Cursos y acreditaciones
-                    </p>
+                    <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Certificaciones</h2>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400">Cursos y acreditaciones</p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddCertification}
-                  className="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
-                >
+                <button type="button" onClick={handleAddCertification} className="shrink-0 whitespace-nowrap inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all">
                   <span className="text-lg">+</span> Añadir
                 </button>
               </div>
-
               <div className="space-y-3">
                 {certifications.map((cert, i) => (
-                  <div
-                    key={cert.id || i}
-                    className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 border border-zinc-200 dark:border-zinc-700 space-y-3"
-                  >
+                  <div key={cert.id || i} className="bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-4 border border-zinc-200 dark:border-zinc-700 space-y-3">
                     <div className="flex items-start gap-3">
                       <div className="flex-1 space-y-3">
                         <div>
                           <label className={labelCls}>Nombre de la certificación</label>
-                          <input
-                            type="text"
-                            value={cert.name}
-                            onChange={(e) =>
-                              setCertifications((prev) =>
-                                prev.map((c, idx) => (idx === i ? { ...c, name: e.target.value } : c))
-                              )
-                            }
-                            className={inputCls}
-                            placeholder="AWS Certified Solutions Architect"
-                          />
+                          <input type="text" value={cert.name} onChange={(e) => setCertifications((prev) => prev.map((c, idx) => (idx === i ? { ...c, name: e.target.value } : c)))} className={inputCls} placeholder="AWS Certified Solutions Architect" />
                         </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           <div>
                             <label className={labelCls}>Fecha (opcional)</label>
-                            <input
-                              type="month"
-                              value={cert.date || ""}
-                              onChange={(e) =>
-                                setCertifications((prev) =>
-                                  prev.map((c, idx) => (idx === i ? { ...c, date: e.target.value } : c))
-                                )
-                              }
-                              className={inputSmCls}
-                              placeholder="2024-01"
-                            />
+                            <input type="month" value={cert.date || ""} onChange={(e) => setCertifications((prev) => prev.map((c, idx) => (idx === i ? { ...c, date: e.target.value } : c)))} className={inputSmCls} />
                           </div>
-
                           <div>
                             <label className={labelCls}>URL de credencial (opcional)</label>
-                            <input
-                              type="url"
-                              value={cert.url || ""}
-                              onChange={(e) =>
-                                setCertifications((prev) =>
-                                  prev.map((c, idx) => (idx === i ? { ...c, url: e.target.value } : c))
-                                )
-                              }
-                              className={inputCls}
-                              placeholder="https://..."
-                            />
+                            <input type="url" value={cert.url || ""} onChange={(e) => setCertifications((prev) => prev.map((c, idx) => (idx === i ? { ...c, url: e.target.value } : c)))} className={inputCls} placeholder="https://..." />
                           </div>
                         </div>
                       </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCertification(i)}
-                        className="text-zinc-400 hover:text-red-600 text-lg cursor-pointer mt-6"
-                        aria-label="Eliminar certificación"
-                        title="Eliminar"
-                      >
-                        ×
-                      </button>
+                      <button type="button" onClick={() => handleRemoveCertification(i)} className="text-zinc-400 hover:text-red-600 text-lg cursor-pointer mt-6" aria-label="Eliminar certificación" title="Eliminar">×</button>
                     </div>
                   </div>
                 ))}
-
                 {certifications.length === 0 && (
                   <div className="text-center py-6 text-zinc-500 dark:text-zinc-400">
                     <p className="text-sm">Aún no agregas certificaciones.</p>
@@ -2196,132 +2300,93 @@ export default function CvBuilder({
                 )}
               </div>
             </section>
+          )}
 
-            {/* Call to action final */}
-            {!isCandidate && (
-              <section className="bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950 dark:to-blue-950 rounded-2xl shadow-lg border border-emerald-200 dark:border-emerald-800 p-6">
-                <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">
-                  Guarda tu CV y postúlate en un clic
-                </h3>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
-                  Crea una cuenta gratis en Bolsa TI para conservar tu CV, editarlo
-                  cuando quieras y postularte a vacantes sin volver a llenar todo.
-                </p>
-                <div className="flex flex-wrap gap-3">
-                  <Link
-                    href="/auth/signup/candidate"
-                    className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all"
-                  >
-                    Crear cuenta y guardar CV
-                  </Link>
-                  <Link
-                    href="/auth/signin"
-                    className="inline-flex items-center gap-2 rounded-lg bg-white dark:bg-zinc-800 px-5 py-2.5 text-sm font-semibold text-zinc-900 dark:text-white shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2 border border-zinc-200 dark:border-zinc-700 transition-all"
-                  >
-                    Ya tengo cuenta
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    disabled={downloadingPdf}
-                    className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    {downloadingPdf ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                            fill="none"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                        Generando PDF...
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                          />
-                        </svg>
-                        Descargar sin registrarme
-                      </>
-                    )}
-                  </button>
+          {/* ==================== TAB 5: VISTA PREVIA ==================== */}
+          {activeTab === 5 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-3 mb-2">
+                <div>
+                  <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Vista previa de tu CV</h2>
+                  <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-0.5">Así lo verá el recruiter</p>
                 </div>
-              </section>
-            )}
+                <button type="button" onClick={handleDownloadPdf} disabled={downloadingPdf}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {downloadingPdf ? "Generando..." : "Descargar PDF"}
+                </button>
+              </div>
+
+              {/* Métricas de completitud */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                {TABS.slice(0, 5).map((tab, i) => {
+                  const done = sectionComplete[tab.key as keyof typeof sectionComplete];
+                  return (
+                    <button key={i} type="button" onClick={() => setActiveTab(i)}
+                      className={`rounded-xl border p-3 text-left transition-all hover:shadow-md ${done ? "border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30" : "border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50"}`}
+                    >
+                      <div className={`text-xs font-semibold mb-1 ${done ? "text-emerald-700 dark:text-emerald-300" : "text-zinc-500 dark:text-zinc-400"}`}>
+                        {done ? "✓" : "○"} {tab.label}
+                      </div>
+                      <div className={`text-xs ${done ? "text-emerald-600 dark:text-emerald-400" : "text-zinc-400 dark:text-zinc-500"}`}>
+                        {done ? "Completo" : "Incompleto"}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Preview inline */}
+              <div className="bg-zinc-100 dark:bg-zinc-950 rounded-xl overflow-auto p-4 sm:p-8">
+                <div className="mx-auto w-full max-w-[794px] shadow-2xl">
+                  <CvPreviewContent />
+                </div>
+              </div>
+
+              {/* CTA para usuarios sin cuenta */}
+              {!isCandidate && (
+                <div className="rounded-2xl bg-gradient-to-r from-emerald-50 to-blue-50 dark:from-emerald-950 dark:to-blue-950 border border-emerald-200 dark:border-emerald-800 p-6">
+                  <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-2">Guarda tu CV y postúlate en un clic</h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">Crea una cuenta gratis en Bolsa TI para conservar tu CV, editarlo cuando quieras y postularte a vacantes sin volver a llenar todo.</p>
+                  <div className="flex flex-wrap gap-3">
+                    <Link href="/auth/signup/candidate" className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 transition-all">Crear cuenta y guardar CV</Link>
+                    <Link href="/auth/signin" className="inline-flex items-center gap-2 rounded-lg bg-white dark:bg-zinc-800 px-5 py-2.5 text-sm font-semibold text-zinc-900 dark:text-white shadow-md hover:bg-zinc-50 dark:hover:bg-zinc-700 border border-zinc-200 dark:border-zinc-700 transition-all">Ya tengo cuenta</Link>
+                    <button type="button" onClick={handleDownloadPdf} disabled={downloadingPdf} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+                      {downloadingPdf ? "Generando PDF..." : "Descargar sin registrarme"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ====== NAVEGACIÓN ENTRE TABS ====== */}
+          <div className="flex items-center justify-between pt-6 mt-6 border-t border-zinc-100 dark:border-zinc-800">
+            <button
+              type="button"
+              disabled={activeTab === 0}
+              onClick={() => setActiveTab((t) => Math.max(0, t - 1))}
+              className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              ← Anterior
+            </button>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">{activeTab + 1} / {TABS.length}</span>
+            <button
+              type="button"
+              disabled={activeTab === TABS.length - 1}
+              onClick={() => setActiveTab((t) => Math.min(TABS.length - 1, t + 1))}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              Siguiente →
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ✅ Vista para exportar a PDF (oculta): ahora reusa el mismo componente */}
+      {/* Vista para exportar a PDF (oculta) */}
       <div ref={cvPrintRef} className="cv-print-root">
         <CvPreviewContent />
       </div>
-
-      {/* ✅ MODAL: Vista previa completa */}
-      {previewOpen && (
-        <div className="fixed inset-0 z-50">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setPreviewOpen(false)}
-            aria-label="Cerrar vista previa"
-          />
-          <div className="absolute inset-0 p-3 sm:p-6">
-            <div className="h-full w-full bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
-                <div className="font-semibold text-zinc-900 dark:text-white">
-                  👁️ Vista previa completa
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    disabled={downloadingPdf}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    📄 Descargar PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewOpen(false)}
-                    className="rounded-lg border border-zinc-200 dark:border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-900 dark:text-white hover:bg-zinc-50 dark:hover:bg-zinc-800"
-                  >
-                    Cerrar
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-auto bg-zinc-100 dark:bg-zinc-950 p-4 sm:p-8">
-                <div className="mx-auto w-full max-w-[980px]">
-                  <div className="shadow-2xl">
-                    <CvPreviewContent />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Estilos específicos para el phone input */}
       <style jsx global>{`
