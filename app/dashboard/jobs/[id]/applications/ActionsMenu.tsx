@@ -51,6 +51,10 @@ type Props = {
   resumeUrl?: string | null;
   candidateEmail: string;
   candidatePhone?: string | null;
+  candidateName?: string | null;   // Nombre del candidato para el mensaje de WhatsApp
+  recruiterName?: string | null;   // Nombre del reclutador para el mensaje de WhatsApp
+  jobTitle?: string | null;        // Título de la vacante para el mensaje de WhatsApp
+  companyName?: string | null;     // Nombre de la empresa para el mensaje de WhatsApp
   assessment?: AssessmentMeta;
 };
 
@@ -72,6 +76,10 @@ export default function ActionsMenu(props: Props) {
     resumeUrl,
     candidateEmail,
     candidatePhone,
+    candidateName,
+    recruiterName,
+    jobTitle,
+    companyName,
     assessment,
   } = props;
 
@@ -222,7 +230,13 @@ export default function ActionsMenu(props: Props) {
     if (digits.length === 13 && digits.startsWith("521")) digits = `52${digits.slice(3)}`;
     if (digits.startsWith("52") && digits.length !== 12)
       return toastError("Número de WhatsApp inválido");
-    const msg = `Hola, vi tu postulación${candidateEmail ? ` registrada con el correo ${candidateEmail}` : ""} y me gustaría platicar contigo.`;
+    // Construir el mensaje con el formato correcto igual al del perfil del candidato
+    const firstName = candidateName?.split(" ")[0] ?? "candidato/a";
+    const recruiter = recruiterName ?? "el equipo de reclutamiento";
+    const company = companyName ?? "";
+    const vacancy = jobTitle ?? "nuestra vacante";
+    const intro = company ? `soy ${recruiter} de ${company}` : `soy ${recruiter}`;
+    const msg = `Hola ${firstName}, ${intro}. Te contacto porque aplicaste a la vacante de ${vacancy}. ¿Tienes disponibilidad para platicar?`;
     window.open(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
   };
 

@@ -351,13 +351,18 @@ export default async function CandidateDetailPage({
   const companyName =
     company?.name?.trim() || "la empresa";
 
+  // jobForMatch es la vacante desde la que llegó el reclutador (más específica)
+  // myApps[0] es solo un fallback si no se viene desde una vacante concreta
   const jobTitle =
-    myApps?.[0]?.job?.title ||
     jobForMatch?.title ||
+    myApps?.[0]?.job?.title ||
     "la vacante";
 
+  // Normalización consistente con ActionsMenu: asegurar formato 52XXXXXXXXXX
   const rawPhone = candidate.phone || "";
-  const whatsappPhone = rawPhone.replace(/\D/g, "");
+  let whatsappPhone = rawPhone.replace(/\D/g, "");
+  if (whatsappPhone.length === 10) whatsappPhone = `52${whatsappPhone}`;
+  if (whatsappPhone.length === 13 && whatsappPhone.startsWith("521")) whatsappPhone = `52${whatsappPhone.slice(3)}`;
 
   const whatsappMessage =
     `Hola ${candidateFirstName}, soy ${recruiterName} de ${companyName}. ` +
