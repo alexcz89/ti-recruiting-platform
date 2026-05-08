@@ -405,7 +405,11 @@ export default async function EditJobPage({ params }: PageProps) {
           certsJson: certsArr,
           locationLat,
           locationLng,
-          recruiterId: (s.user as any)?.id,
+          // ✅ FIX: usar relación Prisma en lugar del campo escalar recruiterId
+          // El campo escalar existe en el schema pero Prisma lo gestiona
+          // internamente a través de la relación. Usar connect evita el error
+          // "Unknown argument recruiterId" en prisma.job.update()
+          recruiter: { connect: { id: (s.user as any)?.id } },
           ...(companyConnect ? { company: companyConnect } : {}),
         },
       });
