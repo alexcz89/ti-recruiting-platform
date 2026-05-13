@@ -236,7 +236,7 @@ export default async function CompanyAssessmentsPage({
           <MetricCard label="Completadas" value={mCompleted} icon={CheckCircle2} color="emerald" total={mTotal} />
           <MetricCard label="Inactivas" value={mInactive} icon={Users} color="zinc" total={mTotal} />
           <MetricCard label="Score prom." value={`${avgScore}%`} icon={TrendingUp} color="teal" isPercentage />
-          <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert alertHref="/dashboard/assessments?state=COMPLETED&cheat=1" />
+          <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert alertHref={"/dashboard/assessments?state=COMPLETED&cheat=1"} />
         </div>
 
         {/* Auto-refresh indicator */}
@@ -440,7 +440,7 @@ export default async function CompanyAssessmentsPage({
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50 [&>tr:last-child>td:first-child]:rounded-bl-3xl [&>tr:last-child>td:last-child]:rounded-br-3xl">
+              <tbody className={"divide-y divide-zinc-100 dark:divide-zinc-800/50 [&>tr:last-child>td:first-child]:rounded-bl-3xl [&>tr:last-child>td:last-child]:rounded-br-3xl"}>
                 {rows.map((r) => {
                   const inv = (r?.inv ?? r) as any;
                   const attempt = (r?.attempt ?? null) as any;
