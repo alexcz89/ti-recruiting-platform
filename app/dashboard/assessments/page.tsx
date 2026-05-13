@@ -417,7 +417,6 @@ export default async function CompanyAssessmentsPage({
             </div>
           </div>
         ) : (
-          {/* Sin overflow-hidden: border-radius se aplica en las celdas de esquina */}
           <div className="rounded-3xl border border-zinc-200/80 bg-white/80 shadow-lg backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80">
             <table className="w-full text-sm">
               <thead className="border-b border-zinc-200/80 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
