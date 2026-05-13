@@ -20,6 +20,7 @@ import {
   TrendingUp,
   Users,
   AlertTriangle,
+  Timer,
 } from "lucide-react";
 
 export const metadata = { title: "Evaluaciones | Panel" };
@@ -59,6 +60,15 @@ function tone(state: Exclude<StateFilter, "ALL">) {
 
 function fmtScore(n: any) {
   return typeof n === "number" && Number.isFinite(n) ? `${Math.round(n)}%` : "—";
+}
+
+function fmtTime(seconds: number | null | undefined): string {
+  if (!seconds || typeof seconds !== "number") return "";
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  if (m === 0) return `${s}s`;
+  if (s === 0) return `${m}m`;
+  return `${m}m ${s}s`;
 }
 
 function buildPageHref(
@@ -216,7 +226,7 @@ export default async function CompanyAssessmentsPage({
           <MetricCard label="Completadas" value={mCompleted} icon={CheckCircle2} color="emerald" total={mTotal} />
           <MetricCard label="Inactivas" value={mInactive} icon={Users} color="zinc" total={mTotal} />
           <MetricCard label="Score prom." value={`${avgScore}%`} icon={TrendingUp} color="teal" isPercentage />
-          <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert />
+          <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert alertHref="/dashboard/assessments?state=COMPLETED&cheat=1" />
         </div>
 
         {/* Filtros */}
@@ -513,7 +523,7 @@ export default async function CompanyAssessmentsPage({
                             {stLabel}
                           </span>
                         </div>
-                        {/* Score */}
+                        {/* Score + aprobado/reprobado */}
                         <div className="flex items-center gap-1.5">
                           <span
                             className={`text-lg font-black ${
@@ -538,6 +548,25 @@ export default async function CompanyAssessmentsPage({
                             </span>
                           )}
                         </div>
+                        {/* Tiempo usado */}
+                        {st === "COMPLETED" && attempt?.timeSpent && (
+                          <div className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
+                            <Timer className="h-3 w-3" />
+                            <span>{fmtTime(attempt.timeSpent)}</span>
+                            {typeof inv.template?.timeLimit === "number" && (
+                              <span className="text-zinc-300 dark:text-zinc-700">/ {inv.template.timeLimit}m</span>
+                            )}
+                          </div>
+                        )}
+                        {/* Botón directo "Ver resultados" para completadas */}
+                        {st === "COMPLETED" && resultsUrl && (
+                          <Link
+                            href={resultsUrl}
+                            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 transition-colors hover:bg-violet-100 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40"
+                          >
+                            Ver resultados →
+                          </Link>
+                        )}
                       </td>
 
                       {/* Col 4: Anti-cheat */}
@@ -636,6 +665,7 @@ function MetricCard({
   total,
   isPercentage,
   isAlert,
+  alertHref,
 }: {
   label: string;
   value: string | number;
@@ -644,6 +674,7 @@ function MetricCard({
   total?: number;
   isPercentage?: boolean;
   isAlert?: boolean;
+  alertHref?: string;
 }) {
   const colors = {
     violet: { bg: "from-violet-500 to-purple-500", shadow: "shadow-violet-500/25", text: "text-violet-600 dark:text-violet-400", bar: "bg-violet-500" },
@@ -657,35 +688,56 @@ function MetricCard({
   const c = colors[color];
   const percentage = total ? Math.round((Number(value) / total) * 100) : 0;
 
-  return (
-    <div className="group relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all hover:scale-[1.02] hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80">
-      <div className={`absolute -right-3 -top-3 h-20 w-20 rounded-full bg-gradient-to-br ${c.bg} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
-      <div className="relative">
-        <div className="flex items-center justify-between">
-          <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            {label}
-          </span>
-          <div className={`rounded-lg bg-gradient-to-br ${c.bg} p-1 ${c.shadow} shadow-md`}>
-            <Icon className="h-3 w-3 text-white" />
-          </div>
+  const inner = (
+    <div className="relative">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          {label}
+        </span>
+        <div className={`rounded-lg bg-gradient-to-br ${c.bg} p-1 ${c.shadow} shadow-md`}>
+          <Icon className="h-3 w-3 text-white" />
         </div>
-        <div className="mt-2">
-          <p className={`text-2xl font-black ${c.text}`}>{value}</p>
-        </div>
-        {total && !isPercentage && !isAlert && typeof value === "number" && (
-          <div className="mt-2">
-            <div className="h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-              <div
-                className={`h-full ${c.bar} transition-all duration-500 ease-out`}
-                style={{ width: `${percentage}%` }}
-              />
-            </div>
-            <p className="mt-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">
-              {percentage}% del total
-            </p>
-          </div>
-        )}
       </div>
+      <div className="mt-2">
+        <p className={`text-2xl font-black ${c.text}`}>{value}</p>
+      </div>
+      {total && !isPercentage && !isAlert && typeof value === "number" && (
+        <div className="mt-2">
+          <div className="h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div
+              className={`h-full ${c.bar} transition-all duration-500 ease-out`}
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+          <p className="mt-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">
+            {percentage}% del total
+          </p>
+        </div>
+      )}
+      {isAlert && alertHref && typeof value === "number" && value > 0 && (
+        <p className="mt-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+          Ver alertas →
+        </p>
+      )}
+    </div>
+  );
+
+  const wrapperClass =
+    "group relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all hover:scale-[1.02] hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80";
+
+  if (alertHref && isAlert && typeof value === "number" && value > 0) {
+    return (
+      <Link href={alertHref} className={wrapperClass}>
+        <div className={`absolute -right-3 -top-3 h-20 w-20 rounded-full bg-gradient-to-br ${c.bg} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={wrapperClass}>
+      <div className={`absolute -right-3 -top-3 h-20 w-20 rounded-full bg-gradient-to-br ${c.bg} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
+      {inner}
     </div>
   );
 }

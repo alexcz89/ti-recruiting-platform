@@ -2,8 +2,10 @@
 "use client";
 
 import * as React from "react";
+import * as ReactDOM from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   MoreHorizontal,
   ClipboardCopy,
@@ -16,10 +18,8 @@ import {
 type Props = {
   applicationId?: string | null;
   templateId?: string | null;
-
-  invitePath?: string | null; // e.g. /assessments/:templateId?token=...
-  resultsUrl?: string | null; // e.g. /assessments/attempts/:attemptId/results
-
+  invitePath?: string | null;
+  resultsUrl?: string | null;
   disabled?: boolean;
   className?: string;
 };
@@ -33,7 +33,6 @@ async function copyToClipboard(text: string) {
     await navigator.clipboard.writeText(text);
     return;
   }
-  // fallback
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.style.position = "fixed";
@@ -43,6 +42,55 @@ async function copyToClipboard(text: string) {
   ta.select();
   document.execCommand("copy");
   document.body.removeChild(ta);
+}
+
+/**
+ * Dropdown rendered in a portal so it never gets clipped by
+ * the table container's overflow-hidden.
+ */
+function DropdownPortal({
+  anchorRef,
+  onClose,
+  children,
+}: {
+  anchorRef: React.RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
+
+  React.useLayoutEffect(() => {
+    if (!anchorRef.current) return;
+    const rect = anchorRef.current.getBoundingClientRect();
+    setPos({
+      top: rect.bottom + window.scrollY + 6,
+      left: rect.right + window.scrollX - 224, // 224 = w-56
+    });
+  }, [anchorRef]);
+
+  // Close on scroll/resize so it doesn't get stale
+  React.useEffect(() => {
+    const close = () => onClose();
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [onClose]);
+
+  if (!pos) return null;
+
+  return ReactDOM.createPortal(
+    <div
+      role="menu"
+      style={{ top: pos.top, left: pos.left }}
+      className="fixed z-[9999] w-56 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+    >
+      {children}
+    </div>,
+    document.body
+  );
 }
 
 export default function AssessmentActionsMenu({
@@ -57,6 +105,7 @@ export default function AssessmentActionsMenu({
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
+  const btnRef = React.useRef<HTMLButtonElement | null>(null);
 
   React.useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -75,18 +124,17 @@ export default function AssessmentActionsMenu({
   }, []);
 
   const inviteUrlAbs =
-    invitePath && typeof window !== "undefined" ? new URL(invitePath, window.location.origin).toString() : null;
+    invitePath && typeof window !== "undefined"
+      ? new URL(invitePath, window.location.origin).toString()
+      : null;
 
   async function onCopyLink() {
     if (!inviteUrlAbs) return;
     try {
       await copyToClipboard(inviteUrlAbs);
-      // Si tienes Sonner/Toast, aquí lo conectas; por ahora simple:
-      // eslint-disable-next-line no-alert
-      alert("Link copiado");
+      toast.success("Link copiado al portapapeles");
     } catch {
-      // eslint-disable-next-line no-alert
-      alert("No se pudo copiar el link");
+      toast.error("No se pudo copiar el link");
     } finally {
       setOpen(false);
     }
@@ -94,35 +142,35 @@ export default function AssessmentActionsMenu({
 
   async function onResend() {
     if (!applicationId || !templateId) {
-      // eslint-disable-next-line no-alert
-      alert("Falta applicationId/templateId para reenviar.");
+      toast.error("Falta información para reenviar");
       return;
     }
 
-    const ok = confirm("¿Reenviar evaluación al candidato? (Genera/actualiza link y expiración).");
+    const ok = window.confirm(
+      "¿Reenviar evaluación al candidato? Se actualizará el link y la expiración."
+    );
     if (!ok) return;
 
     setBusy(true);
+    const toastId = toast.loading("Reenviando evaluación...");
     try {
-      const res = await fetch(`/api/applications/${encodeURIComponent(applicationId)}/assessment-invite`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId }),
-      });
-
+      const res = await fetch(
+        `/api/applications/${encodeURIComponent(applicationId)}/assessment-invite`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ templateId }),
+        }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        // eslint-disable-next-line no-alert
-        alert(data?.error || "No se pudo reenviar");
+        toast.error(data?.error || "No se pudo reenviar", { id: toastId });
         return;
       }
-
-      // eslint-disable-next-line no-alert
-      alert("Assessment reenviado");
+      toast.success("Evaluación reenviada al candidato", { id: toastId });
       router.refresh();
     } catch (e: any) {
-      // eslint-disable-next-line no-alert
-      alert(e?.message || "Error reenviando");
+      toast.error(e?.message || "Error reenviando", { id: toastId });
     } finally {
       setBusy(false);
       setOpen(false);
@@ -137,6 +185,7 @@ export default function AssessmentActionsMenu({
   return (
     <div ref={rootRef} className={cn("relative inline-flex", className)}>
       <button
+        ref={btnRef}
         type="button"
         disabled={disabled || busy}
         onClick={() => setOpen((v) => !v)}
@@ -153,17 +202,10 @@ export default function AssessmentActionsMenu({
         <MoreHorizontal className="h-4 w-4" />
       </button>
 
-      {open ? (
-        <div
-          role="menu"
-          className={cn(
-            "absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-2xl border shadow-lg",
-            "border-zinc-200 bg-white",
-            "dark:border-zinc-800 dark:bg-zinc-950"
-          )}
-        >
+      {open && (
+        <DropdownPortal anchorRef={btnRef} onClose={() => setOpen(false)}>
           <div className="p-2">
-            {/* Link */}
+            {/* Copiar link */}
             <button
               type="button"
               role="menuitem"
@@ -173,13 +215,18 @@ export default function AssessmentActionsMenu({
                 "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
                 canCopy
                   ? "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  : "text-zinc-400 cursor-not-allowed dark:text-zinc-600"
+                  : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
               )}
             >
-              {canCopy ? <ClipboardCopy className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+              {canCopy ? (
+                <ClipboardCopy className="h-4 w-4" />
+              ) : (
+                <Link2 className="h-4 w-4" />
+              )}
               Copiar link
             </button>
 
+            {/* Abrir link */}
             <button
               type="button"
               role="menuitem"
@@ -193,7 +240,7 @@ export default function AssessmentActionsMenu({
                 "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
                 canOpen
                   ? "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  : "text-zinc-400 cursor-not-allowed dark:text-zinc-600"
+                  : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
               )}
             >
               <ExternalLink className="h-4 w-4" />
@@ -212,34 +259,31 @@ export default function AssessmentActionsMenu({
                 "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
                 canResend && !busy
                   ? "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  : "text-zinc-400 cursor-not-allowed dark:text-zinc-600"
+                  : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
               )}
             >
               <RotateCcw className="h-4 w-4" />
               {busy ? "Reenviando..." : "Reenviar assessment"}
             </button>
 
-            {/* Resultados */}
-            {canResults ? (
+            {/* Ver resultados */}
+            {canResults && (
               <>
                 <div className="my-2 h-px bg-zinc-100 dark:bg-zinc-800" />
                 <Link
                   role="menuitem"
                   href={resultsUrl!}
                   onClick={() => setOpen(false)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
-                    "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  )}
+                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
                 >
                   <FileText className="h-4 w-4" />
                   Ver resultados
                 </Link>
               </>
-            ) : null}
+            )}
           </div>
-        </div>
-      ) : null}
+        </DropdownPortal>
+      )}
     </div>
   );
 }
