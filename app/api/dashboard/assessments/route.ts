@@ -67,6 +67,7 @@ export async function GET(request: Request) {
     const jobId = (url.searchParams.get("jobId") ?? "").trim();
     const state = normalizeState(url.searchParams.get("state"));
     const hasAttempt = (url.searchParams.get("hasAttempt") ?? "").trim(); // "1" | "0" | ""
+    const sort = (url.searchParams.get("sort") ?? "recent").trim();
     const page = clampInt(parseInt(url.searchParams.get("page") || "1", 10) || 1, 1, 9999);
 
     const take = 50;
@@ -214,6 +215,21 @@ export async function GET(request: Request) {
 
       return { inv, attempt, uiState, resultsUrl, inviteLink };
     });
+
+    // Sort before filtering
+    if (sort === "score_desc") {
+      rowsAll.sort((a, b) => {
+        const sa = typeof a.attempt?.totalScore === "number" ? a.attempt.totalScore : -1;
+        const sb = typeof b.attempt?.totalScore === "number" ? b.attempt.totalScore : -1;
+        return sb - sa;
+      });
+    } else if (sort === "score_asc") {
+      rowsAll.sort((a, b) => {
+        const sa = typeof a.attempt?.totalScore === "number" ? a.attempt.totalScore : 101;
+        const sb = typeof b.attempt?.totalScore === "number" ? b.attempt.totalScore : 101;
+        return sa - sb;
+      });
+    }
 
     const rows = rowsAll.filter((r) => {
       if (hasAttempt === "1" && !r.attempt) return false;

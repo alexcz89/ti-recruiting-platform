@@ -66,9 +66,10 @@ function DropdownPortal({
   React.useLayoutEffect(() => {
     if (!anchorRef.current) return;
     const rect = anchorRef.current.getBoundingClientRect();
+    // fixed positioning is viewport-relative — no scroll offset needed
     setPos({
-      top: rect.bottom + window.scrollY + 6,
-      left: rect.right + window.scrollX - 224, // 224 = w-56
+      top: rect.bottom + 6,
+      left: rect.right - 224, // 224 = w-56
     });
   }, [anchorRef]);
 

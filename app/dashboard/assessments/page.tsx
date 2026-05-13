@@ -6,6 +6,7 @@ import { headers, cookies } from "next/headers";
 import type { ReactNode } from "react";
 
 import AssessmentActionsMenu from "@/components/dashboard/assessments/AssessmentActionsMenu";
+import AutoRefresh from "@/components/dashboard/assessments/AutoRefresh";
 import { authOptions } from '@/lib/server/auth';
 import { fromNow } from "@/lib/dates";
 import {
@@ -21,6 +22,8 @@ import {
   Users,
   AlertTriangle,
   Timer,
+  Download,
+  ArrowUpDown,
 } from "lucide-react";
 
 export const metadata = { title: "Evaluaciones | Panel" };
@@ -127,6 +130,7 @@ export default async function CompanyAssessmentsPage({
   );
   const hasAttempt =
     typeof searchParams?.hasAttempt === "string" ? searchParams.hasAttempt : "";
+  const sort = typeof searchParams?.sort === "string" ? searchParams.sort : "recent";
   const page = clampInt(
     parseInt(String(searchParams?.page ?? "1"), 10) || 1,
     1,
@@ -138,7 +142,12 @@ export default async function CompanyAssessmentsPage({
   if (jobId) qs.set("jobId", jobId);
   if (state && state !== "ALL") qs.set("state", state);
   if (hasAttempt) qs.set("hasAttempt", hasAttempt);
+  if (sort && sort !== "recent") qs.set("sort", sort);
   qs.set("page", String(page));
+
+  // exportQs: same filters but no page (for CSV export & API)
+  const exportQs = new URLSearchParams(qs);
+  exportQs.delete("page");
 
   const baseUrl = getBaseUrl();
   const cookieHeader = cookies().toString();
@@ -177,6 +186,7 @@ export default async function CompanyAssessmentsPage({
   const mInProgress = rows.filter((r) => r.uiState === "IN_PROGRESS").length;
   const mPending = rows.filter((r) => r.uiState === "PENDING").length;
   const mInactive = rows.filter((r) => r.uiState === "INACTIVE").length;
+  const hasInProgress = mInProgress > 0;
 
   const scored = rows
     .map((r) =>
@@ -229,12 +239,19 @@ export default async function CompanyAssessmentsPage({
           <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert alertHref="/dashboard/assessments?state=COMPLETED&cheat=1" />
         </div>
 
+        {/* Auto-refresh indicator */}
+        {hasInProgress && (
+          <div className="flex justify-end">
+            <AutoRefresh hasInProgress={hasInProgress} intervalMs={30_000} />
+          </div>
+        )}
+
         {/* Filtros */}
         <form className="group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white/80 shadow-sm backdrop-blur-sm transition-all hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80">
           <div className="p-5">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
               {/* Buscar */}
-              <div className="sm:col-span-2 lg:col-span-5">
+              <div className="sm:col-span-2 lg:col-span-4">
                 <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Buscar
                 </label>
@@ -250,7 +267,7 @@ export default async function CompanyAssessmentsPage({
               </div>
 
               {/* Vacante */}
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-2">
                 <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                   Vacante
                 </label>
@@ -325,6 +342,30 @@ export default async function CompanyAssessmentsPage({
                   </div>
                 </div>
               </div>
+
+              {/* Ordenar */}
+              <div className="lg:col-span-2">
+                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                  Ordenar
+                </label>
+                <div className="group/input relative">
+                  <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+                  <select
+                    name="sort"
+                    defaultValue={sort}
+                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                  >
+                    <option value="recent">Más reciente</option>
+                    <option value="score_desc">Score alto → bajo</option>
+                    <option value="score_asc">Score bajo → alto</option>
+                  </select>
+                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                    <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200/70 pt-4 dark:border-zinc-700/70 sm:flex-row sm:items-center sm:justify-between">
@@ -335,7 +376,15 @@ export default async function CompanyAssessmentsPage({
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">{total}</span>{" "}
                 resultados
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                <a
+                  href={`/api/dashboard/assessments/export?${exportQs.toString()}`}
+                  download="evaluaciones.csv"
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Exportar CSV
+                </a>
                 <button
                   type="submit"
                   className="group inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-4 text-xs font-bold text-white shadow-lg shadow-violet-500/25 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/30 active:scale-[0.98] dark:from-violet-500 dark:to-blue-500"
@@ -372,24 +421,19 @@ export default async function CompanyAssessmentsPage({
             <table className="w-full text-sm">
               <thead className="border-b border-zinc-200/80 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
                 <tr>
-                  {/* Col 1: Candidato — 25% */}
-                  <th className="w-1/4 px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <th className="w-[22%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Candidato
                   </th>
-                  {/* Col 2: Assessment + Vacante — 30% */}
-                  <th className="w-[30%] px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <th className="w-[28%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Assessment · Vacante
                   </th>
-                  {/* Col 3: Estado + Score — 20% */}
-                  <th className="w-1/5 px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <th className="w-[22%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Estado · Score
                   </th>
-                  {/* Col 4: Anti-cheat — 15% */}
-                  <th className="w-[15%] px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <th className="w-[14%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Anti-cheat
                   </th>
-                  {/* Col 5: Acciones — 10% */}
-                  <th className="w-[10%] px-5 py-3.5 text-right text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <th className="w-[14%] whitespace-nowrap px-5 py-3.5 text-right text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Acciones
                   </th>
                 </tr>
@@ -510,7 +554,7 @@ export default async function CompanyAssessmentsPage({
                         {/* Estado badge */}
                         <div className="mb-2">
                           <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}
+                            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}
                           >
                             {st === "COMPLETED" && (
                               <CheckCircle2 className="h-2.5 w-2.5" />
