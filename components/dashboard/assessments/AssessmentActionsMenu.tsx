@@ -47,13 +47,17 @@ async function copyToClipboard(text: string) {
 /**
  * Dropdown rendered in a portal so it never gets clipped by
  * the table container's overflow-hidden.
+ * Exposes its DOM node via `portalRef` so the parent can include it
+ * in the click-outside check.
  */
 function DropdownPortal({
   anchorRef,
+  portalRef,
   onClose,
   children,
 }: {
   anchorRef: React.RefObject<HTMLButtonElement | null>;
+  portalRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -83,6 +87,7 @@ function DropdownPortal({
 
   return ReactDOM.createPortal(
     <div
+      ref={portalRef as React.RefObject<HTMLDivElement>}
       role="menu"
       style={{ top: pos.top, left: pos.left }}
       className="fixed z-[9999] w-56 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
@@ -106,11 +111,15 @@ export default function AssessmentActionsMenu({
   const [busy, setBusy] = React.useState(false);
   const rootRef = React.useRef<HTMLDivElement | null>(null);
   const btnRef = React.useRef<HTMLButtonElement | null>(null);
+  const portalRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     function onDown(e: MouseEvent) {
-      if (!rootRef.current) return;
-      if (!rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      // Keep open if click is inside the trigger button OR inside the portal dropdown
+      if (rootRef.current?.contains(target)) return;
+      if (portalRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -203,7 +212,7 @@ export default function AssessmentActionsMenu({
       </button>
 
       {open && (
-        <DropdownPortal anchorRef={btnRef} onClose={() => setOpen(false)}>
+        <DropdownPortal anchorRef={btnRef} portalRef={portalRef} onClose={() => setOpen(false)}>
           <div className="p-2">
             {/* Copiar link */}
             <button
