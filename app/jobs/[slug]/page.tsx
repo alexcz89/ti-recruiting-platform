@@ -5,7 +5,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
-import AssessmentRequirement from "./AssessmentRequirement";
 import CandidateMatchCard from "@/components/jobs/CandidateMatchCard";
 import {
   computeMatchScore,
@@ -231,27 +230,6 @@ export default async function JobDetail({ params }: Params) {
       companyId: true,
       company: { select: { name: true } },
       status: true,
-      assessments: {
-        where: { isRequired: true },
-        orderBy: { createdAt: "asc" },
-        take: 1,
-        select: {
-          id: true,
-          isRequired: true,
-          minScore: true,
-          templateId: true,
-          template: {
-            select: {
-              id: true,
-              title: true,
-              difficulty: true,
-              totalQuestions: true,
-              timeLimit: true,
-              passingScore: true,
-            },
-          },
-        },
-      },
     },
   });
 
@@ -262,21 +240,6 @@ export default async function JobDetail({ params }: Params) {
     const myCompanyId = await getSessionCompanyId().catch(() => null);
     canEdit = !!myCompanyId && job.companyId === myCompanyId;
   }
-
-  const requiredAssessment = job.assessments?.[0] ?? null;
-
-  const userAttempt =
-    isCandidate && user?.id && requiredAssessment?.templateId
-      ? await prisma.assessmentAttempt.findFirst({
-          where: {
-            candidateId: user.id,
-            templateId: requiredAssessment.templateId,
-            status: { in: ["SUBMITTED", "EVALUATED"] },
-          },
-          orderBy: { createdAt: "desc" },
-          select: { id: true, status: true, totalScore: true, passed: true },
-        })
-      : null;
 
   const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
     termId: rs.term.id,
@@ -404,13 +367,6 @@ export default async function JobDetail({ params }: Params) {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-
-      {requiredAssessment && (
-        <AssessmentRequirement
-          assessment={requiredAssessment as any}
-          userAttempt={userAttempt as any}
-        />
-      )}
 
       {isCandidate && candidateMatchResult && (
         <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
