@@ -126,6 +126,18 @@ export async function GET(req: NextRequest) {
     return noStoreJson({ error: "candidateId requerido" }, 400);
   }
 
+  // ✅ Verificar que el candidato tiene al menos una aplicación en una vacante de la empresa
+  const hasAccess = await prisma.application.findFirst({
+    where: {
+      candidateId,
+      job: { companyId },
+    },
+    select: { id: true },
+  });
+  if (!hasAccess) {
+    return noStoreJson({ error: "Forbidden" }, 403);
+  }
+
   const cacheKey = buildCacheKey(candidateId, jobId);
 
   if (!force) {
