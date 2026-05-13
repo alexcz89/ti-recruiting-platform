@@ -51,6 +51,24 @@ const SENIORITY_LABEL: Record<string, string> = {
   LEAD: "Lead",
 };
 
+const EDUCATION_LEVEL_LABEL: Record<string, string> = {
+  NONE: "Sin estudios",
+  PRIMARY: "Primaria",
+  SECONDARY: "Secundaria",
+  HIGH_SCHOOL: "Preparatoria",
+  TECHNICAL: "Técnico",
+  BACHELOR: "Licenciatura",
+  MASTER: "Maestría",
+  DOCTORATE: "Doctorado",
+  OTHER: "Otro",
+};
+
+const EDUCATION_STATUS_LABEL: Record<string, string> = {
+  ONGOING: "En curso",
+  COMPLETED: "Completado",
+  INCOMPLETE: "Incompleto",
+};
+
 function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
   if (!s) return null;
   const lower = s.toLowerCase();
@@ -126,6 +144,31 @@ export default async function CandidateDetailPage({
           level: true,
           term: { select: { label: true } },
         },
+      },
+      experiences: {
+        select: {
+          id: true,
+          role: true,
+          company: true,
+          startDate: true,
+          endDate: true,
+          isCurrent: true,
+          description: true,
+        },
+        orderBy: [{ startDate: "desc" }],
+      },
+      education: {
+        select: {
+          id: true,
+          level: true,
+          status: true,
+          institution: true,
+          program: true,
+          startDate: true,
+          endDate: true,
+          sortIndex: true,
+        },
+        orderBy: [{ sortIndex: "asc" }, { startDate: "desc" }],
       },
     },
   });
@@ -767,6 +810,74 @@ export default async function CandidateDetailPage({
               </div>
             </div>
           </div>
+
+          {/* ====== EXPERIENCIA LABORAL ====== */}
+          {(candidate as any).experiences?.length > 0 && (
+            <div className="glass-card rounded-2xl border p-4 md:p-6">
+              <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Experiencia laboral</h2>
+              <ul className="space-y-4">
+                {(candidate as any).experiences.map((exp: any) => {
+                  const start = exp.startDate ? new Date(exp.startDate).toLocaleDateString("es-MX", { year: "numeric", month: "short" }) : null;
+                  const end = exp.isCurrent ? "Actual" : exp.endDate ? new Date(exp.endDate).toLocaleDateString("es-MX", { year: "numeric", month: "short" }) : null;
+                  return (
+                    <li key={exp.id} className="soft-panel px-4 py-3">
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-50">{exp.role}</p>
+                          <p className="text-sm text-zinc-600 dark:text-zinc-300">{exp.company}</p>
+                        </div>
+                        {(start || end) && (
+                          <p className="text-xs text-zinc-400 dark:text-zinc-500 shrink-0">
+                            {[start, end].filter(Boolean).join(" – ")}
+                          </p>
+                        )}
+                      </div>
+                      {exp.description && (
+                        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 line-clamp-3">{exp.description}</p>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
+          {/* ====== EDUCACIÓN ====== */}
+          {(candidate as any).education?.length > 0 && (
+            <div className="glass-card rounded-2xl border p-4 md:p-6">
+              <h2 className="mb-4 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Educación</h2>
+              <ul className="space-y-3">
+                {(candidate as any).education.map((ed: any) => {
+                  const start = ed.startDate ? new Date(ed.startDate).toLocaleDateString("es-MX", { year: "numeric", month: "short" }) : null;
+                  const end = ed.status === "ONGOING" ? "En curso" : ed.endDate ? new Date(ed.endDate).toLocaleDateString("es-MX", { year: "numeric" }) : null;
+                  return (
+                    <li key={ed.id} className="soft-panel px-4 py-3">
+                      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-sm text-zinc-900 dark:text-zinc-50">
+                            {ed.program || EDUCATION_LEVEL_LABEL[ed.level] || "—"}
+                          </p>
+                          <p className="text-sm text-zinc-600 dark:text-zinc-300">{ed.institution}</p>
+                        </div>
+                        <div className="flex flex-col items-start sm:items-end gap-1 shrink-0">
+                          {(start || end) && (
+                            <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                              {[start, end].filter(Boolean).join(" – ")}
+                            </p>
+                          )}
+                          {ed.level && (
+                            <span className="inline-block rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-400">
+                              {EDUCATION_LEVEL_LABEL[ed.level] ?? ed.level}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
 
           {candidate.resumeUrl && (
             <div className="glass-card rounded-2xl border p-4 md:p-6">
