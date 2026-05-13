@@ -417,11 +417,12 @@ export default async function CompanyAssessmentsPage({
             </div>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-3xl border border-zinc-200/80 bg-white/80 shadow-lg backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80">
+          {/* Sin overflow-hidden: border-radius se aplica en las celdas de esquina */}
+          <div className="rounded-3xl border border-zinc-200/80 bg-white/80 shadow-lg backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80">
             <table className="w-full text-sm">
               <thead className="border-b border-zinc-200/80 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
                 <tr>
-                  <th className="w-[22%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <th className="w-[22%] rounded-tl-3xl whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Candidato
                   </th>
                   <th className="w-[28%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
@@ -433,13 +434,13 @@ export default async function CompanyAssessmentsPage({
                   <th className="w-[14%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Anti-cheat
                   </th>
-                  <th className="w-[14%] whitespace-nowrap px-5 py-3.5 text-right text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
+                  <th className="w-[14%] rounded-tr-3xl whitespace-nowrap px-5 py-3.5 text-right text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
                     Acciones
                   </th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50">
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/50 [&>tr:last-child>td:first-child]:rounded-bl-3xl [&>tr:last-child>td:last-child]:rounded-br-3xl">
                 {rows.map((r) => {
                   const inv = (r?.inv ?? r) as any;
                   const attempt = (r?.attempt ?? null) as any;
@@ -649,7 +650,7 @@ export default async function CompanyAssessmentsPage({
             </table>
 
             {/* Paginación */}
-            <div className="flex flex-col gap-2 border-t border-zinc-200/80 bg-gradient-to-r from-zinc-50/50 via-white to-zinc-50/50 px-5 py-3 dark:border-zinc-800/50 dark:from-zinc-900/50 dark:via-zinc-900/30 dark:to-zinc-900/50 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 rounded-b-3xl border-t border-zinc-200/80 bg-gradient-to-r from-zinc-50/50 via-white to-zinc-50/50 px-5 py-3 dark:border-zinc-800/50 dark:from-zinc-900/50 dark:via-zinc-900/30 dark:to-zinc-900/50 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-zinc-600 dark:text-zinc-300">
                 Página{" "}
                 <span className="font-black text-violet-600 dark:text-violet-400">{page}</span>{" "}
