@@ -179,11 +179,13 @@ export default function CodeEditor({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fontSize, setFontSize] = useState(14);
   const [showSettings, setShowSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState<'problem' | 'results'>('problem');
-  // ✅ NUEVO: trackear si ejecutó tests antes de enviar
+  const [activeTab, setActiveTab] = useState<'problem' | 'results' | 'custom'>('problem');
   const [hasRunTests, setHasRunTests] = useState(false);
-  // ✅ NUEVO: trackear si ya envió la solución (auto-submit)
   const [solutionSubmitted, setSolutionSubmitted] = useState(false);
+  // Custom input
+  const [customInput, setCustomInput] = useState('');
+  const [isRunningCustom, setIsRunningCustom] = useState(false);
+  const [customOutput, setCustomOutput] = useState<{ output: string; error: string; executionTimeMs?: number } | null>(null);
 
   const editorRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -294,6 +296,34 @@ export default function CodeEditor({
       console.error('Error auto-submitting:', err);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleRunCustom = async () => {
+    if (isRunningCustom || readOnly) return;
+    if (!code.trim()) return;
+    setIsRunningCustom(true);
+    setCustomOutput(null);
+    try {
+      const response = await fetch('/api/assessments/code/custom-run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attemptId, questionId, code, language: selectedLanguage, customInput }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setCustomOutput({ output: '', error: (data as any).error || 'Error al ejecutar' });
+      } else {
+        setCustomOutput({
+          output: (data as any).output || '',
+          error: (data as any).error || '',
+          executionTimeMs: (data as any).executionTimeMs,
+        });
+      }
+    } catch {
+      setCustomOutput({ output: '', error: 'Error de conexión. Intenta de nuevo.' });
+    } finally {
+      setIsRunningCustom(false);
     }
   };
 
@@ -522,12 +552,80 @@ export default function CodeEditor({
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-600 to-indigo-600"></div>
             )}
           </button>
+          <button
+            onClick={() => setActiveTab('custom')}
+            className={`relative flex-1 px-6 py-3 text-sm font-medium transition-all ${
+              activeTab === 'custom'
+                ? 'bg-white text-gray-900 dark:bg-slate-800/50 dark:text-white'
+                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
+            }`}
+          >
+            Input Personalizado
+            {activeTab === 'custom' && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-600 to-indigo-600"></div>
+            )}
+          </button>
         </div>
       </div>
 
       {/* Tab Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {activeTab === 'problem' ? (
+        {activeTab === 'custom' ? (
+        /* Custom Input Panel */
+        <div className="flex flex-1 flex-col gap-4 overflow-y-auto bg-gray-50 p-6 dark:bg-slate-900/20">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-slate-300">
+              Input / Runner personalizado
+            </label>
+            <p className="mb-3 text-xs text-gray-500 dark:text-slate-400">
+              Para JS/TS: escribe el código runner que llama tu función (ej: <code className="rounded bg-gray-200 px-1 dark:bg-slate-800">console.log(solution(42))</code>). Para otros lenguajes: escribe el stdin que recibirá tu programa.
+            </p>
+            <textarea
+              value={customInput}
+              onChange={(e) => setCustomInput(e.target.value)}
+              placeholder="// Ej: console.log(solution([1,2,3], 5))"
+              rows={6}
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            />
+          </div>
+          <button
+            onClick={handleRunCustom}
+            disabled={isRunningCustom || !code.trim() || readOnly}
+            className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50"
+          >
+            {isRunningCustom ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /><span>Ejecutando...</span></>
+            ) : (
+              <><Play className="h-4 w-4" /><span>Ejecutar con este input</span></>
+            )}
+          </button>
+          {customOutput && (
+            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/50">
+              {customOutput.executionTimeMs && (
+                <div className="mb-3 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>{customOutput.executionTimeMs}ms</span>
+                </div>
+              )}
+              {customOutput.output && (
+                <div className="mb-3">
+                  <p className="mb-1 text-xs font-semibold text-gray-600 dark:text-slate-400">Output:</p>
+                  <pre className="overflow-x-auto rounded-lg bg-gray-100 p-3 text-xs font-mono text-gray-800 dark:bg-slate-800 dark:text-slate-200">{customOutput.output}</pre>
+                </div>
+              )}
+              {customOutput.error && (
+                <div>
+                  <p className="mb-1 text-xs font-semibold text-red-600 dark:text-red-400">Error:</p>
+                  <pre className="overflow-x-auto rounded-lg bg-red-50 p-3 text-xs font-mono text-red-700 dark:bg-red-900/20 dark:text-red-300">{customOutput.error}</pre>
+                </div>
+              )}
+              {!customOutput.output && !customOutput.error && (
+                <p className="text-sm text-gray-500 dark:text-slate-400">Sin output</p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : activeTab === 'problem' ? (
           <>
             {/* ✅ Problem Description — ahora con react-markdown */}
             <div className="max-h-48 overflow-y-auto border-b border-gray-200 bg-white px-6 py-5 dark:border-slate-800/50 dark:bg-slate-900/30">
@@ -602,45 +700,41 @@ export default function CodeEditor({
             {testResults && testResults.length > 0 && (
               <div className="space-y-4">
                 {/* Summary Card */}
-                <div
-                  className={`rounded-xl border p-5 ${
-                    passedTests === totalTests
-                      ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:border-emerald-500/30 dark:from-emerald-500/10 dark:to-emerald-500/5'
-                      : 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50 dark:border-red-500/30 dark:from-red-500/10 dark:to-red-500/5'
-                  } dark:backdrop-blur-sm`}
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`rounded-xl p-3 ${
-                        passedTests === totalTests
-                          ? 'bg-emerald-100 dark:bg-emerald-500/20'
-                          : 'bg-red-100 dark:bg-red-500/20'
-                      }`}
-                    >
-                      {passedTests === totalTests ? (
-                        <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
-                      ) : (
-                        <XCircle className="h-7 w-7 text-red-600 dark:text-red-400" />
-                      )}
+                {(() => {
+                  const publicResults = testResults.filter((r) => !r.hidden);
+                  const hiddenResults = testResults.filter((r) => r.hidden);
+                  const publicPassed = publicResults.filter((r) => r.passed).length;
+                  const hiddenPassed = hiddenResults.filter((r) => r.passed).length;
+                  const allOk = passedTests === totalTests;
+                  return (
+                    <div className={`rounded-xl border p-5 ${allOk ? 'border-emerald-300 bg-gradient-to-br from-emerald-50 to-emerald-100/50 dark:border-emerald-500/30 dark:from-emerald-500/10 dark:to-emerald-500/5' : 'border-red-300 bg-gradient-to-br from-red-50 to-red-100/50 dark:border-red-500/30 dark:from-red-500/10 dark:to-red-500/5'} dark:backdrop-blur-sm`}>
+                      <div className="flex items-center gap-4">
+                        <div className={`rounded-xl p-3 ${allOk ? 'bg-emerald-100 dark:bg-emerald-500/20' : 'bg-red-100 dark:bg-red-500/20'}`}>
+                          {allOk ? <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" /> : <XCircle className="h-7 w-7 text-red-600 dark:text-red-400" />}
+                        </div>
+                        <div className="flex-1">
+                          <p className={`text-lg font-bold ${allOk ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
+                            {allOk ? '¡Excelente! Todos los tests pasaron' : 'Algunos tests fallaron'}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-3 text-sm text-gray-600 dark:text-slate-400">
+                            <span>Públicos: <strong>{publicPassed}/{publicResults.length}</strong></span>
+                            {hiddenResults.length > 0 && (
+                              <span className="flex items-center gap-1">
+                                Ocultos: <strong>{hiddenPassed}/{hiddenResults.length}</strong>
+                                {hiddenPassed < hiddenResults.length && (
+                                  <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                                    {hiddenResults.length - hiddenPassed} fallaron
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p
-                        className={`text-lg font-bold ${
-                          passedTests === totalTests
-                            ? 'text-emerald-700 dark:text-emerald-400'
-                            : 'text-red-700 dark:text-red-400'
-                        }`}
-                      >
-                        {passedTests === totalTests
-                          ? '¡Excelente! Todos los tests pasaron'
-                          : 'Algunos tests fallaron'}
-                      </p>
-                      <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">
-                        {passedTests} de {totalTests} tests pasados
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
+
 
                 {/* Individual Test Results */}
                 {testResults.map((result, idx) => {

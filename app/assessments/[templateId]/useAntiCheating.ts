@@ -31,7 +31,7 @@ export function useAntiCheating({
   enabled,
   attemptId,
   onFlagsChange,
-  maxTabSwitches = 15, // ✅ Subido de 5 a 15 — más realista para coding
+  maxTabSwitches = 5, // Umbral estricto — el reclutador verá todo en el reporte
 }: Props) {
   const flagsRef = useRef<Flags>({
     tabSwitches: 0,
@@ -115,19 +115,21 @@ export function useAntiCheating({
         enqueue("VISIBILITY_HIDDEN");
 
         if (flagsRef.current.tabSwitches >= maxTabSwitches) {
-          // ✅ Solo mostrar warning severo después del threshold real
           toastError(
-            "⚠️ Has cambiado de pestaña muchas veces. Esto será reportado.",
-            { duration: 5000 }
+            `🚨 Límite de cambios de pestaña alcanzado (${flagsRef.current.tabSwitches}/${maxTabSwitches}). Esto quedará registrado en tu reporte.`,
+            { duration: 8000 }
           );
-        } else if (flagsRef.current.tabSwitches >= Math.floor(maxTabSwitches / 2)) {
-          // ✅ Warning suave a mitad del camino
+        } else if (flagsRef.current.tabSwitches >= Math.ceil(maxTabSwitches / 2)) {
           toastWarning(
-            `⚠️ Evita cambiar de pestaña (${flagsRef.current.tabSwitches}/${maxTabSwitches})`,
-            { duration: 3000 }
+            `⚠️ Cambio de pestaña detectado (${flagsRef.current.tabSwitches}/${maxTabSwitches}). Evita salir del examen.`,
+            { duration: 4000 }
+          );
+        } else if (flagsRef.current.tabSwitches === 1) {
+          toastWarning(
+            "⚠️ No cambies de pestaña durante el examen. Cada cambio queda registrado.",
+            { duration: 4000 }
           );
         }
-        // ✅ Sin toast en las primeras pocas veces — no molestar innecesariamente
       }
     };
 

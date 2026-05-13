@@ -331,36 +331,35 @@ export class Judge0Service {
    * Get starter code template for a language
    */
   getStarterCode(language: string, functionName = 'solution'): string {
+    // IMPORTANTE: Para JS/TS el runner se concatena desde el test case.
+    // El candidato solo debe implementar la función — NO incluir código de ejecución.
     const templates: Record<string, string> = {
-      javascript: `function ${functionName}(input) {
+      javascript: `/**
+ * @param {*} input
+ * @return {*}
+ */
+function ${functionName}(input) {
   // Tu código aquí
-  
-  return result;
-}
 
-// No modifiques esta línea
-console.log(${functionName}(require('fs').readFileSync(0, 'utf-8').trim()));`,
+}`,
 
-      python: `def ${functionName}(input_data):
+      typescript: `function ${functionName}(input: any): any {
+  // Tu código aquí
+
+}`,
+
+      python: `def ${functionName}(input_data: str) -> str:
     # Tu código aquí
-    
-    return result
-
-# No modifiques esta línea
-if __name__ == "__main__":
-    import sys
-    input_data = sys.stdin.read().strip()
-    print(${functionName}(input_data))`,
+    pass`,
 
       java: `import java.util.*;
 
 public class Main {
     public static String ${functionName}(String input) {
         // Tu código aquí
-        
-        return result;
+        return "";
     }
-    
+
     public static void main(String[] args) {
         Scanner scanner = new Scanner(System.in);
         String input = scanner.nextLine();
@@ -374,8 +373,7 @@ using namespace std;
 
 string ${functionName}(string input) {
     // Tu código aquí
-    
-    return result;
+    return "";
 }
 
 int main() {
@@ -384,9 +382,51 @@ int main() {
     cout << ${functionName}(input) << endl;
     return 0;
 }`,
+
+      go: `package main
+
+import "fmt"
+
+func ${functionName}(input string) string {
+    // Tu código aquí
+    return ""
+}
+
+func main() {
+    var input string
+    fmt.Scan(&input)
+    fmt.Println(${functionName}(input))
+}`,
+
+      rust: `use std::io::{self, BufRead};
+
+fn ${functionName}(input: &str) -> String {
+    // Tu código aquí
+    String::new()
+}
+
+fn main() {
+    let stdin = io::stdin();
+    let line = stdin.lock().lines().next().unwrap().unwrap();
+    println!("{}", ${functionName}(&line));
+}`,
+
+      csharp: `using System;
+
+class Program {
+    static string ${functionName}(string input) {
+        // Tu código aquí
+        return "";
+    }
+
+    static void Main() {
+        string input = Console.ReadLine() ?? "";
+        Console.WriteLine(${functionName}(input));
+    }
+}`,
     };
 
-    return templates[language] || `// Starter code for ${language}\n// Write your solution here`;
+    return templates[language] || `// Implementa tu solución en ${language}\n// El runner se añade automáticamente por los test cases`;
   }
 }
 

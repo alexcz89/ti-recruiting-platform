@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
+import { checkPlagiarism } from "@/lib/code-execution/plagiarism";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -334,8 +335,10 @@ export async function POST(request: Request) {
       );
     }
 
+    let savedAnswerId: string | null = null;
+
     if (isSubmission) {
-      await prisma.attemptAnswer.upsert({
+      const savedAnswer = await prisma.attemptAnswer.upsert({
         where: {
           attemptId_questionId: { attemptId, questionId },
         },
@@ -366,6 +369,15 @@ export async function POST(request: Request) {
           memoryUsed: executionResult.memoryUsedMb ?? null,
         },
       });
+      savedAnswerId = savedAnswer.id;
+
+      // Disparar detección de plagio de forma async (no bloquea la respuesta)
+      checkPlagiarism({
+        answerId: savedAnswer.id,
+        questionId,
+        code,
+        candidateId: user.id,
+      }).catch(() => {});
     }
 
     const responseTestResults: SafeExecutionTestResult[] = testResults.map((testResult) => {
