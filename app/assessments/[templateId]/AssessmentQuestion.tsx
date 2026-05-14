@@ -167,6 +167,7 @@ export default function AssessmentQuestion({
     return (
       <div className="h-[700px] overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-slate-800/50 dark:bg-transparent">
         <CodeEditor
+          key={question.id}
           questionId={question.id}
           attemptId={attemptId}
           questionText={question.questionText}

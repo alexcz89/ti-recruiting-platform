@@ -105,8 +105,9 @@ export async function POST(
     }
 
     const answeredCount = attempt.answers.length;
+    // Cap each answer at 1 point to avoid over-scoring (e.g. multiple test cases passing)
     const totalPoints = attempt.answers.reduce(
-      (sum, answer) => sum + (answer.pointsEarned || 0),
+      (sum, answer) => sum + Math.min(1, answer.pointsEarned || 0),
       0
     );
 
@@ -122,6 +123,11 @@ export async function POST(
       },
     });
 
+    // Guard: template must have active questions
+    if (activeQuestions.length === 0) {
+      return jsonNoStore({ error: "El template no tiene preguntas activas" }, 400);
+    }
+
     // Opción A: todas las preguntas valen 1 punto independientemente del tipo.
     // Esto garantiza scores en múltiplos limpios (0%, 20%, 40%... con 5 preguntas)
     // y evita que las preguntas CODING pesen más que las MCQ por tener más test cases.
@@ -136,7 +142,10 @@ export async function POST(
       0
     );
 
-    const maxPoints = totalMaxPoints || answeredCount || 1;
+    // ALWAYS use totalMaxPoints as denominator — never answeredCount
+    // Using answeredCount would give 100% if the candidate answers 1/1 correct
+    // even if the template has 5 questions total.
+    const maxPoints = totalMaxPoints;
 
     const totalScore = Math.max(
       0,

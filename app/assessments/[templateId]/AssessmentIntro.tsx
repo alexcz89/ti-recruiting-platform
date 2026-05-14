@@ -44,43 +44,46 @@ export default function AssessmentIntro({ template, onStart }: Props) {
 
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[800px] px-6 lg:px-10 py-12">
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-default mb-4">{title}</h1>
-          <p className="text-lg text-muted">{description}</p>
+      <div className="mx-auto max-w-[760px] px-4 py-6 md:px-8 md:py-8">
+
+        {/* Title + CTA in a compact top row on desktop */}
+        <div className="mb-5 flex flex-col items-center gap-3 text-center md:flex-row md:items-start md:justify-between md:text-left">
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-default md:text-3xl">{title}</h1>
+            <p className="mt-1 text-sm text-muted md:text-base">{description}</p>
+          </div>
+          <div className="flex flex-col items-center gap-1 md:items-end">
+            <button onClick={onStart} className="btn btn-primary px-7 py-3 text-base md:text-lg whitespace-nowrap">
+              Comenzar evaluación →
+            </button>
+            <p className="text-xs text-muted">El cronómetro inicia al hacer clic</p>
+          </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="p-6 rounded-2xl border glass-card text-center">
-            <FileText className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-default">{totalQuestions ?? "—"}</p>
-            <p className="text-sm text-muted">Preguntas</p>
+        <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="p-4 rounded-xl border glass-card text-center">
+            <FileText className="h-6 w-6 text-emerald-600 mx-auto mb-1" />
+            <p className="text-xl font-bold text-default">{totalQuestions ?? "—"}</p>
+            <p className="text-xs text-muted">Preguntas</p>
           </div>
-
-          <div className="p-6 rounded-2xl border glass-card text-center">
-            <Clock className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-default">{formatMinutes(template?.timeLimit)}</p>
-            <p className="text-sm text-muted">Minutos</p>
+          <div className="p-4 rounded-xl border glass-card text-center">
+            <Clock className="h-6 w-6 text-blue-600 mx-auto mb-1" />
+            <p className="text-xl font-bold text-default">{formatMinutes(template?.timeLimit)}</p>
+            <p className="text-xs text-muted">Minutos</p>
           </div>
-
-          <div className="p-6 rounded-2xl border glass-card text-center">
-            <Award className="h-8 w-8 text-violet-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold text-default">
-              {formatPercent(template?.passingScore)}
-            </p>
-            <p className="text-sm text-muted">Para aprobar</p>
+          <div className="p-4 rounded-xl border glass-card text-center">
+            <Award className="h-6 w-6 text-violet-600 mx-auto mb-1" />
+            <p className="text-xl font-bold text-default">{formatPercent(template?.passingScore)}</p>
+            <p className="text-xs text-muted">Para aprobar</p>
           </div>
         </div>
 
-        {/* Secciones */}
-        <div className="mb-8 p-6 rounded-2xl border glass-card">
-          <h2 className="text-lg font-semibold mb-4">📋 Secciones de la evaluación</h2>
-
-          {sections.length === 0 ? (
-            <p className="text-sm text-muted">Esta evaluación no tiene secciones configuradas.</p>
-          ) : (
-            <div className="space-y-3">
+        {/* Secciones (collapsed if empty) */}
+        {sections.length > 0 && (
+          <div className="mb-5 p-4 rounded-xl border glass-card">
+            <h2 className="text-sm font-semibold mb-3">📋 Secciones</h2>
+            <div className="space-y-2">
               {sections.map((section: any, idx: number) => {
                 const name = String(section?.name ?? `Sección ${idx + 1}`);
                 const questions =
@@ -92,43 +95,38 @@ export default function AssessmentIntro({ template, onStart }: Props) {
                     ? section.weight
                     : null;
                 const timeLimit = formatMinutes(section?.timeLimit);
-
                 return (
                   <div
                     key={`${name}-${idx}`}
-                    className="flex items-center justify-between p-3 rounded-lg bg-zinc-50 dark:bg-zinc-900"
+                    className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-900"
                   >
                     <div>
-                      <p className="font-medium text-default">{name}</p>
-                      <p className="text-sm text-muted">
-                        {questions ?? "—"} preguntas
-                        {weight != null ? ` · ${weight}% del score` : ""}
+                      <p className="text-sm font-medium text-default">{name}</p>
+                      <p className="text-xs text-muted">
+                        {questions ?? "—"} preguntas{weight != null ? ` · ${weight}%` : ""}
                       </p>
                     </div>
-                    <span className="text-sm text-muted">~{timeLimit} min</span>
+                    <span className="text-xs text-muted">~{timeLimit} min</span>
                   </div>
                 );
               })}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
-        {/* Instrucciones */}
-        <div className="mb-8 p-6 rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-900/20">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+        {/* Instrucciones compactas */}
+        <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-900/20">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">
-                Instrucciones importantes
+              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1.5">
+                Instrucciones
               </h3>
-              <ul className="space-y-2 text-sm text-amber-800 dark:text-amber-200">
-                <li>• Una vez iniciada, el tiempo corre automáticamente</li>
+              <ul className="space-y-1 text-xs text-amber-800 dark:text-amber-200">
+                <li>• El tiempo corre automáticamente al iniciar</li>
                 <li>• Puedes navegar entre preguntas libremente</li>
                 <li>• Tus respuestas se guardan automáticamente</li>
-                <li>
-                  •{" "}
-                  {allowRetry ? `Puedes intentar hasta ${maxAttempts} veces` : "Solo tienes 1 intento"}
-                </li>
+                <li>• {allowRetry ? `Puedes intentar hasta ${maxAttempts} veces` : "Solo tienes 1 intento"}</li>
                 {penalizeWrong && <li>• Las respuestas incorrectas restan puntos (-0.25)</li>}
                 <li>• No cambies de ventana durante la evaluación</li>
               </ul>
@@ -136,12 +134,12 @@ export default function AssessmentIntro({ template, onStart }: Props) {
           </div>
         </div>
 
-        {/* Botón de inicio */}
-        <div className="text-center">
-          <button onClick={onStart} className="btn btn-primary text-lg px-8 py-3">
+        {/* Mobile CTA (visible only on mobile since top one is hidden there) */}
+        <div className="mt-5 text-center md:hidden">
+          <button onClick={onStart} className="btn btn-primary w-full py-3 text-base">
             Comenzar evaluación →
           </button>
-          <p className="mt-4 text-sm text-muted">Al hacer clic, el cronómetro comenzará inmediatamente</p>
+          <p className="mt-2 text-xs text-muted">El cronómetro inicia al hacer clic</p>
         </div>
       </div>
     </main>
