@@ -106,7 +106,12 @@ export default function ActionsMenu(props: Props) {
     : [];
 
   const completedTemplates = perTemplateState.filter(t => t.state === "COMPLETED");
-  const hasMultipleCompleted = completedTemplates.length > 1;
+  // Mostrar items individuales por template cuando:
+  // a) Hay 2+ completados, O
+  // b) Hay ≥1 completado Y ≥1 pendiente/sin-enviar (estado mixto)
+  const hasMultipleCompleted =
+    completedTemplates.length > 1 ||
+    (completedTemplates.length > 0 && perTemplateState.some(t => t.state !== "COMPLETED"));
 
   // Estado del primero para derivar el label global
   const assessmentState = assessment?.enabled ? assessment.state : "NONE";
