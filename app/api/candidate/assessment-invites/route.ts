@@ -48,13 +48,24 @@ function jsonNoStore(data: unknown, status = 200) {
 
 function pickUiState(inv: InviteRow, attempt: AttemptRow | null, now: Date): UiState {
   const invStatus = String(inv.status ?? "").toUpperCase();
-  const atStatus = String(attempt?.status ?? "").toUpperCase();
+
+  // Detectar attempt obsoleto: fue creado ANTES de que el invite fuera reenviado.
+  // Cuando se reenvía un assessment, el invite reutiliza el mismo ID pero se actualiza
+  // (updatedAt cambia). Un attempt cuyo createdAt < inv.updatedAt es de una ronda anterior.
+  const isStaleAttempt =
+    attempt !== null &&
+    invStatus === "SENT" &&
+    ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(String(attempt.status ?? "").toUpperCase()) &&
+    attempt.createdAt < inv.updatedAt;
+
+  const effectiveAttempt = isStaleAttempt ? null : attempt;
+  const atStatus = String(effectiveAttempt?.status ?? "").toUpperCase();
 
   // Attempt final siempre manda (SUBMITTED, EVALUATED, COMPLETED) — no importa expiresAt
   if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
 
   // Attempt activo pero su tiempo expiró (ya no puede continuar)
-  if (attempt?.expiresAt && new Date(attempt.expiresAt) <= now) return "EXPIRED";
+  if (effectiveAttempt?.expiresAt && new Date(effectiveAttempt.expiresAt) <= now) return "EXPIRED";
 
   if (["IN_PROGRESS"].includes(atStatus)) return "IN_PROGRESS";
   if (["NOT_STARTED"].includes(atStatus)) {
@@ -211,16 +222,24 @@ export async function GET(request: Request) {
       if (process.env.NODE_ENV !== "production") {
         const attemptExpires = attempt?.expiresAt ? new Date(attempt.expiresAt) : null;
         const attemptExpired = Boolean(attemptExpires && attemptExpires <= now);
+        const isStale =
+          attempt !== null &&
+          String(inv.status ?? "").toUpperCase() === "SENT" &&
+          ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(String(attempt.status ?? "").toUpperCase()) &&
+          attempt.createdAt < inv.updatedAt;
 
         console.log("[INVITE_STATE]", {
           key,
           inviteId: inv.id,
           invStatus: String(inv.status ?? "").toUpperCase(),
+          invUpdatedAt: inv.updatedAt,
           invExpiresAt: inv.expiresAt,
           attemptId: attempt?.id ?? null,
           atStatus: String(attempt?.status ?? "").toUpperCase(),
+          atCreatedAt: attempt?.createdAt ?? null,
           atExpiresAt: attempt?.expiresAt ?? null,
           attemptExpired,
+          isStaleAttempt: isStale,
           pickedState: pickUiState(inv, attempt, now),
         });
       }

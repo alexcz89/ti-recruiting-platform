@@ -359,6 +359,15 @@ export async function POST(
         const rotatedToken = crypto.randomBytes(32).toString("hex");
         rotated = true;
 
+        // Desasociar el attempt anterior para que el candidato pueda iniciar desde cero.
+        // El invite reutiliza el mismo ID (no se crea uno nuevo), por lo que sin esto
+        // el attempt SUBMITTED quedaría vinculado al invite "reenviado" y aparecería
+        // como COMPLETED en lugar de PENDING en el dashboard del candidato.
+        await tx.assessmentAttempt.updateMany({
+          where: { inviteId: localInvite.id },
+          data: { inviteId: null },
+        });
+
         localInvite = await tx.assessmentInvite.update({
           where: { id: localInvite.id },
           data: {
