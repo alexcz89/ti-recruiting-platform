@@ -519,12 +519,6 @@ export default async function CompanyAssessmentsPage({
                           {inv.template?.title}
                         </p>
                         <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                          <span>
-                            {String(inv.template?.difficulty ?? "").toLowerCase()}
-                            {typeof inv.template?.timeLimit === "number"
-                              ? ` · ${inv.template.timeLimit} min`
-                              : ""}
-                          </span>
                           {inv.application?.job?.title && (
                             <>
                               <span className="text-zinc-300 dark:text-zinc-700">·</span>
@@ -617,9 +611,9 @@ export default async function CompanyAssessmentsPage({
                       <td className="px-5 py-4">
                         {showAlert ? (
                           <div className="group/alert relative inline-flex">
-                            <span className="inline-flex cursor-help items-center gap-1.5 rounded-full border-2 border-amber-400 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-900 dark:border-amber-600/50 dark:bg-amber-900/30 dark:text-amber-200">
+                            <span className="inline-flex cursor-help items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-amber-400 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-900 dark:border-amber-600/50 dark:bg-amber-900/30 dark:text-amber-200">
                               <ShieldAlert className="h-3 w-3 flex-shrink-0 animate-pulse" />
-                              {sev}
+                              {sev === "CRITICAL" ? "Crítico" : sev === "SUSPICIOUS" ? "Sospechoso" : sev}
                             </span>
                             <div className="pointer-events-none absolute -top-7 left-0 z-10 whitespace-nowrap rounded-lg bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover/alert:opacity-100">
                               Score: {sevScore}
