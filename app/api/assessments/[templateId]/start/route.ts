@@ -471,11 +471,17 @@ export async function POST(
       }
     }
 
+    // Si el candidato llega con un invite específico (por token), solo contamos
+    // los attempts que pertenecen a ESE invite. Cuando el reclutador "reenvía"
+    // el assessment, el attempt anterior queda con inviteId=null (desasociado),
+    // por lo que el conteo será 0 y se le permite iniciar de nuevo.
+    // Sin invite (flow legacy por applicationId), contamos globalmente por template.
     const attemptsUsed = await prisma.assessmentAttempt.count({
       where: {
         candidateId: user.id,
         templateId: params.templateId,
         status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
+        ...(invite ? { inviteId: invite.id } : {}),
       },
     });
 
