@@ -36,13 +36,6 @@ const LEVEL_LABEL: Record<string, string> = {
   BASIC: "Básico (A1–A2)",
 };
 
-const SKILL_LEVEL_LABEL: Record<number, string> = {
-  1: "Básico",
-  2: "Junior",
-  3: "Intermedio",
-  4: "Avanzado",
-  5: "Experto",
-};
 
 const SENIORITY_LABEL: Record<string, string> = {
   JUNIOR: "Junior",
@@ -765,35 +758,52 @@ export default async function CandidateDetailPage({
             <div className="glass-card rounded-2xl border p-4 md:p-5">
               <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Skills</h2>
               {detailedSkills.length > 0 ? (
-                <ul className="space-y-3">
+                <div className="flex flex-wrap gap-2">
                   {detailedSkills.map((s) => {
-                    const levelValue = s.level ?? 0;
-                    const pct = Math.max(0, Math.min(100, Math.round(levelValue * 20)));
-                    const levelLabel = s.level != null ? SKILL_LEVEL_LABEL[s.level as number] ?? `Nivel ${s.level}` : "Sin nivel";
                     const isJobRequired = matchResult?.details.find((d) => d.termId === s.termId && d.must && d.matched);
                     const isJobNice = matchResult?.details.find((d) => d.termId === s.termId && !d.must && d.matched);
+                    const hasLevel = s.level != null;
+
+                    const chipClass = isJobRequired
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/50 dark:bg-emerald-900/20 dark:text-emerald-200"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300";
+
+                    const levelBadgeClass: Record<number, string> = {
+                      1: "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300",
+                      2: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
+                      3: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+                      4: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+                      5: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+                    };
+                    const lvlClass = hasLevel
+                      ? (levelBadgeClass[s.level as number] ?? "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300")
+                      : "";
 
                     return (
-                      <li key={s.id} className={`soft-panel px-3 py-2 ${isJobRequired ? "ring-1 ring-emerald-400/50 dark:ring-emerald-500/30" : ""}`}>
-                        <div className="flex items-center justify-between text-sm">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-medium">{s.label}</span>
-                            {isJobRequired && (
-                              <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Req</span>
-                            )}
-                            {isJobNice && !isJobRequired && (
-                              <span className="rounded-full bg-sky-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Nice</span>
-                            )}
-                          </div>
-                          <span className="text-xs text-muted">{levelLabel}</span>
-                        </div>
-                        <div className="mt-2 progress" role="progressbar" aria-label={`Nivel ${levelValue} de 5 en ${s.label}`} aria-valuemin={0} aria-valuemax={5} aria-valuenow={levelValue}>
-                          <div className="progress-bar" style={{ width: `${pct}%` }} />
-                        </div>
-                      </li>
+                      <span
+                        key={s.id}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${chipClass}`}
+                      >
+                        {s.label}
+                        {isJobRequired && (
+                          <span className="rounded-full bg-emerald-200 px-1 py-0.5 text-[9px] font-bold uppercase text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-200">
+                            REQ
+                          </span>
+                        )}
+                        {isJobNice && !isJobRequired && (
+                          <span className="rounded-full bg-sky-100 px-1 py-0.5 text-[9px] font-bold uppercase text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                            Nice
+                          </span>
+                        )}
+                        {hasLevel && (
+                          <span className={`rounded-full px-1 py-0.5 text-[9px] font-bold ${lvlClass}`}>
+                            L{s.level}
+                          </span>
+                        )}
+                      </span>
                     );
                   })}
-                </ul>
+                </div>
               ) : (
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">Sin skills capturados</p>
               )}
