@@ -50,15 +50,19 @@ function pickUiState(inv: InviteRow, attempt: AttemptRow | null, now: Date): UiS
   const invStatus = String(inv.status ?? "").toUpperCase();
   const atStatus = String(attempt?.status ?? "").toUpperCase();
 
+  // Attempt final siempre manda (SUBMITTED, EVALUATED, COMPLETED) — no importa expiresAt
+  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
+
+  // Attempt activo pero su tiempo expiró (ya no puede continuar)
   if (attempt?.expiresAt && new Date(attempt.expiresAt) <= now) return "EXPIRED";
 
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
   if (["IN_PROGRESS"].includes(atStatus)) return "IN_PROGRESS";
   if (["NOT_STARTED"].includes(atStatus)) {
     if (invStatus === "STARTED") return "IN_PROGRESS";
     return "PENDING";
   }
 
+  // Sin attempt válido: el invite manda
   if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
   if (inv.expiresAt && new Date(inv.expiresAt) <= now) return "EXPIRED";
   if (invStatus === "CANCELLED") return "CANCELLED";
@@ -167,15 +171,29 @@ export async function GET(request: Request) {
     const attemptByInviteId = new Map<string, AttemptRow>();
     const attemptByKey = new Map<string, AttemptRow>();
 
+    // Solo los inviteIds que sobrevivieron al dedupe (uno por applicationId+templateId)
+    const currentInviteIdSet = new Set(inviteIds);
+
     for (const a of attempts) {
       if (a.inviteId && !attemptByInviteId.has(String(a.inviteId))) {
-        attemptByInviteId.set(String(a.inviteId), a);
+        // Solo guardar si el inviteId pertenece a un invite actualmente vigente.
+        // Evita que un attempt de un invite anterior (ya cancelado/expirado)
+        // se asocie al nuevo invite reenviado.
+        if (currentInviteIdSet.has(String(a.inviteId))) {
+          attemptByInviteId.set(String(a.inviteId), a);
+        }
       }
 
       if (a.applicationId && a.templateId) {
         const key = `${String(a.applicationId)}::${String(a.templateId)}`;
         if (!attemptByKey.has(key)) {
-          attemptByKey.set(key, a);
+          // Fallback por clave solo si:
+          // (a) el attempt no tiene inviteId (legacy/huérfano), o
+          // (b) su inviteId coincide con uno de los invites vigentes.
+          // Si el attempt pertenece a un invite anterior descartado, ignorarlo.
+          if (!a.inviteId || currentInviteIdSet.has(String(a.inviteId))) {
+            attemptByKey.set(key, a);
+          }
         }
       }
     }

@@ -89,13 +89,20 @@ export function NotificationDropdown({
         return '/jobs?applied=1';
 
       case 'ASSESSMENT_INVITATION':
-        if (meta?.templateId && meta?.attemptId) {
-          return `/assessments/${meta.templateId}?attemptId=${meta.attemptId}${
-            meta?.token ? `&token=${meta.token}` : ''
-          }`;
+        // Opción 1: inviteUrl completa preconstruida (más confiable — incluye token)
+        if (meta?.inviteUrl && typeof meta.inviteUrl === 'string') {
+          return meta.inviteUrl;
         }
-        console.error('ASSESSMENT_INVITATION sin metadata completa', notification);
-        return '/dashboard';
+        // Opción 2: templateId + token
+        if (meta?.templateId && meta?.token) {
+          return `/assessments/${meta.templateId}?token=${encodeURIComponent(meta.token)}`;
+        }
+        // Opción 3: templateId + attemptId (legacy)
+        if (meta?.templateId && meta?.attemptId) {
+          return `/assessments/${meta.templateId}?attemptId=${meta.attemptId}`;
+        }
+        // Fallback: lista de assessments del candidato
+        return '/candidate/assessments';
 
       case 'ASSESSMENT_COMPLETED':
         if (meta?.attemptId) {
