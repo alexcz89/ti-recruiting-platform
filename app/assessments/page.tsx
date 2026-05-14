@@ -10,22 +10,37 @@ type UiState = "COMPLETED" | "IN_PROGRESS" | "EXPIRED" | "CANCELLED" | "PENDING"
 
 function pickUiState(inv: any, attempt: any, now: Date): UiState {
   const invStatus = String(inv?.status ?? "").toUpperCase();
-  const atStatus = String(attempt?.status ?? "").toUpperCase();
 
-  // ✅ Si hay attempt y ya expiró, debe dominar (aunque diga IN_PROGRESS)
-  if (attempt?.expiresAt && new Date(attempt.expiresAt) <= now) return "EXPIRED";
+  // Detectar attempt obsoleto: fue creado ANTES de que el invite fuera reenviado.
+  // Cuando se reenvía un assessment, el invite conserva el mismo ID pero se actualiza
+  // (updatedAt cambia y status vuelve a "SENT"). Un attempt cuyo createdAt < inv.updatedAt
+  // es de una ronda anterior y no debe bloquear el estado Pendiente.
+  const rawAtStatus = String(attempt?.status ?? "").toUpperCase();
+  const isStaleAttempt =
+    attempt != null &&
+    invStatus === "SENT" &&
+    ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(rawAtStatus) &&
+    attempt.createdAt != null &&
+    inv.updatedAt != null &&
+    new Date(attempt.createdAt) < new Date(inv.updatedAt);
 
-  // attempt manda (si existe)
+  const effectiveAttempt = isStaleAttempt ? null : attempt;
+  const atStatus = String(effectiveAttempt?.status ?? "").toUpperCase();
+
+  // Attempt final siempre manda (SUBMITTED, EVALUATED, COMPLETED) — no importa expiresAt
   if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
+
+  // Attempt activo pero su tiempo expiró (ya no puede continuar)
+  if (effectiveAttempt?.expiresAt && new Date(effectiveAttempt.expiresAt) <= now) return "EXPIRED";
+
   if (atStatus === "IN_PROGRESS") return "IN_PROGRESS";
 
   if (atStatus === "NOT_STARTED") {
-    // si invite ya está STARTED, muéstralo como en progreso
     if (invStatus === "STARTED") return "IN_PROGRESS";
     return "PENDING";
   }
 
-  // sin attempt: usa invite
+  // Sin attempt válido: el invite manda
   if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
   if (invStatus === "CANCELLED") return "CANCELLED";
   if (inv?.expiresAt && new Date(inv.expiresAt) <= now) return "EXPIRED";
@@ -190,10 +205,23 @@ export default async function CandidateAssessmentsPage() {
     const applicationId = String(inv?.application?.id ?? inv?.applicationId ?? "");
     const token = String(inv?.token ?? "");
 
-    const attempt =
+    const rawAttempt =
       attemptByInviteId.get(String(inv.id)) ||
       (applicationId && templateId ? attemptByKey.get(`${applicationId}::${templateId}`) : null) ||
       null;
+
+    // Filtrar attempt obsoleto (de una ronda anterior al reenvío) antes de pasarlo a pickUiState
+    const invStatusCheck = String(inv?.status ?? "").toUpperCase();
+    const rawAtStatusCheck = String(rawAttempt?.status ?? "").toUpperCase();
+    const isStaleHere =
+      rawAttempt != null &&
+      invStatusCheck === "SENT" &&
+      ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(rawAtStatusCheck) &&
+      rawAttempt.createdAt != null &&
+      inv.updatedAt != null &&
+      new Date(rawAttempt.createdAt) < new Date(inv.updatedAt);
+
+    const attempt = isStaleHere ? null : rawAttempt;
 
     const state = pickUiState(inv, attempt, now);
 
