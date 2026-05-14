@@ -386,6 +386,7 @@ export async function POST(
           jobId: string;
           candidateId: string;
           templateId: string;
+          updatedAt: Date;
         }
       | null = null;
 
@@ -400,6 +401,7 @@ export async function POST(
           jobId: true,
           candidateId: true,
           templateId: true,
+          updatedAt: true,
         },
       });
 
@@ -472,16 +474,21 @@ export async function POST(
     }
 
     // Si el candidato llega con un invite específico (por token), solo contamos
-    // los attempts que pertenecen a ESE invite. Cuando el reclutador "reenvía"
-    // el assessment, el attempt anterior queda con inviteId=null (desasociado),
-    // por lo que el conteo será 0 y se le permite iniciar de nuevo.
-    // Sin invite (flow legacy por applicationId), contamos globalmente por template.
+    // attempts de ESE invite ciclo actual (createdAt >= invite.updatedAt).
+    // Cuando el reclutador "reenvía", invite.updatedAt se actualiza y los attempts
+    // anteriores (creados antes del reenvío) quedan excluidos del conteo.
+    // Sin invite (flow legacy), contamos globalmente por template.
     const attemptsUsed = await prisma.assessmentAttempt.count({
       where: {
         candidateId: user.id,
         templateId: params.templateId,
         status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
-        ...(invite ? { inviteId: invite.id } : {}),
+        ...(invite
+          ? {
+              inviteId: invite.id,
+              createdAt: { gte: invite.updatedAt },
+            }
+          : {}),
       },
     });
 
@@ -565,10 +572,32 @@ export async function POST(
           expiresAt: true,
           startedAt: true,
           flagsJson: true,
+          createdAt: true,
         },
       });
 
       if (attemptByInvite) {
+        // Detectar attempt obsoleto: fue creado antes del último reenvío del invite.
+        // Ocurre cuando el resend se ejecutó con código anterior al fix que desasocia
+        // el attempt (inviteId → null). En ese caso, desasociamos aquí y creamos uno nuevo.
+        const isStaleAttempt =
+          isAttemptFinal(attemptByInvite.status) &&
+          attemptByInvite.createdAt < invite.updatedAt;
+
+        if (isStaleAttempt) {
+          // Desasociar el attempt obsoleto para liberar el UNIQUE constraint
+          await prisma.assessmentAttempt.update({
+            where: { id: attemptByInvite.id },
+            data: { inviteId: null },
+          });
+          // Crear attempt nuevo para este ciclo del invite
+          return createFreshAttempt({
+            oldAttemptId: null,
+            oldInviteId: invite.id,
+            applicationIdToUse: applicationId || attemptByInvite.applicationId || null,
+          });
+        }
+
         if (isAttemptFinal(attemptByInvite.status)) {
           return jsonNoStore({ error: "El intento ya fue completado" }, 400);
         }
