@@ -188,6 +188,7 @@ export default function CodeEditor({
   const [customOutput, setCustomOutput] = useState<{ output: string; error: string; executionTimeMs?: number } | null>(null);
 
   const editorRef = useRef<any>(null);
+  const monacoRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -370,8 +371,21 @@ export default function CodeEditor({
     }
   };
 
+  // Actualizar el tema de Monaco reactivamente cuando cambia isDark.
+  // La prop `theme` no siempre dispara el re-render interno de Monaco;
+  // hay que llamar setTheme() imperativamente.
+  useEffect(() => {
+    if (monacoRef.current) {
+      monacoRef.current.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+    }
+  }, [isDark]);
+
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
+    monacoRef.current = monaco;
+
+    // Aplicar tema correcto inmediatamente al montar (por si resolvedTheme llegó tarde)
+    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       handleRunTests();
