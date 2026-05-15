@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import Footer from "@/components/Footer";
+import TechMarquee from "@/components/landing/TechMarquee";
 import {
   Users,
   Briefcase,
@@ -127,6 +128,11 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* ══════════════════════════════════════════════
+          TECH MARQUEE — Tecnologías evaluadas
+      ══════════════════════════════════════════════ */}
+      <TechMarquee />
 
       {/* ══════════════════════════════════════════════
           DOS CAMINOS — Candidatos vs Empresas
