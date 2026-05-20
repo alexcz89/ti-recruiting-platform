@@ -48,7 +48,10 @@ export default async function Home() {
   if (role === "CANDIDATE") redirect("/profile/summary");
 
   return (
-    <main className="min-h-screen bg-white dark:bg-zinc-950">
+    // -mx y -mb cancelan el max-w-7xl / px / pb-10 que inyecta layout.tsx
+    // así la landing puede tener secciones full-width sin una franja de fondo
+    // debajo del footer que parezca un segundo footer.
+    <div className="min-h-screen bg-white dark:bg-zinc-950 -mx-4 sm:-mx-6 lg:-mx-8 -mb-10">
 
       {/* ══════════════════════════════════════════════
           HERO — Dual audience, diferenciado
@@ -64,13 +67,6 @@ export default async function Home() {
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center pt-16 pb-16 text-center sm:pt-20 lg:pt-28 lg:pb-20">
-
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/40 px-4 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 shadow-sm mb-8 animate-fade-in">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              La plataforma de reclutamiento TI en México
-              <span className="text-base">🇲🇽</span>
-            </div>
 
             {/* Headline */}
             <h1 className="max-w-4xl text-5xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-6xl lg:text-7xl leading-[1.05] animate-fade-in-up">
@@ -177,9 +173,6 @@ export default async function Home() {
       <section className="py-20 sm:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-14">
-            <span className="inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-4">
-              Por qué Taskio
-            </span>
             <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
               No somos otro job board.
             </h2>
@@ -269,9 +262,6 @@ export default async function Home() {
       <section className="border-y border-zinc-100 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/50 py-20 sm:py-28">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
-            <span className="inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/60 px-3 py-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-4">
-              Cómo funciona
-            </span>
             <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
               Simple para todos
             </h2>
@@ -375,9 +365,6 @@ export default async function Home() {
       <section className="py-20 sm:py-28 overflow-hidden">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-12">
-            <span className="inline-flex items-center gap-2 rounded-full border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50 px-3 py-1 text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide mb-4">
-              Plataforma en acción
-            </span>
             <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
               Mira Taskio por dentro
             </h2>
@@ -796,6 +783,6 @@ export default async function Home() {
       </section>
 
       <Footer />
-    </main>
+    </div>
   );
 }
