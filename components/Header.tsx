@@ -1,24 +1,22 @@
 // components/Header.tsx
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import ThemeToggle from "@/components/ThemeToggle";
-import SignOutButton from "@/components/SignOutButton";
 import LogoTaskio from "@/components/LogoTaskio";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { ClipboardList, Menu, X } from "lucide-react";
+import {
+  ClipboardList,
+  Menu,
+  X,
+  User,
+  LogOut,
+} from "lucide-react";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
-  // Cerrar menú móvil al cambiar de ruta
-  useEffect(() => {
-    const handleRouteChange = () => setMobileMenuOpen(false);
-    // Si usas Next.js 13+ con App Router, esto podría no ser necesario
-    return () => {};
-  }, []);
 
   return (
     <header
@@ -81,6 +79,108 @@ function DesktopNav() {
   );
 }
 
+/* -------- Avatar Dropdown -------- */
+function AvatarMenu({ user, role }: { user: any; role?: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  // Close on Escape
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [open]);
+
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n: string) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : user?.email?.[0]?.toUpperCase() ?? "U";
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="
+          flex h-8 w-8 shrink-0 items-center justify-center
+          rounded-full bg-emerald-600 text-white text-[13px] font-bold
+          hover:bg-emerald-500 transition-colors
+          focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
+        "
+        aria-label="Menú de usuario"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        {initials}
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="
+            absolute right-0 top-full mt-2 z-50 w-56
+            rounded-xl border border-zinc-200 dark:border-zinc-700
+            bg-white dark:bg-zinc-900 shadow-lg
+            animate-in fade-in slide-in-from-top-2 duration-150
+          "
+        >
+          {/* User info */}
+          <div className="px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-800">
+            {user?.name && (
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                {user.name}
+              </p>
+            )}
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+              {user?.email}
+            </p>
+          </div>
+
+          {/* Menu items */}
+          <div className="py-1">
+            <Link
+              href={role === "CANDIDATE" ? "/profile/summary" : "/dashboard/profile"}
+              onClick={() => setOpen(false)}
+              role="menuitem"
+              className="flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors"
+            >
+              <User className="h-4 w-4 opacity-60 shrink-0" />
+              Mi perfil
+            </Link>
+          </div>
+
+          <div className="border-t border-zinc-100 dark:border-zinc-800 py-1">
+            <button
+              onClick={() => signOut({ callbackUrl: "/" })}
+              role="menuitem"
+              className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors"
+            >
+              <LogOut className="h-4 w-4 opacity-60 shrink-0" />
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* -------- Mobile Menu -------- */
 function MobileMenu({ onClose }: { onClose: () => void }) {
   const { data: session, status } = useSession();
@@ -103,9 +203,6 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
           <>
             {isRecruiter && (
               <>
-                <MobileNavLink href="/dashboard/jobs/new" onClick={onClose}>
-                  Publicar vacante
-                </MobileNavLink>
                 <MobileNavLink href="/dashboard/overview" onClick={onClose}>
                   Panel
                 </MobileNavLink>
@@ -127,12 +224,21 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
             )}
 
             <div className="pt-2 border-t border-zinc-200/60 dark:border-zinc-800/60">
-              <div className="px-3 py-2 text-xs text-zinc-500 dark:text-zinc-400">
+              {user?.name && (
+                <p className="px-3 py-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+                  {user.name}
+                </p>
+              )}
+              <p className="px-3 py-1 text-xs text-zinc-500 dark:text-zinc-400">
                 {user?.email}
-              </div>
-              <div className="px-3">
-                <SignOutButton />
-              </div>
+              </p>
+              <button
+                onClick={() => signOut({ callbackUrl: "/" })}
+                className="w-full flex items-center gap-2 px-3 py-2.5 mt-1 text-sm rounded-md text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+              >
+                <LogOut className="h-4 w-4 shrink-0" />
+                Cerrar sesión
+              </button>
             </div>
           </>
         ) : (
@@ -196,7 +302,6 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 function AuthArea() {
   const { data: session, status } = useSession();
 
-  // Memoizar para evitar re-renders innecesarios
   const authData = useMemo(() => {
     if (status !== "authenticated" || !session) {
       return { isAuthenticated: false as const };
@@ -219,67 +324,23 @@ function AuthArea() {
     return <AuthButtons />;
   }
 
-  const { user, isRecruiter, isCandidate } = authData;
+  const { user, isCandidate } = authData;
 
   return (
     <div className="flex items-center gap-1.5 sm:gap-2">
-      {isRecruiter && <RecruiterNav />}
-      {isCandidate && <CandidateNav />}
+      {/* Assessments link — solo para candidatos */}
+      {isCandidate && <CandidateAssessmentsNav />}
 
-      {/* 🔔 NOTIFICATION BELL - Solo cuando está autenticado */}
+      {/* 🔔 Notificaciones */}
       <NotificationBell />
 
-      <span className="hidden lg:inline text-[12px] text-zinc-500 dark:text-zinc-400">
-        {user?.email}
-      </span>
-
-      <SignOutButton />
+      {/* Avatar dropdown */}
+      <AvatarMenu user={user} role={authData.role} />
     </div>
   );
 }
 
-/* -------- Recruiter Navigation -------- */
-function RecruiterNav() {
-  return (
-    <>
-      <Link href="/dashboard/jobs/new" className="btn btn-primary h-9 px-3 md:px-3.5">
-        Publicar vacante
-      </Link>
-
-      <Link
-        href="/dashboard/overview"
-        className="btn btn-ghost h-9 px-3 text-zinc-700 dark:text-zinc-300"
-      >
-        Panel
-      </Link>
-
-      <Link
-        href="/dashboard/profile"
-        className="btn btn-ghost h-9 px-3 text-zinc-700 dark:text-zinc-300"
-      >
-        Mi perfil
-      </Link>
-    </>
-  );
-}
-
-/* -------- Candidate Navigation -------- */
-function CandidateNav() {
-  return (
-    <>
-      <CandidateAssessmentsNav />
-
-      <Link
-        href="/profile/summary"
-        className="btn btn-ghost h-9 px-3 text-zinc-700 dark:text-zinc-300"
-      >
-        Perfil
-      </Link>
-    </>
-  );
-}
-
-/* -------- Assessment Badge (optimizado) -------- */
+/* -------- Assessment Badge (candidatos) -------- */
 function CandidateAssessmentsNav() {
   const { data: session, status } = useSession();
   const [badgeCount, setBadgeCount] = useState<number>(0);
@@ -356,7 +417,7 @@ function CandidateAssessmentsNav() {
   );
 }
 
-/* -------- Auth Buttons (simplificado) -------- */
+/* -------- Auth Buttons (unauthenticated) -------- */
 function AuthButtons() {
   const [isOpen, setIsOpen] = useState(false);
 

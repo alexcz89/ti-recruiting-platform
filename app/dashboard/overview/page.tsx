@@ -9,14 +9,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import clsx from "clsx";
 import {
-  AlertCircle,
   CheckCircle2,
-  XCircle,
-  Clock,
   TrendingUp,
   Bell,
   Users,
   Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import QuickActionButtons from "./QuickActionButtons";
 import {
@@ -238,7 +236,6 @@ export default async function OverviewPage() {
   });
 
   const emailUnverified = !dbUser?.emailVerified;
-  const hasPendingTasks = appsPending > 0 || jobsWithoutApps > 0;
 
   const globalAvgMatch =
     topJobs.filter((j) => j.avgMatch !== null).length > 0
@@ -251,66 +248,39 @@ export default async function OverviewPage() {
   return (
     <main className="w-full">
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-4 px-3 py-3 sm:space-y-6 sm:px-6 sm:py-5 lg:px-10">
-        <div className="sticky top-12 z-30">
-          <header className="rounded-2xl border glass-card p-3 sm:p-4 md:p-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-bold leading-tight text-default sm:text-3xl">
-                  Panel
-                </h1>
+        <div className="flex flex-wrap items-center gap-2.5 pb-1">
+          <h1 className="text-2xl font-bold leading-tight text-default sm:text-3xl">
+            Panel
+          </h1>
 
-                {company && (
-                  <span className="badge inline-flex items-center gap-1.5">
-                    {company.logoUrl && (
-                      <Image
-                        src={company.logoUrl}
-                        alt={company.name}
-                        width={16}
-                        height={16}
-                        className="h-4 w-4 rounded-sm object-contain"
-                      />
-                    )}
-                    <span className="max-w-[120px] truncate text-default sm:max-w-none">
-                      {company.name}
-                    </span>
-                  </span>
-                )}
+          {company && (
+            <span className="badge inline-flex items-center gap-1.5">
+              {company.logoUrl && (
+                <Image
+                  src={company.logoUrl}
+                  alt={company.name}
+                  width={16}
+                  height={16}
+                  className="h-4 w-4 rounded-sm object-contain"
+                />
+              )}
+              <span className="max-w-[140px] truncate text-default sm:max-w-none">
+                {company.name}
+              </span>
+            </span>
+          )}
 
-                {appsPending > 0 && (
-                  <Link
-                    href="/dashboard/jobs?filter=pending"
-                    className="relative inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 transition hover:bg-amber-200 dark:border-amber-500/40 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
-                  >
-                    <Bell className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
-                    <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                      {appsPending}
-                    </span>
-                  </Link>
-                )}
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                <Link
-                  href="/dashboard/jobs/new"
-                  className="btn btn-primary text-sm"
-                >
-                  + Publicar vacante
-                </Link>
-                <Link
-                  href="/dashboard/jobs"
-                  className="btn-ghost hidden text-sm sm:inline-flex"
-                >
-                  Administrar vacantes
-                </Link>
-                <Link
-                  href="/dashboard/billing"
-                  className="btn-ghost hidden text-sm md:inline-flex"
-                >
-                  Facturación
-                </Link>
-              </div>
-            </div>
-          </header>
+          {appsPending > 0 && (
+            <Link
+              href="/dashboard/jobs?filter=pending"
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 transition hover:bg-amber-200 dark:border-amber-500/40 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
+            >
+              <Bell className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                {appsPending} sin revisar
+              </span>
+            </Link>
+          )}
         </div>
 
         {emailUnverified && <BannerEmailUnverified />}
@@ -324,72 +294,32 @@ export default async function OverviewPage() {
           company={company}
         />
 
-        {hasPendingTasks && (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-500/30 dark:bg-amber-900/20 sm:p-4 md:p-5">
-            <div className="flex items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
-              <div className="min-w-0 flex-1">
-                <h2 className="mb-2 text-sm font-semibold text-amber-900 dark:text-amber-100 sm:text-base">
-                  Tareas pendientes
-                </h2>
-                <ul className="space-y-2">
-                  {appsPending > 0 && (
-                    <li className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
-                      <Clock className="h-4 w-4 shrink-0" />
-                      <Link
-                        href="/dashboard/jobs?filter=pending"
-                        className="hover:underline"
-                      >
-                        <span className="font-semibold">
-                          {appsPending}
-                        </span>{" "}
-                        candidato{appsPending !== 1 ? "s" : ""} sin revisar
-                      </Link>
-                    </li>
-                  )}
-
-                  {jobsWithoutApps > 0 && (
-                    <li className="flex items-center gap-2 text-sm text-amber-800 dark:text-amber-200">
-                      <XCircle className="h-4 w-4 shrink-0" />
-                      <Link
-                        href="/dashboard/jobs?filter=no-applications"
-                        className="hover:underline"
-                      >
-                        <span className="font-semibold">
-                          {jobsWithoutApps}
-                        </span>{" "}
-                        vacante{jobsWithoutApps !== 1 ? "s" : ""} sin
-                        postulaciones (+15 días)
-                      </Link>
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </div>
-          </section>
-        )}
-
+        {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
         <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          {/* Por revisar — card destacada */}
+          <KpiCard
+            label="Por revisar"
+            value={nf(appsPending)}
+            tone={appsPending > 0 ? "amber" : "emerald"}
+            badge={appsPending > 0 ? "Prioritario" : "Al día"}
+            linkHref={appsPending > 0 ? "/dashboard/jobs?filter=pending" : undefined}
+            linkLabel={appsPending > 0 ? "Revisar candidatos →" : undefined}
+            featured={appsPending > 0}
+          />
           <KpiCard
             label="Vacantes abiertas"
             value={nf(openJobs)}
-            tone="emerald"
+            tone="zinc"
           />
           <KpiCard
-            label="Postulaciones"
+            label="Postulaciones totales"
             value={nf(appsTotal)}
-            tone="blue"
+            tone="zinc"
           />
           <KpiCard
             label="Últimos 7 días"
             value={nf(apps7d)}
-            tone="violet"
-          />
-          <KpiCard
-            label="Por revisar"
-            value={nf(appsPending)}
-            tone={appsPending > 0 ? "amber" : "zinc"}
-            badge={appsPending > 0 ? "Prioritario" : undefined}
+            tone="zinc"
           />
         </section>
 
@@ -706,32 +636,43 @@ function KpiCard({
   value,
   tone = "zinc",
   badge,
+  linkHref,
+  linkLabel,
+  featured = false,
 }: {
   label: string;
   value: string | number;
   tone?: "zinc" | "emerald" | "amber" | "blue" | "violet";
   badge?: string;
+  linkHref?: string;
+  linkLabel?: string;
+  featured?: boolean;
 }) {
-  const tones: Record<string, { card: string; accent: string }> = {
+  const tones: Record<string, { card: string; accent: string; badge: string }> = {
     zinc: {
       card: "glass-card",
-      accent: "bg-zinc-100 dark:bg-zinc-800",
+      accent: "bg-zinc-200 dark:bg-zinc-700",
+      badge: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
     },
     emerald: {
-      card: "glass-card border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-900/20",
-      accent: "bg-emerald-100 dark:bg-emerald-800",
+      card: "glass-card border-emerald-300/60 dark:border-emerald-400/25 bg-emerald-50/70 dark:bg-emerald-900/25",
+      accent: "bg-emerald-200 dark:bg-emerald-800",
+      badge: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-300",
     },
     amber: {
-      card: "glass-card border-amber-300/50 dark:border-amber-400/20 bg-amber-50/60 dark:bg-amber-900/20",
-      accent: "bg-amber-100 dark:bg-amber-800",
+      card: "glass-card border-amber-300/60 dark:border-amber-400/25 bg-amber-50/70 dark:bg-amber-900/25",
+      accent: "bg-amber-200 dark:bg-amber-800",
+      badge: "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300",
     },
     blue: {
       card: "glass-card border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
       accent: "bg-blue-100 dark:bg-blue-800",
+      badge: "border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/40 dark:text-blue-300",
     },
     violet: {
       card: "glass-card border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
       accent: "bg-violet-100 dark:bg-violet-800",
+      badge: "border-violet-200 bg-violet-100 text-violet-700 dark:border-violet-500/40 dark:bg-violet-900/40 dark:text-violet-300",
     },
   };
 
@@ -741,23 +682,48 @@ function KpiCard({
     <div
       className={clsx(
         "rounded-xl border p-3 shadow-sm transition hover:shadow-md",
-        t.card
+        t.card,
+        featured && "ring-1 ring-amber-300/60 dark:ring-amber-500/30"
       )}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className={clsx("h-5 w-5 shrink-0 rounded-md", t.accent)} />
         {badge && (
-          <span className="whitespace-nowrap rounded-full border border-amber-200 bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300 sm:text-[10px]">
+          <span
+            className={clsx(
+              "whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide sm:text-[10px]",
+              t.badge
+            )}
+          >
             {badge}
           </span>
         )}
       </div>
+
       <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-muted sm:text-[11px]">
         {label}
       </p>
-      <p className="mt-1 text-xl font-bold text-default sm:text-2xl md:text-3xl">
+
+      <p
+        className={clsx(
+          "mt-1 font-bold text-default",
+          featured
+            ? "text-2xl sm:text-3xl md:text-4xl"
+            : "text-xl sm:text-2xl md:text-3xl"
+        )}
+      >
         {value}
       </p>
+
+      {linkHref && linkLabel && (
+        <Link
+          href={linkHref}
+          className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline"
+        >
+          {linkLabel}
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      )}
     </div>
   );
 }
