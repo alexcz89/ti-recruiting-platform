@@ -1124,6 +1124,7 @@ enum BillingPlan {
   FREE
   STARTER
   PRO
+  BUSINESS
 }
 
 enum InvoiceStatus {

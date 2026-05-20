@@ -10,8 +10,9 @@ import { toastSuccess, toastError } from "@/lib/ui/toast";
 // Price IDs directamente — NO importar lib/stripe en componentes cliente
 // (lib/stripe inicializa el SDK con STRIPE_SECRET_KEY que solo existe en el servidor)
 const STRIPE_PLAN_MAP: Partial<Record<PlanId, string>> = {
-  STARTER: "price_1T70fj1xbuY0ledyXNl3x7Nc",
-  PRO:     "price_1T70gQ1xbuY0ledyv9Tv3h2G",
+  STARTER:  "price_1T70fj1xbuY0ledyXNl3x7Nc",
+  PRO:      "price_1T70gQ1xbuY0ledyv9Tv3h2G",
+  BUSINESS: "price_business_placeholder", // TODO: reemplazar con price ID real de Stripe
 };
 
 type Props = {
