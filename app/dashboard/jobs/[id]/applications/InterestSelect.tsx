@@ -143,7 +143,7 @@ export default function InterestSelect({
   }, [open]);
 
   const baseButtonClasses =
-    "inline-flex h-8 min-w-[150px] items-center justify-between rounded-full " +
+    "inline-flex h-8 min-w-[150px] items-center gap-2 rounded-full " +
     "border px-3 text-xs font-medium shadow-sm " +
     "transition-colors transition-shadow " +
     "cursor-pointer select-none " +
@@ -167,10 +167,9 @@ export default function InterestSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="truncate">{LABEL[value]}</span>
-        <span className="ml-2 text-[10px] text-zinc-600 dark:text-zinc-300">
-          ▾
-        </span>
+        <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_COLOR[value]}`} aria-hidden />
+        <span className="flex-1 truncate text-left">{LABEL[value]}</span>
+        <span className="shrink-0 text-[10px] opacity-60">▾</span>
       </button>
 
       {/* Menú: ahora es un bloque normal debajo del botón (no absoluto) */}

@@ -8,7 +8,7 @@ import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
 import ActionsMenu from "./ActionsMenu";
-import { Phone, FileText as FileTextIcon, Search, Lock, SlidersHorizontal, ArrowLeft, MapPin, Calendar, Eye as EyeIcon, BarChart2, Users } from "lucide-react";
+import { Phone, FileText as FileTextIcon, Search, Lock, ArrowLeft, MapPin, Calendar, Eye as EyeIcon, BarChart2, Users } from "lucide-react";
 import ShareLinkedInButton from "./ShareLinkedInButton";
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import MatchScorePopover from "@/components/dashboard/MatchScorePopover";
@@ -602,34 +602,16 @@ export default async function JobApplicationsPage({
 
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} />
-            <FilterPill active={chosenInterest === "REVIEW"} href={buildHref({ interest: "REVIEW" })} label={`Revisión (${counters.REVIEW})`} />
-            <FilterPill active={chosenInterest === "MAYBE"} href={buildHref({ interest: "MAYBE" })} label={`En duda (${counters.MAYBE})`} />
-            <FilterPill active={chosenInterest === "ACCEPTED"} href={buildHref({ interest: "ACCEPTED" })} label={`Aceptados (${counters.ACCEPTED})`} />
-            <FilterPill active={chosenInterest === "REJECTED"} href={buildHref({ interest: "REJECTED" })} label={`Rechazados (${counters.REJECTED})`} />
+            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} count={total} />
+            <FilterPill active={chosenInterest === "REVIEW"} href={buildHref({ interest: "REVIEW" })} label={`Revisión (${counters.REVIEW})`} count={counters.REVIEW} />
+            <FilterPill active={chosenInterest === "MAYBE"} href={buildHref({ interest: "MAYBE" })} label={`En duda (${counters.MAYBE})`} count={counters.MAYBE} />
+            <FilterPill active={chosenInterest === "ACCEPTED"} href={buildHref({ interest: "ACCEPTED" })} label={`Aceptados (${counters.ACCEPTED})`} count={counters.ACCEPTED} />
+            <FilterPill active={chosenInterest === "REJECTED"} href={buildHref({ interest: "REJECTED" })} label={`Rechazados (${counters.REJECTED})`} count={counters.REJECTED} />
           </div>
         </section>
 
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <SlidersHorizontal className="h-3.5 w-3.5 text-zinc-400" />
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Filtrar por</span>
-              {activeFiltersCount > 0 && (
-                <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
-                  {activeFiltersCount}
-                </span>
-              )}
-              {activeFiltersCount > 0 && (
-                <Link
-                  href={buildHref({ match: undefined, cv: undefined })}
-                  className="ml-auto text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600"
-                >
-                  Limpiar
-                </Link>
-              )}
-            </div>
-
             <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
               {hasMatchSignals && (
                 <div className="flex items-center gap-2">
@@ -682,6 +664,15 @@ export default async function JobApplicationsPage({
                   ))}
                 </div>
               </div>
+
+              {activeFiltersCount > 0 && (
+                <Link
+                  href={buildHref({ match: undefined, cv: undefined })}
+                  className="ml-auto text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600 whitespace-nowrap"
+                >
+                  Limpiar filtros
+                </Link>
+              )}
             </div>
           </div>
         </section>
@@ -982,25 +973,32 @@ export default async function JobApplicationsPage({
                               </div>
                             )}
 
-                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                            <div className="mt-1 flex flex-wrap items-center gap-1">
                               {phone && (
-                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={`Tel: ${phone}`}>
-                                  <Phone className="h-3 w-3" />
-                                </span>
+                                <a
+                                  href={`tel:${phone}`}
+                                  title={phone}
+                                  className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70 dark:text-zinc-400 transition-colors"
+                                >
+                                  <Phone className="h-3 w-3 shrink-0" />
+                                  Tel
+                                </a>
                               )}
                               {resumeUrl && (
                                 <a
                                   href={resumeUrl}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70"
                                   title="Ver CV"
+                                  className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 transition-colors"
                                 >
-                                  <FileTextIcon className="h-3 w-3" />
+                                  <FileTextIcon className="h-3 w-3 shrink-0" />
+                                  CV
                                 </a>
                               )}
                               {hasWhatsApp && (
-                                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
+                                  <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 fill-current" aria-hidden><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.121 1.532 5.851L.057 23.997l6.305-1.655A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.003-1.366l-.359-.213-3.742.982.999-3.648-.234-.374A9.785 9.785 0 012.182 12C2.182 6.579 6.579 2.182 12 2.182S21.818 6.579 21.818 12 17.421 21.818 12 21.818z"/></svg>
                                   WA
                                 </span>
                               )}
@@ -1056,22 +1054,16 @@ export default async function JobApplicationsPage({
                               </div>
                             </div>
                           ) : (
-                            <div className="space-y-1.5">
-                              <MatchScorePopover
-                                score={gatedFinalScore!}
-                                matchResult={matchResult}
-                                jobSkillCount={jobSkillsForEngine.length}
-                                scoreColor={scoreToColor(gatedFinalScore!)}
-                                scoreTextColor={scoreToTextColor(gatedFinalScore!)}
-                                scoreLabel={scoreToLabel(gatedFinalScore!)}
-                                candidateId={a.candidate?.id}
-                                jobId={job.id}
-                              />
-                              <MatchBreakdownMini
-                                matchResult={matchResult}
-                                showCounts={hasJobSkills}
-                              />
-                            </div>
+                            <MatchScorePopover
+                              score={gatedFinalScore!}
+                              matchResult={matchResult}
+                              jobSkillCount={jobSkillsForEngine.length}
+                              scoreColor={scoreToColor(gatedFinalScore!)}
+                              scoreTextColor={scoreToTextColor(gatedFinalScore!)}
+                              scoreLabel={scoreToLabel(gatedFinalScore!)}
+                              candidateId={a.candidate?.id}
+                              jobId={job.id}
+                            />
                           )}
                         </td>
 
@@ -1084,15 +1076,14 @@ export default async function JobApplicationsPage({
                                 <span
                                   key={`${d.termId}-${i}`}
                                   title={d.must ? "Requerida" : "Deseable"}
-                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] ${
+                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
                                     d.must
-                                      ? "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-600/60 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                      : "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
+                                      ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200"
+                                      : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
                                   }`}
                                 >
-                                  {d.must && <span className="mr-1 text-[9px] font-bold uppercase">Req</span>}
+                                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${d.must ? "bg-emerald-500" : "bg-zinc-400"}`} />
                                   {d.label}
-                                  {d.candidateLevel && <span className="ml-1 text-[9px] opacity-50">L{d.candidateLevel}</span>}
                                 </span>
                               ))}
                               {hiddenCount > 0 && <span className="text-[10px] text-zinc-400">+{hiddenCount}</span>}
@@ -1108,37 +1099,52 @@ export default async function JobApplicationsPage({
                           </div>
                         </td>
 
-                        <td className="px-3 py-2.5 text-xs text-zinc-500" title={new Date(a._lastActivity).toLocaleString()}>
-                          {fromNow(a._lastActivity)}
+                        <td className="px-3 py-2.5" title={new Date(a._lastActivity).toLocaleString()}>
+                          <span className="block text-[10px] text-zinc-400">
+                            {Math.abs(new Date(a.createdAt).getTime() - new Date(a.updatedAt).getTime()) < 5000
+                              ? "Nueva"
+                              : "Actualizada"}
+                          </span>
+                          <span className="text-xs text-zinc-500">{fromNow(a._lastActivity)}</span>
                         </td>
 
                         <td className="px-3 py-2.5 align-top">
-                          <ActionsMenu
-                            applicationId={a.id}
-                            jobId={job.id}
-                            candidateHref={candidateHref}
-                            resumeUrl={resumeUrl ?? null}
-                            candidateEmail={a.candidate?.email ?? ""}
-                            candidatePhone={phone ?? null}
-                            candidateName={a._fullName ?? null}
-                            recruiterName={recruiterName}
-                            jobTitle={job.title}
-                            companyName={company?.name ?? null}
-                            assessment={
-                              assessmentEnabled && chosenTemplateId
-                                ? ({
-                                    enabled: true,
-                                    templateId: assessMeta?.templateId ?? chosenTemplateId,
-                                    templateIds: allJobTemplateIds,
-                                    templateTitles: jobTemplateTitles,
-                                    state: (assessMeta?.state ?? "NONE") as any,
-                                    token: assessMeta?.token ?? null,
-                                    attemptId: assessMeta?.attemptId ?? null,
-                                    perTemplateState: assessMeta?.perTemplateState,
-                                  } as any)
-                                : ({ enabled: false } as any)
-                            }
-                          />
+                          <div className="flex items-center gap-1.5">
+                            {candidateHref && (
+                              <Link
+                                href={candidateHref}
+                                className="inline-flex items-center rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-600 whitespace-nowrap transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-700/40 dark:hover:text-emerald-300"
+                              >
+                                Ver perfil
+                              </Link>
+                            )}
+                            <ActionsMenu
+                              applicationId={a.id}
+                              jobId={job.id}
+                              candidateHref={candidateHref}
+                              resumeUrl={resumeUrl ?? null}
+                              candidateEmail={a.candidate?.email ?? ""}
+                              candidatePhone={phone ?? null}
+                              candidateName={a._fullName ?? null}
+                              recruiterName={recruiterName}
+                              jobTitle={job.title}
+                              companyName={company?.name ?? null}
+                              assessment={
+                                assessmentEnabled && chosenTemplateId
+                                  ? ({
+                                      enabled: true,
+                                      templateId: assessMeta?.templateId ?? chosenTemplateId,
+                                      templateIds: allJobTemplateIds,
+                                      templateTitles: jobTemplateTitles,
+                                      state: (assessMeta?.state ?? "NONE") as any,
+                                      token: assessMeta?.token ?? null,
+                                      attemptId: assessMeta?.attemptId ?? null,
+                                      perTemplateState: assessMeta?.perTemplateState,
+                                    } as any)
+                                  : ({ enabled: false } as any)
+                              }
+                            />
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1153,13 +1159,16 @@ export default async function JobApplicationsPage({
   );
 }
 
-function FilterPill({ active, href, label }: { active?: boolean; href: string; label: string }) {
+function FilterPill({ active, href, label, count }: { active?: boolean; href: string; label: string; count?: number }) {
+  const isEmpty = typeof count === "number" && count === 0 && !active;
   return (
     <Link
       href={href}
       className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-medium transition sm:px-4 ${
         active
           ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
+          : isEmpty
+          ? "border-zinc-200/50 bg-transparent text-zinc-400 hover:bg-zinc-100/40 dark:border-zinc-700/50 dark:text-zinc-600"
           : "border-zinc-200 bg-transparent text-zinc-600 hover:bg-zinc-100/70 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/60"
       }`}
     >
