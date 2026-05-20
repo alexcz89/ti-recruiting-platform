@@ -6,7 +6,7 @@ import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
 import AssignTemplateModalTrigger from "@/components/dashboard/AssignTemplateModalTrigger";
 import AssessmentsBadge from "@/components/dashboard/AssessmentsBadge";
-import { Briefcase, Users, Clock, CheckCircle2, Plus, ClipboardCheck } from "lucide-react";
+import { Briefcase, Plus } from "lucide-react";
 
 export const metadata = { title: "Vacantes | Panel" };
 
@@ -196,55 +196,84 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         )}
 
         {/* ── Header ── */}
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              Panel de reclutador
-            </p>
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 dark:text-zinc-50">
-                Vacantes
-              </h1>
-              {activeFilterLabel && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-200 dark:bg-amber-900/40 dark:border-amber-500/40 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                  🔍 {activeFilterLabel}
-                  <Link href="/dashboard/jobs" className="hover:opacity-70" title="Quitar filtro">✕</Link>
-                </span>
-              )}
-            </div>
-          </div>
-          <Link
-            href="/dashboard/jobs/new"
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-emerald-700 transition shrink-0"
-          >
-            <Plus className="h-4 w-4 shrink-0" />
-            <span className="hidden sm:inline">Publicar vacante</span>
-            <span className="sm:hidden">Publicar</span>
-          </Link>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-zinc-900 dark:text-zinc-50">
+            Vacantes
+          </h1>
+          {activeFilterLabel && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-100 border border-amber-200 dark:bg-amber-900/40 dark:border-amber-500/40 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+              🔍 {activeFilterLabel}
+              <Link href="/dashboard/jobs" className="hover:opacity-70" title="Quitar filtro">✕</Link>
+            </span>
+          )}
         </div>
 
         {/* ── Métricas ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: "Abiertas",          value: openCount,                    icon: Briefcase,    color: "text-emerald-600 dark:text-emerald-400" },
-            { label: "Pausadas/Cerradas", value: pausedCount + closedCount,    icon: Clock,        color: "text-zinc-700 dark:text-zinc-300" },
-            { label: "Postulaciones",     value: totalApplications,            icon: Users,        color: "text-blue-600 dark:text-blue-400" },
-            { label: "Por revisar",       value: totalPending,                 icon: CheckCircle2, color: "text-amber-600 dark:text-amber-400", accent: true },
-          ].map(({ label, value, icon: Icon, color, accent }) => (
-            <div key={label} className="rounded-2xl border border-zinc-200/80 bg-white/80 dark:border-zinc-800/50 dark:bg-zinc-900/80 p-3 sm:p-4 shadow-sm">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 leading-tight">
-                  {label}
-                </p>
-                {accent && (
-                  <span className="rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-500/40 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 dark:text-amber-300 shrink-0">
-                    Prio
-                  </span>
-                )}
-              </div>
-              <p className={`mt-1 text-2xl sm:text-3xl font-black ${color}`}>{value}</p>
+
+          {/* Por revisar — card dominante */}
+          <Link
+            href="/dashboard/jobs?filter=pending"
+            className={`rounded-2xl border p-3 sm:p-4 shadow-sm transition hover:shadow-md ${
+              totalPending > 0
+                ? "border-amber-200/80 bg-amber-50/80 dark:border-amber-500/30 dark:bg-amber-900/20 ring-1 ring-amber-200/60 dark:ring-amber-500/20"
+                : "border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-500/30 dark:bg-emerald-900/20"
+            }`}
+          >
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 leading-tight">
+                Por revisar
+              </p>
+              <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                totalPending > 0
+                  ? "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300"
+                  : "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-300"
+              }`}>
+                {totalPending > 0 ? "Prioritario" : "Al día"}
+              </span>
             </div>
-          ))}
+            <p className={`text-3xl sm:text-4xl font-black ${
+              totalPending > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+            }`}>
+              {totalPending}
+            </p>
+            {totalPending > 0 && (
+              <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                Revisar candidatos →
+              </p>
+            )}
+          </Link>
+
+          {/* Abiertas */}
+          <div className="rounded-2xl border border-zinc-200/80 bg-white/80 dark:border-zinc-800/50 dark:bg-zinc-900/80 p-3 sm:p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 leading-tight mb-1">
+              Abiertas
+            </p>
+            <p className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">{openCount}</p>
+          </div>
+
+          {/* Postulaciones */}
+          <div className="rounded-2xl border border-zinc-200/80 bg-white/80 dark:border-zinc-800/50 dark:bg-zinc-900/80 p-3 sm:p-4 shadow-sm">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 leading-tight mb-1">
+              Postulaciones
+            </p>
+            <p className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400">{totalApplications}</p>
+          </div>
+
+          {/* Pausadas/Cerradas — dimmed cuando es 0 */}
+          <div className={`rounded-2xl border p-3 sm:p-4 shadow-sm transition-opacity ${
+            (pausedCount + closedCount) > 0
+              ? "border-zinc-200/80 bg-white/80 dark:border-zinc-800/50 dark:bg-zinc-900/80"
+              : "border-zinc-100 bg-zinc-50/60 dark:border-zinc-800/30 dark:bg-zinc-900/40 opacity-50"
+          }`}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 leading-tight mb-1">
+              Pausadas/Cerradas
+            </p>
+            <p className="text-2xl sm:text-3xl font-black text-zinc-500 dark:text-zinc-400">
+              {pausedCount + closedCount}
+            </p>
+          </div>
+
         </div>
 
         {/* ── Filtros ── */}
@@ -317,7 +346,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                         .map(a => a.template?.title ?? a.templateId);
 
                       return (
-                        <tr key={j.id} className={`hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40 transition-colors ${
+                        <tr key={j.id} className={`group hover:bg-zinc-50/80 dark:hover:bg-zinc-800/50 transition-colors ${
                           j.status === "OPEN" && total === 0 && new Date(j.createdAt) < new Date(Date.now() - 15 * 86400000)
                             ? "bg-amber-50/40 dark:bg-amber-950/10"
                             : ""
@@ -325,9 +354,12 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           <td className="py-3 px-4">
                             <Link
                               href={`/dashboard/jobs/${j.id}/applications`}
-                              className="font-semibold text-zinc-900 dark:text-zinc-50 hover:underline"
+                              className="font-semibold text-zinc-900 dark:text-zinc-50 group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors"
                             >
                               {j.title}
+                              <span className="ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+                                Ver candidatos →
+                              </span>
                             </Link>
                             <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                               {j.remote ? "Remoto" : j.location || "—"}
@@ -359,8 +391,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
 
                           <td className="py-3 px-4 text-center">
                             {pending > 0 ? (
-                              <Link href={`/dashboard/jobs/${j.id}/applications?status=SUBMITTED`} className="inline-flex min-w-[2rem] justify-center rounded-full border border-amber-200 bg-amber-50 dark:border-amber-500/60 dark:bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-200 hover:bg-amber-100 transition">
-                                {pending}
+                              <Link
+                                href={`/dashboard/jobs/${j.id}/applications?status=SUBMITTED`}
+                                className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 dark:border-amber-500/60 dark:bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-500/25 transition-colors"
+                              >
+                                {pending} revisar
                               </Link>
                             ) : (
                               <span className="text-zinc-300 dark:text-zinc-600 text-sm">—</span>
@@ -435,14 +470,20 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           <p className="text-lg font-black text-zinc-900 dark:text-zinc-100">{total > 0 ? total : <span className="text-zinc-300 dark:text-zinc-600">—</span>}</p>
                           <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Aplics.</p>
                         </div>
-                        <div className={`flex flex-col items-center rounded-xl py-2 ${
-                          pending > 0
-                            ? "bg-amber-50 dark:bg-amber-950/30"
-                            : "bg-zinc-50 dark:bg-zinc-800/50"
-                        }`}>
-                          <p className={`text-lg font-black ${pending > 0 ? "text-amber-600 dark:text-amber-400" : "text-zinc-300 dark:text-zinc-600"}`}>{pending > 0 ? pending : "—"}</p>
-                          <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Por revisar</p>
-                        </div>
+                        {pending > 0 ? (
+                          <Link
+                            href={`/dashboard/jobs/${j.id}/applications?status=SUBMITTED`}
+                            className="flex flex-col items-center rounded-xl py-2 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
+                          >
+                            <p className="text-lg font-black text-amber-600 dark:text-amber-400">{pending}</p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-amber-500 dark:text-amber-400">Por revisar</p>
+                          </Link>
+                        ) : (
+                          <div className="flex flex-col items-center rounded-xl py-2 bg-zinc-50 dark:bg-zinc-800/50">
+                            <p className="text-lg font-black text-zinc-300 dark:text-zinc-600">—</p>
+                            <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">Por revisar</p>
+                          </div>
+                        )}
                         <div className="flex flex-col items-center rounded-xl bg-zinc-50 dark:bg-zinc-800/50 py-2">
                           <p className="text-[10px] font-bold text-zinc-600 dark:text-zinc-300 text-center leading-tight px-1">
                             {new Date(j.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short" })}
