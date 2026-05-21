@@ -15,10 +15,10 @@ import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toas
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 
 const LABEL: Record<InterestKey, string> = {
-  REVIEW: "En revisión",
-  MAYBE: "En duda",
-  ACCEPTED: "Aceptado",
-  REJECTED: "Rechazado",
+  REVIEW: "Por revisar",
+  MAYBE: "Preselecto",
+  ACCEPTED: "Entrevista",
+  REJECTED: "Descartado",
 };
 
 // 🔔 MAPEO A STATUS DE LA APLICACIÓN (para notificaciones)
@@ -42,11 +42,11 @@ const COLOR_CLASSES: Record<InterestKey, string> = {
     "bg-zinc-100 text-zinc-700 border-zinc-300 " +
     "dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-600",
   MAYBE:
-    "bg-amber-100 text-amber-800 border-amber-300 " +
-    "dark:bg-amber-500/25 dark:text-amber-50 dark:border-amber-500/60",
+    "bg-violet-100 text-violet-800 border-violet-300 " +
+    "dark:bg-violet-500/25 dark:text-violet-50 dark:border-violet-500/60",
   ACCEPTED:
-    "bg-emerald-100 text-emerald-800 border-emerald-400 " +
-    "dark:bg-emerald-500/25 dark:text-emerald-50 dark:border-emerald-500/60",
+    "bg-sky-100 text-sky-800 border-sky-300 " +
+    "dark:bg-sky-500/25 dark:text-sky-50 dark:border-sky-500/60",
   REJECTED:
     "bg-rose-100 text-rose-800 border-rose-300 " +
     "dark:bg-rose-500/25 dark:text-rose-50 dark:border-rose-500/60",
@@ -55,8 +55,8 @@ const COLOR_CLASSES: Record<InterestKey, string> = {
 // Puntito de color en el menú
 const DOT_COLOR: Record<InterestKey, string> = {
   REVIEW: "bg-zinc-400",
-  MAYBE: "bg-amber-500",
-  ACCEPTED: "bg-emerald-500",
+  MAYBE: "bg-violet-500",
+  ACCEPTED: "bg-sky-500",
   REJECTED: "bg-rose-500",
 };
 
