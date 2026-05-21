@@ -21,10 +21,10 @@ const INTEREST_STATUSES: ApplicationInterest[] = [
 ];
 
 const INTEREST_LABEL: Record<ApplicationInterest, string> = {
-  REVIEW: "En revisión",
-  MAYBE: "En duda",
-  ACCEPTED: "Aceptado",
-  REJECTED: "Rechazado",
+  REVIEW: "Por revisar",
+  MAYBE: "Preselecto",
+  ACCEPTED: "Entrevista",
+  REJECTED: "Descartado",
 };
 
 export default async function JobPipelinePage({ params }: PageProps) {
