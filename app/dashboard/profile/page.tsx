@@ -5,6 +5,7 @@ import { prisma } from "@/lib/server/prisma";
 import { redirect } from "next/navigation";
 import ProfileForm from "./ProfileForm";
 import CompanyForm from "./CompanyForm";
+import PasswordSettingsCard from "@/components/account/PasswordSettingsCard";
 import {
   Mail,
   CheckCircle,
@@ -30,6 +31,7 @@ export default async function ProfilePage() {
       name: true,
       email: true,
       emailVerified: true,
+      passwordHash: true,
       createdAt: true,
       recruiterProfile: {
         select: {
@@ -237,6 +239,8 @@ export default async function ProfilePage() {
                   </a>
                 </div>
               </section>
+
+              <PasswordSettingsCard hasPassword={Boolean(dbUser.passwordHash)} />
             </aside>
 
             <section className="space-y-6">

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import PhoneInputField from "@/components/PhoneInputField";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
+import PasswordSettingsCard from "@/components/account/PasswordSettingsCard";
 import {
   Phone,
   Mail,
@@ -54,6 +55,7 @@ export type UserData = {
   seekingRemote: boolean;
   seekingHybrid: boolean;
   seekingOnsite: boolean;
+  hasPassword: boolean;
 };
 
 export type Experience = {
@@ -1832,6 +1834,7 @@ export default function ProfileSummaryClient({
               onChange={setSkills}
               skillTermOptions={skillTermOptions}
             />
+            <PasswordSettingsCard hasPassword={user.hasPassword} compact />
             <SectionLanguages
               languages={languages}
               onChange={setLanguages}
