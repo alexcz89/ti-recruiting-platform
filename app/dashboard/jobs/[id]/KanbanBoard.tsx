@@ -28,6 +28,14 @@ type AppCard = {
   candidate: Candidate;
 };
 
+// Colores por etapa del pipeline
+const COLUMN_ACCENT: Record<string, { header: string; badge: string; drag: string }> = {
+  REVIEW:   { header: "text-zinc-700 dark:text-zinc-300",   badge: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",         drag: "border-zinc-400/50 bg-zinc-50/60 dark:bg-zinc-800/20" },
+  MAYBE:    { header: "text-violet-700 dark:text-violet-300", badge: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200", drag: "border-violet-400/50 bg-violet-50/50 dark:bg-violet-900/10" },
+  ACCEPTED: { header: "text-sky-700 dark:text-sky-300",      badge: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200",           drag: "border-sky-400/50 bg-sky-50/50 dark:bg-sky-900/10" },
+  REJECTED: { header: "text-rose-600 dark:text-rose-400",    badge: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200",       drag: "border-rose-400/50 bg-rose-50/50 dark:bg-rose-900/10" },
+};
+
 export default function Kanbanboard({
   jobId,
   statuses,
@@ -125,7 +133,6 @@ export default function Kanbanboard({
                 key={st}
                 droppableId={st}
                 type="APPLICATION"
-                // 👇 Clon bonito mientras arrastras
                 renderClone={(provided, snapshot, rubric) => {
                   const sourceCol =
                     grouped[rubric.source.droppableId] || [];
@@ -150,8 +157,8 @@ export default function Kanbanboard({
                     count={cards.length}
                     isLoading={isPending}
                     isDraggingOver={droppableSnapshot.isDraggingOver}
+                    accent={COLUMN_ACCENT[st] ?? COLUMN_ACCENT.REVIEW}
                     innerRef={droppableProvided.innerRef}
-                    // 👇 aflojamos el tipo para que acepte droppableProps sin pelearse con TS
                     droppableProps={droppableProvided.droppableProps as any}
                   >
                     {cards.map((card, index) => (
@@ -199,6 +206,7 @@ export default function Kanbanboard({
     count,
     isLoading,
     isDraggingOver,
+    accent,
     innerRef,
     droppableProps,
     children,
@@ -207,8 +215,8 @@ export default function Kanbanboard({
     count: number;
     isLoading?: boolean;
     isDraggingOver?: boolean;
+    accent: { header: string; badge: string; drag: string };
     innerRef: (element: HTMLDivElement | null) => void;
-    // 👇 aquí estaba el problema de tipos; lo dejamos como any
     droppableProps: any;
     children: React.ReactNode;
   }) {
@@ -218,17 +226,15 @@ export default function Kanbanboard({
         {...(droppableProps as any)}
         className={[
           "w-[240px] lg:w-[260px] shrink-0 rounded-2xl border glass-card flex flex-col max-h-[72vh] transition-colors",
-          isDraggingOver
-            ? "border-emerald-400/70 bg-emerald-50/60 dark:bg-emerald-900/10"
-            : "",
+          isDraggingOver ? accent.drag : "",
         ].join(" ")}
       >
         {/* Header columna */}
         <div className="sticky top-0 z-10 bg-[rgb(var(--card))] border-b border-zinc-100 px-3 pt-3 pb-2 flex items-center justify-between gap-2 dark:border-zinc-800">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
+          <h3 className={`text-xs font-semibold uppercase tracking-wide ${accent.header}`}>
             {title}
           </h3>
-          <span className="inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full bg-zinc-100 text-[11px] font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200">
+          <span className={`inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full text-[11px] font-semibold ${accent.badge}`}>
             {count}
           </span>
         </div>
