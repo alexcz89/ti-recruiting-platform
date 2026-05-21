@@ -36,6 +36,7 @@ export default async function ProfileSummaryPage({
       github: true,
       resumeUrl: true,
       certifications: true,
+      passwordHash: true,
       highestEducationLevel: true,
       seniority: true,
       yearsExperience: true,
@@ -178,6 +179,7 @@ export default async function ProfileSummaryPage({
         seekingRemote: me.seekingRemote ?? false,
         seekingHybrid: me.seekingHybrid ?? false,
         seekingOnsite: me.seekingOnsite ?? false,
+        hasPassword: Boolean(me.passwordHash),
       }}
       experiences={experiences.map((e) => ({
         id: e.id,
