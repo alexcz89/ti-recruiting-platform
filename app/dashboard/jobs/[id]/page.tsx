@@ -7,6 +7,23 @@ import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
 import Kanbanboard from "./KanbanBoard";
 import { ApplicationInterest, ApplicationStatus } from "@prisma/client";
+import {
+  computeMatchScore,
+  applyPlanGate,
+  scoreToTextColor,
+  scoreToLabel,
+  type BillingPlan,
+  type JobSkillInput,
+  type CandidateSkillInput,
+  type SeniorityLevel,
+} from "@/lib/ai/matchScore";
+
+function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
+  if (!s) return null;
+  const lower = s.toLowerCase();
+  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
+  return null;
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,6 +55,12 @@ export default async function JobPipelinePage({ params }: PageProps) {
     redirect("/dashboard/overview");
   }
 
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { billingPlan: true, name: true },
+  });
+  const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
+
   // Verificar que la vacante pertenece a la empresa de la sesión
   const job = await prisma.job.findFirst({
     where: { id: params.id, companyId },
@@ -46,13 +69,31 @@ export default async function JobPipelinePage({ params }: PageProps) {
       slug: true,
       title: true,
       location: true,
+      seniority: true,
+      minYearsExperience: true,
       company: { select: { name: true } },
+      requiredSkills: {
+        select: {
+          must: true,
+          weight: true,
+          term: { select: { id: true, label: true } },
+        },
+      },
     },
   });
 
   if (!job) {
     notFound();
   }
+
+  const jobSkills: JobSkillInput[] = job.requiredSkills.map((rs) => ({
+    termId: rs.term.id,
+    label: rs.term.label,
+    must: rs.must,
+    weight: rs.weight,
+  }));
+  const jobSeniority = toSeniorityLevel(job.seniority);
+  const hasMatchSignals = jobSkills.length > 0 || jobSeniority !== null || job.minYearsExperience !== null;
 
   // Traer aplicaciones + candidato
   const applications = await prisma.application.findMany({
@@ -65,31 +106,57 @@ export default async function JobPipelinePage({ params }: PageProps) {
           name: true,
           email: true,
           resumeUrl: true,
+          phone: true,
+          location: true,
+          seniority: true,
+          yearsExperience: true,
           candidateSkills: {
             select: {
               level: true,
-              term: { select: { label: true } },
+              term: { select: { id: true, label: true } },
             },
             orderBy: [{ level: "desc" }],
-          }, 
+          },
         },
       },
     },
   });
 
-  const appCards = applications.map((a) => ({
-    id: a.id,
-    status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
-    // 👇 Application no tiene updatedAt, usamos sólo createdAt
-    createdAt: a.createdAt,
-    candidate: {
-      id: a.candidate.id,
-      name: a.candidate.name ?? a.candidate.email,
-      email: a.candidate.email,
-      resumeUrl: a.candidate.resumeUrl,
-      _skills: (a.candidate.candidateSkills ?? []).map(cs => cs.term.label),
-    },
-  }));
+  const appCards = applications.map((a, idx) => {
+    const candidateSkills: CandidateSkillInput[] = (a.candidate.candidateSkills ?? []).map((cs: any) => ({
+      termId: cs.term.id,
+      label: cs.term.label,
+      level: cs.level,
+    }));
+    const matchResult = computeMatchScore({
+      jobSkills,
+      candidateSkills,
+      jobSeniority,
+      candidateSeniority: toSeniorityLevel((a.candidate as any).seniority),
+      jobMinYearsExperience: job.minYearsExperience ?? null,
+      candidateYearsExperience: (a.candidate as any).yearsExperience ?? null,
+    });
+    const rawScore = matchResult?.score ?? 0;
+    const gatedScore = applyPlanGate(rawScore, idx, plan);
+
+    return {
+      id: a.id,
+      status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
+      createdAt: a.createdAt,
+      updatedAt: (a as any).updatedAt ?? a.createdAt,
+      _score: gatedScore,
+      _locked: gatedScore === null,
+      candidate: {
+        id: a.candidate.id,
+        name: a.candidate.name ?? a.candidate.email,
+        email: a.candidate.email,
+        resumeUrl: a.candidate.resumeUrl,
+        phone: (a.candidate as any).phone ?? null,
+        location: (a.candidate as any).location ?? null,
+        _skills: (a.candidate.candidateSkills ?? []).map((cs: any) => cs.term.label),
+      },
+    };
+  });
 
   // -------- Server Action para mover tarjetas en el Kanban --------
   async function moveAction(
@@ -194,6 +261,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
           statuses={INTEREST_STATUSES}
           statusLabels={INTEREST_LABEL}
           applications={appCards}
+          hasMatchSignals={hasMatchSignals}
           moveAction={moveAction}
         />
       </div>
