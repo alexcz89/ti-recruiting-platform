@@ -47,10 +47,10 @@ const PROFILE_TYPE_LABEL: Record<string, string> = {
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const INTEREST_LABEL: Record<InterestKey, string> = {
-  REVIEW: "En revisión",
-  MAYBE: "En duda",
-  ACCEPTED: "Aceptado",
-  REJECTED: "Rechazado",
+  REVIEW: "Por revisar",
+  MAYBE: "Preselecto",
+  ACCEPTED: "Entrevista",
+  REJECTED: "Descartado",
 };
 
 function getAppInterest(a: any): InterestKey {
@@ -602,78 +602,11 @@ export default async function JobApplicationsPage({
 
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} count={total} />
-            <FilterPill active={chosenInterest === "REVIEW"} href={buildHref({ interest: "REVIEW" })} label={`Revisión (${counters.REVIEW})`} count={counters.REVIEW} />
-            <FilterPill active={chosenInterest === "MAYBE"} href={buildHref({ interest: "MAYBE" })} label={`En duda (${counters.MAYBE})`} count={counters.MAYBE} />
-            <FilterPill active={chosenInterest === "ACCEPTED"} href={buildHref({ interest: "ACCEPTED" })} label={`Aceptados (${counters.ACCEPTED})`} count={counters.ACCEPTED} />
-            <FilterPill active={chosenInterest === "REJECTED"} href={buildHref({ interest: "REJECTED" })} label={`Rechazados (${counters.REJECTED})`} count={counters.REJECTED} />
-          </div>
-        </section>
-
-        <section className="glass-card rounded-2xl border p-3 sm:p-4">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
-              {hasMatchSignals && (
-                <div className="flex items-center gap-2">
-                  <span className="w-10 shrink-0 text-[11px] text-zinc-400">Match</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(["ALL", "HIGH", "MED", "LOW"] as MatchFilter[]).map((f) => (
-                      <Link
-                        key={f}
-                        href={buildHref({ match: f === "ALL" ? undefined : f })}
-                        className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                          matchFilter === f
-                            ? f === "HIGH"
-                              ? "border-emerald-500 bg-emerald-600 text-white"
-                              : f === "MED"
-                                ? "border-amber-500 bg-amber-500 text-white"
-                                : f === "LOW"
-                                  ? "border-red-400 bg-red-500 text-white"
-                                  : "border-zinc-500 bg-zinc-700 text-white dark:border-zinc-400 dark:bg-zinc-600"
-                            : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
-                        }`}
-                      >
-                        {f === "ALL"
-                          ? `Todos (${matchCounts.ALL})`
-                          : f === "HIGH"
-                            ? `Alto (${matchCounts.HIGH})`
-                            : f === "MED"
-                              ? `Medio (${matchCounts.MED})`
-                              : `Bajo (${matchCounts.LOW})`}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2">
-                <span className="w-10 shrink-0 text-[11px] text-zinc-400">CV</span>
-                <div className="flex gap-1.5">
-                  {(["ALL", "YES", "NO"] as CvFilter[]).map((f) => (
-                    <Link
-                      key={f}
-                      href={buildHref({ cv: f === "ALL" ? undefined : f })}
-                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                        cvFilter === f
-                          ? "border-emerald-500 bg-emerald-600 text-white"
-                          : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
-                      }`}
-                    >
-                      {f === "ALL" ? "Todos" : f === "YES" ? "Con CV" : "Sin CV"}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-
-              {activeFiltersCount > 0 && (
-                <Link
-                  href={buildHref({ match: undefined, cv: undefined })}
-                  className="ml-auto text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600 whitespace-nowrap"
-                >
-                  Limpiar filtros
-                </Link>
-              )}
-            </div>
+            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} />
+            <FilterPill active={chosenInterest === "REVIEW"} href={buildHref({ interest: "REVIEW" })} label={`Por revisar (${counters.REVIEW})`} count={counters.REVIEW} />
+            <FilterPill active={chosenInterest === "MAYBE"} href={buildHref({ interest: "MAYBE" })} label={`Preselecto (${counters.MAYBE})`} count={counters.MAYBE} />
+            <FilterPill active={chosenInterest === "ACCEPTED"} href={buildHref({ interest: "ACCEPTED" })} label={`Entrevista (${counters.ACCEPTED})`} count={counters.ACCEPTED} />
+            <FilterPill active={chosenInterest === "REJECTED"} href={buildHref({ interest: "REJECTED" })} label={`Descartado (${counters.REJECTED})`} count={counters.REJECTED} />
           </div>
         </section>
 
@@ -707,33 +640,100 @@ export default async function JobApplicationsPage({
           </div>
         ) : (
           <div className="rounded-2xl border border-zinc-100 bg-white/90 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/70">
-            <div className="flex flex-col gap-2 border-b border-zinc-100 p-3 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between sm:p-4">
-              <form method="get" className="relative w-full sm:max-w-xs">
-                {interestParam && <input type="hidden" name="interest" value={interestParam} />}
-                {sortKey && <input type="hidden" name="sort" value={sortKey} />}
-                {matchFilter !== "ALL" && <input type="hidden" name="match" value={matchFilter} />}
-                {cvFilter !== "ALL" && <input type="hidden" name="cv" value={cvFilter} />}
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-                <input
-                  name="q"
-                  defaultValue={qParam}
-                  className="w-full rounded-full border border-zinc-200 bg-white/70 py-1.5 pl-8 pr-3 text-xs text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/60 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-                  placeholder="Nombre, email, ciudad, skill o perfil…"
-                />
-              </form>
+            <div className="space-y-2.5 border-b border-zinc-100 p-3 dark:border-zinc-800 sm:p-4">
+              {/* Fila 1: búsqueda + ordenar */}
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <form method="get" className="relative w-full sm:max-w-xs">
+                  {interestParam && <input type="hidden" name="interest" value={interestParam} />}
+                  {sortKey && <input type="hidden" name="sort" value={sortKey} />}
+                  {matchFilter !== "ALL" && <input type="hidden" name="match" value={matchFilter} />}
+                  {cvFilter !== "ALL" && <input type="hidden" name="cv" value={cvFilter} />}
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+                  <input
+                    name="q"
+                    defaultValue={qParam}
+                    className="w-full rounded-full border border-zinc-200 bg-white/70 py-1.5 pl-8 pr-3 text-xs text-zinc-800 outline-none placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/60 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                    placeholder="Nombre, email, ciudad, skill o perfil…"
+                  />
+                </form>
 
-              <div className="flex items-center gap-2 text-xs">
-                <span className="shrink-0 text-zinc-500">Ordenar:</span>
-                <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
-                  <SortPill href={buildHref({ sort: "match" })} active={sortKey === "match"}>Match</SortPill>
-                  <SortPill href={buildHref({ sort: "recent" })} active={sortKey === "recent"}>Reciente</SortPill>
-                  <SortPill href={buildHref({ sort: "name" })} active={sortKey === "name"}>Nombre</SortPill>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="shrink-0 text-zinc-500">Ordenar:</span>
+                  <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
+                    <SortPill href={buildHref({ sort: "match" })} active={sortKey === "match"}>Match</SortPill>
+                    <SortPill href={buildHref({ sort: "recent" })} active={sortKey === "recent"}>Reciente</SortPill>
+                    <SortPill href={buildHref({ sort: "name" })} active={sortKey === "name"}>Nombre</SortPill>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="px-4 py-2 text-[11px] text-zinc-400">
-              {apps.length} candidato{apps.length !== 1 ? "s" : ""}{activeFiltersCount > 0 ? " (filtrado)" : ""}
+              {/* Fila 2: filtros Match + CV inline */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                {hasMatchSignals && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="shrink-0 text-[10px] text-zinc-400">Match</span>
+                    <div className="flex flex-wrap gap-1">
+                      {(["ALL", "HIGH", "MED", "LOW"] as MatchFilter[]).map((f) => {
+                        const isEmpty = f !== "ALL" && matchCounts[f] === 0 && matchFilter !== f;
+                        return (
+                          <Link
+                            key={f}
+                            href={buildHref({ match: f === "ALL" ? undefined : f })}
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                              isEmpty
+                                ? "border-zinc-200/50 text-zinc-400/60 dark:border-zinc-700/40 dark:text-zinc-600 pointer-events-none"
+                                : matchFilter === f
+                                  ? f === "HIGH"
+                                    ? "border-emerald-500 bg-emerald-600 text-white"
+                                    : f === "MED"
+                                      ? "border-amber-500 bg-amber-500 text-white"
+                                      : f === "LOW"
+                                        ? "border-red-400 bg-red-500 text-white"
+                                        : "border-zinc-500 bg-zinc-700 text-white dark:border-zinc-400 dark:bg-zinc-600"
+                                  : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
+                            }`}
+                          >
+                            {f === "ALL" ? "Todos" : f === "HIGH" ? `Alto (${matchCounts.HIGH})` : f === "MED" ? `Medio (${matchCounts.MED})` : `Bajo (${matchCounts.LOW})`}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1.5">
+                  <span className="shrink-0 text-[10px] text-zinc-400">CV</span>
+                  <div className="flex gap-1">
+                    {(["ALL", "YES", "NO"] as CvFilter[]).map((f) => (
+                      <Link
+                        key={f}
+                        href={buildHref({ cv: f === "ALL" ? undefined : f })}
+                        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
+                          cvFilter === f
+                            ? "border-emerald-500 bg-emerald-600 text-white"
+                            : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
+                        }`}
+                      >
+                        {f === "ALL" ? "Todos" : f === "YES" ? "Con CV" : "Sin CV"}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="ml-auto flex items-center gap-2">
+                  {activeFiltersCount > 0 && (
+                    <Link
+                      href={buildHref({ match: undefined, cv: undefined })}
+                      className="text-[10px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600"
+                    >
+                      Limpiar
+                    </Link>
+                  )}
+                  <span className="text-[10px] text-zinc-400">
+                    {apps.length} candidato{apps.length !== 1 ? "s" : ""}{activeFiltersCount > 0 ? " (filtrado)" : ""}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="block divide-y divide-zinc-100 dark:divide-zinc-800 sm:hidden">
@@ -1168,8 +1168,8 @@ function FilterPill({ active, href, label, count }: { active?: boolean; href: st
         active
           ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
           : isEmpty
-          ? "border-zinc-200/50 bg-transparent text-zinc-400 hover:bg-zinc-100/40 dark:border-zinc-700/50 dark:text-zinc-600"
-          : "border-zinc-200 bg-transparent text-zinc-600 hover:bg-zinc-100/70 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/60"
+            ? "border-zinc-200/50 bg-transparent text-zinc-400/50 dark:border-zinc-700/50 dark:text-zinc-600"
+            : "border-zinc-200 bg-transparent text-zinc-600 hover:bg-zinc-100/70 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/60"
       }`}
     >
       {label}
