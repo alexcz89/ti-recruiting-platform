@@ -141,21 +141,6 @@ export default async function Home() {
             </div>
           </div>
 
-          {/* Stats bar */}
-          <div className="relative -mt-4 mb-0 grid grid-cols-2 gap-3 rounded-3xl border border-zinc-100 dark:border-zinc-800 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm px-6 py-5 shadow-xl dark:shadow-zinc-900/50 sm:grid-cols-4 lg:mx-8 animate-fade-in-up animation-delay-500">
-            {[
-              { value: "500+", label: "Vacantes activas", icon: Briefcase },
-              { value: "12,000+", label: "Candidatos TI", icon: Users },
-              { value: "48,000+", label: "Evaluaciones completadas", icon: ClipboardCheck },
-              { value: "98%", label: "Precisión del AI Match", icon: Brain },
-            ].map(({ value, label, icon: Icon }) => (
-              <div key={label} className="flex flex-col items-center gap-1 text-center">
-                <Icon className="h-4 w-4 text-emerald-500 mb-0.5" />
-                <span className="text-xl font-black text-zinc-900 dark:text-zinc-50 sm:text-2xl">{value}</span>
-                <span className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-tight">{label}</span>
-              </div>
-            ))}
-          </div>
         </div>
 
         {/* Bottom fade */}
