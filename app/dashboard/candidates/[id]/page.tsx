@@ -179,7 +179,7 @@ export default async function CandidateDetailPage({
     seniority: string | null;
     minYearsExperience: number | null;
     requiredSkills: JobSkillInput[];
-    assessmentTemplateId: string | null;
+    assessmentTemplates: { templateId: string; title: string }[];
   } | null = null;
 
   if (fromJobId && companyId) {
@@ -200,8 +200,10 @@ export default async function CandidateDetailPage({
         },
         assessments: {
           orderBy: { createdAt: "asc" },
-          select: { templateId: true },
-          take: 1,
+          select: {
+            templateId: true,
+            template: { select: { title: true } },
+          },
         },
       },
     });
@@ -213,96 +215,86 @@ export default async function CandidateDetailPage({
         seniority: jobRaw.seniority ?? null,
         minYearsExperience: jobRaw.minYearsExperience ?? null,
         requiredSkills: buildJobSkillInputs(jobRaw.requiredSkills, jobRaw.skills),
-        assessmentTemplateId: jobRaw.assessments?.[0]?.templateId ?? null,
+        assessmentTemplates: jobRaw.assessments.map((a) => ({
+          templateId: a.templateId,
+          title: a.template?.title ?? a.templateId,
+        })),
       };
     }
   }
 
-  let assessmentState: {
+  // Estado por cada assessment template asignado a la vacante
+  type AssessmentStateEntry = {
     applicationId: string;
     templateId: string;
+    templateTitle: string;
     state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
     attemptId: string | null;
     token: string | null;
     score: number | null;
-  } | null = null;
+  };
 
-  if (activeAppId && jobForMatch?.assessmentTemplateId && companyId) {
+  const assessmentStates: AssessmentStateEntry[] = [];
+
+  if (activeAppId && jobForMatch && jobForMatch.assessmentTemplates.length > 0) {
     const now = new Date();
-    const templateId = jobForMatch.assessmentTemplateId;
 
-    const [invite, attempt] = await Promise.all([
-      prisma.assessmentInvite.findFirst({
-        where: { applicationId: activeAppId, templateId },
-        orderBy: { updatedAt: "desc" },
-        select: { token: true, status: true, expiresAt: true },
-      }),
-      prisma.assessmentAttempt.findFirst({
-        where: { applicationId: activeAppId, templateId },
-        orderBy: { updatedAt: "desc" },
-        select: { id: true, status: true, totalScore: true, expiresAt: true },
-      }),
-    ]);
+    await Promise.all(
+      jobForMatch.assessmentTemplates.map(async ({ templateId, title: templateTitle }) => {
+        const [invite, attempt] = await Promise.all([
+          prisma.assessmentInvite.findFirst({
+            where: { applicationId: activeAppId, templateId },
+            orderBy: { updatedAt: "desc" },
+            select: { token: true, status: true, expiresAt: true },
+          }),
+          prisma.assessmentAttempt.findFirst({
+            where: { applicationId: activeAppId, templateId },
+            orderBy: { updatedAt: "desc" },
+            select: { id: true, status: true, totalScore: true, expiresAt: true },
+          }),
+        ]);
 
-    const attemptExpired =
-      !!attempt?.expiresAt && new Date(attempt.expiresAt) <= now;
-    const inviteExpired =
-      !!invite?.expiresAt && new Date(invite.expiresAt) <= now;
-    const attemptStatus = String(attempt?.status || "").toUpperCase();
-    const inviteStatus = String(invite?.status || "").toUpperCase();
+        const attemptExpired = !!attempt?.expiresAt && new Date(attempt.expiresAt) <= now;
+        const inviteExpired  = !!invite?.expiresAt  && new Date(invite.expiresAt)  <= now;
+        const attemptStatus  = String(attempt?.status || "").toUpperCase();
+        const inviteStatus   = String(invite?.status  || "").toUpperCase();
 
-    if (
-      attempt &&
-      (attemptStatus === "SUBMITTED" ||
-        attemptStatus === "EVALUATED" ||
-        attemptStatus === "COMPLETED")
-    ) {
-      assessmentState = {
-        applicationId: activeAppId,
-        templateId,
-        state: "COMPLETED",
-        attemptId: attempt.id,
-        token: invite?.token ?? null,
-        score: attempt.totalScore ?? null,
-      };
-    } else if (attemptExpired || inviteExpired) {
-      assessmentState = {
-        applicationId: activeAppId,
-        templateId,
-        state: "EXPIRED",
-        attemptId: attempt?.id ?? null,
-        token: invite?.token ?? null,
-        score: null,
-      };
-    } else if (attempt && attemptStatus === "IN_PROGRESS") {
-      assessmentState = {
-        applicationId: activeAppId,
-        templateId,
-        state: "STARTED",
-        attemptId: attempt.id,
-        token: invite?.token ?? null,
-        score: null,
-      };
-    } else if (invite) {
-      assessmentState = {
-        applicationId: activeAppId,
-        templateId,
-        state: inviteStatus === "STARTED" ? "STARTED" : "SENT",
-        attemptId: null,
-        token: invite.token,
-        score: null,
-      };
-    } else if (jobForMatch.assessmentTemplateId) {
-      assessmentState = {
-        applicationId: activeAppId,
-        templateId,
-        state: "NONE",
-        attemptId: null,
-        token: null,
-        score: null,
-      };
-    }
+        let state: AssessmentStateEntry["state"] = "NONE";
+        let attemptId: string | null = null;
+        let token: string | null = null;
+        let score: number | null = null;
+
+        if (attempt && (attemptStatus === "SUBMITTED" || attemptStatus === "EVALUATED" || attemptStatus === "COMPLETED")) {
+          state = "COMPLETED";
+          attemptId = attempt.id;
+          token = invite?.token ?? null;
+          score = attempt.totalScore ?? null;
+        } else if (attemptExpired || inviteExpired) {
+          state = "EXPIRED";
+          attemptId = attempt?.id ?? null;
+          token = invite?.token ?? null;
+        } else if (attempt && attemptStatus === "IN_PROGRESS") {
+          state = "STARTED";
+          attemptId = attempt.id;
+          token = invite?.token ?? null;
+        } else if (invite) {
+          state = inviteStatus === "STARTED" ? "STARTED" : "SENT";
+          token = invite.token;
+        }
+
+        assessmentStates.push({ applicationId: activeAppId, templateId, templateTitle, state, attemptId, token, score });
+      })
+    );
+
+    // Mantener el orden original de la vacante
+    assessmentStates.sort((a, b) => {
+      const order = jobForMatch!.assessmentTemplates.map((t) => t.templateId);
+      return order.indexOf(a.templateId) - order.indexOf(b.templateId);
+    });
   }
+
+  // Retrocompatibilidad: primer estado para lógica existente
+  const assessmentState = assessmentStates[0] ?? null;
 
   const candidateSkillsForEngine = buildCandidateSkillInputs(candidate.candidateSkills);
 
@@ -559,10 +551,10 @@ export default async function CandidateDetailPage({
             </a>
           )}
 
-          {assessmentState && activeAppId && (
+          {assessmentStates.length > 0 && activeAppId && (
             <SendAssessmentButton
               applicationId={activeAppId}
-              assessment={assessmentState}
+              assessments={assessmentStates}
             />
           )}
         </div>
