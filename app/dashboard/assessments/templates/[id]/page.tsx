@@ -115,11 +115,6 @@ export default async function TemplateDetailPage({ params }: PageProps) {
   }, {});
 
   const sectionNames = Object.keys(bySection);
-  const totalCorrect = template.questions.reduce((sum, q) => {
-    const opts = parseOptions(q.options);
-    return sum + opts.filter(o => o.isCorrect).length;
-  }, 0);
-
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 py-5 space-y-5">
@@ -223,15 +218,13 @@ export default async function TemplateDetailPage({ params }: PageProps) {
                 <div className="space-y-3">
                   {questions.map((q, qIdx) => {
                     const opts = parseOptions(q.options);
-                    const correctCount = opts.filter(o => o.isCorrect).length;
-                    const globalIdx = template.questions.indexOf(q) + 1;
 
                     return (
                       <div key={q.id} className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
                         {/* Question header */}
                         <div className="flex items-start gap-3 p-4 pb-3">
                           <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs font-black text-zinc-600 dark:text-zinc-400">
-                            {globalIdx}
+                            {qIdx + 1}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
