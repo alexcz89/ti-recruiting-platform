@@ -11,7 +11,7 @@ import {
   Clock, BarChart3, BookOpen, ArrowLeft, Eye,
 } from "lucide-react";
 
-const MAX_QUESTIONS = 20;
+const MAX_QUESTIONS = 50;
 const DIFFICULTIES = ["JUNIOR", "MID", "SENIOR"] as const;
 const LANGUAGES = [
   { value: "", label: "Sin lenguaje (genérico)" },

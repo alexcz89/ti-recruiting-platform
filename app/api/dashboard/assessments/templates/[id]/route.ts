@@ -7,7 +7,7 @@ import { prisma } from "@/lib/server/prisma";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-const MAX_QUESTIONS = 20;
+const MAX_QUESTIONS = 50;
 
 function json(status: number, body: any) {
   return NextResponse.json(body, {
