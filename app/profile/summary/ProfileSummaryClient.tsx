@@ -19,6 +19,7 @@ import {
   Building2,
   AlertTriangle,
 } from "lucide-react";
+import { MonthYearPicker, FullDatePicker } from "@/components/ui/WheelPicker";
 
 /* ─── Types ──────────────────────────────────────────────── */
 type SkillLevel = 1 | 2 | 3 | 4 | 5;
@@ -589,13 +590,11 @@ function SectionPersonal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={LABEL}>Fecha de nacimiento</label>
-              <input
-                type="date"
-                className={INPUT}
+              <FullDatePicker
                 value={draft.birthdate}
-                onChange={(e) =>
-                  setDraft((d) => ({ ...d, birthdate: e.target.value }))
-                }
+                onChange={(val) => setDraft((d) => ({ ...d, birthdate: val }))}
+                placeholder="Día, mes y año"
+                maxYear={new Date().getFullYear() - 16}
               />
             </div>
             <div>
@@ -679,13 +678,9 @@ function SectionPersonal({
 function SectionExperience({
   experiences,
   onChange,
-  totalYears,
-  appCount,
 }: {
   experiences: Experience[];
   onChange: (e: Experience[]) => void;
-  totalYears: number | null;
-  appCount: number;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -735,26 +730,6 @@ function SectionExperience({
 
   return (
     <section className={CARD} id="experiencia">
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
-        {[
-          { num: totalYears != null ? `${totalYears}` : "—", label: "Años exp." },
-          { num: experiences.length, label: "Trabajos" },
-          { num: appCount, label: "Postulaciones" },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="rounded-xl bg-zinc-50 dark:bg-zinc-900/40 px-2 sm:px-3 py-3 text-center"
-          >
-            <p className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50">
-              {s.num}
-            </p>
-            <p className="text-[11px] sm:text-xs text-zinc-500 dark:text-zinc-400">
-              {s.label}
-            </p>
-          </div>
-        ))}
-      </div>
-
       <div className={SECTION_HEADER}>
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Historial de trabajo
@@ -848,21 +823,19 @@ function SectionExperience({
                 </div>
                 <div>
                   <label className={LABEL}>Inicio *</label>
-                  <input
-                    type="month"
-                    className={INPUT}
+                  <MonthYearPicker
                     value={e.startDate}
-                    onChange={(ev) => updateExp(i, "startDate", ev.target.value)}
+                    onChange={(val) => updateExp(i, "startDate", val)}
+                    placeholder="Mes y año de inicio"
                   />
                 </div>
                 <div>
                   <label className={LABEL}>Fin</label>
-                  <input
-                    type="month"
-                    className={INPUT}
+                  <MonthYearPicker
                     value={e.endDate ?? ""}
+                    onChange={(val) => updateExp(i, "endDate", val || null)}
                     disabled={e.isCurrent}
-                    onChange={(ev) => updateExp(i, "endDate", ev.target.value || null)}
+                    placeholder="Mes y año de fin"
                   />
                 </div>
               </div>
@@ -1077,20 +1050,19 @@ function SectionEducation({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className={LABEL}>Inicio</label>
-                    <input
-                      type="month"
-                      className={INPUT}
+                    <MonthYearPicker
                       value={ed.startDate}
-                      onChange={(ev) => updateEd(i, "startDate", ev.target.value)}
+                      onChange={(val) => updateEd(i, "startDate", val)}
+                      placeholder="Mes y año"
                     />
                   </div>
                   <div>
                     <label className={LABEL}>Fin</label>
-                    <input
-                      type="month"
-                      className={INPUT}
+                    <MonthYearPicker
                       value={ed.endDate}
-                      onChange={(ev) => updateEd(i, "endDate", ev.target.value)}
+                      onChange={(val) => updateEd(i, "endDate", val)}
+                      placeholder="Mes y año"
+                      maxYear={new Date().getFullYear() + 5}
                     />
                     <p className="mt-0.5 text-xs text-zinc-400">Vacío = en curso</p>
                   </div>
@@ -1688,8 +1660,6 @@ export default function ProfileSummaryClient({
             <SectionExperience
               experiences={experiences}
               onChange={setExperiences}
-              totalYears={totalYears}
-              appCount={applications.length}
             />
             <SectionEducation education={education} onChange={setEducation} />
 
