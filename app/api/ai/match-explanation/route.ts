@@ -6,8 +6,9 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
 import {
+  buildCandidateSkillInputs,
+  buildJobSkillInputs,
   computeMatchScore,
-  type CandidateSkillInput,
   type JobSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
@@ -119,7 +120,7 @@ async function buildMatchExplanationInput(
         candidateSkills: {
           select: {
             level: true,
-            term: { select: { id: true, label: true } },
+            term: { select: { id: true, label: true, aliases: true } },
           },
         },
         candidateLanguages: {
@@ -149,13 +150,14 @@ async function buildMatchExplanationInput(
       select: {
         id: true,
         title: true,
+        skills: true,
         seniority: true,
         minYearsExperience: true,
         requiredSkills: {
           select: {
             must: true,
             weight: true,
-            term: { select: { id: true, label: true } },
+            term: { select: { id: true, label: true, aliases: true } },
           },
         },
       },
@@ -164,18 +166,12 @@ async function buildMatchExplanationInput(
 
   if (!candidate || !job) return null;
 
-  const jobSkills: JobSkillInput[] = job.requiredSkills.map((rs) => ({
-    termId: rs.term.id,
-    label: rs.term.label,
-    must: rs.must,
-    weight: rs.weight,
-  }));
+  const jobSkills: JobSkillInput[] = buildJobSkillInputs(
+    job.requiredSkills,
+    job.skills
+  );
 
-  const candidateSkillsInput: CandidateSkillInput[] = candidate.candidateSkills.map((cs) => ({
-    termId: cs.term.id,
-    label: cs.term.label,
-    level: cs.level,
-  }));
+  const candidateSkillsInput = buildCandidateSkillInputs(candidate.candidateSkills);
 
   const matchResult = computeMatchScore({
     jobSkills,

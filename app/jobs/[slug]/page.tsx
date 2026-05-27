@@ -7,10 +7,11 @@ import { getSessionCompanyId } from "@/lib/server/session";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
 import CandidateMatchCard from "@/components/jobs/CandidateMatchCard";
 import {
+  buildCandidateSkillInputs,
+  buildJobSkillInputs,
   computeMatchScore,
   hasMatchSignals,
   type JobSkillInput,
-  type CandidateSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import type { Metadata } from "next";
@@ -219,7 +220,7 @@ export default async function JobDetail({ params }: Params) {
         select: {
           must: true,
           weight: true,
-          term: { select: { id: true, label: true } },
+          term: { select: { id: true, label: true, aliases: true } },
         },
       },
       salaryMin: true,
@@ -241,12 +242,10 @@ export default async function JobDetail({ params }: Params) {
     canEdit = !!myCompanyId && job.companyId === myCompanyId;
   }
 
-  const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
-    termId: rs.term.id,
-    label: rs.term.label,
-    must: rs.must,
-    weight: rs.weight,
-  }));
+  const jobSkillsForEngine: JobSkillInput[] = buildJobSkillInputs(
+    job.requiredSkills,
+    job.skills
+  );
 
   const jobSeniorityForEngine = toSeniorityLevel(job.seniority);
 
@@ -267,19 +266,16 @@ export default async function JobDetail({ params }: Params) {
         candidateSkills: {
           select: {
             level: true,
-            term: { select: { id: true, label: true } },
+            term: { select: { id: true, label: true, aliases: true } },
           },
         },
       },
     });
 
     if (candidateRaw && hasJobMatchSignals) {
-      const candidateSkillsForEngine: CandidateSkillInput[] =
-        candidateRaw.candidateSkills.map((cs) => ({
-          termId: cs.term.id,
-          label: cs.term.label,
-          level: cs.level,
-        }));
+      const candidateSkillsForEngine = buildCandidateSkillInputs(
+        candidateRaw.candidateSkills
+      );
 
       candidateMatchResult = computeMatchScore({
         jobSkills: jobSkillsForEngine,

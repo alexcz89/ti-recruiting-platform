@@ -18,9 +18,10 @@ import {
 } from "lucide-react";
 import QuickActionButtons from "./QuickActionButtons";
 import {
+  buildCandidateSkillInputs,
+  buildJobSkillInputs,
   computeMatchScore,
   type JobSkillInput,
-  type CandidateSkillInput,
 } from "@/lib/ai/matchScore";
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
@@ -137,11 +138,12 @@ export default async function OverviewPage() {
       status: true,
       createdAt: true,
       _count: { select: { applications: true } },
+      skills: true,
       requiredSkills: {
         select: {
           must: true,
           weight: true,
-          term: { select: { id: true, label: true } },
+          term: { select: { id: true, label: true, aliases: true } },
         },
       },
       applications: {
@@ -152,7 +154,7 @@ export default async function OverviewPage() {
               candidateSkills: {
                 select: {
                   level: true,
-                  term: { select: { id: true, label: true } },
+                  term: { select: { id: true, label: true, aliases: true } },
                 },
               },
             },
@@ -163,24 +165,18 @@ export default async function OverviewPage() {
   });
 
   const topJobs = topJobsRaw.map((job) => {
-    const jobSkills: JobSkillInput[] = job.requiredSkills.map((rs) => ({
-      termId: rs.term.id,
-      label: rs.term.label,
-      must: rs.must,
-      weight: rs.weight,
-    }));
+    const jobSkills: JobSkillInput[] = buildJobSkillInputs(
+      job.requiredSkills,
+      job.skills
+    );
 
     let avgMatch: number | null = null;
 
     if (jobSkills.length > 0 && job.applications.length > 0) {
       const scores = job.applications.map((app) => {
-        const candidateSkills: CandidateSkillInput[] = (
+        const candidateSkills = buildCandidateSkillInputs(
           app.candidate?.candidateSkills ?? []
-        ).map((cs) => ({
-          termId: cs.term.id,
-          label: cs.term.label,
-          level: cs.level,
-        }));
+        );
 
         return computeMatchScore(jobSkills, candidateSkills).score;
       });

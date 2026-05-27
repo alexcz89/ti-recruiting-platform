@@ -15,6 +15,8 @@ import MatchScorePopover from "@/components/dashboard/MatchScorePopover";
 import MatchBreakdownMini from "@/components/jobs/MatchBreakdownMini";
 import { computeTagBoost } from "@/lib/ai/tagBoost";
 import {
+  buildCandidateSkillInputs,
+  buildJobSkillInputs,
   computeMatchScore,
   applyPlanGate,
   scoreToColor,
@@ -22,7 +24,6 @@ import {
   scoreToLabel,
   type BillingPlan,
   type JobSkillInput,
-  type CandidateSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 
@@ -153,7 +154,7 @@ export default async function JobApplicationsPage({
         select: {
           must: true,
           weight: true,
-          term: { select: { id: true, label: true } },
+          term: { select: { id: true, label: true, aliases: true } },
         },
       },
       assessments: {
@@ -175,12 +176,10 @@ export default async function JobApplicationsPage({
     jobAssessmentTemplates.map(a => [a.templateId, (a as any).template?.title ?? a.templateId])
   );
 
-  const jobSkillsForEngine: JobSkillInput[] = job.requiredSkills.map((rs) => ({
-    termId: rs.term.id,
-    label: rs.term.label,
-    must: rs.must,
-    weight: rs.weight,
-  }));
+  const jobSkillsForEngine: JobSkillInput[] = buildJobSkillInputs(
+    job.requiredSkills,
+    job.skills
+  );
 
   const jobSeniorityForEngine = toSeniorityLevel(job.seniority);
 
@@ -215,7 +214,7 @@ export default async function JobApplicationsPage({
           candidateSkills: {
             select: {
               level: true,
-              term: { select: { id: true, label: true } },
+              term: { select: { id: true, label: true, aliases: true } },
             },
           },
           candidateLanguages: {
@@ -383,11 +382,9 @@ export default async function JobApplicationsPage({
   const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
 
   let enriched = allApps.map((a) => {
-    const candidateSkillsForEngine: CandidateSkillInput[] = (a.candidate?.candidateSkills ?? []).map((cs: any) => ({
-      termId: cs.term.id,
-      label: cs.term.label,
-      level: cs.level,
-    }));
+    const candidateSkillsForEngine = buildCandidateSkillInputs(
+      a.candidate?.candidateSkills ?? []
+    );
 
     const matchResult = computeMatchScore({
       jobSkills: jobSkillsForEngine,
@@ -404,7 +401,7 @@ export default async function JobApplicationsPage({
     const tagBoost = computeTagBoost({
       candidateTags: Array.isArray(a.candidate?.aiProfile?.tags) ? a.candidate.aiProfile.tags : [],
       jobTitle: job.title,
-      jobSkills: job.requiredSkills.map((s) => s.term.label),
+      jobSkills: jobSkillsForEngine.map((s) => s.label),
     });
 
     const scoreAfterProfile = adjustScoreByProfileType({
@@ -602,13 +599,14 @@ export default async function JobApplicationsPage({
 
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} />
+            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} count={total} />
             <FilterPill active={chosenInterest === "REVIEW"} href={buildHref({ interest: "REVIEW" })} label={`Por revisar (${counters.REVIEW})`} count={counters.REVIEW} />
             <FilterPill active={chosenInterest === "MAYBE"} href={buildHref({ interest: "MAYBE" })} label={`Preselecto (${counters.MAYBE})`} count={counters.MAYBE} />
             <FilterPill active={chosenInterest === "ACCEPTED"} href={buildHref({ interest: "ACCEPTED" })} label={`Entrevista (${counters.ACCEPTED})`} count={counters.ACCEPTED} />
             <FilterPill active={chosenInterest === "REJECTED"} href={buildHref({ interest: "REJECTED" })} label={`Descartado (${counters.REJECTED})`} count={counters.REJECTED} />
           </div>
         </section>
+
 
         {apps.length === 0 ? (
           <div className="glass-card rounded-2xl border border-dashed p-8 text-center space-y-3">
@@ -640,8 +638,9 @@ export default async function JobApplicationsPage({
           </div>
         ) : (
           <div className="rounded-2xl border border-zinc-100 bg-white/90 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/70">
-            <div className="space-y-2.5 border-b border-zinc-100 p-3 dark:border-zinc-800 sm:p-4">
-              {/* Fila 1: búsqueda + ordenar */}
+            <div className="border-b border-zinc-100 dark:border-zinc-800 p-3 sm:p-4 space-y-2.5">
+
+              {/* Fila 1: Búsqueda + Ordenar */}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <form method="get" className="relative w-full sm:max-w-xs">
                   {interestParam && <input type="hidden" name="interest" value={interestParam} />}
@@ -667,11 +666,11 @@ export default async function JobApplicationsPage({
                 </div>
               </div>
 
-              {/* Fila 2: filtros Match + CV inline */}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {/* Fila 2: Filtros inline + contador */}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                 {hasMatchSignals && (
                   <div className="flex items-center gap-1.5">
-                    <span className="shrink-0 text-[10px] text-zinc-400">Match</span>
+                    <span className="shrink-0 text-[11px] font-medium text-zinc-400">Match</span>
                     <div className="flex flex-wrap gap-1">
                       {(["ALL", "HIGH", "MED", "LOW"] as MatchFilter[]).map((f) => {
                         const isEmpty = f !== "ALL" && matchCounts[f] === 0 && matchFilter !== f;
@@ -680,20 +679,20 @@ export default async function JobApplicationsPage({
                             key={f}
                             href={buildHref({ match: f === "ALL" ? undefined : f })}
                             className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors ${
-                              isEmpty
-                                ? "border-zinc-200/50 text-zinc-400/60 dark:border-zinc-700/40 dark:text-zinc-600 pointer-events-none"
-                                : matchFilter === f
-                                  ? f === "HIGH"
-                                    ? "border-emerald-500 bg-emerald-600 text-white"
-                                    : f === "MED"
-                                      ? "border-amber-500 bg-amber-500 text-white"
-                                      : f === "LOW"
-                                        ? "border-red-400 bg-red-500 text-white"
-                                        : "border-zinc-500 bg-zinc-700 text-white dark:border-zinc-400 dark:bg-zinc-600"
-                                  : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
+                              matchFilter === f
+                                ? f === "HIGH" ? "border-emerald-500 bg-emerald-600 text-white"
+                                  : f === "MED" ? "border-amber-500 bg-amber-500 text-white"
+                                  : f === "LOW" ? "border-red-400 bg-red-500 text-white"
+                                  : "border-zinc-500 bg-zinc-700 text-white dark:bg-zinc-600"
+                                : isEmpty
+                                ? "border-zinc-200/50 bg-white text-zinc-400 dark:border-zinc-700/50 dark:bg-zinc-900/40 dark:text-zinc-600"
+                                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
                             }`}
                           >
-                            {f === "ALL" ? "Todos" : f === "HIGH" ? `Alto (${matchCounts.HIGH})` : f === "MED" ? `Medio (${matchCounts.MED})` : `Bajo (${matchCounts.LOW})`}
+                            {f === "ALL" ? `Todos (${matchCounts.ALL})`
+                              : f === "HIGH" ? `Alto (${matchCounts.HIGH})`
+                              : f === "MED" ? `Medio (${matchCounts.MED})`
+                              : `Bajo (${matchCounts.LOW})`}
                           </Link>
                         );
                       })}
@@ -702,7 +701,7 @@ export default async function JobApplicationsPage({
                 )}
 
                 <div className="flex items-center gap-1.5">
-                  <span className="shrink-0 text-[10px] text-zinc-400">CV</span>
+                  <span className="shrink-0 text-[11px] font-medium text-zinc-400">CV</span>
                   <div className="flex gap-1">
                     {(["ALL", "YES", "NO"] as CvFilter[]).map((f) => (
                       <Link
@@ -720,16 +719,16 @@ export default async function JobApplicationsPage({
                   </div>
                 </div>
 
-                <div className="ml-auto flex items-center gap-2">
+                <div className="ml-auto flex items-center gap-3">
                   {activeFiltersCount > 0 && (
                     <Link
                       href={buildHref({ match: undefined, cv: undefined })}
-                      className="text-[10px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600"
+                      className="text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600 whitespace-nowrap"
                     >
                       Limpiar
                     </Link>
                   )}
-                  <span className="text-[10px] text-zinc-400">
+                  <span className="text-[11px] text-zinc-400 whitespace-nowrap">
                     {apps.length} candidato{apps.length !== 1 ? "s" : ""}{activeFiltersCount > 0 ? " (filtrado)" : ""}
                   </span>
                 </div>
@@ -1168,8 +1167,8 @@ function FilterPill({ active, href, label, count }: { active?: boolean; href: st
         active
           ? "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700"
           : isEmpty
-            ? "border-zinc-200/50 bg-transparent text-zinc-400/50 dark:border-zinc-700/50 dark:text-zinc-600"
-            : "border-zinc-200 bg-transparent text-zinc-600 hover:bg-zinc-100/70 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/60"
+          ? "border-zinc-200/50 bg-transparent text-zinc-400 hover:bg-zinc-100/40 dark:border-zinc-700/50 dark:text-zinc-600"
+          : "border-zinc-200 bg-transparent text-zinc-600 hover:bg-zinc-100/70 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900/60"
       }`}
     >
       {label}

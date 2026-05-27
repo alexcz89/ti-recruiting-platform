@@ -47,19 +47,18 @@ export async function syncJobSkills(
 
   const allTerms = await prisma.taxonomyTerm.findMany({
     where: {
-      OR: uniqueNames.map((name) => ({
-        label: {
-          equals: name,
-          mode: "insensitive",
-        },
-      })),
+      kind: "SKILL",
     },
-    select: { id: true, label: true },
+    select: { id: true, slug: true, label: true, aliases: true },
   });
 
-  const termMap = new Map(
-    allTerms.map((t) => [norm(t.label), t.id] as const)
-  );
+  const termMap = new Map<string, string>();
+  for (const term of allTerms) {
+    for (const value of [term.label, term.slug, ...term.aliases]) {
+      const key = norm(value);
+      if (key && !termMap.has(key)) termMap.set(key, term.id);
+    }
+  }
 
   const seen = new Set<string>();
   const toCreate: Array<{

@@ -174,10 +174,9 @@ export async function PUT(
         },
       });
 
-      // 2) Soft-delete preguntas existentes
-      await tx.assessmentQuestion.updateMany({
+      // 2) Eliminar preguntas existentes (hard delete para evitar duplicados en conteos)
+      await tx.assessmentQuestion.deleteMany({
         where: { templateId: params.id },
-        data: { isActive: false },
       });
 
       // 3) Crear nuevas preguntas con language y allowedLanguages correctos

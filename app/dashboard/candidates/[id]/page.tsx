@@ -5,6 +5,8 @@ import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/server/prisma";
 import Link from "next/link";
 import {
+  buildCandidateSkillInputs,
+  buildJobSkillInputs,
   computeMatchScore,
   scoreToColor,
   scoreToTextColor,
@@ -12,7 +14,6 @@ import {
   hasMatchSignals,
   type BillingPlan,
   type JobSkillInput,
-  type CandidateSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import {
@@ -128,7 +129,7 @@ export default async function CandidateDetailPage({
         select: {
           id: true,
           level: true,
-          term: { select: { id: true, label: true } },
+          term: { select: { id: true, label: true, aliases: true } },
         },
         orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
       },
@@ -189,11 +190,12 @@ export default async function CandidateDetailPage({
         title: true,
         seniority: true,
         minYearsExperience: true,
+        skills: true,
         requiredSkills: {
           select: {
             must: true,
             weight: true,
-            term: { select: { id: true, label: true } },
+            term: { select: { id: true, label: true, aliases: true } },
           },
         },
         assessments: {
@@ -210,12 +212,7 @@ export default async function CandidateDetailPage({
         title: jobRaw.title,
         seniority: jobRaw.seniority ?? null,
         minYearsExperience: jobRaw.minYearsExperience ?? null,
-        requiredSkills: jobRaw.requiredSkills.map((rs) => ({
-          termId: rs.term.id,
-          label: rs.term.label,
-          must: rs.must,
-          weight: rs.weight,
-        })),
+        requiredSkills: buildJobSkillInputs(jobRaw.requiredSkills, jobRaw.skills),
         assessmentTemplateId: jobRaw.assessments?.[0]?.templateId ?? null,
       };
     }
@@ -307,11 +304,7 @@ export default async function CandidateDetailPage({
     }
   }
 
-  const candidateSkillsForEngine: CandidateSkillInput[] = candidate.candidateSkills.map((cs) => ({
-    termId: cs.term.id,
-    label: cs.term.label,
-    level: cs.level,
-  }));
+  const candidateSkillsForEngine = buildCandidateSkillInputs(candidate.candidateSkills);
 
   const jobSeniorityForEngine = toSeniorityLevel(jobForMatch?.seniority);
   const hasJobSkills = (jobForMatch?.requiredSkills?.length ?? 0) > 0;

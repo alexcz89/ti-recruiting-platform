@@ -9,15 +9,17 @@
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type JobSkillInput = {
-  termId: string;
+  termId?: string | null;
   label: string;
+  aliases?: string[] | null;
   must: boolean;
   weight?: number | null;
 };
 
 export type CandidateSkillInput = {
-  termId: string;
+  termId?: string | null;
   label: string;
+  aliases?: string[] | null;
   level?: number | null;
 };
 
@@ -83,8 +85,128 @@ const SENIORITY_MAP: Record<SeniorityLevel, number> = {
 
 // ── Helpers internos ──────────────────────────────────────────────────────
 
+type TaxonomyTermInput = {
+  id?: string | null;
+  label?: string | null;
+  aliases?: string[] | null;
+};
+
+type RequiredSkillInput = {
+  must?: boolean | null;
+  weight?: number | null;
+  term?: TaxonomyTermInput | null;
+};
+
+type CandidateTaxonomySkillInput = {
+  level?: number | null;
+  term?: TaxonomyTermInput | null;
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
+}
+
+export function normalizeSkillKey(value: unknown): string {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function skillLookupKeys(skill: {
+  termId?: string | null;
+  label?: string | null;
+  aliases?: string[] | null;
+}): string[] {
+  const keys = new Set<string>();
+  const termId = String(skill.termId ?? "").trim();
+  if (termId && !termId.startsWith("legacy:")) {
+    keys.add(`id:${termId}`);
+  }
+
+  for (const name of [skill.label, ...(skill.aliases ?? [])]) {
+    const normalized = normalizeSkillKey(name);
+    if (normalized) keys.add(`name:${normalized}`);
+  }
+
+  return Array.from(keys);
+}
+
+function uniqueLegacySkills(skills: string[] | null | undefined): string[] {
+  if (!Array.isArray(skills)) return [];
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const raw of skills) {
+    const label = String(raw ?? "").trim();
+    const key = normalizeSkillKey(label);
+    if (!label || !key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(label);
+  }
+
+  return result;
+}
+
+export function buildJobSkillInputs(
+  requiredSkills: RequiredSkillInput[] | null | undefined,
+  legacySkills?: string[] | null
+): JobSkillInput[] {
+  const taxonomySkills: JobSkillInput[] = [];
+
+  for (const rs of requiredSkills ?? []) {
+    const label = String(rs.term?.label ?? "").trim();
+    if (!rs.term?.id || !label) continue;
+
+    taxonomySkills.push({
+      termId: rs.term.id,
+      label,
+      aliases: rs.term.aliases ?? [],
+      must: rs.must !== false,
+      weight: rs.weight ?? null,
+    });
+  }
+
+  if (taxonomySkills.length > 0) return taxonomySkills;
+
+  return uniqueLegacySkills(legacySkills).map((label) => ({
+    termId: `legacy:${normalizeSkillKey(label)}`,
+    label,
+    aliases: [],
+    must: true,
+    weight: 5,
+  }));
+}
+
+export function buildCandidateSkillInputs(
+  candidateSkills: CandidateTaxonomySkillInput[] | null | undefined,
+  legacySkills?: string[] | null
+): CandidateSkillInput[] {
+  const taxonomySkills: CandidateSkillInput[] = [];
+
+  for (const cs of candidateSkills ?? []) {
+    const label = String(cs.term?.label ?? "").trim();
+    if (!cs.term?.id || !label) continue;
+
+    taxonomySkills.push({
+      termId: cs.term.id,
+      label,
+      aliases: cs.term.aliases ?? [],
+      level: cs.level ?? null,
+    });
+  }
+
+  if (taxonomySkills.length > 0) return taxonomySkills;
+
+  return uniqueLegacySkills(legacySkills).map((label) => ({
+    termId: `legacy:${normalizeSkillKey(label)}`,
+    label,
+    aliases: [],
+    level: null,
+  }));
 }
 
 function computeSeniorityScore(
@@ -185,8 +307,12 @@ export function computeMatchScore(
     candidateYearsExperience,
   } = input;
 
-  const candMap = new Map<string, CandidateSkillInput>();
-  for (const cs of candidateSkills) candMap.set(cs.termId, cs);
+  const candidateByKey = new Map<string, CandidateSkillInput>();
+  for (const cs of candidateSkills) {
+    for (const key of skillLookupKeys(cs)) {
+      if (!candidateByKey.has(key)) candidateByKey.set(key, cs);
+    }
+  }
 
   const mustSkills = jobSkills.filter((s) => s.must);
   const niceSkills = jobSkills.filter((s) => !s.must);
@@ -200,7 +326,9 @@ export function computeMatchScore(
 
   for (const js of jobSkills) {
     const weight = js.weight ?? 5;
-    const candidateSkill = candMap.get(js.termId);
+    const candidateSkill = skillLookupKeys(js)
+      .map((key) => candidateByKey.get(key))
+      .find(Boolean);
     const matched = !!candidateSkill;
 
     // nivel 5 = 100%, nivel 3 = 84%, nivel 1 = 68%, sin nivel = 80%
@@ -223,7 +351,7 @@ export function computeMatchScore(
     if (matched) matchedCount++;
 
     details.push({
-      termId: js.termId,
+      termId: js.termId ?? `legacy:${normalizeSkillKey(js.label)}`,
       label: js.label,
       must: js.must,
       weight,
