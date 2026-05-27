@@ -15,6 +15,7 @@ import { PhoneNumberUtil } from "google-libphonenumber";
 import { toastPromise, toastSuccess } from "@/lib/ui/toast";
 import UploadCvButton from "@/components/upload/UploadCvButton";
 import PhoneInputField from "@/components/PhoneInputField";
+import { MonthYearPicker, FullDatePicker } from "@/components/ui/WheelPicker";
 
 import {
   ProfileFormSchema,
@@ -1014,7 +1015,9 @@ function SectionContact() {
 }
 
 function SectionNetworks() {
-  const { register, formState: { errors } } = useFormContext<ProfileFormData>();
+  const { register, setValue, control, formState: { errors } } = useFormContext<ProfileFormData>();
+  const birthdateValue = useWatch({ control, name: "birthdate" }) || "";
+
   return (
     <section className={SECTION_CARD}>
       <header className="space-y-1">
@@ -1026,7 +1029,12 @@ function SectionNetworks() {
           <label className={LABEL_BASE}>
             Fecha de nacimiento <span className="text-zinc-400 font-normal">(opcional)</span>
           </label>
-          <input type="date" className={INPUT_BASE} {...register("birthdate")} />
+          <FullDatePicker
+            value={birthdateValue}
+            onChange={(val) => setValue("birthdate", val, { shouldDirty: true, shouldValidate: true })}
+            placeholder="Día, mes y año"
+            maxYear={new Date().getFullYear() - 16}
+          />
           <p className={SUBTEXT_BASE}>Solo visible para ti y para los reclutadores que te contacten</p>
         </div>
         <div>
@@ -1216,23 +1224,27 @@ function SectionExperience({
                   </div>
                   <div>
                     <label className={LABEL_BASE}>Inicio</label>
-                    <input type="month" className={INPUT_BASE} {...register(`experiences.${idx}.startDate` as const)} />
+                    <MonthYearPicker
+                      value={item.startDate || ""}
+                      onChange={(val) =>
+                        setValue(`experiences.${idx}.startDate`, val, { shouldDirty: true, shouldValidate: true })
+                      }
+                      placeholder="Mes y año de inicio"
+                    />
                   </div>
                   <div>
                     <label className={LABEL_BASE}>Fin</label>
                     <div className="flex gap-2 items-center">
-                      <input
-                        type="month"
-                        className={`${INPUT_BASE} flex-1 disabled:cursor-not-allowed disabled:opacity-50`}
-                        disabled={isCurrent}
-                        {...register(`experiences.${idx}.endDate` as const, {
-                          onChange: (e) => {
-                            if (String(e.target.value || "") === "") {
-                              setValue(`experiences.${idx}.endDate` as const, null as string | null, { shouldDirty: true, shouldValidate: true });
-                            }
-                          },
-                        })}
-                      />
+                      <div className="flex-1">
+                        <MonthYearPicker
+                          value={item.endDate || ""}
+                          onChange={(val) =>
+                            setValue(`experiences.${idx}.endDate`, val || null, { shouldDirty: true, shouldValidate: true })
+                          }
+                          disabled={isCurrent}
+                          placeholder="Mes y año de fin"
+                        />
+                      </div>
                       <label className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300 cursor-pointer whitespace-nowrap">
                         <input
                           type="checkbox"
@@ -1569,7 +1581,8 @@ function SectionEducation({
   addEducation: () => void;
   moveEducation: (from: number, to: number) => void;
 }) {
-  const { register } = useFormContext<ProfileFormData>();
+  const { register, setValue, control } = useFormContext<ProfileFormData>();
+  const watchedEdu = useWatch({ control, name: "education" });
   return (
     <section id="education" className={`${SECTION_CARD} scroll-mt-24`}>
       <div className="flex items-center justify-between gap-3">
@@ -1593,7 +1606,9 @@ function SectionEducation({
         </div>
       ) : (
         <div className="space-y-3">
-          {eduFA.fields.map((f, idx) => (
+          {eduFA.fields.map((f, idx) => {
+            const eduRow = watchedEdu?.[idx];
+            return (
             <div
               key={f.id}
               className="glass-card border border-zinc-200/70 dark:border-zinc-700/60 rounded-2xl p-4 space-y-3"
@@ -1657,17 +1672,31 @@ function SectionEducation({
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className={LABEL_BASE}>Inicio</label>
-                    <input type="month" className={INPUT_BASE} {...register(`education.${idx}.startDate` as const)} />
+                    <MonthYearPicker
+                      value={eduRow?.startDate || ""}
+                      onChange={(val) =>
+                        setValue(`education.${idx}.startDate`, val, { shouldDirty: true, shouldValidate: true })
+                      }
+                      placeholder="Mes y año"
+                    />
                   </div>
                   <div>
                     <label className={LABEL_BASE}>Fin</label>
-                    <input type="month" className={INPUT_BASE} {...register(`education.${idx}.endDate` as const)} />
+                    <MonthYearPicker
+                      value={eduRow?.endDate || ""}
+                      onChange={(val) =>
+                        setValue(`education.${idx}.endDate`, val || null, { shouldDirty: true, shouldValidate: true })
+                      }
+                      placeholder="Mes y año"
+                      maxYear={new Date().getFullYear() + 5}
+                    />
                     <p className={SUBTEXT_BASE}>Vacío = en curso</p>
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>
