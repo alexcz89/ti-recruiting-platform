@@ -104,7 +104,7 @@ export default async function TemplateDetailPage({ params }: PageProps) {
   const diffConfig = DIFFICULTY_CONFIG[template.difficulty ?? "JUNIOR"];
   const TypeIcon = TYPE_CONFIG[template.type]?.icon ?? CheckCircle2;
   const typeLabel = TYPE_CONFIG[template.type]?.label ?? template.type;
-  const canEdit = !template.isGlobal;
+  const canEdit = !template.isGlobal || role === "ADMIN";
 
   // Group questions by section
   const bySection = template.questions.reduce<Record<string, Question[]>>((acc, q) => {
