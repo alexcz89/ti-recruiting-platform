@@ -22,6 +22,7 @@ type Template = {
   language: string | null; isGlobal: boolean;
   totalQuestions: number; passingScore: number; timeLimit: number;
   sections: { name: string; questions: number }[];
+  createdAt: string;
   _count: { questions: number };
 };
 
@@ -209,6 +210,7 @@ export default async function AssessmentTemplatesPage({ searchParams }: PageProp
                           <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">Tiempo</th>
                           <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">Mínimo</th>
                           <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">Secciones</th>
+                          <th className="px-3 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-zinc-500">Creado</th>
                           <th className="px-4 py-2.5 text-right text-[10px] font-bold uppercase tracking-wider text-zinc-500">Acciones</th>
                         </tr>
                       </thead>
@@ -314,6 +316,15 @@ function TemplateRow({ template, isAdmin }: { template: Template; isAdmin: boole
         </div>
       </td>
 
+      {/* Fecha de creación */}
+      <td className="px-3 py-3 text-center whitespace-nowrap">
+        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          {template.createdAt
+            ? new Date(template.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
+            : "—"}
+        </span>
+      </td>
+
       {/* Acciones */}
       <td className="px-4 py-3">
         <div className="flex items-center justify-end gap-1.5">
@@ -390,6 +401,11 @@ function TemplateMobileCard({ template, isAdmin }: { template: Template; isAdmin
         <span className="flex items-center gap-1"><strong className="text-zinc-900 dark:text-zinc-100 font-black">{questionCount}</strong> preg.</span>
         <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{template.timeLimit}m</span>
         <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" />{template.passingScore}%</span>
+        {template.createdAt && (
+          <span className="flex items-center gap-1 text-zinc-400">
+            {new Date(template.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-1.5">

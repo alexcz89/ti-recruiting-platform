@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
         type: true, difficulty: true, language: true,
         isGlobal: true, companyId: true,
         totalQuestions: true, passingScore: true, timeLimit: true,
-        sections: true,
+        sections: true, createdAt: true,
         _count: { select: { questions: true } },
       },
     });
