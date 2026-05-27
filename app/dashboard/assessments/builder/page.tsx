@@ -361,6 +361,7 @@ function BuilderInner() {
       });
       const data = await res.json();
       if (!res.ok) { setErrors([data.error || "Error al guardar"]); return; }
+      router.refresh(); // Invalida el router cache de Next.js para que el server component se re-fetche
       router.push("/dashboard/assessments/templates?scope=custom");
     } catch {
       setErrors(["Error de conexión"]);
