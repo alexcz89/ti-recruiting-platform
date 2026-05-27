@@ -65,7 +65,10 @@ function parseAndValidateExperiences(json?: string | null):
   }
 
   const finishedExps = parsed.filter((e) => !e.isCurrent);
-  const intervals = finishedExps.map((e) => ({ start: e.startDate.getTime(), end: e.endDate!.getTime() }));
+  // Solo checar solapamiento para experiencias que tienen fecha de fin definida
+  const intervals = finishedExps
+    .filter((e) => e.endDate !== null)
+    .map((e) => ({ start: e.startDate.getTime(), end: e.endDate!.getTime() }));
   intervals.sort((a, b) => a.start - b.start);
   for (let i = 1; i < intervals.length; i++) if (intervals[i - 1].end > intervals[i].start) return { ok: false, error: "Las fechas de experiencias no pueden traslaparse." };
 

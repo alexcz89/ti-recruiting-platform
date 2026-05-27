@@ -794,11 +794,19 @@ export default function ProfileForm({
     if (admin1Norm) fd.set("admin1Norm", admin1Norm);
 
     try {
-      await toastPromise(onSubmit(fd), {
-        loading: "Guardando cambios…",
-        success: "Perfil actualizado",
-        error: (e) => e?.message || "No se pudo actualizar el perfil",
-      });
+      await toastPromise(
+        onSubmit(fd).then((result: any) => {
+          // Server actions return { error } on failure instead of throwing.
+          // We need to convert that into a rejection so toastPromise shows the error toast.
+          if (result?.error) throw new Error(result.error);
+          return result;
+        }),
+        {
+          loading: "Guardando cambios…",
+          success: "Perfil actualizado",
+          error: (e) => e?.message || "No se pudo actualizar el perfil",
+        }
+      );
     } catch (e: any) {
       setError("root", { type: "server", message: e?.message || "Error desconocido" });
     }
