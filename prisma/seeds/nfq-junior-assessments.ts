@@ -383,6 +383,21 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
           { id: "d", text: "Read update", isCorrect: false },
         ],
       },
+      // Q24
+      {
+        section: "Java Core",
+        tags: ["java", "comparator", "arrays", "sort"],
+        questionText: `¿Qué imprime en consola el siguiente código?\n\npublic class Tester {\n  public static void main(String[] args) {\n    Integer[] primes = {3, 2, 7, 11, 13, 5};\n    MySort ms = new MySort();\n    Arrays.sort(primes, ms);\n    for(Integer pi: primes)\n      System.out.println(pi);\n  }\n}\n\nclass MySort implements Comparator {\n  @Override\n  public int compare(Object o1, Object o2) {\n    return ((Integer) o2).compareTo((Integer) o1);\n  }\n}`,
+        allowMultiple: false,
+        difficulty: "JUNIOR",
+        explanation: "MySort implementa Comparator invirtiendo el orden natural (o2.compareTo(o1)), lo que ordena el array de forma descendente: 13, 11, 7, 5, 3, 2, imprimiéndose cada valor en una línea.",
+        options: [
+          { id: "a", text: "2 3 5 7", isCorrect: false },
+          { id: "b", text: "2 3 5 7 11 13", isCorrect: false },
+          { id: "c", text: "13\n11\n7\n5\n3\n2", isCorrect: true },
+          { id: "d", text: "13 11 7 5 3 2", isCorrect: false },
+        ],
+      },
       // Q25
       {
         section: "Java 8 / Streams / Lambdas",
@@ -486,6 +501,22 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
           { id: "b", text: "Git checkout", isCorrect: false },
           { id: "c", text: "create git <nombre de la rama> +1", isCorrect: false },
           { id: "d", text: "git pull", isCorrect: true },
+        ],
+      },
+      // Q32
+      {
+        section: "Java Core",
+        tags: ["java", "inner-class", "access-modifiers", "nested-class"],
+        questionText: `¿Qué código puede ser insertado en la línea N1 comentada y compila correctamente?\n\npublic class App {\n  void calcBill() {\n    // N1\n    new Invoice().print();\n  }\n}`,
+        allowMultiple: false,
+        difficulty: "JUNIOR",
+        explanation: "Una inner class con modificador de acceso por defecto (package-private) puede ser definida dentro de la clase App y ser instanciada desde sus métodos. No existe 'internal' en Java; 'private' sí funciona; sin modificador (package-private) también compila correctamente.",
+        options: [
+          { id: "a", text: "internal class Invoice {\n  void print() {\n    System.out.println(\"Invoice Printed\");\n  }\n}", isCorrect: false },
+          { id: "b", text: "private class Invoice {\n  void print() {\n    System.out.println(\"Invoice Printed\");\n  }\n}", isCorrect: false },
+          { id: "c", text: "protected class Invoice {\n  void print() {\n    System.out.println(\"Invoice Printed\");\n  }\n}", isCorrect: false },
+          { id: "d", text: "public class Invoice {\n  void print() {\n    System.out.println(\"Invoice Printed\");\n  }\n}", isCorrect: false },
+          { id: "e", text: "class Invoice {\n  void print() {\n    System.out.println(\"Invoice Printed\");\n  }\n}", isCorrect: true },
         ],
       },
       // Q33
