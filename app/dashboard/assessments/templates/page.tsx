@@ -213,14 +213,14 @@ export default async function AssessmentTemplatesPage({ searchParams }: PageProp
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900/50">
-                        {group.map((t) => <TemplateRow key={t.id} template={t} />)}
+                        {group.map((t) => <TemplateRow key={t.id} template={t} isAdmin={role === "ADMIN"} />)}
                       </tbody>
                     </table>
                   </div>
 
                   {/* Mobile cards */}
                   <div className="md:hidden grid grid-cols-1 gap-3">
-                    {group.map((t) => <TemplateMobileCard key={t.id} template={t} />)}
+                    {group.map((t) => <TemplateMobileCard key={t.id} template={t} isAdmin={role === "ADMIN"} />)}
                   </div>
                 </section>
               );
@@ -233,13 +233,13 @@ export default async function AssessmentTemplatesPage({ searchParams }: PageProp
 }
 
 // ── Table row (desktop) ──
-function TemplateRow({ template }: { template: Template }) {
+function TemplateRow({ template, isAdmin }: { template: Template; isAdmin: boolean }) {
   const typeConfig = TYPE_CONFIG[template.type as AssessmentType] ?? TYPE_CONFIG.MCQ;
   const TypeIcon = typeConfig.icon;
   const questionCount = template._count?.questions ?? template.totalQuestions ?? 0;
   const sections = Array.isArray(template.sections) ? template.sections : [];
   const diffConfig = DIFFICULTY_CONFIG[template.difficulty as Difficulty] ?? DIFFICULTY_CONFIG.JUNIOR;
-  const canEdit = !template.isGlobal;
+  const canEdit = !template.isGlobal || isAdmin;
 
   return (
     <tr className={`group hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors border-l-2 ${diffConfig.row}`}>
@@ -359,12 +359,12 @@ function TemplateRow({ template }: { template: Template }) {
 }
 
 // ── Mobile card ──
-function TemplateMobileCard({ template }: { template: Template }) {
+function TemplateMobileCard({ template, isAdmin }: { template: Template; isAdmin: boolean }) {
   const typeConfig = TYPE_CONFIG[template.type as AssessmentType] ?? TYPE_CONFIG.MCQ;
   const TypeIcon = typeConfig.icon;
   const diffConfig = DIFFICULTY_CONFIG[template.difficulty as Difficulty] ?? DIFFICULTY_CONFIG.JUNIOR;
   const questionCount = template._count?.questions ?? template.totalQuestions ?? 0;
-  const canEdit = !template.isGlobal;
+  const canEdit = !template.isGlobal || isAdmin;
 
   return (
     <div className={`rounded-xl border bg-white dark:bg-zinc-900 dark:border-zinc-800 shadow-sm border-l-2 ${diffConfig.row} p-4`}>
