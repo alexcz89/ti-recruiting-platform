@@ -5,7 +5,15 @@ import { nfqJuniorAssessments } from "./seeds/nfq-junior-assessments"
 
 const prisma = new PrismaClient()
 
-async function upsertTemplate(template: (typeof nfqJuniorAssessments)[number]) {
+async function upsertTemplate(
+  template: (typeof nfqJuniorAssessments)[number],
+  companyId: string | null,
+) {
+  // Templates no-globales se asignan a la empresa del recruiter que corre el seed
+  const ownership = template.isGlobal
+    ? { isGlobal: true, companyId: null }
+    : { isGlobal: false, companyId }
+
   return prisma.assessmentTemplate.upsert({
     where: { slug: template.slug },
     update: {
@@ -23,7 +31,7 @@ async function upsertTemplate(template: (typeof nfqJuniorAssessments)[number]) {
       penalizeWrong: template.penalizeWrong,
       isActive: template.isActive,
       language: template.language,
-      isGlobal: template.isGlobal,
+      ...ownership,
     },
     create: {
       title: template.title,
@@ -41,7 +49,7 @@ async function upsertTemplate(template: (typeof nfqJuniorAssessments)[number]) {
       penalizeWrong: template.penalizeWrong,
       isActive: template.isActive,
       language: template.language,
-      isGlobal: template.isGlobal,
+      ...ownership,
     },
     select: { id: true, title: true, slug: true },
   })
@@ -79,10 +87,22 @@ async function replaceQuestions(
 }
 
 async function main() {
+  // Buscar la primera empresa disponible para asignar los templates no-globales
+  const company = await prisma.company.findFirst({
+    select: { id: true, name: true },
+  })
+
+  if (!company) {
+    console.warn("⚠️  No se encontró ninguna empresa. Los templates no-globales quedarán sin companyId.")
+  } else {
+    console.log(`🏢 Usando empresa: ${company.name} (${company.id})`)
+  }
+
   for (const template of nfqJuniorAssessments) {
-    const savedTemplate = await upsertTemplate(template)
+    const savedTemplate = await upsertTemplate(template, company?.id ?? null)
     await replaceQuestions(savedTemplate.id, template)
-    console.log(`Seeded template: ${savedTemplate.title} (${savedTemplate.slug})`)
+    const scope = template.isGlobal ? "global" : `empresa: ${company?.name ?? "sin empresa"}`
+    console.log(`✅ Seeded: ${savedTemplate.title} (${savedTemplate.slug}) [${scope}]`)
   }
 }
 

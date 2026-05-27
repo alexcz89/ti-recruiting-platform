@@ -53,7 +53,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
     shuffleQuestions: false,
     penalizeWrong: false,
     isActive: true,
-    isGlobal: true,
+    isGlobal: false,
     language: "java",
     sections: [
       { title: "Fundamentos de Java" },
@@ -568,7 +568,7 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
     shuffleQuestions: false,
     penalizeWrong: false,
     isActive: true,
-    isGlobal: true,
+    isGlobal: false,
     language: null,
     sections: [
       { title: "REST y HTTP" },
