@@ -4,9 +4,11 @@
 import { useFormContext } from "react-hook-form";
 import { useState } from "react";
 import clsx from "clsx";
+import { Clock } from "lucide-react";
 import { JobForm } from "../types";
 import { BENEFITS } from "../constants";
 import NumberMini from "./NumberMini";
+import SchedulePicker from "./SchedulePicker";
 
 type Props = {
   onNext: () => void;
@@ -20,6 +22,7 @@ export default function Step3Benefits({ onNext, onBack }: Props) {
   const showBenefits = watch("showBenefits");
   const valesMonto   = watch("valesMonto");
   const otrosItems   = watch("otrosItems") ?? [];
+  const schedule     = watch("schedule") || "";
 
   const [otroInput, setOtroInput] = useState("");
 
@@ -38,8 +41,20 @@ export default function Step3Benefits({ onNext, onBack }: Props) {
   return (
     <div className="space-y-6 rounded-xl border border-zinc-200 bg-white p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-        3) Prestaciones
+        2) Prestaciones y horario
       </h3>
+
+      {/* Horario */}
+      <div className="space-y-2">
+        <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+          <Clock className="h-4 w-4 text-emerald-500" />
+          Horario <span className="text-xs font-normal text-zinc-400">(opcional)</span>
+        </label>
+        <SchedulePicker
+          value={schedule}
+          onChange={(val) => setValue("schedule", val, { shouldDirty: true })}
+        />
+      </div>
 
       {/* Toggle mostrar prestaciones */}
       <div className={clsx(

@@ -3,12 +3,11 @@
 
 import { useEffect, useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
-import { MapPin, DollarSign, Briefcase, Clock } from "lucide-react";
+import { MapPin, DollarSign, Briefcase, CheckCircle2 } from "lucide-react";
 import clsx from "clsx";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { JobForm, PresetCompany, TemplateJob } from "../types";
 import TemplateSelector from "./TemplateSelector";
-import SchedulePicker from "./SchedulePicker";
 import { EMPLOYMENT_TYPE_OPTIONS } from "../lib/job-enums";
 
 type Step1BasicProps = {
@@ -17,6 +16,14 @@ type Step1BasicProps = {
   onApplyTemplate: (id: string) => void;
   onNext: () => void;
 };
+
+type SalaryMode = "rango" | "hasta" | "exacto";
+
+const SALARY_MODES: { value: SalaryMode; label: string; hint: string }[] = [
+  { value: "rango",  label: "Rango",  hint: "Desde … Hasta" },
+  { value: "hasta",  label: "Hasta",  hint: "Máximo ofrecido" },
+  { value: "exacto", label: "Exacto", hint: "Monto fijo" },
+];
 
 const inputCls = (err?: unknown, extra?: string) =>
   clsx(
@@ -42,6 +49,11 @@ function parseSalaryInput(raw: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function FieldCheck({ ok }: { ok: boolean }) {
+  if (!ok) return null;
+  return <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />;
+}
+
 export default function Step1Basic({
   presetCompany,
   templates,
@@ -56,14 +68,15 @@ export default function Step1Basic({
     formState: { errors },
   } = useFormContext<JobForm>();
 
-  const locationType = watch("locationType");
-  const city = watch("city");
-  const title = watch("title");
-  const salaryMin = watch("salaryMin");
-  const salaryMax = watch("salaryMax");
-  const employmentType = watch("employmentType");
-  const schedule = watch("schedule") || "";
+  const locationType    = watch("locationType");
+  const city            = watch("city");
+  const title           = watch("title");
+  const salaryMin       = watch("salaryMin");
+  const salaryMax       = watch("salaryMax");
+  const employmentType  = watch("employmentType");
+  const companyMode     = watch("companyMode");
 
+  const [salaryMode, setSalaryMode]       = useState<SalaryMode>("rango");
   const [salaryMinFocused, setSalaryMinFocused] = useState(false);
   const [salaryMaxFocused, setSalaryMaxFocused] = useState(false);
 
@@ -79,7 +92,18 @@ export default function Step1Basic({
     }
   }, [locationType, setValue]);
 
+  // Al cambiar modo sueldo, limpiar el campo que ya no aplica
+  function handleSalaryModeChange(mode: SalaryMode) {
+    setSalaryMode(mode);
+    if (mode === "hasta") {
+      setValue("salaryMin", undefined, { shouldDirty: true });
+    } else if (mode === "exacto") {
+      setValue("salaryMax", undefined, { shouldDirty: true });
+    }
+  }
+
   const salaryNeedsSwap =
+    salaryMode === "rango" &&
     salaryMin && salaryMax &&
     !Number.isNaN(Number(salaryMin)) && !Number.isNaN(Number(salaryMax)) &&
     Number(salaryMin) > Number(salaryMax);
@@ -91,94 +115,288 @@ export default function Step1Basic({
     !(cityRequired && !city?.trim()) && !salaryNeedsSwap;
 
   const disabledMessage = !canNext
-    ? !title?.trim() ? "Falta nombre de vacante"
-    : !employmentType ? "Falta tipo de empleo"
+    ? !title?.trim()         ? "Falta nombre de vacante"
+    : !employmentType        ? "Falta tipo de empleo"
     : cityRequired && !city?.trim() ? "Falta ciudad"
     : null
     : null;
 
   return (
     <section className="p-4 sm:p-6 lg:p-8">
-      <div className="space-y-5">
+      <div className="space-y-4">
 
-        {/* Template Selector */}
+        {/* Template Selector compacto */}
         {templates.length > 0 && (
           <TemplateSelector templates={templates} onApply={onApplyTemplate} />
         )}
 
         {/* Título */}
         <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            Nombre de la vacante <span className="text-red-500">*</span>
-          </label>
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              Nombre de la vacante <span className="text-red-500">*</span>
+            </label>
+            <FieldCheck ok={!!title?.trim() && title.trim().length >= 3 && !errors.title} />
+          </div>
           <input
             className={inputCls(errors.title, "h-11 px-3")}
             placeholder="Ej: Desarrollador Full Stack Senior"
             {...register("title")}
             aria-invalid={errors.title ? "true" : "false"}
           />
-          {errors.title && (
+          {errors.title ? (
             <p className="flex items-center gap-1 text-xs text-red-600">⚠️ {errors.title.message}</p>
-          )}
-          {!errors.title && title && title.length < 10 && (
+          ) : title && title.length > 0 && title.length < 10 ? (
             <p className="text-xs text-amber-600">💡 Un título más descriptivo atrae más candidatos</p>
+          ) : null}
+        </div>
+
+        {/* Empresa + Tipo de empleo en fila */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Empresa — radio compacto */}
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-foreground">
+              Empresa <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-2">
+              <label className="flex-1 cursor-pointer">
+                <input type="radio" value="own" className="sr-only" {...register("companyMode")} disabled={!presetCompany?.id} />
+                <span className={clsx(
+                  "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-all w-full",
+                  companyMode === "own"
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300"
+                    : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
+                )}>
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
+                    {presetCompany?.name?.[0]?.toUpperCase() || "?"}
+                  </span>
+                  <span className="truncate font-medium">{presetCompany?.name || "Mi empresa"}</span>
+                </span>
+              </label>
+              <label className="flex-1 cursor-pointer">
+                <input type="radio" value="external" className="sr-only" {...register("companyMode")} />
+                <span className={clsx(
+                  "flex items-center gap-2 rounded-lg border px-3 py-2.5 text-sm transition-all w-full",
+                  companyMode === "external"
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-300"
+                    : "border-zinc-200 bg-white hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-zinc-600"
+                )}>
+                  <span className="text-base">🔒</span>
+                  <span className="font-medium">Confidencial</span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          {/* Tipo de empleo */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <Briefcase className="h-4 w-4 text-emerald-500" />
+                Tipo de empleo <span className="text-red-500">*</span>
+              </label>
+              <FieldCheck ok={!!employmentType && !errors.employmentType} />
+            </div>
+            <select className={inputCls(errors.employmentType, "h-11 px-3")} {...register("employmentType")}>
+              {EMPLOYMENT_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            {errors.employmentType && <p className="text-xs text-red-600">{errors.employmentType.message}</p>}
+          </div>
+        </div>
+
+        {/* Ubicación */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <MapPin className="h-4 w-4 text-emerald-500" />
+              Ubicación <span className="text-red-500">*</span>
+            </label>
+            <FieldCheck ok={locationType === "REMOTE" || (!!city?.trim() && !errors.city)} />
+          </div>
+          <select className={inputCls(undefined, "h-11 px-3")} {...register("locationType")}>
+            <option value="REMOTE">🌎 Remoto</option>
+            <option value="HYBRID">🏢 Híbrido</option>
+            <option value="ONSITE">🏛️ Presencial</option>
+          </select>
+          {cityRequired && (
+            <div className="min-w-0 overflow-hidden">
+              <p className="mb-1 text-xs text-muted-foreground">Escribe ciudad y selecciona una sugerencia.</p>
+              <Controller
+                control={control}
+                name="city"
+                render={({ field: { value, onChange } }) => (
+                  <LocationAutocomplete
+                    value={value || ""}
+                    onChange={(next: unknown) => {
+                      if (typeof next === "string") { onChange(next); return; }
+                      if (next && typeof next === "object") {
+                        const place = next as { label?: string; city?: string; country?: string; admin1?: string; cityNorm?: string; admin1Norm?: string; lat?: number; lng?: number; };
+                        onChange(place.label || place.city || "");
+                        setValue("country", place.country || "");
+                        setValue("admin1", place.admin1 || "");
+                        setValue("cityNorm", place.cityNorm || "");
+                        setValue("admin1Norm", place.admin1Norm || "");
+                        setValue("locationLat", typeof place.lat === "number" && Number.isFinite(place.lat) ? place.lat : null);
+                        setValue("locationLng", typeof place.lng === "number" && Number.isFinite(place.lng) ? place.lng : null);
+                        return;
+                      }
+                      onChange("");
+                      setValue("country", ""); setValue("admin1", "");
+                      setValue("cityNorm", ""); setValue("admin1Norm", "");
+                      setValue("locationLat", null); setValue("locationLng", null);
+                    }}
+                    onPlace={() => {}}
+                    countries={["mx"]}
+                    className={inputCls(errors.city, "h-11 px-3")}
+                  />
+                )}
+              />
+              {errors.city && <p className="mt-1 text-xs text-red-600">⚠️ {errors.city.message as string}</p>}
+            </div>
+          )}
+          {!cityRequired && (
+            <p className="text-xs text-muted-foreground">Para vacantes remotas la ciudad es opcional.</p>
           )}
         </div>
 
-        {/* Sueldo — debajo del título para máximo impacto */}
-        <div className="space-y-1.5">
+        {/* Sueldo */}
+        <div className="space-y-2">
           <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
             <DollarSign className="h-4 w-4 text-emerald-500" />
             Sueldo <span className="text-xs font-normal text-zinc-400">(opcional)</span>
           </label>
-          <div className="grid grid-cols-[88px_1fr_1fr] gap-2">
-            <select
-              className={inputCls(undefined, "h-11 px-2")}
-              {...register("currency")}
-            >
+
+          {/* Segmented mode selector */}
+          <div className="inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-0.5 dark:border-zinc-700 dark:bg-zinc-800">
+            {SALARY_MODES.map((m) => (
+              <button
+                key={m.value}
+                type="button"
+                title={m.hint}
+                onClick={() => handleSalaryModeChange(m.value)}
+                className={clsx(
+                  "rounded-md px-3 py-1 text-xs font-semibold transition-all",
+                  salaryMode === m.value
+                    ? "bg-white text-emerald-700 shadow-sm dark:bg-zinc-700 dark:text-emerald-300"
+                    : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                )}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Inputs según modo */}
+          <div className={clsx(
+            "grid gap-2",
+            salaryMode === "rango" ? "grid-cols-[88px_1fr_1fr]" : "grid-cols-[88px_1fr]"
+          )}>
+            {/* Moneda */}
+            <select className={inputCls(undefined, "h-11 px-2")} {...register("currency")}>
               <option value="MXN">MXN</option>
               <option value="USD">USD</option>
             </select>
 
-            <Controller
-              name="salaryMin"
-              control={control}
-              render={({ field }) => {
-                const raw = typeof field.value === "number" || typeof field.value === "string" ? String(field.value) : "";
-                return (
-                  <input
-                    type="text" inputMode="numeric"
-                    name={field.name} ref={field.ref}
-                    className={inputCls(errors.salaryMin, "h-11 px-3")}
-                    placeholder="Desde"
-                    value={salaryMinFocused ? raw : formatSalary(raw)}
-                    onFocus={() => setSalaryMinFocused(true)}
-                    onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
-                    onBlur={(e) => { setSalaryMinFocused(false); field.onChange(parseSalaryInput(e.target.value)); field.onBlur(); }}
-                  />
-                );
-              }}
-            />
+            {/* Input(s) según modo */}
+            {salaryMode === "rango" && (
+              <>
+                <Controller
+                  name="salaryMin"
+                  control={control}
+                  render={({ field }) => {
+                    const raw = typeof field.value === "number" || typeof field.value === "string" ? String(field.value) : "";
+                    return (
+                      <input
+                        type="text" inputMode="numeric"
+                        name={field.name} ref={field.ref}
+                        className={inputCls(errors.salaryMin, "h-11 px-3")}
+                        placeholder="Desde"
+                        value={salaryMinFocused ? raw : formatSalary(raw)}
+                        onFocus={() => setSalaryMinFocused(true)}
+                        onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
+                        onBlur={(e) => { setSalaryMinFocused(false); field.onChange(parseSalaryInput(e.target.value)); field.onBlur(); }}
+                      />
+                    );
+                  }}
+                />
+                <Controller
+                  name="salaryMax"
+                  control={control}
+                  render={({ field }) => {
+                    const raw = typeof field.value === "number" || typeof field.value === "string" ? String(field.value) : "";
+                    return (
+                      <input
+                        type="text" inputMode="numeric"
+                        name={field.name} ref={field.ref}
+                        className={inputCls(errors.salaryMax, "h-11 px-3")}
+                        placeholder="Hasta"
+                        value={salaryMaxFocused ? raw : formatSalary(raw)}
+                        onFocus={() => setSalaryMaxFocused(true)}
+                        onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
+                        onBlur={(e) => { setSalaryMaxFocused(false); field.onChange(parseSalaryInput(e.target.value)); field.onBlur(); }}
+                      />
+                    );
+                  }}
+                />
+              </>
+            )}
 
-            <Controller
-              name="salaryMax"
-              control={control}
-              render={({ field }) => {
-                const raw = typeof field.value === "number" || typeof field.value === "string" ? String(field.value) : "";
-                return (
-                  <input
-                    type="text" inputMode="numeric"
-                    name={field.name} ref={field.ref}
-                    className={inputCls(errors.salaryMax, "h-11 px-3")}
-                    placeholder="Hasta"
-                    value={salaryMaxFocused ? raw : formatSalary(raw)}
-                    onFocus={() => setSalaryMaxFocused(true)}
-                    onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
-                    onBlur={(e) => { setSalaryMaxFocused(false); field.onChange(parseSalaryInput(e.target.value)); field.onBlur(); }}
-                  />
-                );
-              }}
-            />
+            {salaryMode === "hasta" && (
+              <Controller
+                name="salaryMax"
+                control={control}
+                render={({ field }) => {
+                  const raw = typeof field.value === "number" || typeof field.value === "string" ? String(field.value) : "";
+                  return (
+                    <input
+                      type="text" inputMode="numeric"
+                      name={field.name} ref={field.ref}
+                      className={inputCls(errors.salaryMax, "h-11 px-3")}
+                      placeholder="Sueldo máximo"
+                      value={salaryMaxFocused ? raw : formatSalary(raw)}
+                      onFocus={() => setSalaryMaxFocused(true)}
+                      onChange={(e) => field.onChange(parseSalaryInput(e.target.value))}
+                      onBlur={(e) => { setSalaryMaxFocused(false); field.onChange(parseSalaryInput(e.target.value)); field.onBlur(); }}
+                    />
+                  );
+                }}
+              />
+            )}
+
+            {salaryMode === "exacto" && (
+              <Controller
+                name="salaryMin"
+                control={control}
+                render={({ field }) => {
+                  const raw = typeof field.value === "number" || typeof field.value === "string" ? String(field.value) : "";
+                  return (
+                    <input
+                      type="text" inputMode="numeric"
+                      name={field.name} ref={field.ref}
+                      className={inputCls(errors.salaryMin, "h-11 px-3")}
+                      placeholder="Sueldo exacto"
+                      value={salaryMinFocused ? raw : formatSalary(raw)}
+                      onFocus={() => setSalaryMinFocused(true)}
+                      onChange={(e) => {
+                        const val = parseSalaryInput(e.target.value);
+                        field.onChange(val);
+                        // En modo exacto, salaryMax = salaryMin
+                        setValue("salaryMax", val, { shouldDirty: true });
+                      }}
+                      onBlur={(e) => {
+                        setSalaryMinFocused(false);
+                        const val = parseSalaryInput(e.target.value);
+                        field.onChange(val);
+                        setValue("salaryMax", val, { shouldDirty: true });
+                        field.onBlur();
+                      }}
+                    />
+                  );
+                }}
+              />
+            )}
           </div>
 
           <div className="flex items-center justify-between">
@@ -209,117 +427,6 @@ export default function Step1Basic({
               ⚠️ {(errors.salaryMin?.message as string) || (errors.salaryMax?.message as string)}
             </p>
           )}
-        </div>
-
-        {/* Empresa — tarjetas compactas */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            Empresa <span className="text-red-500">*</span>
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="relative flex cursor-pointer items-center gap-3 rounded-xl border-2 border-zinc-200 bg-white p-3 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20">
-              <input type="radio" value="own" className="sr-only" {...register("companyMode")} disabled={!presetCompany?.id} />
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-sm font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                {presetCompany?.name?.[0]?.toUpperCase() || "?"}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Mi empresa</p>
-                <p className="truncate text-[11px] text-zinc-500">{presetCompany?.name || "(no asignada)"}</p>
-              </div>
-              <div className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 rounded-full border-2 border-zinc-300 bg-white [label:has(:checked)_&]:border-emerald-500 [label:has(:checked)_&]:bg-emerald-500 dark:bg-zinc-900" />
-            </label>
-
-            <label className="relative flex cursor-pointer items-center gap-3 rounded-xl border-2 border-zinc-200 bg-white p-3 transition-all hover:border-emerald-500/50 dark:border-zinc-700 dark:bg-zinc-900 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50 dark:has-[:checked]:bg-emerald-950/20">
-              <input type="radio" value="external" className="sr-only" {...register("companyMode")} />
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-lg dark:bg-zinc-800">🔒</div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Confidencial</p>
-                <p className="text-[11px] text-zinc-500">Ocultar nombre</p>
-              </div>
-              <div className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 rounded-full border-2 border-zinc-300 bg-white [label:has(:checked)_&]:border-emerald-500 [label:has(:checked)_&]:bg-emerald-500 dark:bg-zinc-900" />
-            </label>
-          </div>
-        </div>
-
-        {/* Ubicación + Tipo de empleo en una fila */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          {/* Ubicación */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <MapPin className="h-4 w-4 text-emerald-500" />
-              Ubicación <span className="text-red-500">*</span>
-            </label>
-            <select className={inputCls(undefined, "h-11 px-3")} {...register("locationType")}>
-              <option value="REMOTE">🌎 Remoto</option>
-              <option value="HYBRID">🏢 Híbrido</option>
-              <option value="ONSITE">🏛️ Presencial</option>
-            </select>
-            {cityRequired && (
-              <div className="min-w-0 overflow-hidden">
-                <p className="mb-1.5 text-xs text-muted-foreground">Escribe ciudad y selecciona una sugerencia.</p>
-                <Controller
-                  control={control}
-                  name="city"
-                  render={({ field: { value, onChange } }) => (
-                    <LocationAutocomplete
-                      value={value || ""}
-                      onChange={(next: unknown) => {
-                        if (typeof next === "string") { onChange(next); return; }
-                        if (next && typeof next === "object") {
-                          const place = next as { label?: string; city?: string; country?: string; admin1?: string; cityNorm?: string; admin1Norm?: string; lat?: number; lng?: number; };
-                          onChange(place.label || place.city || "");
-                          setValue("country", place.country || "");
-                          setValue("admin1", place.admin1 || "");
-                          setValue("cityNorm", place.cityNorm || "");
-                          setValue("admin1Norm", place.admin1Norm || "");
-                          setValue("locationLat", typeof place.lat === "number" && Number.isFinite(place.lat) ? place.lat : null);
-                          setValue("locationLng", typeof place.lng === "number" && Number.isFinite(place.lng) ? place.lng : null);
-                          return;
-                        }
-                        onChange("");
-                        setValue("country", ""); setValue("admin1", "");
-                        setValue("cityNorm", ""); setValue("admin1Norm", "");
-                        setValue("locationLat", null); setValue("locationLng", null);
-                      }}
-                      onPlace={() => {}}
-                      countries={["mx"]}
-                      className={inputCls(errors.city, "h-11 px-3")}
-                    />
-                  )}
-                />
-                {errors.city && <p className="mt-1 text-xs text-red-600">⚠️ {errors.city.message as string}</p>}
-              </div>
-            )}
-            {!cityRequired && (
-              <p className="text-xs text-muted-foreground">Para vacantes remotas la ciudad es opcional.</p>
-            )}
-          </div>
-
-          {/* Tipo de empleo */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-              <Briefcase className="h-4 w-4 text-emerald-500" />
-              Tipo de empleo <span className="text-red-500">*</span>
-            </label>
-            <select className={inputCls(errors.employmentType, "h-11 px-3")} {...register("employmentType")}>
-              {EMPLOYMENT_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-            {errors.employmentType && <p className="text-xs text-red-600">{errors.employmentType.message}</p>}
-          </div>
-        </div>
-
-        {/* Horario — fila completa */}
-        <div className="space-y-1.5">
-          <label className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-            <Clock className="h-4 w-4 text-emerald-500" />
-            Horario <span className="text-xs font-normal text-zinc-400">(opcional)</span>
-          </label>
-          <SchedulePicker
-            value={schedule}
-            onChange={(val) => setValue("schedule", val, { shouldDirty: true })}
-          />
         </div>
 
         {/* Navigation */}
