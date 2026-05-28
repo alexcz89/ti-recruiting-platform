@@ -1,7 +1,8 @@
 // components/ui/WheelPicker.tsx
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /* ─── Constants ──────────────────────────────────────────────────────────────── */
 const MONTHS_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
@@ -17,8 +18,10 @@ function daysInMonth(month1: number, year: number) {
 
 /**
  * Bottom-sheet on mobile, centred dialog on desktop.
- * The toolbar (Cancelar / título / OK) is a sticky header so it is always
- * visible even when the body content is taller than the viewport.
+ *
+ * Rendered via createPortal into document.body so it is never trapped
+ * inside a parent with overflow/transform/will-change — the main cause
+ * of position:fixed modals disappearing on iOS Safari.
  */
 function PickerModal({
   open,
@@ -31,16 +34,20 @@ function PickerModal({
   toolbar:  ReactNode;
   children: ReactNode;
 }) {
-  if (!open) return null;
-  return (
-    /* z-[300] to sit above phone-flag dropdowns and other high-z UI */
+  // Needed for SSR: document.body is not available on the server.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
     <div
       className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]"
       onPointerDown={onClose}
     >
       <div
-        /* max-h-[85svh] caps height on every screen size.
-           flex-col keeps toolbar fixed while the body scrolls. */
+        /* max-h capped with svh (small viewport height) so the sheet
+           never overflows behind the mobile browser chrome. */
         className="w-full sm:w-[400px] rounded-t-2xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl flex flex-col"
         style={{ maxHeight: "85svh" }}
         onPointerDown={(e) => e.stopPropagation()}
@@ -48,12 +55,13 @@ function PickerModal({
         {/* Sticky toolbar – never scrolls away */}
         <div className="shrink-0">{toolbar}</div>
 
-        {/* Scrollable body – handles overflow gracefully */}
+        {/* Scrollable body */}
         <div className="overflow-y-auto overscroll-contain">
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
