@@ -16,6 +16,8 @@ type Props = {
   attemptId: string | null;
   onFlagsChange?: (flags: Flags) => void;
   maxTabSwitches?: number;
+  /** Llamado cuando el candidato REGRESA al tab después de haberlo abandonado */
+  onTabReturn?: (switchCount: number) => void;
 };
 
 type AntiCheatEvent =
@@ -31,7 +33,8 @@ export function useAntiCheating({
   enabled,
   attemptId,
   onFlagsChange,
-  maxTabSwitches = 5, // Umbral estricto — el reclutador verá todo en el reporte
+  maxTabSwitches = 5,
+  onTabReturn,
 }: Props) {
   const flagsRef = useRef<Flags>({
     tabSwitches: 0,
@@ -107,28 +110,17 @@ export function useAntiCheating({
 
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        // ── Candidato SALE del tab ──────────────────────────────────────
         flagsRef.current.tabSwitches += 1;
         flagsRef.current.focusLoss += 1;
         emit();
-
         enqueue("TAB_SWITCH");
         enqueue("VISIBILITY_HIDDEN");
-
-        if (flagsRef.current.tabSwitches >= maxTabSwitches) {
-          toastError(
-            `🚨 Límite de cambios de pestaña alcanzado (${flagsRef.current.tabSwitches}/${maxTabSwitches}). Esto quedará registrado en tu reporte.`,
-            { duration: 8000 }
-          );
-        } else if (flagsRef.current.tabSwitches >= Math.ceil(maxTabSwitches / 2)) {
-          toastWarning(
-            `⚠️ Cambio de pestaña detectado (${flagsRef.current.tabSwitches}/${maxTabSwitches}). Evita salir del examen.`,
-            { duration: 4000 }
-          );
-        } else if (flagsRef.current.tabSwitches === 1) {
-          toastWarning(
-            "⚠️ No cambies de pestaña durante el examen. Cada cambio queda registrado.",
-            { duration: 4000 }
-          );
+      } else {
+        // ── Candidato REGRESA al tab ────────────────────────────────────
+        // Solo disparar si ya había salido al menos una vez
+        if (flagsRef.current.tabSwitches > 0) {
+          onTabReturn?.(flagsRef.current.tabSwitches);
         }
       }
     };

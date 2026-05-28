@@ -113,6 +113,9 @@ export default function AssessmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [expired, setExpired] = useState(false);
 
+  // Anti-cheat: modal bloqueante al regresar al tab
+  const [tabWarning, setTabWarning] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
+
   // ✅ NUEVO: trackear qué preguntas CODING fueron enviadas con solución
   const [codingSubmitted, setCodingSubmitted] = useState<Record<string, boolean>>({});
 
@@ -123,6 +126,9 @@ export default function AssessmentPage() {
     enabled: started && !!attemptId && !expired,
     attemptId,
     maxTabSwitches: 5,
+    onTabReturn: (count) => {
+      setTabWarning({ show: true, count });
+    },
   });
 
   const total = questions.length;
@@ -525,6 +531,39 @@ export default function AssessmentPage() {
 
   return (
     <main className="max-w-none p-0">
+
+      {/* ══ Modal bloqueante: regreso al tab ══════════════════════════════ */}
+      {tabWarning.show && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
+            {/* Banda roja superior */}
+            <div className="bg-red-600 px-6 py-4 flex items-center gap-3">
+              <span className="text-2xl">🚨</span>
+              <h2 className="text-lg font-bold text-white">Salida detectada</h2>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-zinc-800 dark:text-zinc-200 font-medium">
+                Detectamos que saliste de la evaluación.
+              </p>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                Este evento quedó registrado ({tabWarning.count}{' '}
+                {tabWarning.count === 1 ? 'salida' : 'salidas'} en total).
+                Tu reclutador verá un reporte completo de toda la actividad sospechosa al revisar tus resultados.
+              </p>
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-700/40 dark:bg-amber-900/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
+                ⚠️ El uso de herramientas externas (IA, buscadores, etc.) durante el examen es considerado trampa y puede resultar en la descalificación automática.
+              </div>
+              <button
+                onClick={() => setTabWarning({ show: false, count: tabWarning.count })}
+                className="mt-5 w-full rounded-xl bg-zinc-900 dark:bg-white px-4 py-3 text-sm font-semibold text-white dark:text-zinc-900 transition hover:bg-zinc-700 dark:hover:bg-zinc-200"
+              >
+                Entendido — continuar evaluación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className={`mx-auto px-6 lg:px-10 py-8 ${isCodingQuestion ? 'max-w-[1800px]' : 'max-w-[1200px]'}`}>
 
         {/* Header — NO-CODING */}
@@ -537,7 +576,15 @@ export default function AssessmentPage() {
                   Pregunta {currentIndex + 1} de {total}
                 </p>
               </div>
-              {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
+              <div className="flex items-center gap-3">
+                {/* Contador de salidas — visible si hay al menos una */}
+                {tabWarning.count > 0 && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 dark:border-red-700/40 dark:bg-red-900/20 dark:text-red-400">
+                    🚨 {tabWarning.count} {tabWarning.count === 1 ? 'salida' : 'salidas'} registradas
+                  </span>
+                )}
+                {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
+              </div>
             </div>
 
             <AssessmentProgress current={currentIndex + 1} total={total} answered={answeredCount} />

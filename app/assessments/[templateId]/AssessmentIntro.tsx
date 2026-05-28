@@ -134,6 +134,25 @@ export default function AssessmentIntro({ template, onStart }: Props) {
           </div>
         </div>
 
+        {/* ── Aviso anti-AI / integridad ──────────────────────────────────── */}
+        <div className="mt-4 p-4 rounded-xl border border-red-200 dark:border-red-700/40 bg-red-50 dark:bg-red-900/20">
+          <div className="flex items-start gap-2.5">
+            <span className="text-lg shrink-0 mt-0.5">🛡️</span>
+            <div>
+              <h3 className="text-sm font-semibold text-red-900 dark:text-red-200 mb-1.5">
+                Evaluación con monitoreo de integridad
+              </h3>
+              <ul className="space-y-1 text-xs text-red-800 dark:text-red-300">
+                <li>• <strong>Se registra cada cambio de pestaña</strong> o pérdida de foco de la ventana</li>
+                <li>• Se detectan intentos de copiar y pegar texto</li>
+                <li>• El tiempo por pregunta queda registrado</li>
+                <li>• El reclutador recibe un reporte completo de actividad sospechosa</li>
+                <li>• <strong>El uso de IA, buscadores u otras herramientas externas está prohibido</strong> y puede resultar en descalificación</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* Mobile CTA (visible only on mobile since top one is hidden there) */}
         <div className="mt-5 text-center md:hidden">
           <button onClick={onStart} className="btn btn-primary w-full py-3 text-base">
