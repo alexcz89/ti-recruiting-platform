@@ -303,7 +303,7 @@ export default function Step1Basic({
                         inputMode="numeric"
                         name={f.name}
                         ref={f.ref}
-                        className={field(errors.salaryMin)}
+                        className={field(salaryNeedsSwap || errors.salaryMin)}
                         placeholder="Desde"
                         value={salaryMinFocused ? raw : fmtSalary(raw)}
                         onFocus={() => setSalaryMinFocused(true)}
@@ -334,7 +334,7 @@ export default function Step1Basic({
                         inputMode="numeric"
                         name={f.name}
                         ref={f.ref}
-                        className={field(errors.salaryMax)}
+                        className={field(salaryNeedsSwap || errors.salaryMax)}
                         placeholder={salaryMode === "hasta" ? "Máximo" : "Hasta"}
                         value={salaryMaxFocused ? raw : fmtSalary(raw)}
                         onFocus={() => setSalaryMaxFocused(true)}
@@ -389,6 +389,24 @@ export default function Step1Basic({
             )}
           </div>
 
+          {salaryNeedsSwap && (
+            <div className="mt-1.5 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/20">
+              <p className="text-xs text-red-600 dark:text-red-400">
+                El mínimo ({fmtSalary(salaryMin)}) no puede ser mayor que el máximo ({fmtSalary(salaryMax)})
+              </p>
+              <button
+                type="button"
+                className="ml-3 shrink-0 text-xs font-semibold text-red-600 underline hover:text-red-500 dark:text-red-400 transition-colors"
+                onClick={() => {
+                  setValue("salaryMin", salaryMax ?? undefined, { shouldDirty: true });
+                  setValue("salaryMax", salaryMin ?? undefined, { shouldDirty: true });
+                }}
+              >
+                ↕ Intercambiar
+              </button>
+            </div>
+          )}
+
           <div className="mt-1.5 flex items-center justify-between">
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 transition-colors">
               <input
@@ -398,18 +416,6 @@ export default function Step1Basic({
               />
               Mostrar en la publicación
             </label>
-            {salaryNeedsSwap && (
-              <button
-                type="button"
-                className="text-xs font-medium text-emerald-600 hover:text-emerald-500 transition-colors"
-                onClick={() => {
-                  setValue("salaryMin", salaryMax ?? undefined, { shouldDirty: true });
-                  setValue("salaryMax", salaryMin ?? undefined, { shouldDirty: true });
-                }}
-              >
-                ↕ Intercambiar
-              </button>
-            )}
           </div>
         </div>
       </div>
