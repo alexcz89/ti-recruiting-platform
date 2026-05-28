@@ -38,7 +38,7 @@ type AppCard = {
   updatedAt?: string | Date | null;
   _score?: number | null;
   _locked?: boolean;
-  _assessment?: AssessmentMeta | null;
+  _assessments?: AssessmentMeta[];
   candidate: Candidate;
 };
 
@@ -155,7 +155,7 @@ export default function Kanbanboard({
   return (
     <section className="rounded-2xl border glass-card p-3 sm:p-4 overflow-x-auto">
       <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="flex gap-4 lg:gap-5 min-w-[900px] pb-1">
+        <div className="flex gap-3 lg:gap-4 min-w-[860px] pb-1">
           {statuses.map((st) => {
             const cards = grouped[st] || [];
             const accent = COLUMN_ACCENT[st] ?? COLUMN_ACCENT.REVIEW;
@@ -237,7 +237,7 @@ export default function Kanbanboard({
         ref={innerRef}
         {...(droppableProps as any)}
         className={[
-          "w-[240px] lg:w-[260px] shrink-0 rounded-2xl border glass-card flex flex-col max-h-[72vh] transition-colors",
+          "flex-1 min-w-[210px] max-w-[340px] rounded-2xl border glass-card flex flex-col max-h-[72vh] transition-colors",
           isDraggingOver ? accent.drag : "",
         ].join(" ")}
       >
@@ -466,9 +466,13 @@ export default function Kanbanboard({
           </div>
         )}
 
-        {/* Badge de assessment */}
-        {card._assessment && card._assessment.state !== "NONE" && (
-          <AssessmentBadge assessment={card._assessment} />
+        {/* Badges de assessments (uno por template enviado) */}
+        {(card._assessments ?? []).length > 0 && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {(card._assessments!).map((a, i) => (
+              <AssessmentBadge key={i} assessment={a} />
+            ))}
+          </div>
         )}
 
         {/* Alerta de candidato estancado */}
@@ -480,8 +484,12 @@ export default function Kanbanboard({
         )}
 
         {/* Footer: acciones rápidas */}
+        {(() => {
+          const completed = (card._assessments ?? []).filter(a => a.state === "COMPLETED" && a.attemptId);
+          const singleResult = completed.length === 1 ? completed[0] : null;
+          return (
         <div className="mt-2.5 flex items-center justify-between gap-1">
-          {/* Izquierda: Ver perfil + Ver resultados (si completó) */}
+          {/* Izquierda: Ver perfil + Ver resultados (solo si hay exactamente 1 completado) */}
           <div className="flex items-center gap-1 min-w-0">
             <a
               href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`}
@@ -491,19 +499,19 @@ export default function Kanbanboard({
               Ver perfil
             </a>
 
-            {card._assessment?.state === "COMPLETED" && card._assessment.attemptId && (
+            {singleResult && (
               <a
-                href={`/dashboard/assessments/attempts/${card._assessment.attemptId}/results`}
+                href={`/dashboard/assessments/attempts/${singleResult.attemptId}/results`}
                 onClick={(e) => e.stopPropagation()}
                 className={[
                   "inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors",
-                  card._assessment.passed === true
+                  singleResult.passed === true
                     ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
-                    : card._assessment.passed === false
+                    : singleResult.passed === false
                     ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
                     : "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600/40 dark:bg-violet-900/20 dark:text-violet-300",
                 ].join(" ")}
-                title="Ver resultados del assessment"
+                title="Ver resultados"
               >
                 📊 Resultados
               </a>
@@ -539,6 +547,8 @@ export default function Kanbanboard({
             )}
           </div>
         </div>
+          );
+        })()}
       </article>
     );
   }

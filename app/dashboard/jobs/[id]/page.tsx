@@ -141,7 +141,8 @@ export default async function JobPipelinePage({ params }: PageProps) {
     templateTitle: string | null;
   };
 
-  const assessmentByAppId = new Map<string, AssessmentMeta>();
+  // Stores ALL assessment states per application (one per template)
+  const assessmentByAppId = new Map<string, AssessmentMeta[]>();
 
   if (assessmentEnabled && applications.length > 0) {
     const applicationIds = applications.map((a) => a.id);
@@ -187,8 +188,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     }
 
     for (const appId of applicationIds) {
-      let bestState: AssessmentMeta = { state: "NONE", score: null, passed: null, attemptId: null, templateTitle: null };
-      const statePriority: Record<string, number> = { COMPLETED: 5, STARTED: 4, SENT: 3, EXPIRED: 2, NONE: 1 };
+      const perTemplateStates: AssessmentMeta[] = [];
 
       for (const templateId of allJobTemplateIds) {
         const key = `${appId}:${templateId}`;
@@ -216,15 +216,14 @@ export default async function JobPipelinePage({ params }: PageProps) {
             state = { state: invStatus === "STARTED" ? "STARTED" : "SENT", score: null, passed: null, attemptId: null, templateTitle: title };
           }
         } else {
-          state = { state: "NONE", score: null, passed: null, attemptId: null, templateTitle: null };
+          // No invite sent yet — skip (don't pollute card with empty entries)
+          continue;
         }
 
-        if ((statePriority[state.state] ?? 0) > (statePriority[bestState.state] ?? 0)) {
-          bestState = state;
-        }
+        perTemplateStates.push(state);
       }
 
-      assessmentByAppId.set(appId, bestState);
+      assessmentByAppId.set(appId, perTemplateStates);
     }
   }
   // ─────────────────────────────────────────────────────────────────────────────
@@ -246,7 +245,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     const rawScore = matchResult?.score ?? 0;
     const gatedScore = applyPlanGate(rawScore, idx, plan);
 
-    const assessMeta = assessmentEnabled ? (assessmentByAppId.get(a.id) ?? null) : null;
+    const assessMetas = assessmentEnabled ? (assessmentByAppId.get(a.id) ?? []) : [];
 
     return {
       id: a.id,
@@ -255,7 +254,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       updatedAt: (a as any).updatedAt ?? a.createdAt,
       _score: gatedScore,
       _locked: gatedScore === null,
-      _assessment: assessMeta,
+      _assessments: assessMetas,
       candidate: {
         id: a.candidate.id,
         name: a.candidate.name ?? a.candidate.email,
