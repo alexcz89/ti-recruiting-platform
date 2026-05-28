@@ -25,7 +25,6 @@ const SALARY_MODES: { value: SalaryMode; label: string }[] = [
   { value: "exacto", label: "Exacto" },
 ];
 
-// Input base — h-9 (36px), limpio y consistente
 const field = (error?: unknown) =>
   clsx(
     "w-full rounded-lg border bg-white px-3 text-sm h-9 transition-colors",
@@ -36,30 +35,22 @@ const field = (error?: unknown) =>
       : "border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600"
   );
 
-function formatSalary(value?: string | number | null): string {
-  if (value === null || value === undefined) return "";
-  const digits = typeof value === "number" ? String(value) : String(value).replace(/[^\d]/g, "");
+// Formatea número como 70,000
+function fmtSalary(v?: string | number | null): string {
+  if (v === null || v === undefined || v === "") return "";
+  const digits = typeof v === "number" ? String(v) : String(v).replace(/[^\d]/g, "");
   if (!digits) return "";
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(Number(digits));
+  return new Intl.NumberFormat("es-MX", { maximumFractionDigits: 0 }).format(Number(digits));
 }
 
-function parseSalaryInput(raw: string): number | undefined {
+function parseNum(raw: string): number | undefined {
   const digits = raw.replace(/[^\d]/g, "");
   if (!digits) return undefined;
   const n = Number(digits);
   return Number.isFinite(n) ? n : undefined;
 }
 
-// Label + check inline
-function FieldLabel({
-  children,
-  required,
-  ok,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-  ok?: boolean;
-}) {
+function FieldLabel({ children, required, ok }: { children: React.ReactNode; required?: boolean; ok?: boolean }) {
   return (
     <div className="mb-1.5 flex items-center justify-between">
       <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
@@ -67,6 +58,18 @@ function FieldLabel({
         {required && <span className="ml-0.5 text-red-400">*</span>}
       </label>
       {ok && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
+    </div>
+  );
+}
+
+// Wrapper con prefijo "$" — decorativo, no modifica el input
+function MoneyInput({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs font-medium text-zinc-400 select-none">
+        $
+      </span>
+      <div className="[&_input]:pl-6">{children}</div>
     </div>
   );
 }
@@ -88,7 +91,7 @@ export default function Step1Basic({
   const employmentType = watch("employmentType");
   const companyMode    = watch("companyMode");
 
-  const [salaryMode, setSalaryMode]           = useState<SalaryMode>("rango");
+  const [salaryMode, setSalaryMode]             = useState<SalaryMode>("rango");
   const [salaryMinFocused, setSalaryMinFocused] = useState(false);
   const [salaryMaxFocused, setSalaryMaxFocused] = useState(false);
 
@@ -126,54 +129,9 @@ export default function Step1Basic({
 
   const locationOk = locationType === "REMOTE" || (!!city?.trim() && !errors.city);
 
-  // Reusable salary input
-  function SalaryInput({
-    name, placeholder, focused, onFocus, onBlurFn,
-  }: {
-    name: "salaryMin" | "salaryMax";
-    placeholder: string;
-    focused: boolean;
-    onFocus: () => void;
-    onBlurFn: () => void;
-  }) {
-    const isMin = name === "salaryMin";
-    const isExacto = salaryMode === "exacto";
-    return (
-      <Controller
-        name={name}
-        control={control}
-        render={({ field: f }) => {
-          const raw = typeof f.value === "number" || typeof f.value === "string" ? String(f.value) : "";
-          return (
-            <input
-              type="text" inputMode="numeric"
-              name={f.name} ref={f.ref}
-              className={field(errors[name])}
-              placeholder={placeholder}
-              value={focused ? raw : formatSalary(raw)}
-              onFocus={onFocus}
-              onChange={(e) => {
-                const val = parseSalaryInput(e.target.value);
-                f.onChange(val);
-                if (isExacto && isMin) setValue("salaryMax", val, { shouldDirty: true });
-              }}
-              onBlur={(e) => {
-                onBlurFn();
-                const val = parseSalaryInput(e.target.value);
-                f.onChange(val);
-                if (isExacto && isMin) setValue("salaryMax", val, { shouldDirty: true });
-                f.onBlur();
-              }}
-            />
-          );
-        }}
-      />
-    );
-  }
-
   return (
     <div className="rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-      {/* Template selector — discreta fila superior */}
+      {/* Template selector */}
       {templates.length > 0 && (
         <div className="border-b border-zinc-100 px-5 py-2.5 dark:border-zinc-800">
           <TemplateSelector templates={templates} onApply={onApplyTemplate} />
@@ -205,14 +163,13 @@ export default function Step1Basic({
           <div>
             <FieldLabel required>Empresa</FieldLabel>
             <div className="flex gap-2">
-              {/* Mi empresa */}
               <label className="flex flex-1 cursor-pointer select-none min-w-0">
                 <input type="radio" value="own" className="sr-only" {...register("companyMode")} disabled={!presetCompany?.id} />
                 <span className={clsx(
                   "flex h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-sm transition-colors",
                   companyMode === "own"
                     ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                 )}>
                   <span className={clsx(
                     "flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md text-[11px] font-bold",
@@ -225,14 +182,13 @@ export default function Step1Basic({
                   </span>
                 </span>
               </label>
-              {/* Confidencial */}
               <label className="flex flex-1 cursor-pointer select-none min-w-0">
                 <input type="radio" value="external" className="sr-only" {...register("companyMode")} />
                 <span className={clsx(
                   "flex h-9 w-full items-center gap-2 rounded-lg border px-2.5 text-sm transition-colors",
                   companyMode === "external"
                     ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"
-                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600"
+                    : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                 )}>
                   <span className="shrink-0 text-base leading-none">🔒</span>
                   <span className="truncate text-[13px] font-medium">Confidencial</span>
@@ -254,7 +210,7 @@ export default function Step1Basic({
           </div>
         </div>
 
-        {/* ── Ubicación + Ciudad ── */}
+        {/* ── Modalidad + Ciudad ── */}
         <div>
           <FieldLabel required ok={locationOk}>Modalidad y ubicación</FieldLabel>
           <div className={clsx("grid gap-2", cityRequired ? "grid-cols-[152px_1fr]" : "grid-cols-1")}>
@@ -298,12 +254,11 @@ export default function Step1Basic({
 
         {/* ── Sueldo ── */}
         <div>
-          {/* Label + modo en misma línea */}
+          {/* Label + modo en misma fila */}
           <div className="mb-1.5 flex items-center gap-2.5">
             <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Sueldo <span className="text-xs font-normal text-zinc-400">(opcional)</span>
             </span>
-            {/* Segmented control */}
             <div className="flex rounded-md border border-zinc-200 bg-zinc-50 p-[3px] dark:border-zinc-700 dark:bg-zinc-800">
               {SALARY_MODES.map((m) => (
                 <button
@@ -323,30 +278,119 @@ export default function Step1Basic({
             </div>
           </div>
 
+          {/* Inputs de sueldo — Controllers inlineados para evitar remount */}
           <div className={clsx(
             "grid gap-2",
             salaryMode === "rango" ? "grid-cols-[64px_1fr_1fr]" : "grid-cols-[64px_1fr]"
           )}>
+            {/* Moneda */}
             <select className={field()} {...register("currency")}>
               <option value="MXN">MXN</option>
               <option value="USD">USD</option>
             </select>
+
+            {/* Desde — solo en modo Rango */}
             {salaryMode === "rango" && (
-              <>
-                <SalaryInput name="salaryMin" placeholder="Desde" focused={salaryMinFocused} onFocus={() => setSalaryMinFocused(true)} onBlurFn={() => setSalaryMinFocused(false)} />
-                <SalaryInput name="salaryMax" placeholder="Hasta" focused={salaryMaxFocused} onFocus={() => setSalaryMaxFocused(true)} onBlurFn={() => setSalaryMaxFocused(false)} />
-              </>
+              <MoneyInput>
+                <Controller
+                  name="salaryMin"
+                  control={control}
+                  render={({ field: f }) => {
+                    const raw = f.value !== null && f.value !== undefined ? String(f.value) : "";
+                    return (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name={f.name}
+                        ref={f.ref}
+                        className={field(errors.salaryMin)}
+                        placeholder="Desde"
+                        value={salaryMinFocused ? raw : fmtSalary(raw)}
+                        onFocus={() => setSalaryMinFocused(true)}
+                        onChange={(e) => f.onChange(parseNum(e.target.value))}
+                        onBlur={(e) => {
+                          setSalaryMinFocused(false);
+                          f.onChange(parseNum(e.target.value));
+                          f.onBlur();
+                        }}
+                      />
+                    );
+                  }}
+                />
+              </MoneyInput>
             )}
-            {salaryMode === "hasta" && (
-              <SalaryInput name="salaryMax" placeholder="Máximo" focused={salaryMaxFocused} onFocus={() => setSalaryMaxFocused(true)} onBlurFn={() => setSalaryMaxFocused(false)} />
+
+            {/* Hasta — en modo Rango y Hasta */}
+            {(salaryMode === "rango" || salaryMode === "hasta") && (
+              <MoneyInput>
+                <Controller
+                  name="salaryMax"
+                  control={control}
+                  render={({ field: f }) => {
+                    const raw = f.value !== null && f.value !== undefined ? String(f.value) : "";
+                    return (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name={f.name}
+                        ref={f.ref}
+                        className={field(errors.salaryMax)}
+                        placeholder={salaryMode === "hasta" ? "Máximo" : "Hasta"}
+                        value={salaryMaxFocused ? raw : fmtSalary(raw)}
+                        onFocus={() => setSalaryMaxFocused(true)}
+                        onChange={(e) => f.onChange(parseNum(e.target.value))}
+                        onBlur={(e) => {
+                          setSalaryMaxFocused(false);
+                          f.onChange(parseNum(e.target.value));
+                          f.onBlur();
+                        }}
+                      />
+                    );
+                  }}
+                />
+              </MoneyInput>
             )}
+
+            {/* Exacto — un solo input que sincroniza min y max */}
             {salaryMode === "exacto" && (
-              <SalaryInput name="salaryMin" placeholder="Monto exacto" focused={salaryMinFocused} onFocus={() => setSalaryMinFocused(true)} onBlurFn={() => setSalaryMinFocused(false)} />
+              <MoneyInput>
+                <Controller
+                  name="salaryMin"
+                  control={control}
+                  render={({ field: f }) => {
+                    const raw = f.value !== null && f.value !== undefined ? String(f.value) : "";
+                    return (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name={f.name}
+                        ref={f.ref}
+                        className={field(errors.salaryMin)}
+                        placeholder="Monto exacto"
+                        value={salaryMinFocused ? raw : fmtSalary(raw)}
+                        onFocus={() => setSalaryMinFocused(true)}
+                        onChange={(e) => {
+                          const val = parseNum(e.target.value);
+                          f.onChange(val);
+                          setValue("salaryMax", val, { shouldDirty: true });
+                        }}
+                        onBlur={(e) => {
+                          setSalaryMinFocused(false);
+                          const val = parseNum(e.target.value);
+                          f.onChange(val);
+                          setValue("salaryMax", val, { shouldDirty: true });
+                          f.onBlur();
+                        }}
+                      />
+                    );
+                  }}
+                />
+              </MoneyInput>
             )}
           </div>
 
           <div className="mt-1.5 flex items-center justify-between">
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400">
+            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 transition-colors">
               <input
                 type="checkbox"
                 className="h-3.5 w-3.5 rounded border-zinc-300 accent-emerald-600"
@@ -370,7 +414,7 @@ export default function Step1Basic({
         </div>
       </div>
 
-      {/* ── Footer de navegación ── */}
+      {/* ── Footer ── */}
       <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
         <p className="text-xs text-zinc-400">{!canNext ? disabledMessage : ""}</p>
         <button
