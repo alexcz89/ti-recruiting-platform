@@ -81,7 +81,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       },
       assessments: {
         orderBy: { createdAt: "asc" },
-        select: { templateId: true },
+        select: { templateId: true, template: { select: { title: true } } },
       },
     },
   });
@@ -92,6 +92,9 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
   const allJobTemplateIds = (job.assessments ?? []).map((a) => a.templateId);
   const assessmentEnabled = allJobTemplateIds.length > 0;
+  const templateTitles: Record<string, string> = Object.fromEntries(
+    (job.assessments ?? []).map((a) => [a.templateId, (a as any).template?.title ?? a.templateId])
+  );
 
   const jobSkills: JobSkillInput[] = job.requiredSkills.map((rs) => ({
     termId: rs.term.id,
@@ -135,6 +138,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     score: number | null;
     passed: boolean | null;
     attemptId: string | null;
+    templateTitle: string | null;
   };
 
   const assessmentByAppId = new Map<string, AssessmentMeta>();
@@ -183,7 +187,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     }
 
     for (const appId of applicationIds) {
-      let bestState: AssessmentMeta = { state: "NONE", score: null, passed: null, attemptId: null };
+      let bestState: AssessmentMeta = { state: "NONE", score: null, passed: null, attemptId: null, templateTitle: null };
       const statePriority: Record<string, number> = { COMPLETED: 5, STARTED: 4, SENT: 3, EXPIRED: 2, NONE: 1 };
 
       for (const templateId of allJobTemplateIds) {
@@ -192,26 +196,27 @@ export default async function JobPipelinePage({ params }: PageProps) {
         const inv = inviteByKey.get(key);
         const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
         const inviteExpired = !!inv?.expiresAt && new Date(inv.expiresAt) <= now;
+        const title = templateTitles[templateId] ?? null;
 
         let state: AssessmentMeta;
         const atStatus = String(at?.status ?? "").toUpperCase();
         if (at && (atStatus === "SUBMITTED" || atStatus === "EVALUATED" || atStatus === "COMPLETED")) {
-          state = { state: "COMPLETED", score: typeof at.totalScore === "number" ? at.totalScore : null, passed: typeof at.passed === "boolean" ? at.passed : null, attemptId: at.id };
+          state = { state: "COMPLETED", score: typeof at.totalScore === "number" ? at.totalScore : null, passed: typeof at.passed === "boolean" ? at.passed : null, attemptId: at.id, templateTitle: title };
         } else if (attemptExpired || inviteExpired) {
-          state = { state: "EXPIRED", score: null, passed: null, attemptId: at?.id ?? null };
+          state = { state: "EXPIRED", score: null, passed: null, attemptId: at?.id ?? null, templateTitle: title };
         } else if (at && atStatus === "IN_PROGRESS") {
-          state = { state: "STARTED", score: null, passed: null, attemptId: at.id };
+          state = { state: "STARTED", score: null, passed: null, attemptId: at.id, templateTitle: title };
         } else if (inv) {
           const invStatus = String(inv.status ?? "").toUpperCase();
           if (invStatus === "CANCELLED" || invStatus === "REVOKED") {
-            state = { state: "EXPIRED", score: null, passed: null, attemptId: null };
+            state = { state: "EXPIRED", score: null, passed: null, attemptId: null, templateTitle: title };
           } else if (invStatus === "SUBMITTED" || invStatus === "EVALUATED" || invStatus === "COMPLETED") {
-            state = { state: "COMPLETED", score: typeof at?.totalScore === "number" ? at.totalScore : null, passed: typeof at?.passed === "boolean" ? at.passed : null, attemptId: at?.id ?? null };
+            state = { state: "COMPLETED", score: typeof at?.totalScore === "number" ? at.totalScore : null, passed: typeof at?.passed === "boolean" ? at.passed : null, attemptId: at?.id ?? null, templateTitle: title };
           } else {
-            state = { state: invStatus === "STARTED" ? "STARTED" : "SENT", score: null, passed: null, attemptId: null };
+            state = { state: invStatus === "STARTED" ? "STARTED" : "SENT", score: null, passed: null, attemptId: null, templateTitle: title };
           }
         } else {
-          state = { state: "NONE", score: null, passed: null, attemptId: null };
+          state = { state: "NONE", score: null, passed: null, attemptId: null, templateTitle: null };
         }
 
         if ((statePriority[state.state] ?? 0) > (statePriority[bestState.state] ?? 0)) {

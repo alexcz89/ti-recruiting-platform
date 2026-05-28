@@ -28,6 +28,7 @@ type AssessmentMeta = {
   score: number | null;
   passed: boolean | null;
   attemptId: string | null;
+  templateTitle: string | null;
 };
 
 type AppCard = {
@@ -271,21 +272,16 @@ export default function Kanbanboard({
 
   /* ============ AssessmentBadge ============ */
 
-  function AssessmentBadge({
-    assessment,
-    attemptId,
-    jobId: _jobId,
-  }: {
-    assessment: AssessmentMeta;
-    attemptId: string | null;
-    jobId: string;
-  }) {
+  function AssessmentBadge({ assessment }: { assessment: AssessmentMeta }) {
+    // Nombre truncado del examen para mostrar en el badge
+    const rawTitle = assessment.templateTitle ?? "";
+    const shortTitle = rawTitle.length > 22 ? rawTitle.slice(0, 21) + "…" : rawTitle;
+
     if (assessment.state === "COMPLETED") {
       const hasScore = typeof assessment.score === "number";
       const pct = hasScore ? Math.round(assessment.score!) : null;
       const passed = assessment.passed;
 
-      // Color: verde = aprobado, rojo = reprobado, violeta = sin dato de aprobación
       const colorClass =
         passed === true
           ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300"
@@ -296,41 +292,36 @@ export default function Kanbanboard({
       const icon = passed === true ? "✓" : passed === false ? "✗" : "📊";
       const label = passed === true ? "Aprobó" : passed === false ? "No aprobó" : "Completado";
 
-      const inner = (
-        <span className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80 ${colorClass}`}>
-          <span>{icon}</span>
-          {hasScore ? (
-            <>
-              <span className="font-black">{pct}%</span>
-              <span className="font-normal opacity-70">· {label}</span>
-            </>
-          ) : (
-            <span>{label}</span>
+      return (
+        <div className="mt-2 flex flex-col gap-0.5">
+          {/* Nombre del examen */}
+          {shortTitle && (
+            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">
+              {shortTitle}
+            </p>
           )}
-        </span>
+          <span className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colorClass}`}>
+            <span>{icon}</span>
+            {hasScore ? (
+              <>
+                <span className="font-black">{pct}%</span>
+                <span className="font-normal opacity-70">· {label}</span>
+              </>
+            ) : (
+              <span>{label}</span>
+            )}
+          </span>
+        </div>
       );
-
-      if (attemptId) {
-        return (
-          <div className="mt-2">
-            <a
-              href={`/dashboard/assessments/attempts/${attemptId}/results`}
-              onClick={(e) => e.stopPropagation()}
-              className="block"
-              title="Ver resultados del assessment"
-            >
-              {inner}
-            </a>
-          </div>
-        );
-      }
-      return <div className="mt-2">{inner}</div>;
     }
 
     if (assessment.state === "STARTED") {
       return (
-        <div className="mt-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-300">
+        <div className="mt-2 flex flex-col gap-0.5">
+          {shortTitle && (
+            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">{shortTitle}</p>
+          )}
+          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-300">
             <span className="relative flex h-1.5 w-1.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-500" />
@@ -343,9 +334,12 @@ export default function Kanbanboard({
 
     if (assessment.state === "SENT") {
       return (
-        <div className="mt-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-300">
-            📋 Evaluación enviada
+        <div className="mt-2 flex flex-col gap-0.5">
+          {shortTitle && (
+            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">{shortTitle}</p>
+          )}
+          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-300">
+            📋 Enviada · pendiente
           </span>
         </div>
       );
@@ -353,8 +347,11 @@ export default function Kanbanboard({
 
     if (assessment.state === "EXPIRED") {
       return (
-        <div className="mt-2">
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300">
+        <div className="mt-2 flex flex-col gap-0.5">
+          {shortTitle && (
+            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">{shortTitle}</p>
+          )}
+          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300">
             ⚠ Expirada
           </span>
         </div>
@@ -471,7 +468,7 @@ export default function Kanbanboard({
 
         {/* Badge de assessment */}
         {card._assessment && card._assessment.state !== "NONE" && (
-          <AssessmentBadge assessment={card._assessment} attemptId={card._assessment.attemptId} jobId={jobId} />
+          <AssessmentBadge assessment={card._assessment} />
         )}
 
         {/* Alerta de candidato estancado */}
@@ -482,17 +479,39 @@ export default function Kanbanboard({
           </div>
         )}
 
-        {/* Footer: Detalle + acciones rápidas */}
+        {/* Footer: acciones rápidas */}
         <div className="mt-2.5 flex items-center justify-between gap-1">
-          <a
-            href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`}
-            className="inline-flex items-center rounded-full border border-zinc-200 px-2.5 py-1 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            onClick={(e) => e.stopPropagation()}
-          >
-            Ver perfil
-          </a>
+          {/* Izquierda: Ver perfil + Ver resultados (si completó) */}
+          <div className="flex items-center gap-1 min-w-0">
+            <a
+              href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`}
+              className="inline-flex shrink-0 items-center rounded-full border border-zinc-200 px-2.5 py-1 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Ver perfil
+            </a>
 
-          <div className="flex items-center gap-1">
+            {card._assessment?.state === "COMPLETED" && card._assessment.attemptId && (
+              <a
+                href={`/dashboard/assessments/attempts/${card._assessment.attemptId}/results`}
+                onClick={(e) => e.stopPropagation()}
+                className={[
+                  "inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors",
+                  card._assessment.passed === true
+                    ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
+                    : card._assessment.passed === false
+                    ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
+                    : "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600/40 dark:bg-violet-900/20 dark:text-violet-300",
+                ].join(" ")}
+                title="Ver resultados del assessment"
+              >
+                📊 Resultados
+              </a>
+            )}
+          </div>
+
+          {/* Derecha: WhatsApp + avanzar etapa */}
+          <div className="flex shrink-0 items-center gap-1">
             {hasWhatsApp && waNumber && (
               <a
                 href={`https://wa.me/${waNumber}`}
