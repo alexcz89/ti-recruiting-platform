@@ -1,164 +1,22 @@
 // components/ui/WheelPicker.tsx
 "use client";
 
-import { useRef, useEffect, useCallback, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 /* ─── Constants ──────────────────────────────────────────────────────────────── */
-const MONTHS_ES = [
-  "Enero","Febrero","Marzo","Abril","Mayo","Junio",
-  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre",
-];
-const ITEM_H  = 44; // px — touch-friendly row height
-const PADDING = 2;  // ghost rows above / below the selected item
+const MONTHS_SHORT = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const MONTHS_FULL  = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
-/* ─── Helpers ────────────────────────────────────────────────────────────────── */
-function buildYears(min: number, max: number) {
-  const out: string[] = [];
-  for (let y = max; y >= min; y--) out.push(String(y));
-  return out;
-}
-function buildDays(month1: number, year: number) {
-  const n = new Date(year, month1, 0).getDate();
-  return Array.from({ length: n }, (_, i) => String(i + 1).padStart(2, "0"));
+function daysInMonth(month1: number, year: number) {
+  return new Date(year, month1, 0).getDate();
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   WheelColumn — only the scrollable list, NO visual overlays (they live in
-   WheelContainer so they span all columns uniformly).
+   Shared primitives
    ══════════════════════════════════════════════════════════════════════════════ */
-function WheelColumn({
-  items,
-  selectedIndex,
-  onChange,
-  className = "flex-1",
-}: {
-  items:         string[];
-  selectedIndex: number;
-  onChange:      (i: number) => void;
-  className?:    string;
-}) {
-  const ref      = useRef<HTMLDivElement>(null);
-  const settling = useRef(false);
-  const mounted  = useRef(false);
-  const timer    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* Instant scroll on first mount, smooth afterwards */
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || settling.current) return;
-    if (!mounted.current) {
-      el.scrollTop   = selectedIndex * ITEM_H;
-      mounted.current = true;
-    } else {
-      el.scrollTo({ top: selectedIndex * ITEM_H, behavior: "smooth" });
-    }
-  }, [selectedIndex]);
-
-  const onScroll = useCallback(() => {
-    settling.current = true;
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      settling.current = false;
-      const el = ref.current;
-      if (!el) return;
-      const idx     = Math.round(el.scrollTop / ITEM_H);
-      const clamped = Math.max(0, Math.min(idx, items.length - 1));
-      el.scrollTo({ top: clamped * ITEM_H, behavior: "smooth" });
-      onChange(clamped);
-    }, 100);
-  }, [items.length, onChange]);
-
-  const colH = ITEM_H * (PADDING * 2 + 1);
-
-  return (
-    <div className={`relative overflow-hidden ${className}`} style={{ height: colH }}>
-      <div
-        ref={ref}
-        onScroll={onScroll}
-        className="absolute inset-0 overflow-y-scroll [&::-webkit-scrollbar]:hidden"
-        style={{ scrollSnapType: "y mandatory", scrollbarWidth: "none" }}
-      >
-        {/* top ghost rows */}
-        {Array.from({ length: PADDING }).map((_, i) => (
-          <div key={`t${i}`} style={{ height: ITEM_H }} />
-        ))}
-
-        {items.map((label, idx) => (
-          <div
-            key={idx}
-            style={{ height: ITEM_H, scrollSnapAlign: "center" }}
-            className={`flex items-center justify-center select-none cursor-pointer transition-all duration-150 ${
-              idx === selectedIndex
-                ? "font-semibold text-[15px] text-zinc-900 dark:text-white"
-                : "text-[13px] text-zinc-400 dark:text-zinc-500"
-            }`}
-            onClick={() => {
-              ref.current?.scrollTo({ top: idx * ITEM_H, behavior: "smooth" });
-              onChange(idx);
-            }}
-          >
-            {label}
-          </div>
-        ))}
-
-        {/* bottom ghost rows */}
-        {Array.from({ length: PADDING }).map((_, i) => (
-          <div key={`b${i}`} style={{ height: ITEM_H }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   WheelContainer — wraps all columns with ONE set of overlays that span the
-   full width: top/bottom fade + centre selection lines.
-   ══════════════════════════════════════════════════════════════════════════════ */
-function WheelContainer({ children }: { children: ReactNode }) {
-  const totalH = ITEM_H * (PADDING * 2 + 1);
-  const fadeH  = ITEM_H * PADDING;
-
-  return (
-    <div className="relative flex gap-2" style={{ height: totalH }}>
-      {children}
-
-      {/* ── top fade ── */}
-      <div
-        className="absolute inset-x-0 top-0 bg-gradient-to-b from-white dark:from-zinc-900 to-transparent pointer-events-none z-10"
-        style={{ height: fadeH }}
-      />
-      {/* ── bottom fade ── */}
-      <div
-        className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-white dark:from-zinc-900 to-transparent pointer-events-none z-10"
-        style={{ height: fadeH }}
-      />
-      {/* ── selection lines (top + bottom of selected row) ── */}
-      <div
-        className="absolute inset-x-0 pointer-events-none z-10"
-        style={{ top: fadeH, height: ITEM_H }}
-      >
-        <div className="h-px w-full bg-zinc-200 dark:bg-zinc-700" />
-        <div className="absolute inset-x-0 bottom-0 h-px bg-zinc-200 dark:bg-zinc-700" />
-      </div>
-    </div>
-  );
-}
-
-/* ── Picker Modal ─────────────────────────────────────────────────────────────
-   Mobile : bottom sheet (items-end), full width
-   Desktop: centred dialog (sm:items-center), max 380 px wide
-   ─────────────────────────────────────────────────────────────────────────── */
-function PickerModal({
-  open,
-  onClose,
-  onOk,
-  children,
-}: {
-  open:     boolean;
-  onClose:  () => void;
-  onOk:     () => void;
-  children: ReactNode;
-}) {
+/** Bottom-sheet on mobile, centred dialog on desktop */
+function PickerModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
   if (!open) return null;
   return (
     <div
@@ -166,41 +24,151 @@ function PickerModal({
       onPointerDown={onClose}
     >
       <div
-        className="w-full sm:w-[380px] rounded-t-2xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl"
+        className="w-full sm:w-[400px] rounded-t-2xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {/* Toolbar */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-w-[64px] text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors text-left"
-          >
-            Cancelar
-          </button>
-          <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-            Seleccionar fecha
-          </p>
-          <button
-            type="button"
-            onClick={onOk}
-            className="min-w-[64px] text-sm font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 transition-colors text-right"
-          >
-            OK
-          </button>
-        </div>
-        {/* Wheel area */}
-        <div className="px-5 py-2 pb-6">
-          {children}
-        </div>
+        {children}
       </div>
     </div>
   );
 }
 
-/* ══════════════════════════════════════════════════════════════════════════════
-   Trigger button — shared by both pickers
-   ══════════════════════════════════════════════════════════════════════════════ */
+function ModalToolbar({
+  title,
+  onCancel,
+  onOk,
+}: {
+  title:    string;
+  onCancel: () => void;
+  onOk:     () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800">
+      <button
+        type="button"
+        onClick={onCancel}
+        className="min-w-[64px] text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200 transition-colors text-left"
+      >
+        Cancelar
+      </button>
+      <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100 truncate max-w-[180px] text-center">
+        {title}
+      </p>
+      <button
+        type="button"
+        onClick={onOk}
+        className="min-w-[64px] text-sm font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors text-right"
+      >
+        OK
+      </button>
+    </div>
+  );
+}
+
+/** ← YEAR → navigation row */
+function YearNav({
+  year,
+  min,
+  max,
+  onChange,
+}: {
+  year:     number;
+  min:      number;
+  max:      number;
+  onChange: (y: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-center gap-4 py-3 px-5">
+      <button
+        type="button"
+        disabled={year <= min}
+        onClick={() => onChange(year - 1)}
+        className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-30"
+        aria-label="Año anterior"
+      >
+        <svg className="w-4 h-4 text-zinc-600 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+      <span className="text-lg font-bold text-zinc-900 dark:text-zinc-100 w-16 text-center tabular-nums">
+        {year}
+      </span>
+      <button
+        type="button"
+        disabled={year >= max}
+        onClick={() => onChange(year + 1)}
+        className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-30"
+        aria-label="Año siguiente"
+      >
+        <svg className="w-4 h-4 text-zinc-600 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+/** 3×4 month grid */
+function MonthGrid({
+  selected,
+  onSelect,
+}: {
+  selected: number;   // 0-11
+  onSelect: (m: number) => void;
+}) {
+  return (
+    <div className="grid grid-cols-4 gap-1.5 px-4 pb-4">
+      {MONTHS_SHORT.map((label, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => onSelect(i)}
+          className={[
+            "rounded-xl py-3 text-sm font-medium transition-all duration-150",
+            i === selected
+              ? "bg-emerald-500 text-white shadow-sm scale-[1.03]"
+              : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-95",
+          ].join(" ")}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Day number grid (rows of 7) */
+function DayGrid({
+  count,
+  selected,
+  onSelect,
+}: {
+  count:    number;   // total days in month
+  selected: number;   // 1-based
+  onSelect: (d: number) => void;
+}) {
+  return (
+    <div className="grid grid-cols-7 gap-1 px-4 pb-4 pt-1">
+      {Array.from({ length: count }, (_, i) => i + 1).map((d) => (
+        <button
+          key={d}
+          type="button"
+          onClick={() => onSelect(d)}
+          className={[
+            "aspect-square rounded-full text-xs font-medium transition-all duration-150 flex items-center justify-center",
+            d === selected
+              ? "bg-emerald-500 text-white shadow-sm"
+              : "text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-90",
+          ].join(" ")}
+        >
+          {d}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Calendar icon trigger button — same visual as before */
 function TriggerButton({
   label,
   placeholder,
@@ -227,18 +195,9 @@ function TriggerButton({
       ].join(" ")}
     >
       <span>{label ?? placeholder}</span>
-      <svg
-        className="h-4 w-4 shrink-0 text-zinc-400"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-        />
+      <svg className="h-4 w-4 shrink-0 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     </button>
   );
@@ -263,33 +222,32 @@ export function MonthYearPicker({
   maxYear?:     number;
   disabled?:    boolean;
 }) {
-  const max   = maxYear ?? new Date().getFullYear();
-  const years = buildYears(minYear, max);
+  const maxY = maxYear ?? new Date().getFullYear();
 
   function parse(v?: string | null) {
-    const now  = new Date();
-    if (!v) return { mIdx: now.getMonth(), yIdx: Math.max(0, years.indexOf(String(now.getFullYear()))) };
+    const now = new Date();
+    if (!v) return { m: now.getMonth(), y: now.getFullYear() };
     const [yyyy = "", mm = "1"] = v.split("-");
     return {
-      mIdx: Math.max(0, Math.min(parseInt(mm, 10) - 1, 11)),
-      yIdx: Math.max(0, years.indexOf(yyyy)),
+      m: Math.max(0, Math.min(parseInt(mm, 10) - 1, 11)),
+      y: parseInt(yyyy, 10) || now.getFullYear(),
     };
   }
 
   const [open,   setOpen]   = useState(false);
   const [draftM, setDraftM] = useState(0);
-  const [draftY, setDraftY] = useState(0);
+  const [draftY, setDraftY] = useState(maxY);
 
   function openPicker() {
     if (disabled) return;
-    const { mIdx, yIdx } = parse(value);
-    setDraftM(mIdx);
-    setDraftY(yIdx);
+    const { m, y } = parse(value);
+    setDraftM(m);
+    setDraftY(Math.min(Math.max(y, minYear), maxY));
     setOpen(true);
   }
 
   function handleOk() {
-    onChange(`${years[draftY]}-${String(draftM + 1).padStart(2, "0")}`);
+    onChange(`${draftY}-${String(draftM + 1).padStart(2, "0")}`);
     setOpen(false);
   }
 
@@ -297,7 +255,7 @@ export function MonthYearPicker({
     if (!value) return null;
     const [yyyy = "", mm = "0"] = value.split("-");
     const m = parseInt(mm, 10) - 1;
-    return m >= 0 && m <= 11 && yyyy ? `${MONTHS_ES[m]} ${yyyy}` : null;
+    return m >= 0 && m <= 11 && yyyy ? `${MONTHS_FULL[m]} ${yyyy}` : null;
   })();
 
   return (
@@ -308,23 +266,14 @@ export function MonthYearPicker({
         disabled={disabled}
         onClick={openPicker}
       />
-      <PickerModal open={open} onClose={() => setOpen(false)} onOk={handleOk}>
-        <WheelContainer>
-          {/* Month — takes remaining space */}
-          <WheelColumn
-            items={MONTHS_ES}
-            selectedIndex={draftM}
-            onChange={setDraftM}
-            className="flex-1"
-          />
-          {/* Year — fixed width */}
-          <WheelColumn
-            items={years}
-            selectedIndex={draftY}
-            onChange={setDraftY}
-            className="w-[80px] shrink-0"
-          />
-        </WheelContainer>
+      <PickerModal open={open} onClose={() => setOpen(false)}>
+        <ModalToolbar
+          title={`${MONTHS_FULL[draftM]} ${draftY}`}
+          onCancel={() => setOpen(false)}
+          onOk={handleOk}
+        />
+        <YearNav year={draftY} min={minYear} max={maxY} onChange={setDraftY} />
+        <MonthGrid selected={draftM} onSelect={setDraftM} />
       </PickerModal>
     </>
   );
@@ -349,50 +298,42 @@ export function FullDatePicker({
   maxYear?:     number;
   disabled?:    boolean;
 }) {
-  const max   = maxYear ?? new Date().getFullYear();
-  const years = buildYears(minYear, max);
+  const maxY = maxYear ?? new Date().getFullYear();
 
   function parse(v?: string | null) {
     const today = new Date();
     if (!v) {
-      const defYear = String(today.getFullYear() - 25);
-      return {
-        dIdx: 0,
-        mIdx: today.getMonth(),
-        yIdx: Math.max(0, years.indexOf(defYear)),
-      };
+      return { d: today.getDate(), m: today.getMonth(), y: today.getFullYear() - 25 };
     }
     const [yyyy = "", mm = "1", dd = "1"] = v.split("-");
     return {
-      dIdx: Math.max(0, parseInt(dd, 10) - 1),
-      mIdx: Math.max(0, Math.min(parseInt(mm, 10) - 1, 11)),
-      yIdx: Math.max(0, years.indexOf(yyyy)),
+      d: parseInt(dd, 10) || 1,
+      m: Math.max(0, Math.min(parseInt(mm, 10) - 1, 11)),
+      y: parseInt(yyyy, 10) || (today.getFullYear() - 25),
     };
   }
 
   const [open,   setOpen]   = useState(false);
-  const [draftD, setDraftD] = useState(0);
+  const [draftD, setDraftD] = useState(1);
   const [draftM, setDraftM] = useState(0);
-  const [draftY, setDraftY] = useState(0);
+  const [draftY, setDraftY] = useState(maxY - 25);
 
-  const draftYearNum = parseInt(years[draftY] ?? String(max), 10);
-  const days         = buildDays(draftM + 1, draftYearNum);
-  const safeDraftD   = Math.min(draftD, days.length - 1);
+  const totalDays = daysInMonth(draftM + 1, draftY);
+  const safeDay   = Math.min(draftD, totalDays);
 
   function openPicker() {
     if (disabled) return;
-    const { dIdx, mIdx, yIdx } = parse(value);
-    setDraftD(dIdx);
-    setDraftM(mIdx);
-    setDraftY(yIdx);
+    const { d, m, y } = parse(value);
+    setDraftD(d);
+    setDraftM(m);
+    setDraftY(Math.min(Math.max(y, minYear), maxY));
     setOpen(true);
   }
 
   function handleOk() {
-    const yyyy = years[draftY];
-    const mm   = String(draftM + 1).padStart(2, "0");
-    const dd   = String(safeDraftD + 1).padStart(2, "0");
-    onChange(`${yyyy}-${mm}-${dd}`);
+    const mm = String(draftM + 1).padStart(2, "0");
+    const dd = String(safeDay).padStart(2, "0");
+    onChange(`${draftY}-${mm}-${dd}`);
     setOpen(false);
   }
 
@@ -401,7 +342,7 @@ export function FullDatePicker({
     const [yyyy = "", mm = "0", dd = "0"] = value.split("-");
     const m = parseInt(mm, 10) - 1;
     if (m < 0 || m > 11 || !yyyy) return null;
-    return `${parseInt(dd, 10)} de ${MONTHS_ES[m]} de ${yyyy}`;
+    return `${parseInt(dd, 10)} de ${MONTHS_FULL[m]} de ${yyyy}`;
   })();
 
   return (
@@ -412,30 +353,23 @@ export function FullDatePicker({
         disabled={disabled}
         onClick={openPicker}
       />
-      <PickerModal open={open} onClose={() => setOpen(false)} onOk={handleOk}>
-        <WheelContainer>
-          {/* Day — fixed narrow */}
-          <WheelColumn
-            items={days}
-            selectedIndex={safeDraftD}
-            onChange={setDraftD}
-            className="w-[52px] shrink-0"
-          />
-          {/* Month — takes remaining space */}
-          <WheelColumn
-            items={MONTHS_ES}
-            selectedIndex={draftM}
-            onChange={setDraftM}
-            className="flex-1"
-          />
-          {/* Year — fixed */}
-          <WheelColumn
-            items={years}
-            selectedIndex={draftY}
-            onChange={setDraftY}
-            className="w-[80px] shrink-0"
-          />
-        </WheelContainer>
+      <PickerModal open={open} onClose={() => setOpen(false)}>
+        <ModalToolbar
+          title={`${safeDay} de ${MONTHS_FULL[draftM]} de ${draftY}`}
+          onCancel={() => setOpen(false)}
+          onOk={handleOk}
+        />
+        {/* Year navigation */}
+        <YearNav year={draftY} min={minYear} max={maxY} onChange={setDraftY} />
+        {/* Month grid */}
+        <MonthGrid selected={draftM} onSelect={setDraftM} />
+        {/* Day grid — separated by a subtle line */}
+        <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2">
+          <p className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-5 pb-1">
+            Día
+          </p>
+          <DayGrid count={totalDays} selected={safeDay} onSelect={setDraftD} />
+        </div>
       </PickerModal>
     </>
   );
