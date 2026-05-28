@@ -199,7 +199,12 @@ export default function AssessmentQuestion({
   };
 
   return (
-    <div className="glass-card rounded-2xl border p-6 md:p-8">
+    /* select-none + onContextMenu evitan selección de texto y clic derecho
+       para reducir el copy-paste de preguntas y opciones */
+    <div
+      className="glass-card rounded-2xl border p-6 md:p-8 select-none"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       <div className="mb-4 flex items-center gap-2">
         <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
           {question.section}
@@ -209,7 +214,7 @@ export default function AssessmentQuestion({
         </span>
       </div>
 
-      {/* ✅ Markdown rendering para MCQ */}
+      {/* Markdown rendering para MCQ */}
       <div className="mb-6">
         <div className="prose prose-sm max-w-none dark:prose-invert">
           <MarkdownContent content={question.questionText} />
