@@ -118,8 +118,7 @@ export default function Step1Basic({
   const canNext =
     !!title?.trim() && title.trim().length >= 3 &&
     !!employmentType &&
-    !(cityRequired && !city?.trim()) &&
-    !salaryNeedsSwap;
+    !(cityRequired && !city?.trim());
 
   const disabledMessage =
     !title?.trim() || title.trim().length < 3 ? "Falta nombre de vacante"
@@ -303,14 +302,22 @@ export default function Step1Basic({
                         inputMode="numeric"
                         name={f.name}
                         ref={f.ref}
-                        className={field(salaryNeedsSwap || errors.salaryMin)}
+                        className={field(errors.salaryMin)}
                         placeholder="Desde"
                         value={salaryMinFocused ? raw : fmtSalary(raw)}
                         onFocus={() => setSalaryMinFocused(true)}
                         onChange={(e) => f.onChange(parseNum(e.target.value))}
                         onBlur={(e) => {
                           setSalaryMinFocused(false);
-                          f.onChange(parseNum(e.target.value));
+                          const minVal = parseNum(e.target.value);
+                          const maxVal = salaryMax ? Number(salaryMax) : undefined;
+                          // Auto-swap si min > max al salir del campo
+                          if (maxVal !== undefined && minVal !== undefined && minVal > maxVal) {
+                            f.onChange(maxVal);
+                            setValue("salaryMax", minVal, { shouldDirty: true });
+                          } else {
+                            f.onChange(minVal);
+                          }
                           f.onBlur();
                         }}
                       />
@@ -334,14 +341,22 @@ export default function Step1Basic({
                         inputMode="numeric"
                         name={f.name}
                         ref={f.ref}
-                        className={field(salaryNeedsSwap || errors.salaryMax)}
+                        className={field(errors.salaryMax)}
                         placeholder={salaryMode === "hasta" ? "Máximo" : "Hasta"}
                         value={salaryMaxFocused ? raw : fmtSalary(raw)}
                         onFocus={() => setSalaryMaxFocused(true)}
                         onChange={(e) => f.onChange(parseNum(e.target.value))}
                         onBlur={(e) => {
                           setSalaryMaxFocused(false);
-                          f.onChange(parseNum(e.target.value));
+                          const maxVal = parseNum(e.target.value);
+                          const minVal = salaryMin ? Number(salaryMin) : undefined;
+                          // Auto-swap si max < min al salir del campo
+                          if (salaryMode === "rango" && maxVal !== undefined && minVal !== undefined && maxVal < minVal) {
+                            f.onChange(minVal);
+                            setValue("salaryMin", maxVal, { shouldDirty: true });
+                          } else {
+                            f.onChange(maxVal);
+                          }
                           f.onBlur();
                         }}
                       />
@@ -388,24 +403,6 @@ export default function Step1Basic({
               </MoneyInput>
             )}
           </div>
-
-          {salaryNeedsSwap && (
-            <div className="mt-1.5 flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-900/50 dark:bg-red-950/20">
-              <p className="text-xs text-red-600 dark:text-red-400">
-                El mínimo ({fmtSalary(salaryMin)}) no puede ser mayor que el máximo ({fmtSalary(salaryMax)})
-              </p>
-              <button
-                type="button"
-                className="ml-3 shrink-0 text-xs font-semibold text-red-600 underline hover:text-red-500 dark:text-red-400 transition-colors"
-                onClick={() => {
-                  setValue("salaryMin", salaryMax ?? undefined, { shouldDirty: true });
-                  setValue("salaryMax", salaryMin ?? undefined, { shouldDirty: true });
-                }}
-              >
-                ↕ Intercambiar
-              </button>
-            </div>
-          )}
 
           <div className="mt-1.5 flex items-center justify-between">
             <label className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 transition-colors">
