@@ -30,7 +30,7 @@ export default function Stepper({
   const items = Array.from({ length: total }, (_, i) => i + 1);
 
   return (
-    <div className="mb-6 p-4">
+    <div className="mb-3 px-1 py-3">
       <ol className="flex items-center justify-between">
         {items.map((n, idx) => {
           const done = n < step;

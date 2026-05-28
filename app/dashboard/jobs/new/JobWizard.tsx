@@ -439,10 +439,10 @@ export default function JobWizard({
     <FormProvider {...methods}>
       <form onSubmit={handleSubmit(onValidSubmit)}>
         <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-          <div className="mx-auto max-w-[1400px] px-6 py-8 lg:px-10 lg:py-12">
-            <div className="mb-0 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div className="mx-auto max-w-[1400px] px-6 pt-5 pb-10 lg:px-10 lg:pt-6">
+            <div className="mb-3 flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 sm:text-3xl">
+                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 sm:text-2xl">
                   {isEditing ? "Editar vacante" : "Nueva vacante"}
                 </h2>
 
@@ -466,7 +466,7 @@ export default function JobWizard({
               </div>
             </div>
 
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px]">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
               <div className="space-y-0">
                 <div className="mb-0">
                   <Stepper
