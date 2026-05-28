@@ -289,8 +289,29 @@ export default function Kanbanboard({
           ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-900/20 dark:text-rose-300"
           : "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-300";
 
+      const hoverClass =
+        passed === true
+          ? "hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+          : passed === false
+          ? "hover:bg-rose-100 dark:hover:bg-rose-900/40"
+          : "hover:bg-violet-100 dark:hover:bg-violet-900/40";
+
       const icon = passed === true ? "✓" : passed === false ? "✗" : "📊";
       const label = passed === true ? "Aprobó" : passed === false ? "No aprobó" : "Completado";
+
+      const badge = (
+        <span className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colorClass} ${assessment.attemptId ? hoverClass + " cursor-pointer transition-colors" : ""}`}>
+          <span>{icon}</span>
+          {hasScore ? (
+            <>
+              <span className="font-black">{pct}%</span>
+              <span className="font-normal opacity-70">· {label}</span>
+            </>
+          ) : (
+            <span>{label}</span>
+          )}
+        </span>
+      );
 
       return (
         <div className="mt-2 flex flex-col gap-0.5">
@@ -300,17 +321,15 @@ export default function Kanbanboard({
               {shortTitle}
             </p>
           )}
-          <span className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colorClass}`}>
-            <span>{icon}</span>
-            {hasScore ? (
-              <>
-                <span className="font-black">{pct}%</span>
-                <span className="font-normal opacity-70">· {label}</span>
-              </>
-            ) : (
-              <span>{label}</span>
-            )}
-          </span>
+          {assessment.attemptId ? (
+            <a
+              href={`/dashboard/assessments/attempts/${assessment.attemptId}/results`}
+              onClick={(e) => e.stopPropagation()}
+              title="Ver resultados"
+            >
+              {badge}
+            </a>
+          ) : badge}
         </div>
       );
     }
@@ -486,7 +505,7 @@ export default function Kanbanboard({
         {/* Footer: acciones rápidas */}
         {(() => {
           const completed = (card._assessments ?? []).filter(a => a.state === "COMPLETED" && a.attemptId);
-          const singleResult = completed.length === 1 ? completed[0] : null;
+          const singleResult = completed.length >= 1 ? completed[0] : null;
           return (
         <div className="mt-2.5 flex items-center justify-between gap-1">
           {/* Izquierda: Ver perfil + Ver resultados (solo si hay exactamente 1 completado) */}

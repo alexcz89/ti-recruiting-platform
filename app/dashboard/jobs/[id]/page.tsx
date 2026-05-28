@@ -194,20 +194,36 @@ export default async function JobPipelinePage({ params }: PageProps) {
         const key = `${appId}:${templateId}`;
         const at = attemptByKey.get(key);
         const inv = inviteByKey.get(key);
-        const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
-        const inviteExpired = !!inv?.expiresAt && new Date(inv.expiresAt) <= now;
         const title = templateTitles[templateId] ?? null;
 
-        let state: AssessmentMeta;
         const atStatus = String(at?.status ?? "").toUpperCase();
+        const invStatus = String(inv?.status ?? "").toUpperCase();
+        const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
+        const inviteExpired = !!inv?.expiresAt && new Date(inv.expiresAt) <= now;
+
+        // Un invite "activo" es uno que fue (re)enviado hoy o recientemente y no expiró.
+        // Tiene prioridad sobre un attempt viejo expirado (que pudo haber quedado huérfano
+        // cuando el reclutador re-envió el invite y rotó el token).
+        const inviteIsActive =
+          !!inv && !inviteExpired && (invStatus === "SENT" || invStatus === "STARTED");
+
+        let state: AssessmentMeta;
+
         if (at && (atStatus === "SUBMITTED" || atStatus === "EVALUATED" || atStatus === "COMPLETED")) {
+          // 1. Attempt completado → siempre gana
           state = { state: "COMPLETED", score: typeof at.totalScore === "number" ? at.totalScore : null, passed: typeof at.passed === "boolean" ? at.passed : null, attemptId: at.id, templateTitle: title };
-        } else if (attemptExpired || inviteExpired) {
-          state = { state: "EXPIRED", score: null, passed: null, attemptId: at?.id ?? null, templateTitle: title };
-        } else if (at && atStatus === "IN_PROGRESS") {
+        } else if (inviteIsActive) {
+          // 2. Invite fresco activo → ignorar attempt viejo expirado (fue huérfano)
+          const inProgress = at && atStatus === "IN_PROGRESS" && !attemptExpired;
+          state = { state: inProgress ? "STARTED" : invStatus === "STARTED" ? "STARTED" : "SENT", score: null, passed: null, attemptId: inProgress ? at!.id : null, templateTitle: title };
+        } else if (at && atStatus === "IN_PROGRESS" && !attemptExpired) {
+          // 3. Attempt en progreso vigente
           state = { state: "STARTED", score: null, passed: null, attemptId: at.id, templateTitle: title };
+        } else if (attemptExpired || inviteExpired) {
+          // 4. Todo expirado
+          state = { state: "EXPIRED", score: null, passed: null, attemptId: at?.id ?? null, templateTitle: title };
         } else if (inv) {
-          const invStatus = String(inv.status ?? "").toUpperCase();
+          // 5. Invite con otros estados
           if (invStatus === "CANCELLED" || invStatus === "REVOKED") {
             state = { state: "EXPIRED", score: null, passed: null, attemptId: null, templateTitle: title };
           } else if (invStatus === "SUBMITTED" || invStatus === "EVALUATED" || invStatus === "COMPLETED") {
@@ -216,7 +232,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
             state = { state: invStatus === "STARTED" ? "STARTED" : "SENT", score: null, passed: null, attemptId: null, templateTitle: title };
           }
         } else {
-          // No invite sent yet — skip (don't pollute card with empty entries)
+          // No invite sent yet — skip
           continue;
         }
 
