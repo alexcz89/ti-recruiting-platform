@@ -11,7 +11,6 @@ import {
   CheckCircle,
   XCircle,
   Calendar,
-  Building2,
   Briefcase,
   ShieldCheck,
   Sparkles,
@@ -244,63 +243,27 @@ export default async function ProfilePage() {
             </aside>
 
             <section className="space-y-6">
-              <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
-                <div className="mb-5">
-                  <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-                    Datos de contacto
-                  </h2>
-                  <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                    Estos datos facilitan el contacto contigo dentro del flujo de
-                    reclutamiento.
-                  </p>
-                </div>
-
-                <ProfileForm
-                  initial={{
-                    phone: profile?.phone || "",
-                    website: company?.website || "",
-                    jobTitle: profile?.jobTitle || "",
-                    linkedinUrl: profile?.linkedinUrl || "",
-                    directPhone: profile?.directPhone || "",
-                  }}
-                />
-              </div>
+              <ProfileForm
+                initial={{
+                  phone: profile?.phone || "",
+                  website: company?.website || "",
+                  jobTitle: profile?.jobTitle || "",
+                  linkedinUrl: profile?.linkedinUrl || "",
+                  directPhone: profile?.directPhone || "",
+                }}
+              />
 
               {companyId && (
-                <div className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
-                  <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-                        Mi empresa
-                      </h2>
-                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        Configura la información principal y la identidad visual de{" "}
-                        <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                          {company?.name || "tu empresa"}
-                        </span>
-                        .
-                      </p>
-                    </div>
-
-                    {company && company._count.jobs > 0 && (
-                      <div className="inline-flex w-fit shrink-0 items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300">
-                        <Building2 className="h-4 w-4" />
-                        {company._count.jobs} vacante
-                        {company._count.jobs !== 1 ? "s" : ""}
-                      </div>
-                    )}
-                  </div>
-
-                  <CompanyForm
-                    companyId={companyId}
-                    initial={{
-                      name: company?.name || "",
-                      size: company?.size || "",
-                      logoUrl: company?.logoUrl || "",
-                      assessmentCredits: assessmentCredits,
-                    }}
-                  />
-                </div>
+                <CompanyForm
+                  companyId={companyId}
+                  initial={{
+                    name: company?.name || "",
+                    size: company?.size || "",
+                    logoUrl: company?.logoUrl || "",
+                    assessmentCredits: assessmentCredits,
+                    jobsCount: company?._count.jobs ?? 0,
+                  }}
+                />
               )}
             </section>
           </div>
