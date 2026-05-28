@@ -15,19 +15,43 @@ function daysInMonth(month1: number, year: number) {
    Shared primitives
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/** Bottom-sheet on mobile, centred dialog on desktop */
-function PickerModal({ open, onClose, children }: { open: boolean; onClose: () => void; children: ReactNode }) {
+/**
+ * Bottom-sheet on mobile, centred dialog on desktop.
+ * The toolbar (Cancelar / título / OK) is a sticky header so it is always
+ * visible even when the body content is taller than the viewport.
+ */
+function PickerModal({
+  open,
+  onClose,
+  toolbar,
+  children,
+}: {
+  open:     boolean;
+  onClose:  () => void;
+  toolbar:  ReactNode;
+  children: ReactNode;
+}) {
   if (!open) return null;
   return (
+    /* z-[300] to sit above phone-flag dropdowns and other high-z UI */
     <div
-      className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]"
       onPointerDown={onClose}
     >
       <div
-        className="w-full sm:w-[400px] rounded-t-2xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden"
+        /* max-h-[85svh] caps height on every screen size.
+           flex-col keeps toolbar fixed while the body scrolls. */
+        className="w-full sm:w-[400px] rounded-t-2xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl flex flex-col"
+        style={{ maxHeight: "85svh" }}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        {children}
+        {/* Sticky toolbar – never scrolls away */}
+        <div className="shrink-0">{toolbar}</div>
+
+        {/* Scrollable body – handles overflow gracefully */}
+        <div className="overflow-y-auto overscroll-contain">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -148,7 +172,7 @@ function DayGrid({
   onSelect: (d: number) => void;
 }) {
   return (
-    <div className="grid grid-cols-7 gap-1 px-4 pb-4 pt-1">
+    <div className="grid grid-cols-7 gap-1 px-4 pb-5 pt-1">
       {Array.from({ length: count }, (_, i) => i + 1).map((d) => (
         <button
           key={d}
@@ -168,7 +192,7 @@ function DayGrid({
   );
 }
 
-/** Calendar icon trigger button — same visual as before */
+/** Calendar icon trigger button */
 function TriggerButton({
   label,
   placeholder,
@@ -266,12 +290,17 @@ export function MonthYearPicker({
         disabled={disabled}
         onClick={openPicker}
       />
-      <PickerModal open={open} onClose={() => setOpen(false)}>
-        <ModalToolbar
-          title={`${MONTHS_FULL[draftM]} ${draftY}`}
-          onCancel={() => setOpen(false)}
-          onOk={handleOk}
-        />
+      <PickerModal
+        open={open}
+        onClose={() => setOpen(false)}
+        toolbar={
+          <ModalToolbar
+            title={`${MONTHS_FULL[draftM]} ${draftY}`}
+            onCancel={() => setOpen(false)}
+            onOk={handleOk}
+          />
+        }
+      >
         <YearNav year={draftY} min={minYear} max={maxY} onChange={setDraftY} />
         <MonthGrid selected={draftM} onSelect={setDraftM} />
       </PickerModal>
@@ -353,17 +382,19 @@ export function FullDatePicker({
         disabled={disabled}
         onClick={openPicker}
       />
-      <PickerModal open={open} onClose={() => setOpen(false)}>
-        <ModalToolbar
-          title={`${safeDay} de ${MONTHS_FULL[draftM]} de ${draftY}`}
-          onCancel={() => setOpen(false)}
-          onOk={handleOk}
-        />
-        {/* Year navigation */}
+      <PickerModal
+        open={open}
+        onClose={() => setOpen(false)}
+        toolbar={
+          <ModalToolbar
+            title={`${safeDay} de ${MONTHS_FULL[draftM]} de ${draftY}`}
+            onCancel={() => setOpen(false)}
+            onOk={handleOk}
+          />
+        }
+      >
         <YearNav year={draftY} min={minYear} max={maxY} onChange={setDraftY} />
-        {/* Month grid */}
         <MonthGrid selected={draftM} onSelect={setDraftM} />
-        {/* Day grid — separated by a subtle line */}
         <div className="border-t border-zinc-100 dark:border-zinc-800 pt-2">
           <p className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider px-5 pb-1">
             Día
