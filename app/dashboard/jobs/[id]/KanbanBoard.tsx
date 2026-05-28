@@ -23,6 +23,13 @@ type Candidate = {
   _skills?: string[];
 };
 
+type AssessmentMeta = {
+  state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
+  score: number | null;
+  passed: boolean | null;
+  attemptId: string | null;
+};
+
 type AppCard = {
   id: string;
   status: string;
@@ -30,6 +37,7 @@ type AppCard = {
   updatedAt?: string | Date | null;
   _score?: number | null;
   _locked?: boolean;
+  _assessment?: AssessmentMeta | null;
   candidate: Candidate;
 };
 
@@ -261,6 +269,101 @@ export default function Kanbanboard({
     );
   }
 
+  /* ============ AssessmentBadge ============ */
+
+  function AssessmentBadge({
+    assessment,
+    attemptId,
+    jobId: _jobId,
+  }: {
+    assessment: AssessmentMeta;
+    attemptId: string | null;
+    jobId: string;
+  }) {
+    if (assessment.state === "COMPLETED") {
+      const hasScore = typeof assessment.score === "number";
+      const pct = hasScore ? Math.round(assessment.score!) : null;
+      const passed = assessment.passed;
+
+      // Color: verde = aprobado, rojo = reprobado, violeta = sin dato de aprobación
+      const colorClass =
+        passed === true
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300"
+          : passed === false
+          ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-900/20 dark:text-rose-300"
+          : "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-300";
+
+      const icon = passed === true ? "✓" : passed === false ? "✗" : "📊";
+      const label = passed === true ? "Aprobó" : passed === false ? "No aprobó" : "Completado";
+
+      const inner = (
+        <span className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition-opacity hover:opacity-80 ${colorClass}`}>
+          <span>{icon}</span>
+          {hasScore ? (
+            <>
+              <span className="font-black">{pct}%</span>
+              <span className="font-normal opacity-70">· {label}</span>
+            </>
+          ) : (
+            <span>{label}</span>
+          )}
+        </span>
+      );
+
+      if (attemptId) {
+        return (
+          <div className="mt-2">
+            <a
+              href={`/dashboard/assessments/attempts/${attemptId}/results`}
+              onClick={(e) => e.stopPropagation()}
+              className="block"
+              title="Ver resultados del assessment"
+            >
+              {inner}
+            </a>
+          </div>
+        );
+      }
+      return <div className="mt-2">{inner}</div>;
+    }
+
+    if (assessment.state === "STARTED") {
+      return (
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-300">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-500" />
+            </span>
+            En progreso
+          </span>
+        </div>
+      );
+    }
+
+    if (assessment.state === "SENT") {
+      return (
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-300">
+            📋 Evaluación enviada
+          </span>
+        </div>
+      );
+    }
+
+    if (assessment.state === "EXPIRED") {
+      return (
+        <div className="mt-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300">
+            ⚠ Expirada
+          </span>
+        </div>
+      );
+    }
+
+    return null;
+  }
+
   /* ============ Card ============ */
 
   function Card({
@@ -364,6 +467,11 @@ export default function Kanbanboard({
               <span className="text-[10px] text-zinc-400">+{card.candidate._skills.length - 3}</span>
             )}
           </div>
+        )}
+
+        {/* Badge de assessment */}
+        {card._assessment && card._assessment.state !== "NONE" && (
+          <AssessmentBadge assessment={card._assessment} attemptId={card._assessment.attemptId} jobId={jobId} />
         )}
 
         {/* Alerta de candidato estancado */}

@@ -146,7 +146,8 @@ export default async function ProfilePage() {
           </section>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <aside className="space-y-6">
+            {/* aside: order-2 en mobile → los forms aparecen primero */}
+            <aside className="order-2 xl:order-1 space-y-6">
               <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
                 <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
                   <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -242,7 +243,7 @@ export default async function ProfilePage() {
               <PasswordSettingsCard hasPassword={Boolean(dbUser.passwordHash)} />
             </aside>
 
-            <section className="space-y-6">
+            <section className="order-1 xl:order-2 space-y-6">
               <ProfileForm
                 initial={{
                   phone: profile?.phone || "",

@@ -79,12 +79,19 @@ export default async function JobPipelinePage({ params }: PageProps) {
           term: { select: { id: true, label: true } },
         },
       },
+      assessments: {
+        orderBy: { createdAt: "asc" },
+        select: { templateId: true },
+      },
     },
   });
 
   if (!job) {
     notFound();
   }
+
+  const allJobTemplateIds = (job.assessments ?? []).map((a) => a.templateId);
+  const assessmentEnabled = allJobTemplateIds.length > 0;
 
   const jobSkills: JobSkillInput[] = job.requiredSkills.map((rs) => ({
     termId: rs.term.id,
@@ -122,6 +129,101 @@ export default async function JobPipelinePage({ params }: PageProps) {
     },
   });
 
+  // ── Assessment state per application ─────────────────────────────────────────
+  type AssessmentMeta = {
+    state: "NONE" | "SENT" | "STARTED" | "COMPLETED" | "EXPIRED";
+    score: number | null;
+    passed: boolean | null;
+    attemptId: string | null;
+  };
+
+  const assessmentByAppId = new Map<string, AssessmentMeta>();
+
+  if (assessmentEnabled && applications.length > 0) {
+    const applicationIds = applications.map((a) => a.id);
+    const now = new Date();
+
+    const [invites, attempts] = await Promise.all([
+      prisma.assessmentInvite.findMany({
+        where: { applicationId: { in: applicationIds }, templateId: { in: allJobTemplateIds } },
+        orderBy: { updatedAt: "desc" },
+        select: { applicationId: true, templateId: true, token: true, status: true, expiresAt: true },
+      }),
+      prisma.assessmentAttempt.findMany({
+        where: { applicationId: { in: applicationIds }, templateId: { in: allJobTemplateIds } },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true, applicationId: true, templateId: true, status: true, totalScore: true, passed: true, expiresAt: true },
+      }),
+    ]);
+
+    // Best attempt per (appId:templateId)
+    const statusRank = (s: string) => {
+      const v = s.toUpperCase();
+      if (v === "SUBMITTED" || v === "EVALUATED" || v === "COMPLETED") return 3;
+      if (v === "IN_PROGRESS") return 2;
+      if (v === "NOT_STARTED") return 1;
+      return 0;
+    };
+
+    const attemptByKey = new Map<string, typeof attempts[number]>();
+    for (const at of attempts) {
+      if (!at.applicationId || !at.templateId) continue;
+      const key = `${at.applicationId}:${at.templateId}`;
+      const prev = attemptByKey.get(key);
+      if (!prev || statusRank(String(at.status)) >= statusRank(String(prev.status))) {
+        attemptByKey.set(key, at);
+      }
+    }
+
+    const inviteByKey = new Map<string, typeof invites[number]>();
+    for (const inv of invites) {
+      if (!inv.applicationId || !inv.templateId) continue;
+      const key = `${inv.applicationId}:${inv.templateId}`;
+      if (!inviteByKey.has(key)) inviteByKey.set(key, inv);
+    }
+
+    for (const appId of applicationIds) {
+      let bestState: AssessmentMeta = { state: "NONE", score: null, passed: null, attemptId: null };
+      const statePriority: Record<string, number> = { COMPLETED: 5, STARTED: 4, SENT: 3, EXPIRED: 2, NONE: 1 };
+
+      for (const templateId of allJobTemplateIds) {
+        const key = `${appId}:${templateId}`;
+        const at = attemptByKey.get(key);
+        const inv = inviteByKey.get(key);
+        const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
+        const inviteExpired = !!inv?.expiresAt && new Date(inv.expiresAt) <= now;
+
+        let state: AssessmentMeta;
+        const atStatus = String(at?.status ?? "").toUpperCase();
+        if (at && (atStatus === "SUBMITTED" || atStatus === "EVALUATED" || atStatus === "COMPLETED")) {
+          state = { state: "COMPLETED", score: typeof at.totalScore === "number" ? at.totalScore : null, passed: typeof at.passed === "boolean" ? at.passed : null, attemptId: at.id };
+        } else if (attemptExpired || inviteExpired) {
+          state = { state: "EXPIRED", score: null, passed: null, attemptId: at?.id ?? null };
+        } else if (at && atStatus === "IN_PROGRESS") {
+          state = { state: "STARTED", score: null, passed: null, attemptId: at.id };
+        } else if (inv) {
+          const invStatus = String(inv.status ?? "").toUpperCase();
+          if (invStatus === "CANCELLED" || invStatus === "REVOKED") {
+            state = { state: "EXPIRED", score: null, passed: null, attemptId: null };
+          } else if (invStatus === "SUBMITTED" || invStatus === "EVALUATED" || invStatus === "COMPLETED") {
+            state = { state: "COMPLETED", score: typeof at?.totalScore === "number" ? at.totalScore : null, passed: typeof at?.passed === "boolean" ? at.passed : null, attemptId: at?.id ?? null };
+          } else {
+            state = { state: invStatus === "STARTED" ? "STARTED" : "SENT", score: null, passed: null, attemptId: null };
+          }
+        } else {
+          state = { state: "NONE", score: null, passed: null, attemptId: null };
+        }
+
+        if ((statePriority[state.state] ?? 0) > (statePriority[bestState.state] ?? 0)) {
+          bestState = state;
+        }
+      }
+
+      assessmentByAppId.set(appId, bestState);
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const appCards = applications.map((a, idx) => {
     const candidateSkills: CandidateSkillInput[] = (a.candidate.candidateSkills ?? []).map((cs: any) => ({
       termId: cs.term.id,
@@ -139,6 +241,8 @@ export default async function JobPipelinePage({ params }: PageProps) {
     const rawScore = matchResult?.score ?? 0;
     const gatedScore = applyPlanGate(rawScore, idx, plan);
 
+    const assessMeta = assessmentEnabled ? (assessmentByAppId.get(a.id) ?? null) : null;
+
     return {
       id: a.id,
       status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
@@ -146,6 +250,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       updatedAt: (a as any).updatedAt ?? a.createdAt,
       _score: gatedScore,
       _locked: gatedScore === null,
+      _assessment: assessMeta,
       candidate: {
         id: a.candidate.id,
         name: a.candidate.name ?? a.candidate.email,
