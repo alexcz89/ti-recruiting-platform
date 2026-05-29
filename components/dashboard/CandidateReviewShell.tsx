@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, GitBranch,
   CheckCircle2, Clock, Star, FileText, User, ClipboardList,
-  Sparkles, ThumbsUp, HelpCircle, XCircle,
+  Sparkles, ThumbsUp, XCircle,
   Download, MessageCircle,
 } from "lucide-react";
 
@@ -77,10 +77,10 @@ export type ShellProps = {
 // Debe coincidir exactamente con el kanban (page.tsx de applications):
 // REVIEW → "Por revisar" | MAYBE → "Preselecto" | ACCEPTED → "Entrevista" | REJECTED → "Descartado"
 const INTEREST_MAP: Record<string, { label: string; short: string; color: string; activeColor: string }> = {
-  REVIEW:    { label: "Por revisar",  short: "Revisar",     color: "border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800", activeColor: "border-zinc-400 bg-zinc-100 text-zinc-800 dark:border-zinc-500 dark:bg-zinc-700 dark:text-zinc-100" },
-  MAYBE:     { label: "Preselecto",   short: "Preselecto",  color: "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600/50 dark:text-emerald-300 dark:hover:bg-emerald-900/20", activeColor: "border-emerald-400 bg-emerald-50 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-200" },
-  ACCEPTED:  { label: "Entrevista",   short: "Entrevista",  color: "border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-600/50 dark:text-blue-300 dark:hover:bg-blue-900/20", activeColor: "border-blue-400 bg-blue-50 text-blue-800 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-200" },
-  REJECTED:  { label: "Descartado",   short: "Descartar",   color: "border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700/50 dark:text-red-400 dark:hover:bg-red-900/20", activeColor: "border-red-400 bg-red-50 text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-300" },
+  REVIEW:    { label: "Por revisar",  short: "Revisar",     color: "border-zinc-300 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800",                                                             activeColor: "border-zinc-500 bg-zinc-100 text-zinc-900 font-semibold dark:border-zinc-400 dark:bg-zinc-700 dark:text-zinc-100" },
+  MAYBE:     { label: "Preselecto",   short: "Preselecto",  color: "border-violet-300 text-violet-600 hover:bg-violet-50 dark:border-violet-600/50 dark:text-violet-400 dark:hover:bg-violet-900/20",                                            activeColor: "border-violet-500 bg-violet-100 text-violet-900 font-semibold dark:border-violet-400 dark:bg-violet-900/40 dark:text-violet-100" },
+  ACCEPTED:  { label: "Entrevista",   short: "Entrevista",  color: "border-sky-300 text-sky-600 hover:bg-sky-50 dark:border-sky-600/50 dark:text-sky-400 dark:hover:bg-sky-900/20",                                                              activeColor: "border-sky-500 bg-sky-100 text-sky-900 font-semibold dark:border-sky-400 dark:bg-sky-900/40 dark:text-sky-100" },
+  REJECTED:  { label: "Descartado",   short: "Descartar",   color: "border-red-300 text-red-500 hover:bg-red-50 dark:border-red-700/50 dark:text-red-400 dark:hover:bg-red-900/20",                                                              activeColor: "border-red-500 bg-red-100 text-red-900 font-semibold dark:border-red-400 dark:bg-red-900/40 dark:text-red-100" },
 };
 
 const SENIORITY_LABEL: Record<string, string> = {
@@ -88,15 +88,15 @@ const SENIORITY_LABEL: Record<string, string> = {
 };
 
 const INTEREST_ICON: Record<string, React.ReactNode> = {
-  ACCEPTED: <ThumbsUp className="h-3.5 w-3.5" />,
-  MAYBE:    <HelpCircle className="h-3.5 w-3.5" />,
-  REJECTED: <XCircle className="h-3.5 w-3.5" />,
+  MAYBE:    <ThumbsUp className="h-3.5 w-3.5" />,   // Preselecto
+  ACCEPTED: <User className="h-3.5 w-3.5" />,        // Entrevista
+  REJECTED: <XCircle className="h-3.5 w-3.5" />,     // Descartar
 };
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
-  ACCEPTED:  <ThumbsUp className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />,
-  MAYBE:     <HelpCircle className="h-3 w-3 text-amber-500 dark:text-amber-400" />,
-  REJECTED:  <XCircle className="h-3 w-3 text-red-500 dark:text-red-400" />,
+  MAYBE:     <ThumbsUp className="h-3 w-3 text-violet-500 dark:text-violet-400" />,   // Preselecto
+  ACCEPTED:  <User className="h-3 w-3 text-sky-500 dark:text-sky-400" />,              // Entrevista
+  REJECTED:  <XCircle className="h-3 w-3 text-red-500 dark:text-red-400" />,           // Descartado
 };
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
