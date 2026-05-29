@@ -114,6 +114,10 @@ export default function CandidateSummaryCard({ candidateId, jobId }: Props) {
         const data = await res.json().catch(() => null);
 
         if (!res.ok) {
+          // 422 = datos insuficientes (candidato sin CV ni skills)
+          if (res.status === 422) {
+            throw new Error("insufficient_data");
+          }
           throw new Error(data?.error || "No se pudo generar el resumen");
         }
 
@@ -191,11 +195,15 @@ export default function CandidateSummaryCard({ candidateId, jobId }: Props) {
         </button>
       </div>
 
-      {error && (
+      {error && error === "insufficient_data" ? (
+        <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800/40 dark:text-zinc-400">
+          El candidato aún no ha cargado su CV ni completado su perfil. El resumen AI se generará automáticamente cuando tenga información suficiente.
+        </div>
+      ) : error ? (
         <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-300">
           {error}
         </div>
-      )}
+      ) : null}
 
       {open && summary && (
         <div className="mt-4 space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">

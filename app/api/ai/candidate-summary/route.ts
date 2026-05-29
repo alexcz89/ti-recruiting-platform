@@ -195,6 +195,20 @@ export async function GET(req: NextRequest) {
     return noStoreJson({ error: "Candidato no encontrado" }, 404);
   }
 
+  // Guard: require minimum data before calling GPT to avoid hallucinations
+  const hasEnoughData =
+    input.skills.length > 0 ||
+    input.experienceTitles.length > 0 ||
+    (input.certifications ?? []).length > 0 ||
+    input.yearsExperience != null;
+
+  if (!hasEnoughData) {
+    return noStoreJson(
+      { error: "insufficient_data", message: "El candidato no tiene suficiente información para generar un resumen." },
+      422
+    );
+  }
+
   const summary = await generateCandidateSummary(input);
   const fingerprint = buildFingerprint(input);
 
