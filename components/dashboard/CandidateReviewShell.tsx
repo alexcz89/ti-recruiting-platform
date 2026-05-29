@@ -74,10 +74,12 @@ export type ShellProps = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Debe coincidir exactamente con el kanban (page.tsx de applications):
+// REVIEW → "Por revisar" | MAYBE → "Preselecto" | ACCEPTED → "Entrevista" | REJECTED → "Descartado"
 const INTEREST_MAP: Record<string, { label: string; short: string; color: string; activeColor: string }> = {
   REVIEW:    { label: "Por revisar",  short: "Revisar",     color: "border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800", activeColor: "border-zinc-400 bg-zinc-100 text-zinc-800 dark:border-zinc-500 dark:bg-zinc-700 dark:text-zinc-100" },
-  ACCEPTED:  { label: "Preselecto",   short: "Preselecto",  color: "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600/50 dark:text-emerald-300 dark:hover:bg-emerald-900/20", activeColor: "border-emerald-400 bg-emerald-50 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-200" },
-  MAYBE:     { label: "Duda",         short: "Duda",        color: "border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-600/40 dark:text-amber-300 dark:hover:bg-amber-900/20", activeColor: "border-amber-400 bg-amber-50 text-amber-800 dark:border-amber-500 dark:bg-amber-900/30 dark:text-amber-200" },
+  MAYBE:     { label: "Preselecto",   short: "Preselecto",  color: "border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600/50 dark:text-emerald-300 dark:hover:bg-emerald-900/20", activeColor: "border-emerald-400 bg-emerald-50 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-200" },
+  ACCEPTED:  { label: "Entrevista",   short: "Entrevista",  color: "border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-600/50 dark:text-blue-300 dark:hover:bg-blue-900/20", activeColor: "border-blue-400 bg-blue-50 text-blue-800 dark:border-blue-500 dark:bg-blue-900/30 dark:text-blue-200" },
   REJECTED:  { label: "Descartado",   short: "Descartar",   color: "border-red-300 text-red-600 hover:bg-red-50 dark:border-red-700/50 dark:text-red-400 dark:hover:bg-red-900/20", activeColor: "border-red-400 bg-red-50 text-red-700 dark:border-red-600 dark:bg-red-900/30 dark:text-red-300" },
 };
 
@@ -139,6 +141,12 @@ export default function CandidateReviewShell({
   slots,
 }: ShellProps) {
   const [app, setApp] = useState<AppState | null>(currentApplication);
+  // currentInterest es estado propio para que el botón se resalte incluso si app es null
+  const [currentInterest, setCurrentInterest] = useState<string>(
+    currentApplication?.recruiterInterest ??
+    (navIndex >= 0 ? navList[navIndex]?.recruiterInterest : undefined) ??
+    "REVIEW"
+  );
   const [activeTab, setActiveTab] = useState<TabId>("summary");
   const [notes, setNotes] = useState(currentApplication?.internalNotes ?? "");
   const [notesSaved, setNotesSaved] = useState(false);
@@ -158,6 +166,8 @@ export default function CandidateReviewShell({
 
   const patchInterest = useCallback((recruiterInterest: string) => {
     if (!applicationId) return;
+    // Actualización optimista inmediata — el botón responde al instante
+    setCurrentInterest(recruiterInterest);
     startTransition(async () => {
       const res = await fetch(`/api/applications/${applicationId}/interest`, {
         method: "PATCH",
@@ -166,10 +176,14 @@ export default function CandidateReviewShell({
       });
       if (res.ok) {
         const data = await res.json();
+        setCurrentInterest(data.recruiterInterest);
         setApp((prev) => prev ? { ...prev, recruiterInterest: data.recruiterInterest } : prev);
+      } else {
+        // Revertir si falla
+        setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
       }
     });
-  }, [applicationId]);
+  }, [applicationId, app?.recruiterInterest]);
 
   const saveNotes = useCallback(() => {
     if (!applicationId) return;
@@ -194,8 +208,6 @@ export default function CandidateReviewShell({
     }
     return () => { if (notesTimer.current) clearTimeout(notesTimer.current); };
   }, [notes]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const currentInterest = app?.recruiterInterest ?? "REVIEW";
 
   // ── Initials ──────────────────────────────────────────────────────────────
 
@@ -300,7 +312,7 @@ export default function CandidateReviewShell({
             {/* Right: quick actions + nav */}
             <div className="flex flex-wrap items-center gap-1.5 shrink-0">
               {/* Interest buttons */}
-              {(["ACCEPTED", "MAYBE", "REJECTED"] as const).map((key) => {
+              {(["MAYBE", "ACCEPTED", "REJECTED"] as const).map((key) => {
                 const m = INTEREST_MAP[key];
                 const isSelected = currentInterest === key;
                 return (
