@@ -6,7 +6,7 @@ import Link from "next/link";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, GitBranch,
   CheckCircle2, Clock, Star, FileText, User, ClipboardList,
-  Sparkles, ThumbsUp, HelpCircle, XCircle, ChevronRight as Arrow,
+  Sparkles, ThumbsUp, HelpCircle, XCircle,
   Download, MessageCircle,
 } from "lucide-react";
 
@@ -73,14 +73,6 @@ export type ShellProps = {
 };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const STATUS_PIPELINE = [
-  { key: "SUBMITTED",  label: "Postulado",    short: "Post." },
-  { key: "REVIEWING",  label: "En revisión",  short: "Rev." },
-  { key: "INTERVIEW",  label: "Entrevista",   short: "Entrev." },
-  { key: "OFFER",      label: "Oferta",       short: "Oferta" },
-  { key: "HIRED",      label: "Contratado",   short: "Contrat." },
-];
 
 const INTEREST_MAP: Record<string, { label: string; short: string; color: string; activeColor: string }> = {
   REVIEW:    { label: "Por revisar",  short: "Revisar",     color: "border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800", activeColor: "border-zinc-400 bg-zinc-100 text-zinc-800 dark:border-zinc-500 dark:bg-zinc-700 dark:text-zinc-100" },
@@ -179,20 +171,6 @@ export default function CandidateReviewShell({
     });
   }, [applicationId]);
 
-  const patchStatus = useCallback((status: string) => {
-    if (!applicationId) return;
-    startTransition(async () => {
-      const res = await fetch(`/api/applications/${applicationId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (res.ok) {
-        setApp((prev) => prev ? { ...prev, status } : prev);
-      }
-    });
-  }, [applicationId]);
-
   const saveNotes = useCallback(() => {
     if (!applicationId) return;
     startTransition(async () => {
@@ -218,7 +196,6 @@ export default function CandidateReviewShell({
   }, [notes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const currentInterest = app?.recruiterInterest ?? "REVIEW";
-  const currentStatus   = app?.status ?? "SUBMITTED";
 
   // ── Initials ──────────────────────────────────────────────────────────────
 
@@ -312,16 +289,7 @@ export default function CandidateReviewShell({
                       {matchScore}% match
                     </span>
                   )}
-                  {/* Stage pill */}
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    currentStatus === "REJECTED"    ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-300"
-                    : currentStatus === "HIRED"     ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-200"
-                    : currentStatus === "INTERVIEW" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
-                    : currentStatus === "OFFER"     ? "bg-violet-100 text-violet-700 dark:bg-violet-900/20 dark:text-violet-300"
-                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                  }`}>
-                    {STATUS_PIPELINE.find((s) => s.key === currentStatus)?.label ?? currentStatus}
-                  </span>
+
                 </div>
                 {candidateLocation && (
                   <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">{candidateLocation}</p>
@@ -454,66 +422,6 @@ export default function CandidateReviewShell({
       <aside className="hidden xl:flex flex-col w-72 shrink-0 border-l border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
         <div className="flex-1 overflow-y-auto sticky top-12 max-h-[calc(100vh-3rem)]">
           <div className="px-4 py-4 space-y-5">
-
-            {/* Stage pipeline */}
-            <div>
-              <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                Etapa
-              </h3>
-              <div className="space-y-1">
-                {STATUS_PIPELINE.map((step, i) => {
-                  const pipelineKeys = STATUS_PIPELINE.map((s) => s.key);
-                  const currentIdx = pipelineKeys.indexOf(currentStatus === "REJECTED" ? "REJECTED" : currentStatus);
-                  const stepIdx = i;
-                  const isDone = stepIdx < (currentStatus === "REJECTED" ? -1 : pipelineKeys.indexOf(currentStatus));
-                  const isCurrent = step.key === currentStatus;
-                  const isRejected = currentStatus === "REJECTED";
-
-                  return (
-                    <button
-                      key={step.key}
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => patchStatus(step.key)}
-                      className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-left transition-colors disabled:opacity-50 ${
-                        isCurrent
-                          ? "bg-emerald-50 text-emerald-800 font-semibold dark:bg-emerald-950/30 dark:text-emerald-200"
-                          : isDone
-                          ? "text-zinc-400 dark:text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-                          : "text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
-                      }`}
-                    >
-                      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-                        isCurrent ? "bg-emerald-500 text-white"
-                        : isDone  ? "bg-zinc-200 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400"
-                        : "border border-zinc-200 text-zinc-400 dark:border-zinc-700"
-                      }`}>
-                        {isDone ? "✓" : i + 1}
-                      </span>
-                      {step.label}
-                    </button>
-                  );
-                })}
-
-                {/* Rejected — separate */}
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={() => currentStatus === "REJECTED" ? patchStatus("SUBMITTED") : patchStatus("REJECTED")}
-                  className={`w-full flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-left transition-colors disabled:opacity-50 ${
-                    currentStatus === "REJECTED"
-                      ? "bg-red-50 text-red-700 font-semibold dark:bg-red-950/30 dark:text-red-300"
-                      : "text-zinc-500 hover:bg-red-50 hover:text-red-600 dark:text-zinc-500 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                  }`}
-                >
-                  <XCircle className="h-4 w-4 shrink-0" />
-                  {currentStatus === "REJECTED" ? "Reactivar" : "Descartar"}
-                </button>
-              </div>
-            </div>
-
-            {/* Divider */}
-            <div className="border-t border-zinc-100 dark:border-zinc-800" />
 
             {/* Internal notes */}
             <div>
