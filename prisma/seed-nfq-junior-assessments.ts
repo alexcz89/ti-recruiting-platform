@@ -55,34 +55,66 @@ async function upsertTemplate(
   })
 }
 
+/**
+ * Upsert questions by questionText to preserve IDs of existing questions.
+ * This avoids breaking in-progress attempts whose flagsJson.questionOrder
+ * references existing IDs.
+ *
+ * - Existing question with same text → UPDATE in place (keeps same ID)
+ * - New question not in DB → CREATE
+ * - Questions in DB but not in seed → mark isActive=false (soft-delete)
+ */
 async function replaceQuestions(
   templateId: string,
   template: (typeof nfqJuniorAssessments)[number],
 ) {
-  await prisma.assessmentQuestion.deleteMany({
+  const existing = await prisma.assessmentQuestion.findMany({
     where: { templateId },
+    select: { id: true, questionText: true },
   })
 
-  for (const q of template.questions) {
-    await prisma.assessmentQuestion.create({
-    data: {
-        templateId,
-        section: q.section,
-        difficulty: q.difficulty as any,
-        tags: q.tags,
-        questionText: q.questionText,
-        codeSnippet: null,
-        options: q.options as any,
-        allowMultiple: q.allowMultiple,
-        explanation: q.explanation ?? null,
-        isActive: true,
-        type: "MULTIPLE_CHOICE" as any,
-        language: null,
-        starterCode: null,
-        solutionCode: null,
-        allowedLanguages: null,
-    },
+  const existingByText = new Map(existing.map((q) => [q.questionText.trim(), q.id]))
+  const seedTexts = new Set(template.questions.map((q) => q.questionText.trim()))
+
+  // Soft-delete questions no longer in seed
+  const toDeactivate = existing
+    .filter((q) => !seedTexts.has(q.questionText.trim()))
+    .map((q) => q.id)
+
+  if (toDeactivate.length) {
+    await prisma.assessmentQuestion.updateMany({
+      where: { id: { in: toDeactivate } },
+      data: { isActive: false },
     })
+  }
+
+  for (const q of template.questions) {
+    const existingId = existingByText.get(q.questionText.trim())
+
+    const data = {
+      templateId,
+      section: q.section,
+      difficulty: q.difficulty as any,
+      tags: q.tags,
+      questionText: q.questionText,
+      codeSnippet: null,
+      options: q.options as any,
+      allowMultiple: q.allowMultiple,
+      explanation: q.explanation ?? null,
+      isActive: true,
+      type: "MULTIPLE_CHOICE" as any,
+      language: null,
+      starterCode: null,
+      solutionCode: null,
+      allowedLanguages: null,
+    }
+
+    if (existingId) {
+      // Update in place — ID stays the same, no impact on running attempts
+      await prisma.assessmentQuestion.update({ where: { id: existingId }, data })
+    } else {
+      await prisma.assessmentQuestion.create({ data })
+    }
   }
 }
 
