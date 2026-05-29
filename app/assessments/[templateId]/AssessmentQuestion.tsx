@@ -289,7 +289,7 @@ export default function AssessmentQuestion({
 
                 <div className="flex-1">
                   <span className="text-default mr-2 font-semibold">{label})</span>
-                  <span className="text-default">{text}</span>
+                  <span className="text-default whitespace-pre-wrap">{text}</span>
                 </div>
               </div>
             </button>

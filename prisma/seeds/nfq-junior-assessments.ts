@@ -392,10 +392,10 @@ export const nfqJuniorAssessments: SeedAssessmentTemplate[] = [
         difficulty: "JUNIOR",
         explanation: "MySort implementa Comparator invirtiendo el orden natural (o2.compareTo(o1)), lo que ordena el array de forma descendente: 13, 11, 7, 5, 3, 2, imprimiéndose cada valor en una línea.",
         options: [
-          { id: "a", text: "2 3 5 7", isCorrect: false },
+          { id: "a", text: "2\n3\n5\n7\n11\n13", isCorrect: false },
           { id: "b", text: "2 3 5 7 11 13", isCorrect: false },
           { id: "c", text: "13\n11\n7\n5\n3\n2", isCorrect: true },
-          { id: "d", text: "13 11 7 5 3 2", isCorrect: false },
+          { id: "d", text: "3\n2\n7\n11\n13\n5", isCorrect: false },
         ],
       },
       // Q25
