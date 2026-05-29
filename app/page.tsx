@@ -99,14 +99,14 @@ export default async function Home() {
                 {/* Candidato */}
                 <Link
                   href="/unete"
-                  className="group relative flex flex-1 flex-col items-center gap-1 rounded-2xl bg-emerald-600 dark:bg-emerald-500 px-6 py-4 text-white shadow-xl shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 hover:shadow-2xl hover:shadow-emerald-600/35 hover:-translate-y-0.5 active:translate-y-0"
+                  className="group relative flex flex-1 flex-col items-center gap-1 rounded-2xl bg-emerald-600 dark:bg-emerald-700 px-6 py-4 text-white shadow-xl shadow-emerald-600/20 dark:shadow-emerald-900/40 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-600 hover:shadow-2xl hover:shadow-emerald-600/30 hover:-translate-y-0.5 active:translate-y-0"
                 >
                   <div className="flex items-center gap-2 font-bold text-base">
                     <UserCircle className="h-5 w-5" />
                     Soy candidato
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>
-                  <span className="text-xs text-emerald-200 font-normal">Crea tu perfil · Siempre gratis</span>
+                  <span className="text-xs text-emerald-100 dark:text-emerald-300 font-normal">Crea tu perfil · Siempre gratis</span>
                 </Link>
 
                 {/* Empresa */}
