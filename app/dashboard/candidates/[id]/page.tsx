@@ -16,7 +16,7 @@ import {
   type JobSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
-import { Lock, CheckCircle2, XCircle } from "lucide-react";
+import { Lock, CheckCircle2, XCircle, ExternalLink, Github, Linkedin } from "lucide-react";
 import CandidateSummaryCard from "@/components/dashboard/CandidateSummaryCard";
 import SendAssessmentButton from "@/components/dashboard/SendAssessmentButton";
 import CandidateReviewShell from "@/components/dashboard/CandidateReviewShell";
@@ -221,6 +221,8 @@ export default async function CandidateDetailPage({
     attemptId: string | null;
     token: string | null;
     score: number | null;
+    passed: boolean | null;
+    completedAt: string | null;
   };
 
   const assessmentStates: AssessmentStateEntry[] = [];
@@ -239,7 +241,7 @@ export default async function CandidateDetailPage({
           prisma.assessmentAttempt.findFirst({
             where: { applicationId: activeAppId, templateId },
             orderBy: { updatedAt: "desc" },
-            select: { id: true, status: true, totalScore: true, expiresAt: true },
+            select: { id: true, status: true, totalScore: true, passed: true, expiresAt: true, submittedAt: true },
           }),
         ]);
 
@@ -252,12 +254,16 @@ export default async function CandidateDetailPage({
         let attemptId: string | null = null;
         let token: string | null = null;
         let score: number | null = null;
+        let passed: boolean | null = null;
+        let completedAt: string | null = null;
 
         if (attempt && (attemptStatus === "SUBMITTED" || attemptStatus === "EVALUATED" || attemptStatus === "COMPLETED")) {
           state = "COMPLETED";
           attemptId = attempt.id;
           token = invite?.token ?? null;
           score = attempt.totalScore ?? null;
+          passed = (attempt as any).passed ?? null;
+          completedAt = (attempt as any).submittedAt ? new Date((attempt as any).submittedAt).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : null;
         } else if (attemptExpired || inviteExpired) {
           state = "EXPIRED";
           attemptId = attempt?.id ?? null;
@@ -271,7 +277,7 @@ export default async function CandidateDetailPage({
           token = invite.token;
         }
 
-        assessmentStates.push({ applicationId: activeAppId, templateId, templateTitle, state, attemptId, token, score });
+        assessmentStates.push({ applicationId: activeAppId, templateId, templateTitle, state, attemptId, token, score, passed, completedAt });
       })
     );
 
@@ -615,8 +621,26 @@ export default async function CandidateDetailPage({
           ].map(({ label, value }) => (
             <div key={label}><dt className="text-xs text-zinc-500 dark:text-zinc-400">{label}</dt><dd className="mt-0.5 text-zinc-900 dark:text-zinc-50">{value ?? "—"}</dd></div>
           ))}
-          <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">LinkedIn</dt><dd className="mt-0.5">{candidate.linkedin ? <a className="text-blue-600 hover:underline dark:text-blue-400 break-all" href={candidate.linkedin} target="_blank" rel="noreferrer">{candidate.linkedin}</a> : "—"}</dd></div>
-          <div><dt className="text-xs text-zinc-500 dark:text-zinc-400">GitHub</dt><dd className="mt-0.5">{candidate.github ? <a className="text-blue-600 hover:underline dark:text-blue-400 break-all" href={candidate.github} target="_blank" rel="noreferrer">{candidate.github}</a> : "—"}</dd></div>
+          <div>
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">LinkedIn</dt>
+            <dd className="mt-1">
+              {candidate.linkedin
+                ? <a href={candidate.linkedin} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800/50 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-900/40">
+                    <Linkedin className="h-3.5 w-3.5" /> Ver LinkedIn <ExternalLink className="h-3 w-3 opacity-60" />
+                  </a>
+                : <span className="text-zinc-400">—</span>}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs text-zinc-500 dark:text-zinc-400">GitHub</dt>
+            <dd className="mt-1">
+              {candidate.github
+                ? <a href={candidate.github} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800/50 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    <Github className="h-3.5 w-3.5" /> Ver GitHub <ExternalLink className="h-3 w-3 opacity-60" />
+                  </a>
+                : <span className="text-zinc-400">—</span>}
+            </dd>
+          </div>
         </dl>
       </div>
 
@@ -723,30 +747,59 @@ export default async function CandidateDetailPage({
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Evaluaciones técnicas</h2>
         <SendAssessmentButton applicationId={activeAppId} assessments={assessmentStates} />
       </div>
-      {assessmentStates.map((a) => (
-        <div key={a.templateId} className="glass-card rounded-2xl border p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">{a.templateTitle}</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                {a.state === "NONE"      && "Sin enviar"}
-                {a.state === "SENT"      && "Enviada — pendiente"}
-                {a.state === "STARTED"   && "En progreso"}
-                {a.state === "EXPIRED"   && "Expirada"}
-                {a.state === "COMPLETED" && `Completada${a.score != null ? ` — ${a.score}%` : ""}`}
-              </p>
+      {assessmentStates.map((a) => {
+        const stateConfig = {
+          NONE:      { label: "Sin enviar",        badge: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" },
+          SENT:      { label: "Pendiente",          badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
+          STARTED:   { label: "En progreso",        badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+          EXPIRED:   { label: "Expirada",           badge: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" },
+          COMPLETED: { label: "Completada",         badge: a.passed === true ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : a.passed === false ? "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400" : "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300" },
+        }[a.state];
+
+        return (
+          <div key={a.templateId} className="glass-card rounded-2xl border p-4 md:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+
+              {/* Left: title + meta */}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{a.templateTitle}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${stateConfig.badge}`}>
+                    {a.passed === true && a.state === "COMPLETED" ? "Aprobó" : a.passed === false && a.state === "COMPLETED" ? "No aprobó" : stateConfig.label}
+                  </span>
+                </div>
+                {a.completedAt && (
+                  <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Completada el {a.completedAt}</p>
+                )}
+                {a.state === "SENT" && (
+                  <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-500">Esperando al candidato</p>
+                )}
+              </div>
+
+              {/* Right: score + CTA */}
+              <div className="flex shrink-0 items-center gap-3">
+                {a.state === "COMPLETED" && a.score != null && (
+                  <div className={`flex h-14 w-14 flex-col items-center justify-center rounded-full border-2 font-black ${
+                    a.passed === true  ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-300"
+                    : a.passed === false ? "border-red-300 bg-red-50 text-red-600 dark:border-red-600 dark:bg-red-900/20 dark:text-red-400"
+                    : "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-500 dark:bg-violet-900/20 dark:text-violet-300"
+                  }`}>
+                    <span className="text-base leading-none">{Math.round(a.score)}%</span>
+                  </div>
+                )}
+                {a.state === "COMPLETED" && a.attemptId ? (
+                  <Link
+                    href={`/dashboard/assessments/attempts/${a.attemptId}/results`}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                  >
+                    Ver resultados →
+                  </Link>
+                ) : null}
+              </div>
             </div>
-            {a.state === "COMPLETED" && a.attemptId && (
-              <Link
-                href={`/dashboard/assessments/attempts/${a.attemptId}/results`}
-                className={btnLink + " text-xs"}
-              >
-                Ver resultados →
-              </Link>
-            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   ) : (
     <div className="rounded-2xl border border-dashed border-zinc-200 p-8 text-center dark:border-zinc-700">

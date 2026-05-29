@@ -261,8 +261,18 @@ export default function CandidateReviewShell({
                   {entry.seniority && entry.location && <span>·</span>}
                   {entry.location && <span className="truncate">{entry.location.split(",")[0]}</span>}
                 </div>
-                {entry.status === "REJECTED" && (
-                  <span className="text-[9px] font-semibold uppercase text-red-500 dark:text-red-400">Descartado</span>
+                {entry.recruiterInterest !== "REVIEW" && (
+                  <span className={`text-[9px] font-medium ${
+                    entry.recruiterInterest === "MAYBE"
+                      ? "text-violet-600 dark:text-violet-400"
+                      : entry.recruiterInterest === "ACCEPTED"
+                      ? "text-sky-600 dark:text-sky-400"
+                      : "text-zinc-400 dark:text-zinc-500"
+                  }`}>
+                    {entry.recruiterInterest === "MAYBE" ? "Preselecto"
+                    : entry.recruiterInterest === "ACCEPTED" ? "Entrevista"
+                    : "Descartado"}
+                  </span>
                 )}
               </Link>
             );
