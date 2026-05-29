@@ -123,7 +123,7 @@ export async function sendEmailNotification(
       const text = [
         `Hola${metadata.candidateName ? ` ${metadata.candidateName}` : ''},`,
         '',
-        `Gracias por tu interés en la posición de ${metadata.jobTitle || 'la vacante'} y por el tiempo que dedicaste a tu postulación.`,
+        `Gracias por tu interés en la vacante "${metadata.jobTitle || 'la vacante'}" y por el tiempo que dedicaste a tu postulación.`,
         '',
         'Después de revisar cuidadosamente todos los perfiles, hemos decidido continuar el proceso con otros candidatos cuyo perfil se ajusta mejor a los requerimientos actuales.',
         '',
@@ -457,7 +457,7 @@ function buildRejectionEmailHtml(params: {
 
               <!-- Cuerpo -->
               <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.8;">
-                Gracias por tu interés en esta posición y por el tiempo que dedicaste a tu postulación.
+                Gracias por tu interés en la vacante <strong>&ldquo;${safeJob}&rdquo;</strong> y por el tiempo que dedicaste a tu postulación.
               </p>
               <p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.8;">
                 Después de revisar cuidadosamente todos los perfiles, hemos decidido continuar el proceso con otros candidatos cuyo perfil se ajusta mejor a los requerimientos actuales.
