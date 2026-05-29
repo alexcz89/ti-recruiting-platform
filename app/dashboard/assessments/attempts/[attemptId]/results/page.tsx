@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { prisma } from "@/lib/server/prisma";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import {
@@ -427,6 +428,24 @@ export default async function AttemptResultsPage({
 
   const { attempt, template, candidate, answers, stats } = data;
 
+  // Fetch applicationId + jobId so "Ver perfil" links to the contextual candidate view
+  const attemptCtx = await prisma.assessmentAttempt.findUnique({
+    where: { id: params.attemptId },
+    select: {
+      applicationId: true,
+      application: { select: { jobId: true } },
+      invite: { select: { applicationId: true, application: { select: { jobId: true } } } },
+    },
+  });
+  const ctxApplicationId =
+    attemptCtx?.applicationId ??
+    attemptCtx?.invite?.applicationId ??
+    null;
+  const ctxJobId =
+    attemptCtx?.application?.jobId ??
+    attemptCtx?.invite?.application?.jobId ??
+    null;
+
   const score = Math.min(100, attempt.totalScore ?? 0);
   const passing = template.passingScore ?? 70;
   const passed = attempt.passed ?? score >= passing;
@@ -508,7 +527,11 @@ export default async function AttemptResultsPage({
                   )}
                   {candidate.id && (
                     <Link
-                      href={`/dashboard/candidates/${candidate.id}`}
+                      href={
+                        ctxJobId && ctxApplicationId
+                          ? `/dashboard/candidates/${candidate.id}?jobId=${ctxJobId}&applicationId=${ctxApplicationId}`
+                          : `/dashboard/candidates/${candidate.id}`
+                      }
                       className="ml-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
                     >
                       Ver perfil →
