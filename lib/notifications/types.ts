@@ -75,6 +75,7 @@ export type NotificationMetadata = {
     jobTitle: string;
     jobId: string;
     applicationId: string;
+    candidateName?: string;
     oldStatus: string;
     newStatus: string;
   };

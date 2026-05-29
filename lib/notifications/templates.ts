@@ -31,15 +31,15 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
   },
 
   APPLICATION_STATUS_CHANGE: {
-    title: (data) => 'Actualización en tu aplicación',
+    title: (data) => 'Actualización sobre tu postulación',
     message: (data) =>
-      `Tu aplicación a ${data.jobTitle} cambió a: ${data.newStatus}`,
-    actionText: () => 'Ver detalles',
+      `Gracias por tu interés en ${data.jobTitle}. Hemos decidido continuar con otros candidatos.`,
+    actionText: () => 'Ver mis postulaciones',
     actionUrl: (data) => `/profile/applications`,
     priority: 'HIGH',
     defaultChannels: ['IN_APP', 'EMAIL'],
-    emailSubject: (data) => `Actualización: ${data.jobTitle}`,
-    emailTemplate: 'application-status-change',
+    emailSubject: (data) => `Actualización sobre tu postulación: ${data.jobTitle}`,
+    emailTemplate: 'application-rejection',
   },
 
   APPLICATION_COMMENT: {

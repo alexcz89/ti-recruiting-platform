@@ -111,6 +111,33 @@ export async function sendEmailNotification(
       return;
     }
 
+    // ── Template de rechazo de postulación ──
+    case 'APPLICATION_STATUS_CHANGE': {
+      const absoluteUrl = `${BASE_URL}/profile/applications`;
+      const html = buildRejectionEmailHtml({
+        candidateName: metadata.candidateName || undefined,
+        jobTitle: metadata.jobTitle || '',
+        applicationsUrl: absoluteUrl,
+      });
+
+      const text = [
+        `Hola${metadata.candidateName ? ` ${metadata.candidateName}` : ''},`,
+        '',
+        `Gracias por tu interés en la posición de ${metadata.jobTitle || 'la vacante'} y por el tiempo que dedicaste a tu postulación.`,
+        '',
+        'Después de revisar cuidadosamente todos los perfiles, hemos decidido continuar el proceso con otros candidatos cuyo perfil se ajusta mejor a los requerimientos actuales.',
+        '',
+        'Te agradecemos sinceramente tu participación y te animamos a estar atento a futuras oportunidades.',
+        '',
+        '¡Mucho éxito en tu búsqueda!',
+        '',
+        'El equipo de TaskIO',
+      ].join('\n');
+
+      await sendEmail({ to: user.email, subject, html, text });
+      return;
+    }
+
     // ── Fallback: todos los demás tipos usan el layout genérico ──
     default: {
       // ✅ BUG FIX: usa BASE_URL en lugar de process.env.NEXT_PUBLIC_APP_URL
@@ -378,6 +405,90 @@ function buildAssessmentCompletedEmailHtml(params: {
               <a href="${escapeHtml(BASE_URL)}" style="color:#a1a1aa;text-decoration:underline;">taskio.com.mx</a>
             </p>
           </td></tr>
+
+        </table>
+      </td></tr>
+    </table>
+  </body>
+</html>`;
+}
+
+/* ─── Template de rechazo de postulación ─── */
+
+function buildRejectionEmailHtml(params: {
+  candidateName?: string;
+  jobTitle: string;
+  applicationsUrl: string;
+}): string {
+  const safeName    = params.candidateName ? escapeHtml(params.candidateName) : '';
+  const safeJob     = escapeHtml(params.jobTitle);
+  const safeUrl     = escapeHtml(params.applicationsUrl);
+  const greeting    = safeName ? `Hola <strong>${safeName}</strong>,` : 'Hola,';
+
+  return `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Actualización sobre tu postulación</title>
+  </head>
+  <body style="margin:0;padding:0;background:#f4f4f5;font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+      <tr><td align="center">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+          <!-- Logo -->
+          <tr>
+            <td align="center" style="padding-bottom:24px;">
+              <img src="https://taskio.com.mx/TASKIO.png" alt="TaskIO" width="130" height="auto" style="display:block;border:0;max-width:130px;" />
+            </td>
+          </tr>
+
+          <!-- Card -->
+          <tr>
+            <td style="background:#ffffff;border-radius:14px;border:1px solid #e4e4e7;padding:32px 36px;">
+
+              <!-- Vacante -->
+              <p style="margin:0 0 6px;font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:#9ca3af;">Postulación</p>
+              <h2 style="margin:0 0 24px;font-size:18px;font-weight:700;color:#0f172a;">${safeJob}</h2>
+
+              <!-- Saludo -->
+              <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.7;">${greeting}</p>
+
+              <!-- Cuerpo -->
+              <p style="margin:0 0 16px;font-size:14px;color:#4b5563;line-height:1.8;">
+                Gracias por tu interés en esta posición y por el tiempo que dedicaste a tu postulación.
+              </p>
+              <p style="margin:0 0 24px;font-size:14px;color:#4b5563;line-height:1.8;">
+                Después de revisar cuidadosamente todos los perfiles, hemos decidido continuar el proceso con otros candidatos cuyo perfil se ajusta mejor a los requerimientos actuales.
+              </p>
+              <p style="margin:0 0 28px;font-size:14px;color:#4b5563;line-height:1.8;">
+                Te agradecemos sinceramente tu participación y te animamos a estar atento a futuras oportunidades en nuestra plataforma. ¡Mucho éxito en tu búsqueda!
+              </p>
+
+              <!-- CTA -->
+              <a href="${safeUrl}"
+                 style="display:inline-block;padding:12px 24px;background:#10b981;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+                Ver mis postulaciones
+              </a>
+
+              <!-- Footer note -->
+              <p style="margin:28px 0 0;padding-top:20px;border-top:1px solid #f4f4f5;font-size:12px;color:#9ca3af;line-height:1.6;">
+                Correo automático de TaskIO. Ajusta tus preferencias en
+                <a href="${escapeHtml(BASE_URL)}/dashboard/notifications/preferences" style="color:#7c3aed;text-decoration:none;">tu perfil</a>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td align="center" style="padding:20px 0 8px;">
+              <p style="margin:0;font-size:12px;color:#a1a1aa;">
+                © ${new Date().getFullYear()} TaskIO —
+                <a href="${escapeHtml(BASE_URL)}" style="color:#a1a1aa;text-decoration:underline;">taskio.com.mx</a>
+              </p>
+            </td>
+          </tr>
 
         </table>
       </td></tr>

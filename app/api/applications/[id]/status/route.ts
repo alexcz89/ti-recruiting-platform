@@ -62,6 +62,7 @@ async function updateStatus(id: string, status: string) {
       candidate: {
         select: {
           id: true,
+          name: true,
         },
       },
     },
@@ -103,7 +104,8 @@ async function updateStatus(id: string, status: string) {
     },
   });
 
-  if (oldStatus !== newStatus) {
+  // Solo enviar email al candidato cuando es rechazado
+  if (oldStatus !== newStatus && newStatus === "REJECTED") {
     await NotificationService.create({
       userId: app.candidate.id,
       type: "APPLICATION_STATUS_CHANGE",
@@ -111,6 +113,7 @@ async function updateStatus(id: string, status: string) {
         jobTitle: app.job.title,
         jobId: app.job.id,
         applicationId: app.id,
+        candidateName: app.candidate.name ?? "Candidato",
         oldStatus,
         newStatus,
       },
