@@ -18,12 +18,13 @@ import {
 } from "@/lib/ai/matchScore";
 import {
   ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
   Download,
   GitBranch,
   Lock,
   CheckCircle2,
   XCircle,
-  ExternalLink,
 } from "lucide-react";
 import CandidateSummaryCard from "@/components/dashboard/CandidateSummaryCard";
 import SendAssessmentButton from "@/components/dashboard/SendAssessmentButton";
@@ -323,26 +324,27 @@ export default async function CandidateDetailPage({
   const matchLocked = plan === "FREE";
   const gatedScore = matchResult && !matchLocked ? matchResult.score : null;
 
-  const myApps = companyId
-    ? await prisma.application.findMany({
-        where: { candidateId: candidate.id, job: { companyId } },
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true,
-          status: true,
-          createdAt: true,
-          job: {
-            select: {
-              id: true,
-              title: true,
-              skills: true,
-              company: { select: { name: true } },
-            },
-          },
-        },
-        take: 10,
-      })
-    : [];
+  // Navegación prev/next entre candidatos de la misma vacante
+  type NavEntry = { candidateId: string; applicationId: string };
+  let navList: NavEntry[] = [];
+  let navIndex = -1;
+
+  if (fromJobId && companyId && activeAppId) {
+    const jobApps = await prisma.application.findMany({
+      where: { jobId: fromJobId, job: { companyId } },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, candidateId: true },
+    });
+    navList = jobApps.map((a) => ({ candidateId: a.candidateId, applicationId: a.id }));
+    navIndex = navList.findIndex((n) => n.applicationId === activeAppId);
+  }
+
+  const prevNav = navIndex > 0 ? navList[navIndex - 1] : null;
+  const nextNav = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
+
+  function navUrl(entry: NavEntry) {
+    return `/dashboard/candidates/${entry.candidateId}?jobId=${fromJobId}&applicationId=${entry.applicationId}`;
+  }
 
   const Pill = ({ children, highlight = false }: { children: React.ReactNode; highlight?: boolean }) => (
     <span
@@ -372,12 +374,7 @@ export default async function CandidateDetailPage({
   const companyName =
     company?.name?.trim() || "la empresa";
 
-  // jobForMatch es la vacante desde la que llegó el reclutador (más específica)
-  // myApps[0] es solo un fallback si no se viene desde una vacante concreta
-  const jobTitle =
-    jobForMatch?.title ||
-    myApps?.[0]?.job?.title ||
-    "la vacante";
+  const jobTitle = jobForMatch?.title || "la vacante";
 
   // Normalización consistente con ActionsMenu: asegurar formato 52XXXXXXXXXX
   const rawPhone = candidate.phone || "";
@@ -398,43 +395,9 @@ export default async function CandidateDetailPage({
     ? `${candidate.resumeUrl}${candidate.resumeUrl.includes("#") ? "" : "#toolbar=1&navpanes=0&scrollbar=1"}`
     : null;
 
-  function buildRequiredSnapshot(jobSkills: string[] | null | undefined, candSkills: string[] | null | undefined) {
-    const reqNames = new Set(
-      (jobSkills || [])
-        .filter((s) => s.toLowerCase().startsWith("req:"))
-        .map((s) => s.slice(4).trim().toLowerCase())
-        .filter(Boolean)
-    );
-    const cand = candSkills || [];
-    const matches: string[] = [];
-    const seen = new Set<string>();
-
-    for (const s of cand) {
-      const key = s.toLowerCase();
-      if (!seen.has(key) && reqNames.has(key)) {
-        matches.push(s);
-        seen.add(key);
-      }
-    }
-
-    const others: string[] = [];
-    for (const s of cand) {
-      const key = s.toLowerCase();
-      if (!seen.has(key)) {
-        others.push(s);
-        seen.add(key);
-      }
-      if (matches.length + others.length >= 4) break;
-    }
-
-    return { matches: matches.slice(0, 4), others: others.slice(0, Math.max(0, 4 - matches.length)) };
-  }
-
   const detailedSkills = (candidate.candidateSkills || [])
     .map((s) => ({ id: s.id, label: s.term?.label || "", level: s.level ?? null, termId: s.term?.id || "" }))
     .filter((s) => s.label);
-
-  const candidateSkillNames = detailedSkills.map((s) => s.label);
 
   const languageItems = (candidate.candidateLanguages || [])
     .map((cl) => {
@@ -528,6 +491,39 @@ export default async function CandidateDetailPage({
                 <GitBranch className="h-4 w-4 shrink-0" />
                 <span>Ver pipeline</span>
               </Link>
+              {navList.length > 1 && (
+                <div className="inline-flex items-center rounded-xl border border-zinc-300 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+                  {prevNav ? (
+                    <Link
+                      href={navUrl(prevNav)}
+                      className="inline-flex h-10 w-9 items-center justify-center rounded-l-xl text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      title="Candidato anterior"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <span className="inline-flex h-10 w-9 items-center justify-center rounded-l-xl text-zinc-300 dark:text-zinc-600">
+                      <ChevronLeft className="h-4 w-4" />
+                    </span>
+                  )}
+                  <span className="border-x border-zinc-200 px-3 text-xs font-medium tabular-nums text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                    {navIndex + 1} / {navList.length}
+                  </span>
+                  {nextNav ? (
+                    <Link
+                      href={navUrl(nextNav)}
+                      className="inline-flex h-10 w-9 items-center justify-center rounded-r-xl text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      title="Candidato siguiente"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <span className="inline-flex h-10 w-9 items-center justify-center rounded-r-xl text-zinc-300 dark:text-zinc-600">
+                      <ChevronRight className="h-4 w-4" />
+                    </span>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -560,8 +556,8 @@ export default async function CandidateDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-3 lg:gap-6">
-        <section className="space-y-5 lg:col-span-2">
+      <div className="space-y-5">
+        <section className="space-y-5">
           {jobForMatch && (
             <div className="glass-card rounded-2xl border p-4 md:p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -892,70 +888,6 @@ export default async function CandidateDetailPage({
             </div>
           )}
         </section>
-
-        <aside className="space-y-4">
-          <div className="glass-card rounded-2xl border p-4 md:p-5">
-            <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              Postulaciones recientes (mi empresa)
-            </h3>
-            {myApps.length === 0 ? (
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">—</p>
-            ) : (
-              <ul className="space-y-3">
-                {myApps.map((a) => {
-                  const { matches, others } = buildRequiredSnapshot(a.job?.skills, candidateSkillNames);
-                  const show = [...matches, ...others].slice(0, 4);
-                  const isActive = a.job?.id === fromJobId;
-
-                  return (
-                    <li
-                      key={a.id}
-                      className={`rounded-xl border p-3 text-sm ${
-                        isActive
-                          ? "border-emerald-300 bg-emerald-50 dark:border-emerald-600/40 dark:bg-emerald-950/30"
-                          : "border-zinc-200 bg-zinc-50 dark:border-zinc-800/70 dark:bg-zinc-950/70"
-                      }`}
-                    >
-                      <div className="font-medium text-zinc-900 dark:text-zinc-50 leading-snug">
-                        {a.job?.title} — {a.job?.company?.name ?? "—"}
-                        {isActive && (
-                          <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                            Activa
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                        Estado: {a.status} · {new Date(a.createdAt).toLocaleDateString()}
-                      </div>
-
-                      {show.length > 0 && (
-                        <div className="mt-2 flex flex-wrap">
-                          {show.map((s) => <Pill key={s} highlight={matches.includes(s)}>{s}</Pill>)}
-                        </div>
-                      )}
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Link
-                          href={`/dashboard/jobs/${a.job?.id}/applications`}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/70 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                        >
-                          <ExternalLink className="h-3 w-3" />
-                          Ver vacante
-                        </Link>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          {!fromJobId && (
-            <Link href="/dashboard/jobs" className="block text-sm text-blue-600 hover:underline dark:text-blue-400">
-              ← Volver a vacantes
-            </Link>
-          )}
-        </aside>
       </div>
     </main>
   );
