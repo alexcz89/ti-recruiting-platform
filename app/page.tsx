@@ -106,7 +106,7 @@ export default async function Home() {
                     Soy candidato
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>
-                  <span className="text-xs text-emerald-100 dark:text-emerald-300 font-normal">Crea tu perfil · Siempre gratis</span>
+                  <span className="text-xs text-emerald-100 dark:text-emerald-300 font-normal">Crea tu perfil, es gratis</span>
                 </Link>
 
                 {/* Empresa */}
@@ -119,7 +119,7 @@ export default async function Home() {
                     Soy empresa
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>
-                  <span className="text-xs text-violet-400 dark:text-violet-400 font-normal">14 días gratis · Sin tarjeta</span>
+                  <span className="text-xs text-violet-400 dark:text-violet-400 font-normal">14 días gratis, sin tarjeta</span>
                 </Link>
               </div>
             </div>
@@ -182,7 +182,7 @@ export default async function Home() {
                 <span className="text-emerald-400">✓ Tests pasados:</span>
                 <span className="text-zinc-300"> 8/10</span>
                 <br />
-                <span className="text-zinc-500">Runtime: 42ms · Python 3.11</span>
+                <span className="text-zinc-500">Runtime: 42ms en Python 3.11</span>
               </div>
             </div>
 
@@ -471,7 +471,7 @@ export default async function Home() {
                 </div>
                 <div>
                   <p className="text-xs font-bold text-zinc-900 dark:text-zinc-50">Evaluación completada</p>
-                  <p className="text-[10px] text-zinc-400">Ana García · 8/10 tests · Python</p>
+                  <p className="text-[10px] text-zinc-400">Ana García — 8/10 tests en Python</p>
                 </div>
                 <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
               </div>
@@ -485,7 +485,7 @@ export default async function Home() {
               className="group inline-flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-5 py-2.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200 shadow-sm transition-all duration-200 hover:border-zinc-300 dark:hover:border-zinc-600 hover:shadow-md hover:-translate-y-0.5"
             >
               <PlayCircle className="h-4 w-4 text-emerald-500" />
-              Ver demo completa — es gratis
+              Ver demo completa, es gratis
               <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
             </Link>
           </div>
@@ -542,7 +542,7 @@ export default async function Home() {
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
                 <p className="mt-3 text-center text-xs text-zinc-400 dark:text-zinc-500">
-                  Sin tarjeta de crédito · Siempre gratis
+                  Sin tarjeta de crédito, siempre gratis
                 </p>
               </div>
             </div>
@@ -590,7 +590,7 @@ export default async function Home() {
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
                 <p className="mt-3 text-center text-xs text-zinc-400 dark:text-zinc-500">
-                  14 días gratis · Cancela cuando quieras
+                  14 días gratis. Cancela cuando quieras.
                 </p>
               </div>
             </div>
@@ -620,7 +620,7 @@ export default async function Home() {
                   <span className="text-emerald-200">en 10 minutos</span>
                 </h2>
                 <p className="mt-4 text-base text-emerald-100 leading-relaxed sm:text-lg">
-                  Constructor intuitivo con diseño moderno y optimizado para ATS. Sin plantillas genéricas — tu CV, tu historia.
+                  Constructor intuitivo con diseño moderno y optimizado para ATS. Sin plantillas genéricas. Tu CV, tu historia.
                 </p>
                 <ul className="mt-8 space-y-3">
                   {[
@@ -762,7 +762,7 @@ export default async function Home() {
             </Link>
           </div>
           <p className="mt-6 text-sm text-zinc-400 dark:text-zinc-500">
-            Candidatos: siempre gratis · Empresas: 14 días de prueba sin tarjeta
+            Candidatos gratis para siempre. Empresas con 14 días de prueba, sin tarjeta.
           </p>
         </div>
       </section>
