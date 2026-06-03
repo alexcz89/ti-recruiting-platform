@@ -162,7 +162,7 @@ export default async function Home() {
               No somos otro job board.
             </h2>
             <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400 sm:text-lg max-w-xl mx-auto">
-              OCC y LinkedIn te dan currículums. Taskio te da certeza técnica.
+              Los job boards te dan currículums. Taskio te da certeza técnica.
             </p>
           </div>
 
