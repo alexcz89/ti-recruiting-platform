@@ -652,33 +652,19 @@ export default async function Home() {
                 </div>
               </div>
 
-              {/* Mock CV preview */}
+              {/* CV Builder screenshot real */}
               <div className="relative hidden lg:block">
                 <div className="absolute inset-0 rounded-2xl bg-black/20 blur-2xl translate-y-4" />
-                <div className="relative rounded-2xl border border-white/20 bg-white/95 dark:bg-zinc-900/95 p-8 shadow-2xl">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-emerald-200 dark:bg-emerald-900" />
-                      <div className="space-y-1.5">
-                        <div className="h-3 w-28 rounded-full bg-zinc-200 dark:bg-zinc-700" />
-                        <div className="h-2 w-20 rounded-full bg-zinc-100 dark:bg-zinc-800" />
-                      </div>
-                    </div>
-                    <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-2">
-                      <div className="h-2 w-16 rounded-full bg-emerald-200 dark:bg-emerald-900" />
-                      <div className="h-2 w-full rounded-full bg-zinc-100 dark:bg-zinc-800" />
-                      <div className="h-2 w-5/6 rounded-full bg-zinc-100 dark:bg-zinc-800" />
-                      <div className="h-2 w-4/6 rounded-full bg-zinc-100 dark:bg-zinc-800" />
-                    </div>
-                    <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 space-y-2">
-                      <div className="h-2 w-20 rounded-full bg-emerald-200 dark:bg-emerald-900" />
-                      <div className="flex flex-wrap gap-1.5">
-                        {["React", "TypeScript", "Node.js", "AWS"].map((s) => (
-                          <span key={s} className="rounded-full bg-emerald-100 dark:bg-emerald-900/50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">{s}</span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                <div className="relative overflow-hidden rounded-2xl border border-white/20 shadow-2xl">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/screenshots/cv-builder.png"
+                    alt="CV Builder de Taskio"
+                    width={760}
+                    height={248}
+                    className="w-full h-auto block"
+                    loading="lazy"
+                  />
                   <div className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 shadow-lg">
                     <CheckCircle className="h-5 w-5 text-white" />
                   </div>
