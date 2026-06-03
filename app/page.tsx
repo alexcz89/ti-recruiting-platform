@@ -132,7 +132,7 @@ export default async function Home() {
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-                <span>AI Match con OpenAI GPT-4</span>
+                <span>AI Match inteligente</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5 text-emerald-500" />
@@ -195,7 +195,7 @@ export default async function Home() {
                 AI Match, no sorteo
               </h3>
               <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                GPT-4 analiza skills, experiencia y seniority del candidato contra los requerimientos de la vacante. Ranking objetivo.
+                Nuestro AI analiza skills, experiencia y seniority del candidato contra los requerimientos de la vacante. Ranking objetivo.
               </p>
               <div className="mt-5 space-y-2">
                 {[
@@ -313,7 +313,7 @@ export default async function Home() {
               <div className="space-y-5">
                 {[
                   { step: "01", icon: Briefcase, title: "Publica tu vacante en 2 minutos", desc: "Wizard guiado con skills requeridas, seniority y modalidad. La vacante aparece en la bolsa pública TI.", color: "violet" },
-                  { step: "02", icon: Brain, title: "AI filtra automáticamente", desc: "GPT-4 rankea candidatos por compatibilidad real. No más revisar 200 CVs irrelevantes.", color: "violet" },
+                  { step: "02", icon: Brain, title: "AI filtra automáticamente", desc: "Nuestro AI rankea candidatos por compatibilidad real. No más revisar 200 CVs irrelevantes.", color: "violet" },
                   { step: "03", icon: ClipboardCheck, title: "Evalúa técnicamente antes de entrevistar", desc: "Envía assessments MCQ o de código con un link. El sistema califica automáticamente.", color: "violet" },
                   { step: "04", icon: BadgeCheck, title: "Contrata con certeza", desc: "Pipeline Kanban completo: de postulación a oferta. Analytics y reportes de todo el proceso.", color: "violet" },
                 ].map((item) => (
@@ -705,7 +705,7 @@ export default async function Home() {
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { icon: FileText, title: "CV Profesional", description: "Constructor drag & drop con plantillas ATS-friendly. Descarga PDF o comparte con link único.", color: "emerald" },
-              { icon: Brain, title: "AI Match Score", description: "GPT-4 analiza compatibilidad candidato ↔ vacante. Top candidatos en segundos, no en horas.", color: "violet" },
+              { icon: Brain, title: "AI Match Score", description: "Analiza compatibilidad candidato ↔ vacante con inteligencia artificial. Top candidatos en segundos, no en horas.", color: "violet" },
               { icon: Code2, title: "Evaluaciones de Código", description: "Código real ejecutado en entorno seguro. El candidato demuestra lo que dice saber, no solo lo que escribe en el CV.", color: "blue" },
               { icon: Kanban, title: "Pipeline Kanban", description: "Gestión visual de candidatos por etapa. Arrastra, comenta y colabora con tu equipo.", color: "amber" },
               { icon: Shield, title: "Perfiles Verificados", description: "Skills validados con evaluaciones reales. Reduce el 60% del tiempo de screening.", color: "teal" },
