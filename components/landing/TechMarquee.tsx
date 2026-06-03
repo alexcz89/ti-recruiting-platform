@@ -92,7 +92,7 @@ export default function TechMarquee() {
           className="marquee-track flex py-2"
           style={{ '--marquee-offset': `${OFFSET_1}px` } as React.CSSProperties}
         >
-          {[...ROW_1, ...ROW_1].map((logo, i) => (
+          {[...ROW_1, ...ROW_1, ...ROW_1, ...ROW_1].map((logo, i) => (
             <LogoCard key={`r1-${i}`} {...logo} />
           ))}
         </div>
@@ -107,7 +107,7 @@ export default function TechMarquee() {
           className="marquee-track-reverse flex py-2"
           style={{ '--marquee-offset': `${OFFSET_2}px` } as React.CSSProperties}
         >
-          {[...ROW_2, ...ROW_2].map((logo, i) => (
+          {[...ROW_2, ...ROW_2, ...ROW_2, ...ROW_2].map((logo, i) => (
             <LogoCard key={`r2-${i}`} {...logo} />
           ))}
         </div>
