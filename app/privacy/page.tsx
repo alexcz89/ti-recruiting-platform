@@ -22,7 +22,8 @@ export default function PrivacyPage() {
                 1. Responsable del tratamiento de datos
               </h2>
               <p>
-                TaskIO (en adelante &ldquo;la Plataforma&rdquo;) es responsable del tratamiento de tus datos personales.
+                Alejandro Cerda Zertuche, operando bajo el nombre comercial TaskIO (en adelante &ldquo;la Plataforma&rdquo;),
+                es responsable del tratamiento de tus datos personales.
                 Puedes contactarnos en cualquier momento a través de{" "}
                 <a className="text-emerald-700 dark:text-emerald-400 hover:underline" href="mailto:alejandro@taskio.com.mx">
                   alejandro@taskio.com.mx
@@ -121,7 +122,7 @@ export default function PrivacyPage() {
               <p>
                 Implementamos medidas técnicas y organizativas para proteger tus datos: conexiones
                 cifradas (HTTPS), contraseñas almacenadas con hash, y acceso restringido a la base de
-                datos. Sin embargo, ningún sistema es 100% seguro — te recomendamos usar una contraseña
+                datos. Sin embargo, ningún sistema es 100% seguro. Te recomendamos usar una contraseña
                 única y segura.
               </p>
             </section>
