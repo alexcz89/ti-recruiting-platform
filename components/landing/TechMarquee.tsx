@@ -36,6 +36,12 @@ const ROW_2 = [
 const MASK =
   'linear-gradient(to right, transparent 0%, black 12%, black 88%, transparent 100%)';
 
+// Cada card: 64px ancho + 12px margin-right = 76px por item
+// El offset es el ancho exacto de UN set (sin depender de porcentajes)
+const CARD_STEP = 76; // px
+const OFFSET_1  = ROW_1.length * CARD_STEP; // 912px
+const OFFSET_2  = ROW_2.length * CARD_STEP; // 912px
+
 function LogoCard({ name, icon }: { name: string; icon: string }) {
   return (
     <div
@@ -77,24 +83,30 @@ export default function TechMarquee() {
         </p>
       </div>
 
-      {/* ── Fila 1 — izquierda (→←) ── */}
+      {/* ── Fila 1 — izquierda ── */}
       <div
         className="marquee-wrapper relative mb-4 overflow-hidden"
         style={{ maskImage: MASK, WebkitMaskImage: MASK }}
       >
-        <div className="marquee-track flex py-2">
+        <div
+          className="marquee-track flex py-2"
+          style={{ '--marquee-offset': `${OFFSET_1}px` } as React.CSSProperties}
+        >
           {[...ROW_1, ...ROW_1].map((logo, i) => (
             <LogoCard key={`r1-${i}`} {...logo} />
           ))}
         </div>
       </div>
 
-      {/* ── Fila 2 — derecha (←→) ── */}
+      {/* ── Fila 2 — derecha ── */}
       <div
         className="marquee-wrapper relative overflow-hidden"
         style={{ maskImage: MASK, WebkitMaskImage: MASK }}
       >
-        <div className="marquee-track-reverse flex py-2">
+        <div
+          className="marquee-track-reverse flex py-2"
+          style={{ '--marquee-offset': `${OFFSET_2}px` } as React.CSSProperties}
+        >
           {[...ROW_2, ...ROW_2].map((logo, i) => (
             <LogoCard key={`r2-${i}`} {...logo} />
           ))}

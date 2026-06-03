@@ -492,23 +492,21 @@ p, span, div {
 
 @keyframes marquee-left {
   from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+  to   { transform: translateX(calc(-1 * var(--marquee-offset, 912px))); }
 }
 
 @keyframes marquee-right {
-  from { transform: translateX(-50%); }
+  from { transform: translateX(calc(-1 * var(--marquee-offset, 912px))); }
   to   { transform: translateX(0); }
 }
 
 .marquee-track {
   display: flex;
-  width: max-content;
   animation: marquee-left 30s linear infinite;
 }
 
 .marquee-track-reverse {
   display: flex;
-  width: max-content;
   animation: marquee-right 35s linear infinite;
 }
 
