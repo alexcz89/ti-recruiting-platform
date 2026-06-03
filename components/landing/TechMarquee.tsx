@@ -39,7 +39,7 @@ const MASK =
 function LogoCard({ name, icon }: { name: string; icon: string }) {
   return (
     <div
-      style={{ width: 64, height: 72, flexShrink: 0 }}
+      style={{ width: 64, height: 72, flexShrink: 0, marginRight: 12 }}
       className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700/60 dark:bg-zinc-900"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -82,7 +82,7 @@ export default function TechMarquee() {
         className="marquee-wrapper relative mb-4 overflow-hidden"
         style={{ maskImage: MASK, WebkitMaskImage: MASK }}
       >
-        <div className="marquee-track flex gap-3 py-2">
+        <div className="marquee-track flex py-2">
           {[...ROW_1, ...ROW_1].map((logo, i) => (
             <LogoCard key={`r1-${i}`} {...logo} />
           ))}
@@ -94,7 +94,7 @@ export default function TechMarquee() {
         className="marquee-wrapper relative overflow-hidden"
         style={{ maskImage: MASK, WebkitMaskImage: MASK }}
       >
-        <div className="marquee-track-reverse flex gap-3 py-2">
+        <div className="marquee-track-reverse flex py-2">
           {[...ROW_2, ...ROW_2].map((logo, i) => (
             <LogoCard key={`r2-${i}`} {...logo} />
           ))}
@@ -102,7 +102,7 @@ export default function TechMarquee() {
       </div>
 
       <p className="mt-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
-        Y muchos más — Bash, R, Elixir, Haskell, Lua, Redis, Tailwind...
+        También: Bash, R, Elixir, Haskell, Lua, Redis, Tailwind y más.
       </p>
     </section>
   );
