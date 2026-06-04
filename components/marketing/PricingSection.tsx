@@ -134,7 +134,7 @@ function PricingCard({
 
       <div className="my-5 border-t border-slate-100 dark:border-slate-800" />
 
-      <ul className="flex-1 space-y-2.5">
+      <ul className="space-y-2.5">
         {plan.features.map((f) => {
           const isHeader = f.startsWith("Todo lo del plan");
           return (
