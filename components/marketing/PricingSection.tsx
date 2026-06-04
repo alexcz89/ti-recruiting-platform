@@ -1,15 +1,13 @@
-﻿// components/marketing/PricingSection.tsx
+// components/marketing/PricingSection.tsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import { PLANS, type PlanConfig } from "@/config/plans";
 
-// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const USD_RATE = 17.5; // tipo de cambio aproximado MXN â†’ USD
-const ANNUAL_DISCOUNT = 0.8; // 20% descuento anual
+const USD_RATE = 17.5;
+const ANNUAL_DISCOUNT = 0.8;
 
-// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function formatPrice(
   mxn: number,
   currency: "MXN" | "USD",
@@ -17,8 +15,7 @@ function formatPrice(
 ): string {
   if (mxn === 0) return "$0";
   const discounted = billing === "anual" ? Math.round(mxn * ANNUAL_DISCOUNT) : mxn;
-  const amount =
-    currency === "USD" ? Math.round(discounted / USD_RATE) : discounted;
+  const amount = currency === "USD" ? Math.round(discounted / USD_RATE) : discounted;
   return new Intl.NumberFormat(currency === "MXN" ? "es-MX" : "en-US", {
     style: "currency",
     currency,
@@ -26,7 +23,6 @@ function formatPrice(
   }).format(amount);
 }
 
-// â”€â”€ Plan icon map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PLAN_ICONS: Record<string, React.ReactNode> = {
   FREE: (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -50,7 +46,6 @@ const PLAN_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-// â”€â”€ Checkmark icon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function CheckIcon() {
   return (
     <svg
@@ -65,7 +60,6 @@ function CheckIcon() {
   );
 }
 
-// â”€â”€ PricingCard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PricingCard({
   plan,
   billing,
@@ -93,7 +87,6 @@ function PricingCard({
           : "border-slate-200 dark:border-slate-700",
       ].join(" ")}
     >
-      {/* Badge Recomendado */}
       {isHighlight && (
         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap">
           <span className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
@@ -102,7 +95,6 @@ function PricingCard({
         </div>
       )}
 
-      {/* Plan name + icon */}
       <div className="mb-5 flex items-start gap-3">
         <div
           className={[
@@ -122,7 +114,6 @@ function PricingCard({
         </div>
       </div>
 
-      {/* Precio */}
       <div>
         <div className="flex items-baseline gap-1">
           <span className="text-4xl font-bold text-slate-900 dark:text-white">
@@ -136,15 +127,13 @@ function PricingCard({
           {plan.priceMonthly === 0
             ? "Sin costo, para siempre"
             : billing === "anual"
-            ? "Facturado anualmente · ahorras 20%"
+            ? "Facturado anualmente - ahorras 20%"
             : "Facturado mensualmente"}
         </p>
       </div>
 
-      {/* Divider */}
       <div className="my-5 border-t border-slate-100 dark:border-slate-800" />
 
-      {/* Features */}
       <ul className="flex-1 space-y-2.5">
         {plan.features.map((f) => (
           <li key={f} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
@@ -154,7 +143,6 @@ function PricingCard({
         ))}
       </ul>
 
-      {/* Stats */}
       <div className="mt-6 rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
         <div className="flex items-center justify-between py-0.5 text-xs">
           <span className="text-slate-500 dark:text-slate-400">Evaluaciones/mes</span>
@@ -176,7 +164,6 @@ function PricingCard({
         </div>
       </div>
 
-      {/* CTA */}
       <Link
         href={plan.id === "FREE" ? "/signup" : `/signup?plan=${plan.slug}`}
         className={[
@@ -191,14 +178,13 @@ function PricingCard({
 
       {plan.id === "FREE" && (
         <p className="mt-2 text-center text-xs text-slate-400">
-          Sin tarjeta de crédito
+          Sin tarjeta de credito
         </p>
       )}
     </div>
   );
 }
 
-// â”€â”€ Toggle pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TogglePill<T extends string>({
   options,
   value,
@@ -232,7 +218,6 @@ function TogglePill<T extends string>({
   );
 }
 
-// -- PricingSection (main) --
 export default function PricingSection() {
   const [billing, setBilling] = useState<"mensual" | "anual">("mensual");
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
@@ -243,7 +228,7 @@ export default function PricingSection() {
       className="w-full border-t border-slate-100 bg-white py-16 dark:border-slate-800 dark:bg-slate-950 sm:py-24"
     >
       <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-        {/* Header */}
+
         <div className="mx-auto max-w-2xl text-center">
           <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
             Precios transparentes
@@ -252,7 +237,7 @@ export default function PricingSection() {
             Planes para cada etapa de tu equipo
           </h2>
           <p className="mt-3 text-base text-slate-600 dark:text-slate-400">
-            Empieza gratis. Sin compromisos. Escala cuando estés listo.
+            Empieza gratis. Sin compromisos. Escala cuando estes listo.
           </p>
         </div>
 
@@ -260,14 +245,13 @@ export default function PricingSection() {
         <div className="mt-8 mx-auto max-w-3xl rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
           <p className="text-center text-sm text-emerald-800 dark:text-emerald-200">
             <span className="font-bold">HireLine cobra $1,090 MXN por 1 sola vacante</span>
-            {“ “}— sin ATS, sin evaluaciones técnicas.{“ “}
+            {" "}sin ATS, sin evaluaciones tecnicas.{" "}
             <span className="font-bold text-emerald-700 dark:text-emerald-300">
-              Con Taskio Starter obtienes 5 vacantes + ATS + evaluaciones + AI Match por $649/mes.
+              Con Taskio Starter obtienes 5 vacantes + ATS + evaluaciones + AI Match por $999/mes.
             </span>
           </p>
         </div>
 
-        {/* Toggles */}
         <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <TogglePill<"mensual" | "anual">
             value={billing}
@@ -298,7 +282,6 @@ export default function PricingSection() {
           />
         </div>
 
-        {/* Cards */}
         <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           {PLANS.map((plan) => (
             <PricingCard
@@ -310,14 +293,13 @@ export default function PricingSection() {
           ))}
         </div>
 
-        {/* Headhunting banner */}
         <div className="mt-10 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5 dark:border-emerald-900/50 dark:bg-emerald-950/30 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-semibold text-emerald-900 dark:text-emerald-100">
-              ¿Tienes vacantes críticas de TI?
+              Tienes vacantes criticas de TI?
             </p>
             <p className="mt-0.5 text-sm text-emerald-800/80 dark:text-emerald-200/70">
-              Servicio de headhunting especializado con success fee — 1.5 meses
+              Servicio de headhunting especializado con success fee. 1.5 meses
               de sueldo. Sin costo si no contratamos.
             </p>
           </div>
@@ -328,6 +310,7 @@ export default function PricingSection() {
             Agenda una llamada
           </Link>
         </div>
+
       </div>
     </section>
   );
