@@ -278,7 +278,7 @@ export const PLANS: PlanConfig[] = [
       "Hasta 10 clientes (modo agencia)",
       "15 reclutadores incluidos",
     ],
-    ctaLabel: "Hablar con ventas",
+    ctaLabel: "Iniciar con Business",
     limits: {
       maxActiveJobs:          null,
       maxCandidatesPerMonth:  null,
