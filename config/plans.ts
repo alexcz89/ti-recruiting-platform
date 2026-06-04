@@ -237,7 +237,7 @@ export const PLANS: PlanConfig[] = [
       "15 vacantes activas",
       "150 coding tests al mes",
       "Analytics de reclutamiento",
-      "AI Match ilimitado — todos tus candidatos rankeados",
+      "AI Match ilimitado",
     ],
     ctaLabel: "Empezar con Pro",
     limits: {
@@ -277,7 +277,7 @@ export const PLANS: PlanConfig[] = [
       "Analytics avanzados",
       "Hasta 10 clientes (modo agencia)",
       "15 reclutadores incluidos",
-      "AI Match ilimitado + explicación detallada",
+      "AI Match ilimitado",
     ],
     ctaLabel: "Hablar con ventas",
     limits: {
