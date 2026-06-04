@@ -153,6 +153,8 @@ export const PLANS: PlanConfig[] = [
       "1 vacante activa",
       "Hasta 10 candidatos por vacante",
       "20 tests de opción múltiple al mes",
+      "10 coding tests al mes",
+      "Sin anticheat",
       "Portal público de empleo TI",
       "Pipeline básico de candidatos",
       "AI Match no incluido",
@@ -166,9 +168,9 @@ export const PLANS: PlanConfig[] = [
     },
     aiMatchLimit: 0,
     assessments: {
-      monthlyCredits:  20,  // ~20 MCQ — suficiente para evaluar 1 posición
-      codingEnabled:   false,
-      packsAvailable:  true, // sí puede comprar, pero al precio más alto → dolor
+      monthlyCredits:  10,  // 10 coding tests — MCQ separado (20 fijo)
+      codingEnabled:   true,
+      packsAvailable:  true,
       packDiscountPct: 0,
     },
   },
@@ -194,8 +196,10 @@ export const PLANS: PlanConfig[] = [
       "5 vacantes activas",
       "Candidatos ilimitados",
       "ATS completo con pipeline Kanban",
-      "150 evaluaciones al mes (tests de opción múltiple + código)",
-      "AI Match — top 10 candidatos rankeados por vacante",
+      "Tests de opción múltiple ilimitados",
+      "50 coding tests al mes",
+      "Anticheat activado",
+      "AI Match — top 10 candidatos por vacante",
       "Soporte por email",
     ],
     ctaLabel: "Empezar con Starter",
@@ -207,10 +211,10 @@ export const PLANS: PlanConfig[] = [
     },
     aiMatchLimit: 10,
     assessments: {
-      monthlyCredits:  150, // ~150 MCQ o ~30 coding o mix
+      monthlyCredits:  50,  // 50 coding tests — MCQ ilimitado
       codingEnabled:   true,
       packsAvailable:  true,
-      packDiscountPct: 17,  // ~17% vs precio FREE (pack_50: $299→$249)
+      packDiscountPct: 17,
     },
   },
 
@@ -234,7 +238,9 @@ export const PLANS: PlanConfig[] = [
       "15 vacantes activas",
       "Candidatos ilimitados",
       "ATS completo + analytics de reclutamiento",
-      "500 evaluaciones al mes (tests de opción múltiple + código)",
+      "Tests de opción múltiple ilimitados",
+      "150 coding tests al mes",
+      "Anticheat activado",
       "AI Match ilimitado — todos tus candidatos rankeados",
       "Soporte prioritario por WhatsApp",
     ],
@@ -247,10 +253,10 @@ export const PLANS: PlanConfig[] = [
     },
     aiMatchLimit: null,
     assessments: {
-      monthlyCredits:  500, // ~500 MCQ o ~100 coding o mix
+      monthlyCredits:  150, // 150 coding tests — MCQ ilimitado
       codingEnabled:   true,
       packsAvailable:  true,
-      packDiscountPct: 33,  // pack_50: $299→$199
+      packDiscountPct: 33,
     },
   },
 
@@ -273,25 +279,27 @@ export const PLANS: PlanConfig[] = [
       "Vacantes ilimitadas",
       "Candidatos ilimitados",
       "ATS enterprise + analytics avanzados",
-      "2,000 evaluaciones técnicas al mes",
-      "Hasta 10 clientes (modo agencia multi-empresa)",
+      "Tests de opción múltiple ilimitados",
+      "500 coding tests al mes",
+      "Anticheat activado",
+      "Hasta 10 clientes (modo agencia)",
       "15 reclutadores incluidos",
-      "AI Match ilimitado + explicacion detallada del match",
+      "AI Match ilimitado + explicación detallada",
       "Cuenta dedicada — SLA garantizado por WhatsApp",
     ],
     ctaLabel: "Hablar con ventas",
     limits: {
-      maxActiveJobs:          null, // ilimitado
+      maxActiveJobs:          null,
       maxCandidatesPerMonth:  null,
       maxRecruiters:          15,
       maxClients:             10,
     },
     aiMatchLimit: null,
     assessments: {
-      monthlyCredits:  2000, // ~2,000 MCQ o ~400 coding o mix
+      monthlyCredits:  500, // 500 coding tests — MCQ ilimitado
       codingEnabled:   true,
       packsAvailable:  true,
-      packDiscountPct: 50,  // pack_50: $299→$149
+      packDiscountPct: 50,
     },
   },
 ];
