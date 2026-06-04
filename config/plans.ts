@@ -219,7 +219,7 @@ export const PLANS: PlanConfig[] = [
     priceMonthly: 2499,
     currency: "MXN",
     periodLabel: "/mes",
-    tagline: "Para equipos de reclutamiento que contratan seguido",
+    tagline: "Para equipos TI en crecimiento",
     highlight: false,
     features: [
       "15 vacantes activas",
@@ -258,7 +258,7 @@ export const PLANS: PlanConfig[] = [
     priceMonthly: 4999,
     currency: "MXN",
     periodLabel: "/mes",
-    tagline: "Para agencias de reclutamiento TI y equipos enterprise",
+    tagline: "Para agencias y equipos enterprise",
     highlight: false,
     features: [
       "Vacantes ilimitadas",

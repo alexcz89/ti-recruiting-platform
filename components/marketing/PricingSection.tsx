@@ -108,7 +108,7 @@ function PricingCard({
         </div>
         <div className="min-w-0">
           <p className="font-semibold text-slate-900 dark:text-white">{plan.name}</p>
-          <p className="mt-0.5 text-xs leading-snug text-slate-500 dark:text-slate-400">
+          <p className="mt-0.5 text-xs leading-snug text-slate-500 dark:text-slate-400 hyphens-none">
             {plan.tagline}
           </p>
         </div>
