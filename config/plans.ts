@@ -277,7 +277,6 @@ export const PLANS: PlanConfig[] = [
       "Reportes avanzados + exportacion CSV",
       "Hasta 10 clientes (modo agencia)",
       "15 reclutadores incluidos",
-      "AI Match ilimitado",
     ],
     ctaLabel: "Hablar con ventas",
     limits: {
