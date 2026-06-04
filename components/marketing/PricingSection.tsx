@@ -1,15 +1,15 @@
-// components/marketing/PricingSection.tsx
+﻿// components/marketing/PricingSection.tsx
 "use client";
 
 import { useState } from "react";
 import Link from "next/link";
 import { PLANS, type PlanConfig } from "@/config/plans";
 
-// ── Constants ────────────────────────────────────────────────────────────────
-const USD_RATE = 17.5; // tipo de cambio aproximado MXN → USD
+// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const USD_RATE = 17.5; // tipo de cambio aproximado MXN â†’ USD
 const ANNUAL_DISCOUNT = 0.8; // 20% descuento anual
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function formatPrice(
   mxn: number,
   currency: "MXN" | "USD",
@@ -26,7 +26,7 @@ function formatPrice(
   }).format(amount);
 }
 
-// ── Plan icon map ─────────────────────────────────────────────────────────────
+// â”€â”€ Plan icon map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const PLAN_ICONS: Record<string, React.ReactNode> = {
   FREE: (
     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
@@ -50,7 +50,7 @@ const PLAN_ICONS: Record<string, React.ReactNode> = {
   ),
 };
 
-// ── Checkmark icon ────────────────────────────────────────────────────────────
+// â”€â”€ Checkmark icon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function CheckIcon() {
   return (
     <svg
@@ -65,7 +65,7 @@ function CheckIcon() {
   );
 }
 
-// ── PricingCard ───────────────────────────────────────────────────────────────
+// â”€â”€ PricingCard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PricingCard({
   plan,
   billing,
@@ -136,7 +136,7 @@ function PricingCard({
           {plan.priceMonthly === 0
             ? "Sin costo, para siempre"
             : billing === "anual"
-            ? "Facturado anualmente · ahorras 20%"
+            ? "Facturado anualmente Â· ahorras 20%"
             : "Facturado mensualmente"}
         </p>
       </div>
@@ -157,7 +157,7 @@ function PricingCard({
       {/* Stats */}
       <div className="mt-6 rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
         <div className="flex items-center justify-between py-0.5 text-xs">
-          <span className="text-slate-500 dark:text-slate-400">Créditos/mes</span>
+          <span className="text-slate-500 dark:text-slate-400">CrÃ©ditos/mes</span>
           <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
             {credits.toLocaleString("es-MX")}
           </span>
@@ -191,14 +191,14 @@ function PricingCard({
 
       {plan.id === "FREE" && (
         <p className="mt-2 text-center text-xs text-slate-400">
-          Sin tarjeta de crédito
+          Sin tarjeta de crÃ©dito
         </p>
       )}
     </div>
   );
 }
 
-// ── Toggle pill ───────────────────────────────────────────────────────────────
+// â”€â”€ Toggle pill â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TogglePill<T extends string>({
   options,
   value,
@@ -232,7 +232,7 @@ function TogglePill<T extends string>({
   );
 }
 
-// ── PricingSection (main) ─────────────────────────────────────────────────────
+// â”€â”€ PricingSection (main) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function PricingSection() {
   const [billing, setBilling] = useState<"mensual" | "anual">("mensual");
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
@@ -252,7 +252,7 @@ export default function PricingSection() {
             Planes para cada etapa de tu equipo
           </h2>
           <p className="mt-3 text-base text-slate-600 dark:text-slate-400">
-            Empieza gratis. Sin compromisos. Escala cuando estés listo.
+            Empieza gratis. Sin compromisos. Escala cuando estÃ©s listo.
           </p>
         </div>
 
@@ -260,7 +260,7 @@ export default function PricingSection() {
         <div className="mt-8 mx-auto max-w-3xl rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
           <p className="text-center text-sm text-emerald-800 dark:text-emerald-200">
             <span className="font-bold">HireLine cobra $1,090 MXN por 1 sola vacante</span>
-            {" "}— sin ATS, sin evaluaciones técnicas.{" "}
+            {" "}â€” sin ATS, sin evaluaciones tÃ©cnicas.{" "}
             <span className="font-bold text-emerald-700 dark:text-emerald-300">
               Con Taskio Starter obtienes 5 vacantes + ATS + evaluaciones + AI Match por $649/mes.
             </span>
@@ -314,10 +314,10 @@ export default function PricingSection() {
         <div className="mt-10 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5 dark:border-emerald-900/50 dark:bg-emerald-950/30 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-semibold text-emerald-900 dark:text-emerald-100">
-              ¿Tienes vacantes críticas de TI?
+              Â¿Tienes vacantes crÃ­ticas de TI?
             </p>
             <p className="mt-0.5 text-sm text-emerald-800/80 dark:text-emerald-200/70">
-              Servicio de headhunting especializado con success fee — 1.5 meses
+              Servicio de headhunting especializado con success fee â€” 1.5 meses
               de sueldo. Sin costo si no contratamos.
             </p>
           </div>
