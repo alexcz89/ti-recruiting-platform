@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import Footer from "@/components/Footer";
 import TechMarquee from "@/components/landing/TechMarquee";
+import PricingSection from "@/components/marketing/PricingSection";
 import {
   Users,
   Briefcase,
@@ -715,6 +716,11 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* ══════════════════════════════════════════════
+          PRECIOS
+      ══════════════════════════════════════════════ */}
+      <PricingSection />
 
       {/* ══════════════════════════════════════════════
           CTA FINAL
