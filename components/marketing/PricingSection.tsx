@@ -152,7 +152,8 @@ function PricingCard({
         })}
       </ul>
 
-      <div className="mt-6 rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
+      <div className="mt-auto pt-6">
+      <div className="rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
         <div className="flex items-center justify-between py-0.5 text-xs">
           <span className="text-slate-500 dark:text-slate-400">Coding tests/mes</span>
           <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
@@ -171,6 +172,7 @@ function PricingCard({
             {reclutadores}
           </span>
         </div>
+      </div>
       </div>
 
       <Link
