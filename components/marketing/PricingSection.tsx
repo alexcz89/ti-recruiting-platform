@@ -135,12 +135,21 @@ function PricingCard({
       <div className="my-5 border-t border-slate-100 dark:border-slate-800" />
 
       <ul className="flex-1 space-y-2.5">
-        {plan.features.map((f) => (
-          <li key={f} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300 hyphens-none [word-break:keep-all]">
-            <CheckIcon />
-            <span>{f}</span>
-          </li>
-        ))}
+        {plan.features.map((f) => {
+          const isHeader = f.startsWith("Todo lo del plan");
+          return (
+            <li key={f} className="flex items-start gap-2 hyphens-none [word-break:keep-all]">
+              {isHeader ? (
+                <span className="text-xs italic text-slate-400 dark:text-slate-500 pt-0.5">{f}</span>
+              ) : (
+                <>
+                  <CheckIcon />
+                  <span className="text-sm text-slate-700 dark:text-slate-300">{f}</span>
+                </>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       <div className="mt-6 rounded-xl bg-slate-50 px-4 py-3 dark:bg-slate-800/60">
