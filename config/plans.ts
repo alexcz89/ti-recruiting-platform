@@ -236,7 +236,6 @@ export const PLANS: PlanConfig[] = [
       "ATS completo + analytics de reclutamiento",
       "500 evaluaciones al mes (tests de opción múltiple + código)",
       "AI Match ilimitado — todos tus candidatos rankeados",
-      "Branding de empresa en el portal público",
       "Soporte prioritario por WhatsApp",
     ],
     ctaLabel: "Empezar con Pro",
