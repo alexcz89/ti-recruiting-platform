@@ -256,8 +256,19 @@ export default function PricingSection() {
           </p>
         </div>
 
+        {/* Banner competitivo */}
+        <div className="mt-8 mx-auto max-w-3xl rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3.5 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+          <p className="text-center text-sm text-emerald-800 dark:text-emerald-200">
+            <span className="font-bold">HireLine cobra $1,090 MXN por 1 sola vacante</span>
+            {" "}— sin ATS, sin evaluaciones técnicas.{" "}
+            <span className="font-bold text-emerald-700 dark:text-emerald-300">
+              Con Taskio Starter obtienes 5 vacantes + ATS + evaluaciones + AI Match por $649/mes.
+            </span>
+          </p>
+        </div>
+
         {/* Toggles */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
           <TogglePill<"mensual" | "anual">
             value={billing}
             onChange={setBilling}
