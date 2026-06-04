@@ -232,7 +232,7 @@ function TogglePill<T extends string>({
   );
 }
 
-// â”€â”€ PricingSection (main) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// -- PricingSection (main) --
 export default function PricingSection() {
   const [billing, setBilling] = useState<"mensual" | "anual">("mensual");
   const [currency, setCurrency] = useState<"MXN" | "USD">("MXN");
