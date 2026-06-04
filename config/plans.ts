@@ -157,7 +157,8 @@ export const PLANS: PlanConfig[] = [
       "Sin anticheat",
       "Portal público de empleo TI",
       "Pipeline básico de candidatos",
-      "AI Match no incluido",
+      "Sin AI Match",
+      "Sin contacto por WhatsApp con candidatos",
     ],
     ctaLabel: "Crear cuenta gratis",
     limits: {
@@ -200,7 +201,6 @@ export const PLANS: PlanConfig[] = [
       "50 coding tests al mes",
       "Anticheat activado",
       "AI Match — top 10 candidatos por vacante",
-      "Soporte por email",
     ],
     ctaLabel: "Empezar con Starter",
     limits: {
@@ -242,7 +242,6 @@ export const PLANS: PlanConfig[] = [
       "150 coding tests al mes",
       "Anticheat activado",
       "AI Match ilimitado — todos tus candidatos rankeados",
-      "Soporte prioritario por WhatsApp",
     ],
     ctaLabel: "Empezar con Pro",
     limits: {
@@ -285,7 +284,7 @@ export const PLANS: PlanConfig[] = [
       "Hasta 10 clientes (modo agencia)",
       "15 reclutadores incluidos",
       "AI Match ilimitado + explicación detallada",
-      "Cuenta dedicada — SLA garantizado por WhatsApp",
+      "Cuenta dedicada con SLA garantizado",
     ],
     ctaLabel: "Hablar con ventas",
     limits: {
