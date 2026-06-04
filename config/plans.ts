@@ -179,7 +179,7 @@ export const PLANS: PlanConfig[] = [
     priceMonthly: 999,
     currency: "MXN",
     periodLabel: "/mes",
-    tagline: "5 vacantes + ATS + evaluaciones. Más por menos.",
+    tagline: "5 vacantes + ATS + evaluaciones técnicas",
     highlight: true,
     popularLabel: "Más popular",
     features: [
