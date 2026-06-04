@@ -187,11 +187,6 @@ function PricingCard({
         {plan.ctaLabel}
       </Link>
 
-      {plan.id === "FREE" && (
-        <p className="mt-2 text-center text-xs text-slate-400">
-          Sin tarjeta de credito
-        </p>
-      )}
     </div>
   );
 }
