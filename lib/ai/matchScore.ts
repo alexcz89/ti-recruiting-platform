@@ -450,12 +450,12 @@ export function scoreToTextColor(score: number): string {
 
 // ── Plan gate ─────────────────────────────────────────────────────────────
 
-export type BillingPlan = "FREE" | "STARTER" | "PRO";
+export type BillingPlan = "FREE" | "STARTER" | "PRO" | "BUSINESS";
 
 export function getMatchScoreLimit(plan: BillingPlan): number {
-  if (plan === "PRO") return Infinity;
-  if (plan === "STARTER") return 5;
-  return 0;
+  if (plan === "PRO" || plan === "BUSINESS") return Infinity;
+  if (plan === "STARTER") return 10;
+  return 0; // FREE — no disponible
 }
 
 export function applyPlanGate(

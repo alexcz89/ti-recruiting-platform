@@ -103,6 +103,12 @@ export type PlanConfig = {
     maxRecruiters: number | null;          // null = ilimitado
     maxClients: number | null;             // null = ilimitado (modo agencia)
   };
+  /**
+   * Cuantos candidatos por vacante reciben AI Match score.
+   * null = sin limite (Pro y Business)
+   * 0 = no disponible (Free)
+   */
+  aiMatchLimit: number | null;
   assessments: {
     /**
      * Créditos incluidos en el plan cada mes (renuevan el 1ro del ciclo).
@@ -149,6 +155,7 @@ export const PLANS: PlanConfig[] = [
       "20 tests de opción múltiple al mes",
       "Portal público de empleo TI",
       "Pipeline básico de candidatos",
+      "AI Match no incluido",
     ],
     ctaLabel: "Crear cuenta gratis",
     limits: {
@@ -157,6 +164,7 @@ export const PLANS: PlanConfig[] = [
       maxRecruiters:          1,
       maxClients:             1,
     },
+    aiMatchLimit: 0,
     assessments: {
       monthlyCredits:  20,  // ~20 MCQ — suficiente para evaluar 1 posición
       codingEnabled:   false,
@@ -187,7 +195,7 @@ export const PLANS: PlanConfig[] = [
       "Candidatos ilimitados",
       "ATS completo con pipeline Kanban",
       "150 evaluaciones al mes (tests de opción múltiple + código)",
-      "AI Match — top candidatos rankeados automáticamente",
+      "AI Match — top 10 candidatos rankeados por vacante",
       "Soporte por email",
     ],
     ctaLabel: "Empezar con Starter",
@@ -197,6 +205,7 @@ export const PLANS: PlanConfig[] = [
       maxRecruiters:          2,
       maxClients:             1,
     },
+    aiMatchLimit: 10,
     assessments: {
       monthlyCredits:  150, // ~150 MCQ o ~30 coding o mix
       codingEnabled:   true,
@@ -237,6 +246,7 @@ export const PLANS: PlanConfig[] = [
       maxRecruiters:          5,
       maxClients:             5,
     },
+    aiMatchLimit: null,
     assessments: {
       monthlyCredits:  500, // ~500 MCQ o ~100 coding o mix
       codingEnabled:   true,
@@ -267,7 +277,7 @@ export const PLANS: PlanConfig[] = [
       "2,000 evaluaciones técnicas al mes",
       "Hasta 10 clientes (modo agencia multi-empresa)",
       "15 reclutadores incluidos",
-      "AI Match ilimitado + features anticipadas",
+      "AI Match ilimitado + explicacion detallada del match",
       "Cuenta dedicada — SLA garantizado por WhatsApp",
     ],
     ctaLabel: "Hablar con ventas",
@@ -277,6 +287,7 @@ export const PLANS: PlanConfig[] = [
       maxRecruiters:          15,
       maxClients:             10,
     },
+    aiMatchLimit: null,
     assessments: {
       monthlyCredits:  2000, // ~2,000 MCQ o ~400 coding o mix
       codingEnabled:   true,
