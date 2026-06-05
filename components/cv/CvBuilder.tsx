@@ -1425,12 +1425,14 @@ export default function CvBuilder({
                   </p>
                 </div>
               </div>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-4">
-                Email principal:{" "}
-                <span className="font-medium text-zinc-900 dark:text-white">
-                  {initial.identity.email || "david@gmail.com"}
-                </span>
-              </p>
+              {initial.identity.email && (
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-4">
+                  Email principal:{" "}
+                  <span className="font-medium text-zinc-900 dark:text-white">
+                    {initial.identity.email}
+                  </span>
+                </p>
+              )}
 
               <div className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
