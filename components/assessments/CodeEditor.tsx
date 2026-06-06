@@ -417,7 +417,7 @@ export default function CodeEditor({
   return (
     <div
       ref={containerRef}
-      className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl dark:border-slate-800/50 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
+      className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl dark:border-slate-800/50 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
     >
       {/* Header */}
       <div className="border-b border-gray-200 bg-white dark:border-slate-800/80 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
