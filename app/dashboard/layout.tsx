@@ -223,7 +223,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* CTA derecha */}
             <Link
               href="/dashboard/jobs/new"
-              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3.5 py-1.5 text-sm font-semibold text-white transition-colors shadow-sm"
+              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600 px-3.5 py-1.5 text-sm font-semibold text-white dark:text-white transition-colors shadow-sm"
             >
               <Plus className="h-4 w-4" />
               Publicar vacante
