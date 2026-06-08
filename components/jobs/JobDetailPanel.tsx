@@ -222,6 +222,8 @@ function labelEmploymentType(type: string | null | undefined): string {
     case "PART_TIME":   return "Medio tiempo";
     case "CONTRACT":    return "Por contrato";
     case "INTERNSHIP":  return "Prácticas";
+    case "TEMPORARY":   return "Temporal";
+    case "FREELANCE":   return "Freelance";
     default:            return type ?? "—";
   }
 }

@@ -6,7 +6,7 @@ import JobSearchBar from "@/components/JobSearchBar";
 import JobsFeed from "@/components/jobs/JobsFeed";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
 
-const EMP_TYPES = ["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP"] as const;
+const EMP_TYPES = ["FULL_TIME", "PART_TIME", "CONTRACT", "INTERNSHIP", "TEMPORARY", "FREELANCE"] as const;
 const SENIORITIES = ["JUNIOR", "MID", "SENIOR", "LEAD"] as const;
 
 const EMP_LABEL: Record<string, string> = {
@@ -14,6 +14,8 @@ const EMP_LABEL: Record<string, string> = {
   PART_TIME: "Medio tiempo",
   CONTRACT: "Contrato",
   INTERNSHIP: "Prácticas",
+  TEMPORARY: "Temporal",
+  FREELANCE: "Freelance",
 };
 const SEN_LABEL: Record<string, string> = {
   JUNIOR: "Junior",

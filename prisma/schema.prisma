@@ -1052,6 +1052,7 @@ enum EmploymentType {
   CONTRACT
   INTERNSHIP
   TEMPORARY
+  FREELANCE
 }
 
 enum ApplicationInterest {

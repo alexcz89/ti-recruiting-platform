@@ -26,6 +26,7 @@ const EMPLOYMENT_TYPE_VALUES = [
   "CONTRACT",
   "TEMPORARY",
   "INTERNSHIP",
+  "FREELANCE",
 ] as const;
 const EDUCATION_LEVEL_VALUES = [
   "NONE",

@@ -9,6 +9,7 @@ export const EMPLOYMENT_TYPE_VALUES = [
   "CONTRACT",
   "TEMPORARY",
   "INTERNSHIP",
+  "FREELANCE",
 ] as const;
 export type EmploymentTypeValue = (typeof EMPLOYMENT_TYPE_VALUES)[number];
 
@@ -38,6 +39,7 @@ export const EMPLOYMENT_TYPE_OPTIONS: Array<{
   { value: "CONTRACT", label: "Por contrato" },
   { value: "TEMPORARY", label: "Temporal" },
   { value: "INTERNSHIP", label: "Prácticas / Internship" },
+  { value: "FREELANCE", label: "Freelance" },
 ];
 
 export const DEGREE_OPTIONS: Array<{
@@ -92,6 +94,9 @@ const EMPLOYMENT_TYPE_ALIASES: Record<string, EmploymentTypeValue> = {
   INTERNSHIP: "INTERNSHIP",
   PRACTICAS: "INTERNSHIP",
   "PRÁCTICAS": "INTERNSHIP",
+
+  FREELANCE: "FREELANCE",
+  FREELANCER: "FREELANCE",
 };
 
 const LOCATION_TYPE_ALIASES: Record<string, LocationTypeValue> = {
