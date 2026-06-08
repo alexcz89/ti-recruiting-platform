@@ -313,18 +313,18 @@ export default function CandidateOnboardingPage({
             </div>
           </label>
 
-          <div className="flex items-center gap-3 my-4">
-            <div className="flex-1 h-px bg-zinc-100 dark:bg-zinc-800" />
-            <span className="text-xs text-zinc-400">o sin CV</span>
-            <div className="flex-1 h-px bg-zinc-100 dark:bg-zinc-800" />
-          </div>
+          <p className="mt-4 text-center text-xs text-zinc-400">
+            Los perfiles con CV reciben{" "}
+            <span className="font-semibold text-zinc-500">3× más visitas</span>{" "}
+            de reclutadores.
+          </p>
 
           <button
             type="button"
             onClick={() => setStep(2)}
-            className="w-full rounded-lg border px-4 py-2 text-sm text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+            className="mt-5 w-full text-center text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2 transition"
           >
-            Llenar manualmente
+            Continuar sin CV por ahora
           </button>
         </div>
       )}
@@ -351,13 +351,6 @@ export default function CandidateOnboardingPage({
             </button>
             <div className="flex items-center gap-3">
               <button
-                type="button"
-                onClick={() => setStep(3)}
-                className="rounded-lg px-4 py-2 text-sm text-zinc-500 hover:underline"
-              >
-                Saltar por ahora
-              </button>
-              <button
                 type="submit"
                 disabled={pending}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
@@ -366,6 +359,9 @@ export default function CandidateOnboardingPage({
               </button>
             </div>
           </div>
+          <p className="mt-3 text-center text-xs text-zinc-400">
+            Puedes editar tus skills en cualquier momento desde tu perfil.
+          </p>
         </form>
       )}
 
