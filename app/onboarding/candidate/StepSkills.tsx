@@ -73,9 +73,16 @@ export function StepSkills({ skills, onChange, skillOptions = [] }: Props) {
       </p>
 
       {/* Selected */}
-      <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-2">
-        Seleccionadas
-      </p>
+      <div className="flex items-center gap-2 mb-2">
+        <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+          {skills.length > 0 ? "Tus skills" : "Seleccionadas"}
+        </p>
+        {skills.length > 0 && (
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">
+            ({skills.length}) · toca una para quitarla
+          </span>
+        )}
+      </div>
       <div className="min-h-[44px] bg-zinc-50 dark:bg-zinc-800/50 rounded-xl p-2.5 flex flex-wrap gap-1.5 mb-4">
         {skills.length === 0 ? (
           <span className="text-xs text-zinc-400 dark:text-zinc-500 self-center px-1">
@@ -96,12 +103,19 @@ export function StepSkills({ skills, onChange, skillOptions = [] }: Props) {
         )}
       </div>
 
-      {/* Pool de populares — solo si no hay query */}
+      {/* Pool de sugerencias — solo si no hay query activo */}
       {!input && (
         <>
-          <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-2">
-            Populares en TI
-          </p>
+          <div className="flex items-baseline gap-2 mb-2">
+            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+              {skills.length > 0 ? "¿También manejas alguna de estas?" : "Populares en TI"}
+            </p>
+            {skills.length > 0 && (
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                toca para agregar
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap gap-1.5 mb-4">
             {POPULAR.filter((sk) => !skills.map((s) => s.toLowerCase()).includes(sk.toLowerCase())).map((sk) => (
               <button
