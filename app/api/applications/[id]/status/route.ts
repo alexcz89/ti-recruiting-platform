@@ -6,7 +6,6 @@ import { ApplicationStatus } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
-import { NotificationService } from "@/lib/notifications/service";
 
 const ALLOWED = new Set<ApplicationStatus>([
   "SUBMITTED",
@@ -104,26 +103,8 @@ async function updateStatus(id: string, status: string) {
     },
   });
 
-  // Solo enviar email al candidato cuando es rechazado
-  if (oldStatus !== newStatus && newStatus === "REJECTED") {
-    await NotificationService.create({
-      userId: app.candidate.id,
-      type: "APPLICATION_STATUS_CHANGE",
-      metadata: {
-        jobTitle: app.job.title,
-        jobId: app.job.id,
-        applicationId: app.id,
-        candidateName: app.candidate.name ?? "Candidato",
-        oldStatus,
-        newStatus,
-      },
-    }).catch((notifErr) => {
-      console.warn(
-        "[PATCH /api/applications/status] Notification failed:",
-        notifErr
-      );
-    });
-  }
+  // El email de rechazo se envía con 3 días de delay por el cron /api/cron/rejections
+  // (rejectedAt + rejectionEmailSent=false ya quedaron guardados arriba)
 
   return jsonNoStore({ ok: true, application: updated });
 }

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { sendRejectionEmail } from "@/lib/server/mailer";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const LOOKBACK_MS = 5 * DAY_MS;
+const LOOKBACK_MS = 3 * DAY_MS; // 3 días de delay antes de enviar el email
 
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
