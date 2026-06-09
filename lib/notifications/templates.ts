@@ -23,7 +23,7 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     title: (data) => 'Nueva aplicación recibida',
     message: (data) => `${data.candidateName} aplicó a ${data.jobTitle}`,
     actionText: () => 'Ver aplicación',
-    actionUrl: (data) => `/dashboard/jobs/${data.jobId}/applications/${data.applicationId}`,
+    actionUrl: (data) => `/dashboard/candidates/${data.candidateId}?jobId=${data.jobId}&applicationId=${data.applicationId}`,
     priority: 'MEDIUM',
     defaultChannels: ['IN_APP', 'EMAIL'],
     emailSubject: (data) => `Nueva aplicación de ${data.candidateName}`,
