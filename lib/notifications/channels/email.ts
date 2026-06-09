@@ -75,6 +75,7 @@ export async function sendEmailNotification(
         recruiterName: user.name ?? undefined,
         candidateName: metadata.candidateName || 'Candidato',
         candidateEmail: metadata.candidateEmail ?? undefined,
+        candidateId: metadata.candidateId || '',
         jobTitle: metadata.jobTitle || '',
         jobId: metadata.jobId || '',
         applicationId: metadata.applicationId || '',
