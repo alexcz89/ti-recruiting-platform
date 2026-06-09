@@ -104,7 +104,7 @@ function CheckEmailContent() {
             <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 dark:text-zinc-50">
               Revisa tu correo
             </h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 hyphens-none">
               Te enviamos un enlace de verificación a:
             </p>
             {email ? (

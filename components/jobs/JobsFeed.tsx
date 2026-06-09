@@ -385,7 +385,7 @@ export default function JobsFeed({
                     Antes: truncate (1 línea, corta en móvil)
                     Ahora: line-clamp-2 en móvil, line-clamp-1 en sm+
                   */}
-                  <h3 className="font-semibold text-default leading-snug line-clamp-2 sm:line-clamp-1">
+                  <h3 className="font-semibold text-default leading-snug line-clamp-2 sm:line-clamp-1 hyphens-none">
                     {j.title ?? "Sin título"}
                   </h3>
 

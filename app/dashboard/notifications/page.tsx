@@ -102,7 +102,10 @@ export default async function NotificationsPage({ searchParams }: PageProps) {
 
     switch (n.type) {
       case "NEW_APPLICATION":
-        if (meta?.jobId && meta?.applicationId) {
+        if (meta?.candidateId && meta?.jobId) {
+          actionUrl = `/dashboard/candidates/${meta.candidateId}?jobId=${meta.jobId}`;
+          if (meta?.applicationId) actionUrl += `&applicationId=${meta.applicationId}`;
+        } else if (meta?.jobId) {
           actionUrl = `/dashboard/jobs/${meta.jobId}/applications`;
         }
         break;

@@ -368,39 +368,6 @@ export default async function JobDetail({ params }: Params) {
         <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
       )}
 
-      {!session && hasJobSignalsForAnon && (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-5 py-4 dark:border-emerald-700/40 dark:bg-emerald-950/20">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
-                ¿Cuánto encajas con esta vacante?
-              </p>
-              <p className="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">
-                Crea tu perfil o inicia sesión para ver tu score de compatibilidad con esta vacante.
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <a
-                href={`/auth/signin?role=CANDIDATE&callbackUrl=${encodeURIComponent(
-                  `/jobs/${job.slug ?? job.id}`
-                )}`}
-                className="inline-flex items-center rounded-xl border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-600/50 dark:bg-transparent dark:text-emerald-300"
-              >
-                Iniciar sesión
-              </a>
-              <a
-                href={`/auth/signup/candidate?callbackUrl=${encodeURIComponent(
-                  `/jobs/${job.slug ?? job.id}`
-                )}`}
-                className="inline-flex items-center rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
-              >
-                Crear cuenta gratis →
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
-
       <JobDetailPanel
         job={panelJob as any}
         canApply={canApply}

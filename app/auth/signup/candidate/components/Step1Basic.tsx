@@ -96,8 +96,8 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
       </div>
 
       {/* Apellidos en grid */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="flex flex-col">
           <label htmlFor="lastName" className={labelClass}>
             Ap. Paterno <span className="text-red-500">*</span>
           </label>
@@ -112,10 +112,9 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
             required
           />
         </div>
-        <div>
+        <div className="flex flex-col">
           <label htmlFor="maternalSurname" className={labelClass}>
-            Ap. Materno{" "}
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">(opc.)</span>
+            Ap. Materno <span className="text-xs text-zinc-400 dark:text-zinc-500">(opc.)</span>
           </label>
           <input
             id="maternalSurname"

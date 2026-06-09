@@ -638,7 +638,7 @@ export default function JobDetailPanel({
                 <>
                   <Link
                     href={signinHref}
-                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-semibold text-default hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
                   >
                     <LogIn className="h-4 w-4" />
                     Inicia sesión para postularte
@@ -647,7 +647,7 @@ export default function JobDetailPanel({
 
                   <Link
                     href={signupHref}
-                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-500"
+                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
                   >
                     <UserPlus className="h-4 w-4" />
                     Crear cuenta

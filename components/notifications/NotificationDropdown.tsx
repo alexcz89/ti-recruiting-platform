@@ -82,6 +82,10 @@ export function NotificationDropdown({
 
     switch (notification.type) {
       case 'NEW_APPLICATION':
+        if (meta?.candidateId && meta?.jobId) {
+          const url = `/dashboard/candidates/${meta.candidateId}?jobId=${meta.jobId}`;
+          return meta.applicationId ? `${url}&applicationId=${meta.applicationId}` : url;
+        }
         if (meta?.jobId) return `/dashboard/jobs/${meta.jobId}/applications`;
         break;
 

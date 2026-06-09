@@ -227,7 +227,7 @@ export default function SignupMultiStep({
           <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
             {fromCvBuilder ? "Guarda tu CV gratis" : "Crea tu cuenta"}
           </h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400 hyphens-none">
             {fromCvBuilder
               ? "Registra tu cuenta para guardar y compartir tu CV"
               : "Encuentra tu próximo reto profesional en TI"}

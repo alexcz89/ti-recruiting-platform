@@ -70,7 +70,7 @@ export default function Step3Professional({
 
       {/* Banner informativo */}
       <div className="rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-800/50 px-3 py-2">
-        <p className="text-xs text-blue-800 dark:text-blue-300">
+        <p className="text-xs text-blue-800 dark:text-blue-300 hyphens-none">
           💼 <strong>Datos opcionales</strong> — puedes completarlos ahora o después en tu perfil.
         </p>
       </div>
@@ -111,7 +111,7 @@ export default function Step3Professional({
           className={inputClass}
           placeholder="Escribe tu ciudad..."
         />
-        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+        <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 hyphens-none">
           Te mostraremos trabajos cerca de ti y opciones remotas
         </p>
       </div>
@@ -178,7 +178,7 @@ export default function Step3Professional({
 
       {/* Tip CV */}
       {!fromCvBuilder && (
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">
+        <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center hyphens-none">
           ℹ️ Después podrás agregar CV, experiencia y skills en tu perfil
         </p>
       )}
@@ -190,14 +190,14 @@ export default function Step3Professional({
             type="button"
             onClick={onBack}
             disabled={isSubmitting}
-            className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50"
+            className="flex-1 rounded-lg border border-zinc-300 dark:border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors disabled:opacity-50 hyphens-none"
           >
             ← Atrás
           </button>
           <button
             type="submit"
             disabled={isSubmitting}
-            className="flex-1 rounded-lg px-4 py-3 text-sm font-semibold transition-colors bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex-1 rounded-lg px-4 py-3 text-sm font-semibold transition-colors bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-400 text-white dark:text-zinc-900 disabled:cursor-not-allowed disabled:opacity-50 hyphens-none"
           >
             {isSubmitting
               ? "Creando cuenta..."
@@ -211,7 +211,7 @@ export default function Step3Professional({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-1.5 w-full text-center text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline transition-colors"
+            className="mt-1.5 w-full text-center text-xs text-zinc-400 dark:text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-300 underline transition-colors hyphens-none"
           >
             Omitir por ahora y crear cuenta
           </button>
