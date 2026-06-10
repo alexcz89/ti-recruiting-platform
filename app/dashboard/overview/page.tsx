@@ -99,20 +99,103 @@ export default async function OverviewPage() {
     }),
   ]);
 
-  const jobsWithoutApps = await prisma.job.count({
-    where: {
-      companyId,
-      createdAt: { lt: new Date(Date.now() - d15) },
-      applications: { none: {} },
-    },
-  });
+  // Batch all independent queries in parallel
+  const [
+    jobsWithoutApps,
+    funnelRaw,
+    topJobsRaw,
+    recent,
+    recentActivity,
+  ] = await Promise.all([
+    // Count jobs without applications in last 15 days
+    prisma.job.count({
+      where: {
+        companyId,
+        createdAt: { lt: new Date(Date.now() - d15) },
+        applications: { none: {} },
+      },
+    }),
+    // Funnel data by recruiter interest
+    prisma.application.groupBy({
+      by: ["recruiterInterest"],
+      where: { job: { companyId } },
+      _count: { _all: true },
+    }),
+    // Top jobs by application count
+    prisma.job.findMany({
+      where: { companyId },
+      orderBy: { applications: { _count: "desc" } },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        createdAt: true,
+        _count: { select: { applications: true } },
+        skills: true,
+        requiredSkills: {
+          select: {
+            must: true,
+            weight: true,
+            term: { select: { id: true, label: true, aliases: true } },
+          },
+        },
+        applications: {
+          take: 50,
+          select: {
+            candidate: {
+              select: {
+                candidateSkills: {
+                  select: {
+                    level: true,
+                    term: { select: { id: true, label: true, aliases: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    }),
+    // Recent applications
+    prisma.application.findMany({
+      where: { job: { companyId } },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+      include: {
+        job: {
+          select: {
+            id: true,
+            title: true,
+            company: { select: { name: true } },
+          },
+        },
+        candidate: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+      },
+    }),
+    // Recent activity
+    prisma.application.findMany({
+      where: { job: { companyId } },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        job: { select: { title: true } },
+        candidate: { select: { name: true } },
+      },
+    }),
+  ]);
 
-  const funnelRaw = await prisma.application.groupBy({
-    by: ["recruiterInterest"],
-    where: { job: { companyId } },
-    _count: { _all: true },
-  });
-
+  // Process funnel data
   const funnel = {
     REVIEW: 0,
     MAYBE: 0,
@@ -128,42 +211,7 @@ export default async function OverviewPage() {
 
   const funnelTotal = Object.values(funnel).reduce((a, b) => a + b, 0);
 
-  const topJobsRaw = await prisma.job.findMany({
-    where: { companyId },
-    orderBy: { applications: { _count: "desc" } },
-    take: 5,
-    select: {
-      id: true,
-      title: true,
-      status: true,
-      createdAt: true,
-      _count: { select: { applications: true } },
-      skills: true,
-      requiredSkills: {
-        select: {
-          must: true,
-          weight: true,
-          term: { select: { id: true, label: true, aliases: true } },
-        },
-      },
-      applications: {
-        take: 50,
-        select: {
-          candidate: {
-            select: {
-              candidateSkills: {
-                select: {
-                  level: true,
-                  term: { select: { id: true, label: true, aliases: true } },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
+  // Process top jobs with match scores
   const topJobs = topJobsRaw.map((job) => {
     const jobSkills: JobSkillInput[] = buildJobSkillInputs(
       job.requiredSkills,
@@ -193,42 +241,6 @@ export default async function OverviewPage() {
       avgMatch,
       createdAt: job.createdAt,
     };
-  });
-
-  const recent = await prisma.application.findMany({
-    where: { job: { companyId } },
-    orderBy: { createdAt: "desc" },
-    take: 8,
-    include: {
-      job: {
-        select: {
-          id: true,
-          title: true,
-          company: { select: { name: true } },
-        },
-      },
-      candidate: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-    },
-  });
-
-  const recentActivity = await prisma.application.findMany({
-    where: { job: { companyId } },
-    orderBy: { updatedAt: "desc" },
-    take: 5,
-    select: {
-      id: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      job: { select: { title: true } },
-      candidate: { select: { name: true } },
-    },
   });
 
   const emailUnverified = !dbUser?.emailVerified;
