@@ -6,12 +6,24 @@
    Base / Reset
    =============================== */
 
-/* Fuente global (usa la variable de Inter que inyecta layout.tsx) */
+/* ✅ Fuente global optimizada (usa la variable de Inter que inyecta layout.tsx) */
 html {
   font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
     sans-serif;
   scroll-behavior: smooth;
+
+  /* ✅ Font Optimization */
+  /* Enable font ligatures and kerning for better typography */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Prevent bold synthesis and italic synthesis if font has variants */
+  font-synthesis: none;
+
+  /* Enable OpenType features: ligatures, kerning */
+  font-feature-settings: "kern" 1, "liga" 1;
+  text-rendering: optimizeLegibility;
 }
 
 /* Reset base */

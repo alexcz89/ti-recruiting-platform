@@ -8,7 +8,15 @@ import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+// ✅ Font Optimization: Use variable font with display swap
+// - display: 'swap' prevents invisible text while font loads (FOIT → FOUT)
+// - Variable font reduces payload vs multiple weights
+// - Weights: 400 (normal), 500 (medium), 600 (semibold), 700 (bold)
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap", // Prevents font flash while loading
+  variable: "--font-inter", // CSS variable for usage
+});
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
 
