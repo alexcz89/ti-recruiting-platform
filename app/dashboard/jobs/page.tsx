@@ -84,7 +84,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const win = DATE_WINDOWS.find(w => w.value === sp.date);
   if (win?.days) createdAtGte = new Date(Date.now() - win.days * 86400000);
 
-  // ── Métricas
+  // ── Métricas: Get all jobs
   const allJobs = await prisma.job.findMany({
     where: { companyId },
     select: { id: true, status: true, title: true, location: true, remote: true },
@@ -94,12 +94,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   const pausedCount = allJobs.filter(j => j.status === "PAUSED").length;
   const closedCount = allJobs.filter(j => j.status === "CLOSED").length;
 
-  const totalApplications = allJobIds.length
-    ? await prisma.application.count({ where: { jobId: { in: allJobIds } } }) : 0;
-  const totalPending = allJobIds.length
-    ? await prisma.application.count({ where: { jobId: { in: allJobIds }, status: "SUBMITTED" } }) : 0;
-
-  // ── Listado filtrado
+  // ── Build filter where clause
   const where: any = { companyId };
   if (sp.status && sp.status !== "ALL") where.status = sp.status;
   if (sp.title)    where.title    = { contains: sp.title, mode: "insensitive" };
@@ -109,17 +104,30 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   }
   if (createdAtGte) where.createdAt = { gte: createdAtGte };
 
-  let jobs = await prisma.job.findMany({
-    where,
-    orderBy: { updatedAt: "desc" },
-    select: {
-      id: true, title: true, location: true, remote: true,
-      createdAt: true, status: true,
-      _count: { select: { applications: true } },
-      assessments: { select: { templateId: true, template: { select: { title: true } } } },
-    },
-  });
+  // ── Batch queries in parallel
+  const [totalApplications, totalPending, jobs] = await Promise.all([
+    // Count total applications across all company jobs
+    allJobIds.length
+      ? prisma.application.count({ where: { jobId: { in: allJobIds } } })
+      : Promise.resolve(0),
+    // Count pending applications across all company jobs
+    allJobIds.length
+      ? prisma.application.count({ where: { jobId: { in: allJobIds }, status: "SUBMITTED" } })
+      : Promise.resolve(0),
+    // Get filtered jobs list
+    prisma.job.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      select: {
+        id: true, title: true, location: true, remote: true,
+        createdAt: true, status: true,
+        _count: { select: { applications: true } },
+        assessments: { select: { templateId: true, template: { select: { title: true } } } },
+      },
+    }),
+  ]);
 
+  // Get pending counts per job
   const byJobPending = await prisma.application.groupBy({
     by: ["jobId"],
     where: { jobId: { in: jobs.map(j => j.id) }, status: "SUBMITTED" },
