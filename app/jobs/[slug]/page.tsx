@@ -229,7 +229,13 @@ export default async function JobDetail({ params }: Params) {
       createdAt: true,
       updatedAt: true,
       companyId: true,
-      company: { select: { name: true } },
+      company: {
+        select: {
+          id: true,
+          name: true,
+          logoUrl: true,
+        },
+      },
       status: true,
     },
   });
@@ -355,6 +361,12 @@ export default async function JobDetail({ params }: Params) {
     });
   }
 
+  // ✅ Rich Snippets: Skills requeridos (Schema.org)
+  const skillsArray = job.requiredSkills
+    .filter((s) => s.term)
+    .slice(0, 10) // Máximo 10 skills para no saturar
+    .map((s) => s.term.label);
+
   const jsonLd: any = {
     "@context": "https://schema.org",
     "@type": "JobPosting",
@@ -364,11 +376,17 @@ export default async function JobDetail({ params }: Params) {
     datePosted: datePosted.toISOString(),
     validThrough: validThrough.toISOString(),
     employmentType: job.employmentType || "FULL_TIME",
+
     hiringOrganization: {
       "@type": "Organization",
       name: job.company?.name ?? "Empresa confidencial",
       sameAs: `${APP_URL}`,
+      // ✅ Logo de la empresa (importante para Rich Snippets)
+      ...(job.company?.logoUrl && {
+        logo: job.company.logoUrl,
+      }),
     },
+
     jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
 
     // ✅ Ubicaciones del trabajo
@@ -386,6 +404,19 @@ export default async function JobDetail({ params }: Params) {
       },
     },
 
+    // ✅ Skills requeridos (Rich Snippets)
+    ...(skillsArray.length > 0 && {
+      skills: skillsArray,
+    }),
+
+    // ✅ Experience level (Junior, Mid, Senior)
+    ...(job.seniority && {
+      experienceRequirements: {
+        "@type": "OccupationalExperienceRequirements",
+        monthsOfExperience: (job.minYearsExperience ?? 0) * 12,
+      },
+    }),
+
     // ✅ ID único del job posting
     identifier: {
       "@type": "PropertyValue",
@@ -397,12 +428,45 @@ export default async function JobDetail({ params }: Params) {
   const canApply = !isRecruiterOrAdmin;
   const hasJobSignalsForAnon = hasJobMatchSignals;
 
+  // ✅ Breadcrumb Schema para navegación estructurada
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: APP_URL,
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Vacantes",
+        item: `${APP_URL}/jobs`,
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: job.title,
+        item: jobUrl,
+      },
+    ],
+  };
+
   return (
     <>
       <main className="mx-auto max-w-[1100px] space-y-6 px-6 py-8 lg:px-10 xl:max-w-[1200px]">
+      {/* ✅ JobPosting Schema */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+
+      {/* ✅ Breadcrumb Schema */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
       />
 
       {isCandidate && candidateMatchResult && (
