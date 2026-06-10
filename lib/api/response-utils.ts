@@ -25,7 +25,7 @@ export function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
     if (Array.isArray(value)) {
       // Keep arrays only if not empty
       if (value.length > 0) {
-        cleaned[key] = value.map((item) =>
+        cleaned[key] = value.map((item: any) =>
           typeof item === "object" ? cleanObject(item) : item
         );
       }
@@ -46,26 +46,23 @@ export function cleanObject<T extends Record<string, any>>(obj: T): Partial<T> {
 /**
  * Create optimized JSON response with compression headers
  */
-export function jsonResponse<T>(
-  data: T,
+export function jsonResponse(
+  data: any,
   options: {
     status?: number;
     maxAge?: number;
     sMaxAge?: number;
-    clean?: boolean;
     version?: string;
   } = {}
-): NextResponse<T> {
+): NextResponse {
   const {
     status = 200,
     maxAge = 60,
     sMaxAge = 3600,
-    clean = true,
     version = "1",
   } = options;
 
-  const body = clean ? cleanObject(data as any) : data;
-
+  const body = cleanObject(data);
   const response = NextResponse.json(body, { status });
 
   // Set cache headers
@@ -78,7 +75,6 @@ export function jsonResponse<T>(
 
   // Compression headers
   response.headers.set("Vary", "Accept-Encoding");
-  response.headers.set("Content-Encoding", "gzip");
 
   // API versioning header
   response.headers.set("X-API-Version", version);
@@ -92,33 +88,31 @@ export function jsonResponse<T>(
 /**
  * Create response for frequently accessed data (use aggressive caching)
  */
-export function cachedJsonResponse<T>(
-  data: T,
+export function cachedJsonResponse(
+  data: any,
   cacheSeconds: number = 3600
-): NextResponse<T> {
+): NextResponse {
   return jsonResponse(data, {
     maxAge: Math.min(60, cacheSeconds), // Client: min 1 min
     sMaxAge: cacheSeconds, // CDN: configurable
-    clean: true,
   });
 }
 
 /**
  * Create response for real-time data (minimal caching)
  */
-export function realtimeJsonResponse<T>(data: T): NextResponse<T> {
+export function realtimeJsonResponse(data: any): NextResponse {
   return jsonResponse(data, {
     maxAge: 0, // No client cache
     sMaxAge: 10, // Only CDN cache 10 sec
-    clean: true,
   });
 }
 
 /**
  * Format list response with pagination
  */
-export function listResponse<T>(
-  items: T[],
+export function listResponse(
+  items: any[],
   pagination: {
     total: number;
     page: number;
@@ -126,9 +120,9 @@ export function listResponse<T>(
     cursor?: string | null;
   },
   cacheSeconds: number = 300
-) {
+): NextResponse {
   const response = {
-    items: items.map((item) => cleanObject(item as any)),
+    items: items.map((item) => cleanObject(item)),
     pagination: {
       total: pagination.total,
       page: pagination.page,
