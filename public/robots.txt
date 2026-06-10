@@ -1,0 +1,44 @@
+# ✅ TaskIO Robots.txt - Optimizado para SEO
+# Este archivo controla qué motores de búsqueda pueden rastrear
+
+# Reglas generales para todos los bots
+User-agent: *
+
+# ✅ PERMITIR: Rastrear vacantes, página principal, perfil de candidato
+Allow: /
+Allow: /jobs/
+Allow: /profile/
+Allow: /auth/signup/
+
+# ❌ NO RASTREAR: Áreas privadas
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /auth/signin
+Disallow: /auth/verify/
+Disallow: /onboarding/
+Disallow: /_next/
+Disallow: /static/
+
+# ✅ Velocidad de rastreo
+Crawl-delay: 1
+
+# Google específicamente
+User-agent: Googlebot
+Allow: /
+
+# Bing
+User-agent: Bingbot
+Allow: /
+
+# LinkedIn
+User-agent: LinkedInBot
+Allow: /jobs/
+
+# Indeed
+User-agent: Slurp
+Allow: /jobs/
+
+# ✅ SITEMAP - Donde están todas las vacantes y páginas
+Sitemap: https://www.taskio.com.mx/sitemap.xml
+Sitemap: https://www.taskio.com.mx/sitemap-jobs.xml

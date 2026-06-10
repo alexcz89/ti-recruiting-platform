@@ -321,34 +321,75 @@ export default async function JobDetail({ params }: Params) {
     updatedAt: job.updatedAt,
   };
 
-  const jsonLd = {
+  // ✅ Schema.org JobPosting optimizado para Google for Jobs
+  const canonicalPath = job.slug ?? job.id;
+  const jobUrl = `${APP_URL}/jobs/${canonicalPath}`;
+
+  // Calcular fecha de expiración (30 días desde creación)
+  const datePosted = job.createdAt ?? new Date();
+  const validThrough = new Date(datePosted);
+  validThrough.setDate(validThrough.getDate() + 30);
+
+  // Construir jobLocation array
+  const jobLocationArray = [];
+  if (job.remote) {
+    // Remote jobs también pueden tener una ubicación base
+    if (job.city) {
+      jobLocationArray.push({
+        "@type": "Place",
+        address: {
+          "@type": "PostalAddress",
+          addressLocality: job.city,
+          addressCountry: "MX",
+        },
+      });
+    }
+  } else if (job.city) {
+    jobLocationArray.push({
+      "@type": "Place",
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: job.city,
+        addressCountry: "MX",
+      },
+    });
+  }
+
+  const jsonLd: any = {
     "@context": "https://schema.org",
     "@type": "JobPosting",
     title: job.title,
+    description: stripHtml(job.descriptionHtml || job.description || ""),
+    url: jobUrl,
+    datePosted: datePosted.toISOString(),
+    validThrough: validThrough.toISOString(),
+    employmentType: job.employmentType || "FULL_TIME",
     hiringOrganization: {
       "@type": "Organization",
       name: job.company?.name ?? "Empresa confidencial",
+      sameAs: `${APP_URL}`,
     },
     jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
-    jobLocation: job.remote
-      ? undefined
-      : [
-          {
-            "@type": "Place",
-            address: {
-              "@type": "PostalAddress",
-              addressLocality: job.location || "México",
-              addressCountry: "MX",
-            },
-          },
-        ],
-    description:
-      job.descriptionHtml || (job.description || "").replace(/\n/g, "<br/>"),
-    datePosted: job.createdAt?.toISOString?.() ?? new Date().toISOString(),
-    employmentType: job.employmentType,
+
+    // ✅ Ubicaciones del trabajo
+    ...(jobLocationArray.length > 0 && {
+      jobLocation: jobLocationArray,
+    }),
+
+    // ✅ Salario (importante para Google for Jobs)
+    ...(job.salaryMin || job.salaryMax) && {
+      baseSalary: {
+        "@type": "PriceSpecification",
+        currency: job.currency || "MXN",
+        ...(job.salaryMin && { minValue: job.salaryMin }),
+        ...(job.salaryMax && { maxValue: job.salaryMax }),
+      },
+    },
+
+    // ✅ ID único del job posting
     identifier: {
       "@type": "PropertyValue",
-      name: job.company?.name ?? "Confidencial",
+      name: "TaskIO Job ID",
       value: job.id,
     },
   };
