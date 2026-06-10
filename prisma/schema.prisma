@@ -1199,6 +1199,19 @@ enum NotificationType {
   SUBSCRIPTION_EXPIRING
 }
 
+// ✅ Rate limiting para email verification requests
+model EmailVerificationRateLimit {
+  id        String   @id @default(cuid())
+  email     String   @db.VarChar(190)
+  ip        String?  @db.VarChar(45)
+  count     Int      @default(1)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+
+  @@unique([email])
+  @@index([resetAt])
+}
+
 enum NotificationChannel {
   IN_APP
   EMAIL

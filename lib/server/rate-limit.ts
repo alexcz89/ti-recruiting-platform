@@ -56,6 +56,11 @@ export const RATE_LIMITS = {
     maxAttempts: 10,
     windowMs: 60 * 60 * 1000, // 1 hora
   },
+  // ✅ Límite para reenvío de email de verificación
+  EMAIL_VERIFICATION_RESEND: {
+    maxAttempts: 5,
+    windowMs: 60 * 60 * 1000, // 1 hora - máximo 5 reenvíos por hora
+  },
   // Puedes agregar más límites aquí para otros endpoints
   GENERAL_EMAIL: {
     maxAttempts: 5,

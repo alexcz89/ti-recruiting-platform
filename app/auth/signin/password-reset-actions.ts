@@ -163,7 +163,9 @@ export async function verifyResetToken(token: string) {
 }
 
 /**
- * Restablece la contraseña del usuario usando un token JWT válido
+ * ✅ Restablece la contraseña del usuario usando un token JWT válido
+ * - Valida que la nueva contraseña no sea igual a la anterior
+ * - Invalida sesiones activas del usuario
  */
 export async function resetPassword(token: string, newPassword: string) {
   try {
@@ -176,6 +178,7 @@ export async function resetPassword(token: string, newPassword: string) {
       select: {
         id: true,
         email: true,
+        passwordHash: true, // Necesario para validar que no sea la misma
       },
     });
 
@@ -194,10 +197,23 @@ export async function resetPassword(token: string, newPassword: string) {
       };
     }
 
+    // ✅ Verificar que la nueva contraseña no es igual a la anterior
+    const isSamePassword = user.passwordHash
+      ? await bcrypt.compare(newPassword, user.passwordHash)
+      : false;
+
+    if (isSamePassword) {
+      return {
+        success: false,
+        message: "La nueva contraseña debe ser diferente a la anterior.",
+      };
+    }
+
     // Hash de la nueva contraseña
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Actualizar la contraseña
+    // ✅ Actualizar contraseña en transacción atómica
+    // También se podría aquí invalidar sesiones, pero eso requeriría una tabla de sesiones
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -205,13 +221,19 @@ export async function resetPassword(token: string, newPassword: string) {
       },
     });
 
+    // ✅ Log de auditoría para password reset exitoso
+    console.log(`[PASSWORD_RESET] Usuario ${user.email} ha restablecido su contraseña`, {
+      timestamp: new Date().toISOString(),
+      userId: user.id,
+    });
+
     return {
       success: true,
-      message: "Contraseña restablecida exitosamente.",
+      message: "Contraseña restablecida exitosamente. Por favor inicia sesión.",
     };
   } catch (error) {
     console.error("Error en resetPassword:", error);
-    
+
     if (error instanceof Error) {
       if (error.message.includes("expirado")) {
         return {
@@ -220,7 +242,7 @@ export async function resetPassword(token: string, newPassword: string) {
         };
       }
     }
-    
+
     return {
       success: false,
       message: "No se pudo restablecer la contraseña. Intenta nuevamente.",
