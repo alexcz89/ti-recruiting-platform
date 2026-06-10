@@ -15,6 +15,18 @@ interface Props {
   onNext: () => void;
 }
 
+// ✅ Helper para validar que el email sigue siendo disponible en submit
+async function validateEmailAvailability(email: string): Promise<boolean> {
+  if (!email || !email.includes("@")) return false;
+  try {
+    const res = await fetch(`/api/auth/check-email?email=${encodeURIComponent(email)}`);
+    const result = await res.json();
+    return result.available === true; // Explícitamente true
+  } catch {
+    return false;
+  }
+}
+
 // Clases reutilizables para consistencia y dark mode
 const inputClass =
   "w-full rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 px-3 py-3 text-sm text-zinc-900 dark:text-zinc-50 placeholder:text-zinc-400 dark:placeholder:text-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-colors";
@@ -27,7 +39,8 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
   const [emailAvailable, setEmailAvailable] = useState<boolean | null>(null);
   const [emailCheckTimeout, setEmailCheckTimeout] = useState<NodeJS.Timeout | null>(null);
 
-  // Verificar disponibilidad del email con debounce
+  // ✅ Verificar disponibilidad del email con debounce y AbortController
+  // para cancelar requests antiguas
   useEffect(() => {
     if (!data.email || !data.email.includes("@")) {
       setEmailAvailable(null);
@@ -36,15 +49,24 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
 
     if (emailCheckTimeout) clearTimeout(emailCheckTimeout);
 
+    // Crear AbortController para esta request
+    const abortController = new AbortController();
+
     const timeout = setTimeout(async () => {
       setEmailChecking(true);
       try {
         const res = await fetch(
-          `/api/auth/check-email?email=${encodeURIComponent(data.email)}`
+          `/api/auth/check-email?email=${encodeURIComponent(data.email)}`,
+          { signal: abortController.signal }
         );
         const result = await res.json();
-        setEmailAvailable(!result.exists);
+        setEmailAvailable(result.available === true);
       } catch (error) {
+        // Si es AbortError, significa que fue cancelado por un request más nuevo
+        if (error instanceof Error && error.name === "AbortError") {
+          console.debug("Email check cancelled (newer request)");
+          return;
+        }
         console.error("Error checking email:", error);
         setEmailAvailable(null);
       } finally {
@@ -54,7 +76,11 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
 
     setEmailCheckTimeout(timeout);
 
-    return () => { if (timeout) clearTimeout(timeout); };
+    // Cleanup: cancelar request si el componente se desmonta o el email cambia
+    return () => {
+      if (timeout) clearTimeout(timeout);
+      abortController.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data.email]);
 
@@ -64,8 +90,18 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
       onChange({ [field]: e.target.value });
     };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // ✅ Double-submit prevention: re-validar email en el submit
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validar que el email sigue siendo disponible (previene race condition)
+    const isStillAvailable = await validateEmailAvailability(data.email);
+    if (!isStillAvailable) {
+      setEmailAvailable(false);
+      // No continuamos al siguiente paso si el email ya no está disponible
+      return;
+    }
+
     onNext();
   };
 

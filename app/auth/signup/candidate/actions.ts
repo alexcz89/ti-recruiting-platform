@@ -84,13 +84,18 @@ type CvDraft = {
   languages?: CvDraftLanguage[];
 };
 
+/**
+ * ✅ Parse "YYYY-MM" format to Date in UTC
+ * Ensures consistent timezone handling across all servers
+ */
 function parseMonthToDate(ym?: string | null): Date | null {
   if (!ym) return null;
   const [y, m] = ym.split("-");
   const yy = Number(y);
   const mm = Number(m);
   if (!yy || !mm) return null;
-  return new Date(yy, mm - 1, 1);
+  // ✅ Use UTC explicitly to avoid timezone issues
+  return new Date(Date.UTC(yy, mm - 1, 1));
 }
 
 function normalize(text: string): string {

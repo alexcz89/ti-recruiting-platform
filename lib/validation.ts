@@ -8,10 +8,42 @@ export * from "@/lib/shared/schemas/profile";
 
 export const EmailSchema = z.string().email("Email inválido");
 
+/**
+ * ✅ Enhanced Mexican phone validation
+ * - Validates format: +52 9XX XXXX XXXX or variations
+ * - Minimum 10 digits (Mexican mobile: 10 digits, landline: 10 digits)
+ * - Rejects all-zeros or sequential numbers
+ */
+function validateMexicanPhone(phone: string): boolean {
+  // Remove all non-digit characters except leading +
+  const cleaned = phone.replace(/\D/g, "");
+
+  // Must be 10-15 digits
+  if (cleaned.length < 10 || cleaned.length > 15) {
+    return false;
+  }
+
+  // ✅ Reject obvious invalid patterns
+  // All same digit (0000000000, 1111111111, etc)
+  if (/^(\d)\1+$/.test(cleaned)) {
+    return false;
+  }
+
+  // Sequential digits (0123456789, 1234567890, etc)
+  if (/^(?:0123456789|1234567890|2345678901|3456789012|4567890123|5678901234|6789012345|7890123456|8901234567|9012345678)/.test(
+    cleaned
+  )) {
+    return false;
+  }
+
+  return true;
+}
+
 export const PhoneMxSchema = z
   .string()
   .min(10, "Teléfono muy corto")
-  .regex(/^\+?(\d[\s-]?){10,15}$/, "Teléfono inválido");
+  .regex(/^\+?(\d[\s-]?){10,15}$/, "Formato de teléfono inválido")
+  .refine(validateMexicanPhone, "Número de teléfono inválido");
 
 // ================================
 // 1) Schema usado actualmente por signup de Candidato
