@@ -1,5 +1,6 @@
 // app/page.tsx
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
@@ -653,18 +654,18 @@ export default async function Home() {
                 </div>
               </div>
 
-              {/* CV Builder screenshot real */}
+              {/* CV Builder screenshot real — ✅ Optimized with Next.js Image */}
               <div className="relative hidden lg:block">
                 <div className="absolute inset-0 rounded-2xl bg-black/20 blur-2xl translate-y-4" />
                 <div className="relative overflow-hidden rounded-2xl border border-white/20 shadow-2xl">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src="/screenshots/cv-builder.png"
-                    alt="CV Builder de Taskio"
+                    alt="CV Builder de Taskio - Constructor de currículum profesional"
                     width={760}
                     height={248}
+                    quality={85}
+                    priority={false}
                     className="w-full h-auto block"
-                    loading="lazy"
                   />
                   <div className="absolute -right-3 -top-3 flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 shadow-lg">
                     <CheckCircle className="h-5 w-5 text-white" />
