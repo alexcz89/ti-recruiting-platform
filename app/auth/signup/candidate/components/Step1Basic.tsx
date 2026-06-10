@@ -124,6 +124,7 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
           type="text"
           value={data.firstName}
           onChange={handleChange("firstName")}
+          maxLength={50}
           className={inputClass}
           placeholder="Tu nombre"
           autoComplete="given-name"
@@ -142,6 +143,7 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
             type="text"
             value={data.lastName}
             onChange={handleChange("lastName")}
+            maxLength={50}
             className={inputClass}
             placeholder="Ap. paterno"
             autoComplete="family-name"
@@ -157,6 +159,7 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
             type="text"
             value={data.maternalSurname}
             onChange={handleChange("maternalSurname")}
+            maxLength={50}
             className={inputClass}
             placeholder="Ap. materno"
             autoComplete="additional-name"

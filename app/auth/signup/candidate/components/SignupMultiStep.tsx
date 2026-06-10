@@ -75,6 +75,41 @@ function GoogleIcon() {
 }
 
 // ============================================
+// HELPERS - Mejora de mensajes de error
+// ============================================
+
+/**
+ * ✅ Fix #23: Mapea errores específicos a mensajes claros
+ * Usuarios saben exactamente qué cambiar
+ */
+function getErrorMessage(error: string | undefined): string {
+  const errorLower = (error || "").toLowerCase();
+
+  // Errores comunes con mensajes claros
+  if (errorLower.includes("email") && errorLower.includes("existe")) {
+    return "Este email ya está registrado. Intenta iniciar sesión o usa otro email.";
+  }
+  if (errorLower.includes("password")) {
+    return "La contraseña no cumple con los requisitos. Debe tener mayúscula, minúscula, número y símbolo.";
+  }
+  if (errorLower.includes("ubicación")) {
+    return "Debes seleccionar una ubicación válida de la lista.";
+  }
+  if (errorLower.includes("teléfono")) {
+    return "El teléfono no tiene un formato válido. Usa formato mexicano (+52 o 10 dígitos).";
+  }
+  if (errorLower.includes("email inválido")) {
+    return "El email no tiene un formato válido. Usa algo como: usuario@empresa.com";
+  }
+  if (errorLower.includes("linkedin") || errorLower.includes("github")) {
+    return "La URL de LinkedIn o GitHub no es válida. Verifica que sea de linkedin.com o github.com";
+  }
+
+  // Fallback: mostrar el error del servidor si existe, sino genérico
+  return error || "No se pudo crear la cuenta. Intenta de nuevo.";
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 
@@ -221,7 +256,8 @@ export default function SignupMultiStep({
       const result = await createCandidateImproved(payload, cvDraft);
 
       if (!result?.ok) {
-        toastError(result?.error || "Error al crear la cuenta");
+        // ✅ Fix #23: Usar mensajes de error específicos
+        toastError(getErrorMessage(result?.error));
         return;
       }
 
@@ -251,7 +287,9 @@ export default function SignupMultiStep({
       if (err instanceof z.ZodError) {
         toastError(err.errors[0]?.message || "Datos inválidos");
       } else {
-        toastError("Error al crear la cuenta");
+        // ✅ Fix #23: Mostrar mensajes específicos incluso en errores inesperados
+        const errMsg = err instanceof Error ? err.message : "Error desconocido";
+        toastError(getErrorMessage(errMsg));
       }
     } finally {
       setIsSubmitting(false);

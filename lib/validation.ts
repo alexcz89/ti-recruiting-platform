@@ -45,6 +45,26 @@ export const PhoneMxSchema = z
   .regex(/^\+?(\d[\s-]?){10,15}$/, "Formato de teléfono inválido")
   .refine(validateMexicanPhone, "Número de teléfono inválido");
 
+/**
+ * ✅ Fix #20: Input Sanitization - Previene XSS
+ * Rechaza intentos de inyectar scripts o HTML peligroso
+ */
+function sanitizeInput(input: string): boolean {
+  // Rechaza caracteres peligrosos
+  const dangerousPatterns = [
+    /<script/i,           // <script>
+    /javascript:/i,       // javascript:
+    /on\w+=/i,           // onclick=, onload=, etc
+    /<iframe/i,          // <iframe>
+    /<embed/i,           // <embed>
+    /<object/i,          // <object>
+    /eval\(/i,           // eval(
+    /expression\(/i,     // expression(
+  ];
+
+  return !dangerousPatterns.some(pattern => pattern.test(input));
+}
+
 // ================================
 // 1) Schema usado actualmente por signup de Candidato
 // ✅ MANTENER (usado por CV Builder)
@@ -182,6 +202,7 @@ export const SignupStep1Schema = z.object({
       /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/,
       'El nombre solo puede contener letras, espacios, guiones y apóstrofes'
     )
+    .refine(sanitizeInput, 'El nombre contiene caracteres no permitidos')
     .transform(str => str.trim()),
 
   lastName: z.string()
@@ -191,6 +212,7 @@ export const SignupStep1Schema = z.object({
       /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]+$/,
       'El apellido solo puede contener letras'
     )
+    .refine(sanitizeInput, 'El apellido contiene caracteres no permitidos')
     .transform(str => str.trim()),
 
   maternalSurname: z.string()
@@ -199,6 +221,7 @@ export const SignupStep1Schema = z.object({
       /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s'-]*$/,
       'Solo puede contener letras'
     )
+    .refine(sanitizeInput, 'El apellido materno contiene caracteres no permitidos')
     .transform(str => str.trim())
     .optional()
     .or(z.literal('')),
@@ -282,15 +305,17 @@ export const SignupStep3Schema = z.object({
   location: z.string()
     .min(3, 'La ubicación debe tener al menos 3 caracteres')
     .max(200)
+    .refine(sanitizeInput, 'La ubicación contiene caracteres no permitidos')
     .optional()
     .or(z.literal('')),
-    
+
   locationLat: z.number().optional(),
   locationLng: z.number().optional(),
   placeId: z.string().optional(),
 
   linkedin: z.string()
     .url('URL inválida')
+    .refine(sanitizeInput, 'URL contiene caracteres no permitidos')
     .refine(
       (url) => {
         try {
@@ -307,6 +332,7 @@ export const SignupStep3Schema = z.object({
 
   github: z.string()
     .url('URL inválida')
+    .refine(sanitizeInput, 'URL contiene caracteres no permitidos')
     .refine(
       (url) => {
         try {
