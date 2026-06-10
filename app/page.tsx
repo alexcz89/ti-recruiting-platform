@@ -1,5 +1,6 @@
 // app/page.tsx
-import dynamic from "next/dynamic";
+// ✅ Rename dynamic import to avoid conflict with export const dynamic
+import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -8,7 +9,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 
 // ✅ Lazy load below-fold components for better FCP
-const TechMarquee = dynamic(
+const TechMarquee = dynamicImport(
   () => import("@/components/landing/TechMarquee"),
   {
     loading: () => (
@@ -17,7 +18,7 @@ const TechMarquee = dynamic(
   }
 );
 
-const PricingSection = dynamic(
+const PricingSection = dynamicImport(
   () => import("@/components/marketing/PricingSection"),
   {
     loading: () => (
@@ -26,7 +27,7 @@ const PricingSection = dynamic(
   }
 );
 
-const Footer = dynamic(() => import("@/components/Footer"), {
+const Footer = dynamicImport(() => import("@/components/Footer"), {
   loading: () => null,
 });
 import {

@@ -1,5 +1,6 @@
 // app/jobs/[slug]/page.tsx
-import dynamic from "next/dynamic";
+// ✅ Rename dynamic import to avoid conflict with export const dynamic
+import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
 import { prisma } from "@/lib/server/prisma";
 import { notFound, redirect } from "next/navigation";
@@ -18,7 +19,7 @@ import {
 import type { Metadata } from "next";
 
 // ✅ Lazy load components below-fold for better FCP/LCP
-const CandidateMatchCard = dynamic(
+const CandidateMatchCard = dynamicImport(
   () => import("@/components/jobs/CandidateMatchCard"),
   {
     loading: () => (
@@ -28,7 +29,7 @@ const CandidateMatchCard = dynamic(
   }
 );
 
-const Footer = dynamic(() => import("@/components/Footer"), {
+const Footer = dynamicImport(() => import("@/components/Footer"), {
   loading: () => null, // Footer doesn't need a skeleton
 });
 
