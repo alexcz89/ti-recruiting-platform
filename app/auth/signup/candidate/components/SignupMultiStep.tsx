@@ -1,7 +1,7 @@
 // app/auth/signup/candidate/components/SignupMultiStep.tsx
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { signIn } from "next-auth/react";
@@ -21,6 +21,10 @@ import ProgressBar from "./ProgressBar";
 import Step1Basic from "./Step1Basic";
 import Step2Security from "./Step2Security";
 import Step3Professional from "./Step3Professional";
+
+// ✅ Storage keys para resume capability
+const SIGNUP_STORAGE_KEY = "signup_multi_step_data_v1";
+const SIGNUP_STEP_KEY = "signup_current_step_v1";
 
 // ============================================
 // TIPOS
@@ -108,6 +112,38 @@ export default function SignupMultiStep({
   const updateForm = useCallback((updates: Partial<FormData>) => {
     setFormData((prev) => ({ ...prev, ...updates }));
   }, []);
+
+  // ✅ Cargar datos guardados al montar (resume capability)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedData = localStorage.getItem(SIGNUP_STORAGE_KEY);
+      const savedStep = localStorage.getItem(SIGNUP_STEP_KEY);
+
+      if (savedData) {
+        try {
+          const parsed = JSON.parse(savedData) as FormData;
+          setFormData((prev) => ({ ...prev, ...parsed }));
+        } catch {
+          // Invalid JSON, ignore
+        }
+      }
+
+      if (savedStep) {
+        const step = parseInt(savedStep, 10);
+        if (step >= 1 && step <= 3) {
+          setCurrentStep(step as Step);
+        }
+      }
+    }
+  }, []);
+
+  // ✅ Guardar datos en localStorage cuando cambien (resume capability)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(SIGNUP_STORAGE_KEY, JSON.stringify(formData));
+      localStorage.setItem(SIGNUP_STEP_KEY, String(currentStep));
+    }
+  }, [formData, currentStep]);
 
   // ── Google OAuth ──────────────────────────────────────────
   const handleGoogleSignIn = async () => {
@@ -199,8 +235,13 @@ export default function SignupMultiStep({
         try { window.localStorage.removeItem("cv_builder_draft_v1"); } catch {}
       }
 
+      // ✅ Limpiar datos de signup guardados (resume data)
       if (typeof window !== "undefined") {
-        try { window.sessionStorage.setItem("verification_email", formData.email); } catch {}
+        try {
+          window.localStorage.removeItem(SIGNUP_STORAGE_KEY);
+          window.localStorage.removeItem(SIGNUP_STEP_KEY);
+          window.sessionStorage.setItem("verification_email", formData.email);
+        } catch {}
       }
 
       router.push(
