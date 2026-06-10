@@ -17,6 +17,13 @@ import {
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import type { Metadata } from "next";
+import {
+  generateJobKeywords,
+  generateJobMetaDescription,
+  generateJobTitle,
+  getCanonicalUrl,
+} from "@/lib/seo/keywords";
+import { generateJobPostingSchema, generateBreadcrumbSchema } from "@/lib/seo/schema";
 
 // ✅ Lazy load components below-fold for better FCP/LCP
 const CandidateMatchCard = dynamicImport(
@@ -142,32 +149,37 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       description: true,
       descriptionHtml: true,
       city: true,
+      admin1: true,
       employmentType: true,
       salaryMin: true,
       salaryMax: true,
+      showSalary: true,
       currency: true,
       updatedAt: true,
+      createdAt: true,
+      remote: true,
+      skills: true,
+      seniority: true,
       company: { select: { name: true } },
     },
   });
 
   if (!job) return {};
 
-  const companyName = job.company?.name ?? null;
-  const locationPart = job.city ? ` | ${job.city}` : "";
-  const title = companyName
-    ? `${job.title} — ${companyName}${locationPart} | TaskIO`
-    : `${job.title}${locationPart} | TaskIO`;
-  const description = buildDescription(job);
+  // ✅ Use SEO-optimized functions
+  const title = generateJobTitle(job);
+  const description = generateJobMetaDescription(job);
+  const keywords = generateJobKeywords(job);
 
   // ✅ Canonical apunta siempre al slug (o al ID si no tiene slug aún)
   const canonicalPath = job.slug ?? job.id;
-  const url = `${APP_URL}/jobs/${canonicalPath}`;
+  const url = getCanonicalUrl(`/jobs/${canonicalPath}`);
   const ogImage = `${APP_URL}/api/og/job?jobId=${job.id}&v=${job.updatedAt.getTime()}`;
 
   return {
     title,
     description,
+    keywords,
     alternates: { canonical: url },
     openGraph: {
       title,
@@ -176,13 +188,23 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       siteName: SITE_NAME,
       locale: "es_MX",
       type: "website",
-      images: [{ url: ogImage, width: 630, height: 630, alt: title }],
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: job.title,
+          type: "image/png",
+        },
+      ],
     },
     twitter: {
-      card: "summary",
+      card: "summary_large_image",
       title,
       description,
       images: [ogImage],
+      creator: "@taskio_mx",
+      site: "@taskio_mx",
     },
   };
 }

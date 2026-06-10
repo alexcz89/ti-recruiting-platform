@@ -7,6 +7,7 @@ import { Inter } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider";
+import { generateOrganizationSchema, generateWebsiteSchema } from "@/lib/seo/schema";
 
 // ✅ Font Optimization: Use variable font with display swap
 // - display: 'swap' prevents invisible text while font loads (FOIT → FOUT)
@@ -40,11 +41,26 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const orgSchema = generateOrganizationSchema();
+  const websiteSchema = generateWebsiteSchema();
+
   return (
     <html lang="es" suppressHydrationWarning className={`${inter.className} h-full`}>
       <head>
         <ThemeScript />
         <meta name="apple-mobile-web-app-title" content="TaskIO" />
+
+        {/* ✅ Organization Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(orgSchema) }}
+        />
+
+        {/* ✅ Website Schema with Search Action */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+        />
       </head>
 
       <body className="min-h-screen antialiased bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
