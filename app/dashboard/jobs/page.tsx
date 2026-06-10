@@ -105,7 +105,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   if (createdAtGte) where.createdAt = { gte: createdAtGte };
 
   // ── Batch queries in parallel
-  const [totalApplications, totalPending, jobs] = await Promise.all([
+  let [totalApplications, totalPending, jobs] = await Promise.all([
     // Count total applications across all company jobs
     allJobIds.length
       ? prisma.application.count({ where: { jobId: { in: allJobIds } } })
