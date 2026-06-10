@@ -307,6 +307,7 @@ model Job {
   @@index([status])
   @@index([employmentType, status])
   @@index([publishAt])
+  @@index([slug]) // ✅ NEW: Fast slug lookups for job detail page
 }
 
 model Application {
@@ -350,6 +351,7 @@ model Application {
   messages           Message[]
 
   @@unique([candidateId, jobId])
+  @@index([candidateId]) // ✅ NEW: Fast candidate application lookups
   @@index([status, createdAt])
   @@index([status, rejectedAt, rejectionEmailSent])
   @@index([recruiterInterest])
