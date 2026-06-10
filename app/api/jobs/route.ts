@@ -332,7 +332,7 @@ export async function GET(req: NextRequest) {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       select: {
         id: true,
-        slug: true, // ← NUEVO
+        slug: true,
         title: true,
         location: true,
         locationType: true,
@@ -342,7 +342,7 @@ export async function GET(req: NextRequest) {
         remote: true,
         employmentType: true,
         description: true,
-        descriptionHtml: true,
+        // descriptionHtml removed - fetched separately when job is selected
         skills: true,
         salaryMin: true,
         salaryMax: true,
@@ -364,7 +364,7 @@ export async function GET(req: NextRequest) {
 
       return {
         id: j.id,
-        slug: j.slug ?? null, // ← NUEVO
+        slug: j.slug ?? null,
         title: j.title,
         company: j.companyConfidential ? "Confidencial" : companyObj?.name ?? null,
         companyObj,
@@ -378,7 +378,7 @@ export async function GET(req: NextRequest) {
         remote: j.remote,
         employmentType: j.employmentType,
         description: j.description,
-        descriptionHtml: j.descriptionHtml,
+        // descriptionHtml removed from listing - only loaded on detail view
         skills: j.skills,
         salaryMin: j.salaryMin,
         salaryMax: j.salaryMax,
