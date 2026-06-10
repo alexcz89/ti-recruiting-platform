@@ -128,7 +128,7 @@ function checkRateLimit(
  */
 export function checkEmailRateLimit(
   email: string,
-  config = RATE_LIMITS.PASSWORD_RESET_EMAIL
+  config: { readonly maxAttempts: number; readonly windowMs: number } = RATE_LIMITS.PASSWORD_RESET_EMAIL
 ) {
   const key = `email:${email.toLowerCase().trim()}`;
   return checkRateLimit(
