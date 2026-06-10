@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ✅ Accessibility: Focus indicators for keyboard navigation */
+@import "../styles/focus.css";
+
 /* ===============================
    Base / Reset
    =============================== */
