@@ -342,7 +342,7 @@ export async function GET(req: NextRequest) {
         remote: true,
         employmentType: true,
         description: true,
-        // descriptionHtml removed - fetched separately when job is selected
+        descriptionHtml: true,
         skills: true,
         salaryMin: true,
         salaryMax: true,
@@ -378,7 +378,7 @@ export async function GET(req: NextRequest) {
         remote: j.remote,
         employmentType: j.employmentType,
         description: j.description,
-        // descriptionHtml removed from listing - only loaded on detail view
+        descriptionHtml: j.descriptionHtml,
         skills: j.skills,
         salaryMin: j.salaryMin,
         salaryMax: j.salaryMax,
