@@ -24,61 +24,94 @@ const nextConfig = {
   // ✅ HTTP response headers for caching and security
   async headers() {
     return [
+      // ─── API Endpoints: Jobs, Applications, etc
+      {
+        source: "/api/jobs",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=30, s-maxage=300, stale-while-revalidate=3600",
+          },
+          { key: "Vary", value: "Accept-Encoding" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
+      },
+      {
+        source: "/api/applications",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=0, s-maxage=60, must-revalidate",
+          },
+          { key: "Vary", value: "Accept-Encoding" },
+        ],
+      },
       {
         source: "/api/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=60, s-maxage=3600", // 1 min client, 1 hour CDN
+            value: "public, max-age=60, s-maxage=3600, stale-while-revalidate=86400",
           },
-          {
-            key: "Content-Encoding",
-            value: "gzip", // Gzip compression
-          },
+          { key: "Vary", value: "Accept-Encoding" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
         ],
       },
+
+      // ─── Static Pages: Jobs, Profile, etc
       {
         source: "/jobs/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=300, s-maxage=86400", // 5 min client, 24h CDN
+            value: "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800",
           },
+          { key: "Vary", value: "Accept-Encoding" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+        ],
+      },
+      {
+        source: "/dashboard/:path*",
+        headers: [
           {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
+            key: "Cache-Control",
+            value: "private, max-age=0, must-revalidate",
           },
         ],
       },
+
+      // ─── Static Assets: Images, Fonts (Long-term caching)
       {
         source: "/static/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=31536000, immutable", // 1 year (immutable)
+            value: "public, max-age=31536000, immutable",
           },
+          { key: "Vary", value: "Accept-Encoding" },
         ],
       },
       {
-        // ✅ Security headers for all pages
-        source: "/:path*",
+        source: "/:path*\\.(jpg|jpeg|png|gif|webp|svg|woff|woff2|ttf|eot)$",
         headers: [
           {
-            key: "X-Frame-Options",
-            value: "DENY",
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
-          {
-            key: "X-Content-Type-Options",
-            value: "nosniff",
-          },
-          {
-            key: "Referrer-Policy",
-            value: "strict-origin-when-cross-origin",
-          },
-          {
-            key: "Permissions-Policy",
-            value: "geolocation=(), microphone=(), camera=()",
-          },
+          { key: "Vary", value: "Accept-Encoding" },
+        ],
+      },
+
+      // ─── Security headers for all pages
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Frame-Options", value: "DENY" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "Permissions-Policy", value: "geolocation=(), microphone=(), camera=()" },
+          // Enable compression for all responses
+          { key: "Accept-Encoding", value: "gzip, deflate, br" },
         ],
       },
     ];

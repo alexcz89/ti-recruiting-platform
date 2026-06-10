@@ -4,7 +4,9 @@ import { prisma } from "@/lib/server/prisma";
 import { syncJobSkills } from "@/lib/server/syncJobSkills";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import { PLANS, type PlanId } from "@/config/plans";
-import { generateJobSlug } from "@/lib/utils/slugify"; // ← NUEVO
+import { generateJobSlug } from "@/lib/utils/slugify";
+import { getApiVersion, transformByVersion } from "@/lib/api/versioning";
+import { cleanObject, jsonResponse, listResponse } from "@/lib/api/response-utils";
 import {
   EmploymentType,
   JobStatus,
@@ -393,7 +395,17 @@ export async function GET(req: NextRequest) {
     let nextCursor: string | null = null;
     if (page.length > limit) nextCursor = page[limit].id;
 
-    return jsonPublic({ items, nextCursor });
+    // Get API version for response transformation
+    const version = getApiVersion(req);
+    const transformedItems = items.map((item) => transformByVersion(item, version));
+    const cleanedItems = transformedItems.map((item) => cleanObject(item));
+
+    return listResponse(cleanedItems, {
+      total: items.length,
+      page: 1,
+      pageSize: limit,
+      cursor: nextCursor,
+    });
   } catch (err) {
     console.error("[GET /api/jobs]", err);
     return jsonNoStore({ error: "Internal Server Error" }, 500);
