@@ -118,8 +118,9 @@ async function sendCandidateVerificationEmail(
   await sendVerificationEmailBase(email, verifyUrl);
 }
 
-async function importDraftToUser(userId: string, draft: CvDraft) {
+async function importDraftToUser(userId: string, draft: CvDraft, txClient?: any) {
   const tx: any[] = [];
+  const prismaClient = txClient || prisma;
 
   if (draft.identity) {
     const { location, phone, birthdate, linkedin, github } = draft.identity;
@@ -130,7 +131,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
     }
 
     tx.push(
-      prisma.user.update({
+      prismaClient.user.update({
         where: { id: userId },
         data: {
           location: location || undefined,
@@ -169,7 +170,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
       });
 
     if (data.length) {
-      tx.push(prisma.workExperience.createMany({ data: data as any }));
+      tx.push(prismaClient.workExperience.createMany({ data: data as any }));
     }
   }
 
@@ -193,7 +194,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
       });
 
     if (data.length) {
-      tx.push(prisma.education.createMany({ data: data as any }));
+      tx.push(prismaClient.education.createMany({ data: data as any }));
     }
   }
 
@@ -208,7 +209,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
 
     if (data.length) {
       tx.push(
-        prisma.candidateSkill.createMany({
+        prismaClient.candidateSkill.createMany({
           data: data as any,
           skipDuplicates: true,
         })
@@ -227,7 +228,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
 
     if (data.length) {
       tx.push(
-        prisma.candidateLanguage.createMany({
+        prismaClient.candidateLanguage.createMany({
           data: data as any,
           skipDuplicates: true,
         })
@@ -235,7 +236,7 @@ async function importDraftToUser(userId: string, draft: CvDraft) {
     }
   }
 
-  if (tx.length) {
+  if (tx.length && !txClient) {
     await prisma.$transaction(tx);
   }
 }
@@ -280,46 +281,51 @@ export async function createCandidateImproved(
         : null;
     }
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        passwordHash,
-        role: data.role as Role,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        maternalSurname: data.maternalSurname || null,
-        name: [data.firstName, data.lastName, data.maternalSurname]
-          .filter(Boolean)
-          .join(" "),
-        phone: data.phone || null,
-        location: data.location || null,
-        locationLat: data.locationLat || null,
-        locationLng: data.locationLng || null,
-        placeId: data.placeId || null,
-        country: country,
-        admin1: admin1,
-        city: city,
-        cityNorm: cityNorm,
-        admin1Norm: admin1Norm,
-        linkedin: data.linkedin || null,
-        github: data.github || null,
-        onboardingStep: 3,
-        profileCompleted: !!(data.phone && data.location),
-        profileCompletion: calculateProfileCompletion(data),
-        signupSource: "organic",
-        signupDevice: "web",
-      },
-      select: { id: true, firstName: true, email: true },
-    });
-
     let cvDraft: CvDraft | null = null;
     if (rawDraft && typeof rawDraft === "object") {
       cvDraft = rawDraft as CvDraft;
     }
 
-    if (cvDraft) {
-      await importDraftToUser(user.id, cvDraft);
-    }
+    // ✅ Wrap user creation + draft import in transaction to ensure rollback if draft fails
+    const user = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          passwordHash,
+          role: data.role as Role,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          maternalSurname: data.maternalSurname || null,
+          name: [data.firstName, data.lastName, data.maternalSurname]
+            .filter(Boolean)
+            .join(" "),
+          phone: data.phone || null,
+          location: data.location || null,
+          locationLat: data.locationLat || null,
+          locationLng: data.locationLng || null,
+          placeId: data.placeId || null,
+          country: country,
+          admin1: admin1,
+          city: city,
+          cityNorm: cityNorm,
+          admin1Norm: admin1Norm,
+          linkedin: data.linkedin || null,
+          github: data.github || null,
+          onboardingStep: 3,
+          profileCompleted: !!(data.phone && data.location),
+          profileCompletion: calculateProfileCompletion(data),
+          signupSource: "organic",
+          signupDevice: "web",
+        },
+        select: { id: true, firstName: true, email: true },
+      });
+
+      if (cvDraft) {
+        await importDraftToUser(newUser.id, cvDraft, tx);
+      }
+
+      return newUser;
+    });
 
     await sendCandidateVerificationEmail(user.email, data.firstName);
 
@@ -364,28 +370,33 @@ export async function createCandidateAction(
     const firstName = nameParts[0] || data.name;
     const lastName = nameParts.slice(1).join(" ") || "";
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name: data.name,
-        firstName,
-        lastName,
-        passwordHash,
-        role: "CANDIDATE" as Role,
-        onboardingStep: 1,
-        profileCompleted: false,
-      },
-      select: { id: true, name: true, email: true },
-    });
-
     let cvDraft: CvDraft | null = null;
     if (rawDraft && typeof rawDraft === "object") {
       cvDraft = rawDraft as CvDraft;
     }
 
-    if (cvDraft) {
-      await importDraftToUser(user.id, cvDraft);
-    }
+    // ✅ Wrap user creation + draft import in transaction
+    const user = await prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          name: data.name,
+          firstName,
+          lastName,
+          passwordHash,
+          role: "CANDIDATE" as Role,
+          onboardingStep: 1,
+          profileCompleted: false,
+        },
+        select: { id: true, name: true, email: true },
+      });
+
+      if (cvDraft) {
+        await importDraftToUser(newUser.id, cvDraft, tx);
+      }
+
+      return newUser;
+    });
 
     await sendCandidateVerificationEmail(user.email, firstName);
 

@@ -104,13 +104,13 @@ export type SignInInput = z.infer<typeof SignInSchema>;
  */
 export function calculatePasswordStrength(password: string): number {
   let strength = 0;
-  
+
   if (password.length >= 8) strength++;
   if (password.length >= 12) strength++;
   if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
   if (/[0-9]/.test(password)) strength++;
-  if (/[^A-Za-z0-9]/.test(password)) strength++;
-  
+  if (/[!@#$%^&*]/.test(password)) strength++;
+
   return Math.min(strength, 4);
 }
 
@@ -208,7 +208,7 @@ export const SignupStep2Schema = z.object({
       'Debe contener al menos un número'
     )
     .refine(
-      (password) => /[^A-Za-z0-9]/.test(password),
+      (password) => /[!@#$%^&*]/.test(password),
       'Debe contener al menos un carácter especial (!@#$%^&*)'
     )
     .refine(
@@ -268,7 +268,7 @@ export const SignupStep3Schema = z.object({
           return false;
         }
       },
-      'Debe ser una URL válida de LinkedIn'
+      'Debe ser una URL válida de LinkedIn (linkedin.com)'
     )
     .optional()
     .or(z.literal('')),
@@ -284,7 +284,7 @@ export const SignupStep3Schema = z.object({
           return false;
         }
       },
-      'Debe ser una URL válida de GitHub'
+      'Debe ser una URL válida de GitHub (github.com)'
     )
     .optional()
     .or(z.literal('')),
@@ -361,7 +361,7 @@ const PasswordOnlySchema = z.object({
       'Debe contener al menos un número'
     )
     .refine(
-      (password) => /[^A-Za-z0-9]/.test(password),
+      (password) => /[!@#$%^&*]/.test(password),
       'Debe contener al menos un carácter especial (!@#$%^&*)'
     )
     .refine(
