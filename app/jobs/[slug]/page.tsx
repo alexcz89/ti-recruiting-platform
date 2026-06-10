@@ -1,11 +1,12 @@
 // app/jobs/[slug]/page.tsx
+import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import { prisma } from "@/lib/server/prisma";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
 import JobDetailPanel from "@/components/jobs/JobDetailPanel";
-import CandidateMatchCard from "@/components/jobs/CandidateMatchCard";
 import {
   buildCandidateSkillInputs,
   buildJobSkillInputs,
@@ -15,7 +16,21 @@ import {
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import type { Metadata } from "next";
-import Footer from "@/components/Footer";
+
+// ✅ Lazy load components below-fold for better FCP/LCP
+const CandidateMatchCard = dynamic(
+  () => import("@/components/jobs/CandidateMatchCard"),
+  {
+    loading: () => (
+      <div className="h-32 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse rounded-lg" />
+    ),
+    ssr: true, // Keep SSR for candidate-specific data
+  }
+);
+
+const Footer = dynamic(() => import("@/components/Footer"), {
+  loading: () => null, // Footer doesn't need a skeleton
+});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -457,33 +472,43 @@ export default async function JobDetail({ params }: Params) {
   return (
     <>
       <main className="mx-auto max-w-[1100px] space-y-6 px-6 py-8 lg:px-10 xl:max-w-[1200px]">
-      {/* ✅ JobPosting Schema */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+        {/* ✅ JobPosting Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
 
-      {/* ✅ Breadcrumb Schema */}
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
-      />
+        {/* ✅ Breadcrumb Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+        />
 
-      {isCandidate && candidateMatchResult && (
-        <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
-      )}
+        {/* ✅ Lazy load CandidateMatchCard only if needed */}
+        {isCandidate && candidateMatchResult && (
+          <Suspense
+            fallback={
+              <div className="h-32 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse rounded-lg" />
+            }
+          >
+            <CandidateMatchCard matchResult={candidateMatchResult} jobId={job.id} />
+          </Suspense>
+        )}
 
-      <JobDetailPanel
-        job={panelJob as any}
-        canApply={canApply}
-        isAuthed={Boolean(session)}
-        role={role}
-        editHref={canEdit ? `/dashboard/jobs/${job.id}/edit` : undefined}
-        alreadyApplied={alreadyApplied}
-        applicationHref={applicationHref}
-      />
-    </main>
-      <Footer />
+        <JobDetailPanel
+          job={panelJob as any}
+          canApply={canApply}
+          isAuthed={Boolean(session)}
+          role={role}
+          editHref={canEdit ? `/dashboard/jobs/${job.id}/edit` : undefined}
+          alreadyApplied={alreadyApplied}
+          applicationHref={applicationHref}
+        />
+      </main>
+      {/* ✅ Lazy load Footer (below-fold) */}
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
     </>
   );
 }

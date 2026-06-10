@@ -1,12 +1,34 @@
 // app/page.tsx
+import dynamic from "next/dynamic";
+import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
-import Footer from "@/components/Footer";
-import TechMarquee from "@/components/landing/TechMarquee";
-import PricingSection from "@/components/marketing/PricingSection";
+
+// ✅ Lazy load below-fold components for better FCP
+const TechMarquee = dynamic(
+  () => import("@/components/landing/TechMarquee"),
+  {
+    loading: () => (
+      <div className="h-20 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse" />
+    ),
+  }
+);
+
+const PricingSection = dynamic(
+  () => import("@/components/marketing/PricingSection"),
+  {
+    loading: () => (
+      <div className="min-h-[600px] bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse rounded-lg" />
+    ),
+  }
+);
+
+const Footer = dynamic(() => import("@/components/Footer"), {
+  loading: () => null,
+});
 import {
   Users,
   Briefcase,
@@ -150,9 +172,15 @@ export default async function Home() {
       </section>
 
       {/* ══════════════════════════════════════════════
-          TECH MARQUEE
+          TECH MARQUEE — Lazy loaded (below-fold)
       ══════════════════════════════════════════════ */}
-      <TechMarquee />
+      <Suspense
+        fallback={
+          <div className="h-20 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse" />
+        }
+      >
+        <TechMarquee />
+      </Suspense>
 
       {/* ══════════════════════════════════════════════
           DIFERENCIADORES — No somos un job board genérico
@@ -719,9 +747,15 @@ export default async function Home() {
       </section>
 
       {/* ══════════════════════════════════════════════
-          PRECIOS
+          PRECIOS — Lazy loaded (below-fold)
       ══════════════════════════════════════════════ */}
-      <PricingSection />
+      <Suspense
+        fallback={
+          <div className="min-h-[600px] bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse rounded-lg" />
+        }
+      >
+        <PricingSection />
+      </Suspense>
 
       {/* ══════════════════════════════════════════════
           CTA FINAL
@@ -760,7 +794,10 @@ export default async function Home() {
         </div>
       </section>
 
-      <Footer />
+      {/* ✅ Lazy load Footer (below-fold) */}
+      <Suspense fallback={null}>
+        <Footer />
+      </Suspense>
     </div>
   );
 }
