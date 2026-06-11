@@ -105,6 +105,15 @@ export default function ApplyButton({
         : "cursor-default bg-zinc-700 text-white dark:bg-zinc-200 dark:text-zinc-900"
       : "bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95";
 
+  // Determine aria-label based on button state
+  const getAriaLabel = (): string => {
+    if (pending) return "Enviando postulación…";
+    if (justApplied) {
+      return appliedHref ? "Ver mi postulación" : "Ya postulaste a esta vacante";
+    }
+    return label;
+  };
+
   return (
     <button
       type="button"
@@ -113,6 +122,7 @@ export default function ApplyButton({
       aria-disabled={pending ? "true" : "false"}
       aria-busy={pending ? "true" : "false"}
       aria-live="polite"
+      aria-label={getAriaLabel()}
       className={`${btnBase} ${btnState} ${className}`}
     >
       {pending ? (

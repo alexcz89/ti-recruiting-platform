@@ -2,17 +2,21 @@
 "use client";
 
 import * as React from "react";
-import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
+import { toastSuccess, toastError } from "@/lib/ui/toast";
 
 export default function CopyInviteLinkButton({
   invitePath,
   children,
   className,
+  ariaLabel = "Copiar link de invitación",
 }: {
   invitePath: string; // ej: /assessments/[templateId]?token=...
   children?: React.ReactNode;
   className?: string;
+  ariaLabel?: string;
 }) {
+  const [justCopied, setJustCopied] = React.useState(false);
+
   const onCopy = async () => {
     try {
       const origin =
@@ -21,7 +25,9 @@ export default function CopyInviteLinkButton({
 
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(full);
+        setJustCopied(true);
         toastSuccess("Link copiado");
+        setTimeout(() => setJustCopied(false), 2000);
         return;
       }
 
@@ -33,7 +39,13 @@ export default function CopyInviteLinkButton({
   };
 
   return (
-    <button type="button" onClick={onCopy} className={className}>
+    <button
+      type="button"
+      onClick={onCopy}
+      className={className}
+      aria-label={justCopied ? "Link copiado" : ariaLabel}
+      aria-live="polite"
+    >
       {children ?? "Copiar link"}
     </button>
   );

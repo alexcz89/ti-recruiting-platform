@@ -12,7 +12,7 @@ function NavItem({ href, label }: { href: string; label: string }) {
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`px-3 py-2 rounded-md text-sm border transition
+      className={`px-3 py-2 rounded-md text-sm border transition focus-ring
         ${
           active
             ? "bg-emerald-600 text-white border-emerald-600"
@@ -26,7 +26,7 @@ function NavItem({ href, label }: { href: string; label: string }) {
 
 export default function Nav() {
   return (
-    <nav className="flex gap-2">
+    <nav className="flex gap-2" aria-label="Panel de control - Navegación principal">
       <NavItem href="/dashboard/overview" label="Overview" />
       <NavItem href="/dashboard/jobs" label="Vacantes" />
       <NavItem href="/dashboard/assessments" label="Evaluaciones" /> {/* ✅ NUEVO */}
