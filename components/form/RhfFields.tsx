@@ -10,7 +10,8 @@ export function Field({
   const errorId = name ? `error-${name}` : undefined;
 
   return (
-    <div className="mb-4">
+    // ✅ Mobile-optimized form field with better spacing
+    <div className="mb-4 sm:mb-3">
       {/* ✅ Mobile-optimized label (larger on mobile for better readability) */}
       <label htmlFor={name} className="block mb-2 sm:mb-1 text-base sm:text-sm font-medium text-zinc-900 dark:text-zinc-50">
         {label}
@@ -25,13 +26,16 @@ export function Field({
           } as any)
         : children}
       {error && (
-        <p
+        // ✅ Mobile-optimized error message with better contrast and spacing
+        <div
           id={errorId}
           role="alert"
-          className="mt-1 text-xs text-red-700 dark:text-red-300 font-medium"
+          className="mt-2 sm:mt-1 p-2 sm:p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50"
         >
-          {error.message as string}
-        </p>
+          <p className="text-xs sm:text-xs text-red-700 dark:text-red-300 font-medium">
+            {error.message as string}
+          </p>
+        </div>
       )}
     </div>
   );

@@ -112,7 +112,8 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
     emailAvailable === true;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    // ✅ Mobile-optimized form spacing
+    <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-3">
 
       {/* Nombre */}
       <div>
@@ -198,37 +199,42 @@ export default function Step1Basic({ data, onChange, onNext }: Props) {
           </div>
         </div>
 
-        {/* Mensajes de validación */}
+        {/* Mensajes de validación - mobile optimized */}
         {emailAvailable === false && (
-          <p className="mt-1 text-xs text-red-500 dark:text-red-400">
-            Este email ya está registrado.{" "}
-            <a
-              href="/auth/signin"
-              className="underline hover:text-red-600 dark:hover:text-red-300 transition-colors"
-            >
-              Iniciar sesión
-            </a>
-          </p>
+          <div className="mt-2 sm:mt-1 p-2 sm:p-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50">
+            <p className="text-xs text-red-700 dark:text-red-300 font-medium">
+              Este email ya está registrado.{" "}
+              <a
+                href="/auth/signin"
+                className="underline hover:text-red-600 dark:hover:text-red-200 transition-colors"
+              >
+                Iniciar sesión
+              </a>
+            </p>
+          </div>
         )}
         {emailAvailable === true && (
-          <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">
-            ✓ Email disponible
-          </p>
+          <div className="mt-2 sm:mt-1 p-2 sm:p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50">
+            <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
+              ✓ Email disponible
+            </p>
+          </div>
         )}
       </div>
 
-      {/* Botón Continuar — contraste corregido en dark mode */}
+      {/* ✅ Mobile-optimized submit button */}
       <button
         type="submit"
         disabled={!isFormValid}
         className="
-          w-full rounded-lg px-4 py-3 text-sm font-semibold
+          w-full rounded-lg px-4 py-3 sm:py-2.5 text-sm font-semibold
           bg-emerald-600 hover:bg-emerald-700
           dark:bg-emerald-500 dark:hover:bg-emerald-400
           text-white dark:text-zinc-900
           transition-colors
           disabled:cursor-not-allowed disabled:opacity-50
           disabled:hover:bg-emerald-600 dark:disabled:hover:bg-emerald-500
+          min-h-[44px] sm:min-h-auto
         "
       >
         Continuar →
