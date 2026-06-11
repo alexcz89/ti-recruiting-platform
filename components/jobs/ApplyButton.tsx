@@ -91,11 +91,12 @@ export default function ApplyButton({
     });
   };
 
+  // ✅ Mobile-optimized button (44px minimum height on mobile)
   const btnBase =
-    "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold shadow-sm transition " +
+    "inline-flex items-center gap-2 rounded-xl px-4 py-3 sm:py-2 text-sm font-semibold shadow-sm transition " +
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 " +
     "focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-zinc-900 " +
-    "whitespace-nowrap";
+    "whitespace-nowrap min-h-[44px] sm:min-h-auto";
 
   const btnState = pending
     ? "cursor-not-allowed bg-emerald-600/85 text-white"

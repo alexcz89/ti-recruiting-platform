@@ -618,36 +618,39 @@ export default function JobDetailPanel({
             </h2>
 
             <div className="flex shrink-0 flex-wrap items-center gap-2">
+              {/* ✅ Mobile-optimized touch target (44px minimum) */}
               <button
                 type="button"
                 onClick={handleShare}
                 title="Compartir"
-                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border px-3 py-3 sm:px-2.5 sm:py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 min-h-[44px] sm:min-h-auto"
               >
                 <Share2 className="h-4 w-4 shrink-0 text-muted" />
                 <span className="hidden text-xs sm:inline">Compartir</span>
               </button>
 
               {copied && (
-                <span className="whitespace-nowrap rounded border border-emerald-300/50 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300">
+                <span className="whitespace-nowrap rounded border border-emerald-300/50 bg-emerald-500/10 px-3 py-2 sm:px-2 sm:py-1 text-xs text-emerald-700 dark:text-emerald-300 min-h-[44px] sm:min-h-auto flex items-center">
                   Link copiado
                 </span>
               )}
 
               {!isAuthed ? (
                 <>
+                  {/* ✅ Mobile-optimized sign in button (44px minimum) */}
                   <Link
                     href={signinHref}
-                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800"
+                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3 py-3 sm:py-1.5 text-sm font-semibold text-gray-900 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100 dark:hover:bg-gray-800 min-h-[44px] sm:min-h-auto"
                   >
                     <LogIn className="h-4 w-4" />
                     Inicia sesión para postularte
                     <ArrowRight className="h-4 w-4" />
                   </Link>
 
+                  {/* ✅ Mobile-optimized sign up button (44px minimum) */}
                   <Link
                     href={signupHref}
-                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                    className="inline-flex items-center gap-2 whitespace-nowrap rounded-lg bg-emerald-600 px-3 py-3 sm:py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700 min-h-[44px] sm:min-h-auto"
                   >
                     <UserPlus className="h-4 w-4" />
                     Crear cuenta
@@ -664,7 +667,7 @@ export default function JobDetailPanel({
               ) : editHref ? (
                 <Link
                   href={editHref}
-                  className="inline-flex items-center whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  className="inline-flex items-center whitespace-nowrap rounded-lg border px-3 py-3 sm:py-1.5 text-sm text-default hover:bg-zinc-50 dark:hover:bg-zinc-800 min-h-[44px] sm:min-h-auto"
                 >
                   Editar vacante
                 </Link>
