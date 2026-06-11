@@ -155,103 +155,12 @@ export default async function Home() {
 
         </div>
 
-        {/* Bottom fade */}
-        <div className="h-16 bg-gradient-to-b from-transparent to-zinc-50/60 dark:to-zinc-900/40" />
-      </section>
-
-      {/* ══════════════════════════════════════════════
-          DIFERENCIADORES — No somos un job board genérico
-      ══════════════════════════════════════════════ */}
-      <section className="py-20 sm:py-24">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
-              No somos otro job board.
-            </h2>
-            <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400 sm:text-lg max-w-xl mx-auto">
-              Los job boards te dan currículums. Taskio te da certeza técnica.
-            </p>
-          </div>
-
-          <div className="grid gap-6 sm:grid-cols-3">
-            {/* Diferenciador 1 — Código real */}
-            <div className="group relative overflow-hidden rounded-3xl border border-emerald-100 dark:border-emerald-900/40 bg-gradient-to-b from-emerald-50 to-white dark:from-emerald-950/30 dark:to-zinc-900 p-8 transition-all duration-300 hover:shadow-xl hover:shadow-emerald-500/10 hover:-translate-y-1">
-              <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500 shadow-lg shadow-emerald-500/30">
-                <Code2 className="h-7 w-7 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
-                Código real, no palabras clave
-              </h3>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Los candidatos escriben y ejecutan código en un entorno seguro. Ves el output real, no solo si "saben React".
-              </p>
-              <div className="mt-5 rounded-xl bg-zinc-900 dark:bg-zinc-800 p-3 font-mono text-xs">
-                <span className="text-emerald-400">✓ Tests pasados:</span>
-                <span className="text-zinc-300"> 8/10</span>
-                <br />
-                <span className="text-zinc-500">Runtime: 42ms en Python 3.11</span>
-              </div>
-            </div>
-
-            {/* Diferenciador 2 — AI Match */}
-            <div className="group relative overflow-hidden rounded-3xl border border-violet-100 dark:border-violet-900/40 bg-gradient-to-b from-violet-50 to-white dark:from-violet-950/30 dark:to-zinc-900 p-8 transition-all duration-300 hover:shadow-xl hover:shadow-violet-500/10 hover:-translate-y-1">
-              <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-600 shadow-lg shadow-violet-500/30">
-                <Brain className="h-7 w-7 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
-                AI Match, no sorteo
-              </h3>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Nuestro AI analiza skills, experiencia y seniority del candidato contra los requerimientos de la vacante. Ranking objetivo.
-              </p>
-              <div className="mt-5 space-y-2">
-                {[
-                  { name: "Ana García", match: 94, color: "bg-emerald-500" },
-                  { name: "Luis Torres", match: 81, color: "bg-teal-500" },
-                  { name: "María Ruiz", match: 73, color: "bg-blue-500" },
-                ].map((c) => (
-                  <div key={c.name} className="flex items-center gap-2 text-xs">
-                    <div className="h-5 w-5 rounded-full bg-zinc-200 dark:bg-zinc-700 shrink-0" />
-                    <span className="text-zinc-600 dark:text-zinc-300 flex-1 truncate">{c.name}</span>
-                    <div className="w-16 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-                      <div className={`h-full rounded-full ${c.color}`} style={{ width: `${c.match}%` }} />
-                    </div>
-                    <span className="font-bold text-zinc-700 dark:text-zinc-200 w-7">{c.match}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Diferenciador 3 — ATS Completo */}
-            <div className="group relative overflow-hidden rounded-3xl border border-blue-100 dark:border-blue-900/40 bg-gradient-to-b from-blue-50 to-white dark:from-blue-950/30 dark:to-zinc-900 p-8 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1">
-              <div className="mb-5 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-500/30">
-                <LayoutDashboard className="h-7 w-7 text-white" />
-              </div>
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
-                ATS real, no una lista
-              </h3>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Pipeline Kanban de candidatos, notificaciones automáticas, seguimiento por etapa y analytics de reclutamiento.
-              </p>
-              <div className="mt-5 grid grid-cols-3 gap-1.5 text-[10px]">
-                {["Postulados", "En revisión", "Entrevista"].map((col, ci) => (
-                  <div key={col} className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-2">
-                    <div className="font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5 truncate">{col}</div>
-                    {[1, ci < 2 ? 2 : null].filter(Boolean).map((_, i) => (
-                      <div key={i} className="mb-1 h-5 rounded bg-white dark:bg-zinc-700 shadow-sm" />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
 
       {/* ══════════════════════════════════════════════
           CÓMO FUNCIONA — Flujo por audiencia
       ══════════════════════════════════════════════ */}
-      <section className="border-y border-zinc-100 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/50 py-20 sm:py-28">
+      <section className="border-y border-zinc-100 dark:border-zinc-800/60 bg-zinc-50 dark:bg-zinc-900/50 py-12 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
@@ -608,7 +517,7 @@ export default async function Home() {
       {/* ══════════════════════════════════════════════
           CV BUILDER — Feature destacada
       ══════════════════════════════════════════════ */}
-      <section className="py-20 sm:py-24">
+      <section className="py-12 sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 to-teal-600 dark:from-emerald-700 dark:to-teal-700 p-8 shadow-2xl sm:p-12 lg:p-16">
             <div className="pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-white/10 blur-3xl" />
