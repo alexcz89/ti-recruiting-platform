@@ -76,7 +76,7 @@ p, span, div {
   overflow-wrap: anywhere;
   word-break: break-word;
   white-space: normal;
-  hyphens: auto;
+  hyphens: none;
 }
 
 /* Para tarjetas/listas de vacantes */
