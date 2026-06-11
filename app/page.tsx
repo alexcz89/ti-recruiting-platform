@@ -128,14 +128,14 @@ export default async function Home() {
                 {/* Empresa */}
                 <Link
                   href="/auth/signup/recruiter"
-                  className="group relative flex flex-1 flex-col items-center gap-1 rounded-2xl border-2 border-violet-200 dark:border-violet-700/60 bg-white dark:bg-zinc-900 px-6 py-4 text-violet-700 dark:text-violet-300 shadow-lg transition-all duration-200 hover:border-violet-300 dark:hover:border-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/20 hover:-translate-y-0.5 active:translate-y-0"
+                  className="group relative flex flex-1 flex-col items-center gap-1 rounded-2xl border-2 border-violet-300 dark:border-violet-600 bg-white dark:bg-violet-950 px-6 py-4 text-violet-700 dark:text-violet-100 shadow-lg dark:shadow-violet-600/20 transition-all duration-200 hover:border-violet-400 dark:hover:border-violet-500 hover:bg-violet-50 dark:hover:bg-violet-900 hover:-translate-y-0.5 active:translate-y-0"
                 >
-                  <div className="flex items-center gap-2 font-bold text-base">
+                  <div className="flex items-center gap-2 font-bold text-base text-violet-700 dark:text-violet-100">
                     <Building2 className="h-5 w-5" />
                     Soy empresa
                     <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </div>
-                  <span className="text-xs text-violet-400 dark:text-violet-400 font-normal">14 días gratis, sin tarjeta</span>
+                  <span className="text-xs text-violet-600 dark:text-violet-300 font-normal">14 días gratis, sin tarjeta</span>
                 </Link>
               </div>
             </div>
@@ -208,7 +208,7 @@ export default async function Home() {
               </div>
               <Link
                 href="/unete"
-                className="group mt-2 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 hover:-translate-y-0.5"
+                className="group mt-2 inline-flex items-center gap-2 rounded-xl bg-emerald-600 dark:bg-emerald-600 px-5 py-3 text-sm font-bold text-white dark:text-white shadow-lg shadow-emerald-600/25 dark:shadow-emerald-600/30 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-500 hover:-translate-y-0.5"
               >
                 Empezar gratis
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -250,7 +250,7 @@ export default async function Home() {
               </div>
               <Link
                 href="/auth/signup/recruiter"
-                className="group mt-2 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-600/25 transition-all duration-200 hover:bg-violet-500 hover:-translate-y-0.5"
+                className="group mt-2 inline-flex items-center gap-2 rounded-xl bg-violet-600 dark:bg-violet-600 px-5 py-3 text-sm font-bold text-white dark:text-white shadow-lg shadow-violet-600/25 dark:shadow-violet-600/30 transition-all duration-200 hover:bg-violet-500 dark:hover:bg-violet-500 hover:-translate-y-0.5"
               >
                 Ver demo gratis
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -451,7 +451,7 @@ export default async function Home() {
                 </ul>
                 <Link
                   href="/unete"
-                  className="group mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-500 px-6 py-4 text-base font-bold text-white shadow-lg shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                  className="group mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-600 px-6 py-4 text-base font-bold text-white dark:text-white shadow-lg shadow-emerald-600/25 dark:shadow-emerald-600/30 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-500 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
                 >
                   <UserCircle className="h-5 w-5" />
                   Crear cuenta gratis
@@ -499,7 +499,7 @@ export default async function Home() {
                 </ul>
                 <Link
                   href="/auth/signup/recruiter"
-                  className="group mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 dark:bg-violet-500 px-6 py-4 text-base font-bold text-white shadow-lg shadow-violet-600/25 transition-all duration-200 hover:bg-violet-500 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                  className="group mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-violet-600 dark:bg-violet-600 px-6 py-4 text-base font-bold text-white dark:text-white shadow-lg shadow-violet-600/25 dark:shadow-violet-600/30 transition-all duration-200 hover:bg-violet-500 dark:hover:bg-violet-500 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
                 >
                   <Building2 className="h-5 w-5" />
                   Empezar prueba gratuita
@@ -553,7 +553,7 @@ export default async function Home() {
                 <div className="mt-8 flex flex-col sm:flex-row gap-3">
                   <Link
                     href="/cv/builder"
-                    className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-3.5 text-sm font-bold text-emerald-700 shadow-lg transition-all duration-200 hover:bg-emerald-50 hover:-translate-y-0.5 hover:shadow-xl"
+                    className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-white dark:bg-emerald-700 px-6 py-3.5 text-sm font-bold text-emerald-700 dark:text-white shadow-lg dark:shadow-emerald-600/30 transition-all duration-200 hover:bg-emerald-50 dark:hover:bg-emerald-600 hover:-translate-y-0.5 hover:shadow-xl"
                   >
                     <Rocket className="h-4 w-4 group-hover:rotate-12 transition-transform" />
                     Crear mi CV ahora
@@ -561,7 +561,7 @@ export default async function Home() {
                   </Link>
                   <Link
                     href="/unete"
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-6 py-3.5 text-sm font-semibold text-white backdrop-blur-sm transition-all duration-200 hover:bg-white/20 hover:-translate-y-0.5"
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-300 dark:border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 px-6 py-3.5 text-sm font-semibold text-emerald-700 dark:text-emerald-200 backdrop-blur-sm transition-all duration-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 hover:-translate-y-0.5"
                   >
                     O crea tu cuenta
                   </Link>
@@ -660,7 +660,7 @@ export default async function Home() {
           <div className="mt-10 flex flex-col w-full gap-3 sm:flex-row sm:items-center sm:justify-center">
             <Link
               href="/unete"
-              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-500 px-8 py-4 text-base font-bold text-white shadow-xl shadow-emerald-600/25 transition-all duration-200 hover:bg-emerald-500 hover:shadow-2xl hover:-translate-y-0.5 sm:px-10 sm:py-5 sm:text-lg"
+              className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 dark:bg-emerald-600 px-8 py-4 text-base font-bold text-white dark:text-white shadow-xl shadow-emerald-600/25 dark:shadow-emerald-600/30 transition-all duration-200 hover:bg-emerald-500 dark:hover:bg-emerald-500 hover:shadow-2xl hover:-translate-y-0.5 sm:px-10 sm:py-5 sm:text-lg"
             >
               <UserCircle className="h-5 w-5 sm:h-6 sm:w-6" />
               Crear cuenta gratis
@@ -668,7 +668,7 @@ export default async function Home() {
             </Link>
             <Link
               href="/auth/signup/recruiter"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-8 py-4 text-base font-semibold text-zinc-700 dark:text-zinc-200 transition-all duration-200 hover:border-zinc-300 dark:hover:border-zinc-600 hover:-translate-y-0.5 sm:px-10 sm:py-5 sm:text-lg"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border-2 border-zinc-300 dark:border-violet-600 bg-white dark:bg-violet-950 px-8 py-4 text-base font-semibold text-zinc-700 dark:text-violet-100 transition-all duration-200 hover:border-zinc-400 dark:hover:border-violet-500 hover:bg-zinc-50 dark:hover:bg-violet-900 hover:-translate-y-0.5 sm:px-10 sm:py-5 sm:text-lg"
             >
               <Building2 className="h-5 w-5" />
               Demo para empresas
