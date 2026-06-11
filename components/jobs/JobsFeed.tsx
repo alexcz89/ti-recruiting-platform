@@ -7,6 +7,7 @@ import { MapPin } from "lucide-react";   // CAMBIO: nuevo ícono
 import { fromNow } from "@/lib/dates";
 import { useJobs } from "@/lib/client/hooks/useJobs";
 import { useRouter } from "next/navigation";
+import { JobsListSkeleton } from "@/components/ui/Skeleton";
 
 type Props = {
   initial?: {
@@ -269,26 +270,20 @@ export default function JobsFeed({
   if (isError)
     return (
       <div className={`md:max-w-[560px] mx-auto ${className}`}>
-        <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-xl px-3 py-2">
-          Error al cargar vacantes.
-        </p>
+        <div
+          role="alert"
+          aria-live="polite"
+          className="text-sm text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/50 bg-red-50 dark:bg-red-900/20 rounded-xl px-3 py-2"
+        >
+          Error al cargar vacantes. Por favor, intenta de nuevo.
+        </div>
       </div>
     );
 
   if (isLoading && visibleJobs.length === 0) {
     return (
-      <div
-        className={`md:max-w-[560px] mx-auto glass-card p-4 md:p-6 ${className}`}
-      >
-        <ul className="mt-1 space-y-3 animate-pulse">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <li key={i} className="glass-card p-4">
-              <div className="h-4 w-2/3 rounded-md bg-zinc-200/60 dark:bg-zinc-700/50" />
-              <div className="mt-2 h-3 w-4/5 rounded-md bg-zinc-200/60 dark:bg-zinc-700/50" />
-              <div className="mt-2 h-3 w-3/5 rounded-md bg-zinc-200/60 dark:bg-zinc-700/50" />
-            </li>
-          ))}
-        </ul>
+      <div className={`md:max-w-[560px] mx-auto ${className}`}>
+        <JobsListSkeleton count={6} />
       </div>
     );
   }
@@ -298,7 +293,7 @@ export default function JobsFeed({
       <div
         className={`md:max-w-[560px] mx-auto glass-card p-4 md:p-6 ${className}`}
       >
-        <p className="text-sm text-muted">
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
           No hay vacantes que coincidan con los filtros.
         </p>
       </div>
@@ -343,6 +338,7 @@ export default function JobsFeed({
               key={j.id}
               role="option"
               aria-selected={isSelected}
+              aria-label={`${j.title} en ${displayCompany(j)}${location ? ` - ${location}` : ""}`}
               tabIndex={0}
               onClick={onActivate}
               onKeyDown={(e) => {
@@ -353,7 +349,7 @@ export default function JobsFeed({
               }}
               onMouseEnter={() => router.prefetch?.(`/jobs/${j.slug ?? j.id}`)}
               className={[
-                "group relative cursor-pointer transition",
+                "group relative cursor-pointer transition focus-ring",
                 isSelected
                   ? "ring-2 ring-blue-500/40 border-blue-400 bg-blue-50/70 dark:bg-blue-950/30 rounded-xl p-4 border"
                   : "glass-card p-4",
@@ -398,7 +394,7 @@ export default function JobsFeed({
                     {displayCompany(j)}
                   </p>
                   {location && (
-                    <p className="inline-flex items-center gap-1 text-xs text-muted mt-0.5">
+                    <p className="inline-flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400 mt-0.5">
                       <MapPin className="h-3 w-3 shrink-0" />
                       {location}
                     </p>
@@ -421,7 +417,7 @@ export default function JobsFeed({
                       {skillLabels.slice(0, typeof window !== "undefined" && window.innerWidth < 640 ? 3 : 5).map((label) => (
                         <span
                           key={label}
-                          className="inline-flex items-center rounded-full border border-zinc-200/70 dark:border-zinc-700/60 bg-zinc-100/80 dark:bg-zinc-800/70 px-2 py-0.5 text-[10px] text-muted whitespace-nowrap"
+                          className="inline-flex items-center rounded-full border border-zinc-200/70 dark:border-zinc-700/60 bg-zinc-100/80 dark:bg-zinc-800/70 px-2 py-0.5 text-[10px] text-zinc-700 dark:text-zinc-300 whitespace-nowrap"
                         >
                           {label}
                         </span>
@@ -438,7 +434,7 @@ export default function JobsFeed({
                 </div>
 
                 <time
-                  className="text-[11px] text-muted shrink-0 whitespace-nowrap"
+                  className="text-[11px] text-zinc-600 dark:text-zinc-400 shrink-0 whitespace-nowrap"
                   title={new Date(
                     j.updatedAt ?? j.createdAt
                   ).toLocaleString()}

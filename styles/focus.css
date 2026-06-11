@@ -65,17 +65,3 @@ select:focus-visible {
   outline-color: rgb(107, 114, 128); /* gray-500 */
 }
 
-/* Utility classes for focus indicators in Tailwind */
-@layer components {
-  .focus-ring {
-    @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 dark:focus-visible:outline-emerald-300;
-  }
-
-  .focus-ring-inset {
-    @apply focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-emerald-500 dark:focus-visible:outline-emerald-300;
-  }
-
-  .focus-ring-none {
-    @apply focus-visible:outline-none;
-  }
-}
