@@ -76,7 +76,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     sort:           (searchParams.sort as any) || "createdAt",
     dir:            (searchParams.dir as any) || "desc",
     status:         (searchParams.status as any) || "OPEN",
-    filter:         searchParams.filter,
+    filter:         null, // Deprecated: use /dashboard/candidates/pending instead
     assignTemplate: searchParams.assignTemplate,
   };
 
