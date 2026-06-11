@@ -180,7 +180,7 @@ function PricingCard({
         className={[
           "mt-5 inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-semibold transition-colors",
           isHighlight
-            ? "bg-emerald-600 text-white hover:bg-emerald-700"
+            ? "bg-emerald-600 dark:bg-emerald-600 text-white dark:text-white hover:bg-emerald-500 dark:hover:bg-emerald-500"
             : "bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white",
         ].join(" ")}
       >
