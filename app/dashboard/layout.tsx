@@ -15,8 +15,10 @@ import {
   Shield,
   ChevronDown,
   Plus,
+  Menu,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import { MobileDrawer } from "@/components/ui/MobileDrawer";
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -182,6 +184,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const { data: session } = useSession();
   const isAdmin = (session?.user as any)?.role === "ADMIN";
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-0">
@@ -230,45 +233,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </Link>
           </div>
 
-          {/* Mobile — scroll horizontal */}
-          <nav className="lg:hidden flex items-center gap-1.5 h-12 overflow-x-auto scrollbar-none">
-            {NAV.map((group) => {
-              // En mobile mostramos todos los items aplanados
-              const items = group.children ?? [group];
-              return items.map((item) => {
-                const active = isActive(pathname, item);
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap shrink-0 transition-colors
-                      ${active
-                        ? "bg-emerald-600 text-white"
-                        : "text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800/60 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-                      }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {item.label}
-                  </Link>
-                );
-              });
-            })}
-            {isAdmin && (
-              <Link
-                href="/dashboard/admin"
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap shrink-0 transition-colors
-                  ${pathname.startsWith("/dashboard/admin")
-                    ? "bg-red-600 text-white"
-                    : "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20"
-                  }`}
-              >
-                <Shield className="h-4 w-4 shrink-0" />
-                Admin
-              </Link>
-            )}
-          </nav>
+          {/* Mobile — hamburger menu button + drawer */}
+          <div className="lg:hidden flex items-center gap-2 h-12">
+            {/* ✅ Mobile hamburger button (44px touch target) */}
+            <button
+              onClick={() => setMobileNavOpen(true)}
+              className="flex-1 flex items-center justify-start gap-2 rounded-lg px-3 py-3 sm:py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/60 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors min-h-[44px] sm:min-h-auto focus-ring"
+              aria-label="Abrir navegación del panel"
+            >
+              <Menu className="h-4 w-4 shrink-0" />
+              <span className="hidden sm:inline">Navegación</span>
+            </button>
+
+            {/* "Publicar vacante" button - mobile optimized */}
+            <Link
+              href="/dashboard/jobs/new"
+              className="flex items-center justify-center h-10 w-10 sm:h-auto sm:w-auto rounded-lg bg-emerald-600 hover:bg-emerald-500 dark:bg-emerald-700 dark:hover:bg-emerald-600 sm:px-3.5 sm:py-1.5 text-sm font-semibold text-white dark:text-white transition-colors shadow-sm min-h-[44px] sm:min-h-auto"
+              aria-label="Publicar vacante"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1.5">Publicar</span>
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -276,6 +262,83 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="mx-auto max-w-[1720px] px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {children}
       </main>
+
+      {/* ✅ Mobile navigation drawer */}
+      <MobileDrawer
+        isOpen={mobileNavOpen}
+        onClose={() => setMobileNavOpen(false)}
+        title="Navegación"
+        side="left"
+      >
+        <nav className="flex flex-col p-4 space-y-2">
+          {NAV.map((group) => {
+            const active = isGroupActive(pathname, group);
+            const Icon = group.icon;
+
+            if (group.children && group.children.length > 0) {
+              return (
+                <div key={group.href} className="space-y-1">
+                  <div className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <Icon className="h-4 w-4" />
+                    {group.label}
+                  </div>
+                  <div className="ml-4 space-y-1 border-l border-zinc-200 dark:border-zinc-800 pl-3">
+                    {group.children.map((item) => (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setMobileNavOpen(false)}
+                        className={`block px-3 py-2 rounded-lg text-sm font-medium transition-colors min-h-[44px] flex items-center ${
+                          isActive(pathname, item)
+                            ? "bg-emerald-600 text-white"
+                            : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <Link
+                key={group.href}
+                href={group.href}
+                onClick={() => setMobileNavOpen(false)}
+                className={`flex items-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                  active
+                    ? "bg-emerald-600 text-white"
+                    : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {group.label}
+              </Link>
+            );
+          })}
+
+          {isAdmin && (
+            <>
+              <div className="border-t border-zinc-200 dark:border-zinc-800 pt-2 mt-2">
+                <Link
+                  href="/dashboard/admin"
+                  onClick={() => setMobileNavOpen(false)}
+                  className={`flex items-center gap-2 px-3 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${
+                    pathname.startsWith("/dashboard/admin")
+                      ? "bg-red-600 text-white"
+                      : "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  }`}
+                >
+                  <Shield className="h-4 w-4" />
+                  Admin
+                </Link>
+              </div>
+            </>
+          )}
+        </nav>
+      </MobileDrawer>
     </div>
   );
 }
