@@ -219,13 +219,13 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         {/* ── Métricas ── */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
 
-          {/* Por revisar — card dominante */}
+          {/* Por revisar — card dominante clickeable */}
           <Link
             href="/dashboard/jobs?filter=pending"
-            className={`rounded-2xl border p-3 sm:p-4 shadow-sm transition hover:shadow-md ${
+            className={`group rounded-2xl border p-3 sm:p-4 shadow-sm transition hover:shadow-lg hover:-translate-y-0.5 cursor-pointer ${
               totalPending > 0
-                ? "border-amber-200/80 bg-amber-50/80 dark:border-amber-500/30 dark:bg-amber-900/20 ring-1 ring-amber-200/60 dark:ring-amber-500/20"
-                : "border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-500/30 dark:bg-emerald-900/20"
+                ? "border-amber-200/80 bg-amber-50/80 dark:border-amber-500/30 dark:bg-amber-900/20 ring-1 ring-amber-200/60 dark:ring-amber-500/20 hover:border-amber-300/80 dark:hover:border-amber-500/50"
+                : "border-emerald-200/80 bg-emerald-50/80 dark:border-emerald-500/30 dark:bg-emerald-900/20 hover:border-emerald-300/80 dark:hover:border-emerald-500/50"
             }`}
           >
             <div className="flex items-start justify-between gap-2 mb-1">
@@ -246,8 +246,13 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
               {totalPending}
             </p>
             {totalPending > 0 && (
-              <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+              <p className="mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400 group-hover:underline">
                 Revisar candidatos →
+              </p>
+            )}
+            {totalPending === 0 && (
+              <p className="mt-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 group-hover:underline">
+                Ver detalles →
               </p>
             )}
           </Link>
