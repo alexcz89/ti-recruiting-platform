@@ -9,15 +9,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 
 // ✅ Lazy load below-fold components for better FCP
-const TechMarquee = dynamicImport(
-  () => import("@/components/landing/TechMarquee"),
-  {
-    loading: () => (
-      <div className="h-20 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse" />
-    ),
-  }
-);
-
 const PricingSection = dynamicImport(
   () => import("@/components/marketing/PricingSection"),
   {
@@ -159,10 +150,6 @@ export default async function Home() {
                 <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                 <span>AI Match inteligente</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Hecho para México</span>
-              </div>
             </div>
           </div>
 
@@ -171,17 +158,6 @@ export default async function Home() {
         {/* Bottom fade */}
         <div className="h-16 bg-gradient-to-b from-transparent to-zinc-50/60 dark:to-zinc-900/40" />
       </section>
-
-      {/* ══════════════════════════════════════════════
-          TECH MARQUEE — Lazy loaded (below-fold)
-      ══════════════════════════════════════════════ */}
-      <Suspense
-        fallback={
-          <div className="h-20 bg-gradient-to-r from-zinc-100 to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 animate-pulse" />
-        }
-      >
-        <TechMarquee />
-      </Suspense>
 
       {/* ══════════════════════════════════════════════
           DIFERENCIADORES — No somos un job board genérico
