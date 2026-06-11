@@ -143,7 +143,8 @@ export function CreditBalance({
         </a>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      {/* ✅ Responsive grid: 1 column on mobile, 3 on desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
         <div>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-1">
             Disponibles

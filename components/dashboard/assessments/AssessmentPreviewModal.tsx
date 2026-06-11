@@ -265,7 +265,7 @@ export default function AssessmentPreviewModal({ form, questions, onClose }: Pro
               </p>
               <div className="space-y-2">
                 {visibleTestCases.map((tc, i) => (
-                  <div key={i} className="rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 grid grid-cols-2 gap-3 text-xs font-mono">
+                  <div key={i} className="rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
                     <div>
                       <p className="text-[9px] text-zinc-400 uppercase font-sans mb-1">Input</p>
                       <p className="text-zinc-700 dark:text-zinc-300 break-all">{tc.input || "—"}</p>

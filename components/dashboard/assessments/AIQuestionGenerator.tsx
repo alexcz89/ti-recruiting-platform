@@ -494,7 +494,7 @@ export default function AIQuestionGenerator({
 
               {/* Tipo — bloqueado si el template tiene tipo fijo */}
               {currentType === "MIXED" || !currentType ? (
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     { value: "MULTIPLE_CHOICE", label: "Opción múltiple", icon: "✓" },
                     { value: "CODING", label: "Código", icon: "</>" },
@@ -519,8 +519,8 @@ export default function AIQuestionGenerator({
                 </div>
               )}
 
-              {/* Config */}
-              <div className={`grid gap-3 ${isCoding ? "grid-cols-2" : "grid-cols-1"}`}>
+              {/* Config - responsive grid */}
+              <div className={`grid gap-3 ${isCoding ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
                 {isCoding && (
                   <div>
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Lenguaje</label>
