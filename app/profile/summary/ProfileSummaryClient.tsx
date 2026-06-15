@@ -1,7 +1,7 @@
 // app/profile/summary/ProfileSummaryClient.tsx
 "use client";
 
-import { useState, useMemo, type ReactNode, type ElementType } from "react";
+import { useState, useMemo, useRef, type ReactNode, type ElementType } from "react";
 import Link from "next/link";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import PhoneInputField from "@/components/PhoneInputField";
@@ -18,6 +18,8 @@ import {
   Laptop,
   Building2,
   AlertTriangle,
+  Upload,
+  Info,
 } from "lucide-react";
 import { MonthYearPicker, FullDatePicker } from "@/components/ui/WheelPicker";
 
@@ -1606,6 +1608,43 @@ export default function ProfileSummaryClient({
   const [education, setEducation] = useState(initialEducation);
   const [languages, setLanguages] = useState(initialLanguages);
   const [skills, setSkills] = useState(initialSkills);
+  const [cvUploading, setCvUploading] = useState(false);
+  const [cvError, setCvError] = useState<string | null>(null);
+  const [cvSuccess, setCvSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleCvReplace(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setCvError("Solo se permiten archivos PDF");
+      return;
+    }
+    setCvError(null);
+    setCvSuccess(false);
+    setCvUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const upRes = await fetch("/api/profile/upload-resume", { method: "POST", body: form });
+      if (!upRes.ok) throw new Error("No se pudo subir el archivo");
+      const { url } = await upRes.json();
+      const saveRes = await fetch("/api/profile/set-resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeUrl: url }),
+      });
+      if (!saveRes.ok) throw new Error("No se pudo guardar el CV");
+      setUser((u) => ({ ...u, resumeUrl: url }));
+      setCvSuccess(true);
+      setTimeout(() => setCvSuccess(false), 4000);
+    } catch (err: any) {
+      setCvError(err.message || "Error al reemplazar el CV");
+    } finally {
+      setCvUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   const totalYears = useMemo(() => {
     try {
@@ -1740,21 +1779,59 @@ export default function ProfileSummaryClient({
                     rel="noopener noreferrer"
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 transition-colors"
                   >
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
                     Abrir en nueva pestaña
                   </a>
+
+                  {/* Reemplazar CV */}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    className="hidden"
+                    onChange={handleCvReplace}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={cvUploading}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 transition-colors disabled:opacity-50"
+                  >
+                    {cvUploading ? (
+                      <>
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Subiendo…
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        Reemplazar CV
+                      </>
+                    )}
+                  </button>
+
+                  {/* Feedback */}
+                  {cvSuccess && (
+                    <p className="text-center text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      ✓ CV reemplazado correctamente
+                    </p>
+                  )}
+                  {cvError && (
+                    <p className="text-center text-xs text-red-500">{cvError}</p>
+                  )}
+
+                  {/* Nota informativa */}
+                  <div className="flex items-start gap-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2">
+                    <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-zinc-400" />
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                      Solo se reemplaza el archivo PDF. Tu experiencia, skills y demas datos del perfil no se modifican.
+                    </p>
+                  </div>
 
                   <Link
                     href="/cv/builder"
