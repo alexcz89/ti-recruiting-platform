@@ -5,6 +5,7 @@ import { prisma } from "@/lib/server/prisma";
 import JobSearchBar from "@/components/JobSearchBar";
 import ClientSplitView from "@/components/jobs/ClientSplitView";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
 import Footer from "@/components/Footer";
 import ProfileCompletionBanner from "@/components/candidate/ProfileCompletionBanner";
@@ -82,7 +83,9 @@ export default async function PublicJobsPage({ searchParams }: { searchParams: S
         <JobSearchBar />
 
         {/* Chips de filtros activos */}
-        <ActiveFilterChips />
+        <Suspense fallback={null}>
+          <ActiveFilterChips />
+        </Suspense>
 
         {/* Banner de completitud de perfil — sólo para candidatos con perfil incompleto */}
         {showBanner && (
