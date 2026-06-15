@@ -371,12 +371,15 @@ export default function CodeEditor({
     }
   };
 
-  // Actualizar el tema de Monaco reactivamente cuando cambia isDark.
-  // La prop `theme` no siempre dispara el re-render interno de Monaco;
-  // hay que llamar setTheme() imperativamente.
+  // resolvedTheme puede ser undefined en el primer render (next-themes hidrata tarde).
+  // Usamos el atributo class del <html> como fuente de verdad inmediata.
+  const getIsDark = () =>
+    resolvedTheme === 'dark' ||
+    (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+
   useEffect(() => {
     if (monacoRef.current) {
-      monacoRef.current.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+      monacoRef.current.editor.setTheme(getIsDark() ? 'vs-dark' : 'vs');
     }
   }, [isDark]);
 
@@ -384,8 +387,7 @@ export default function CodeEditor({
     editorRef.current = editor;
     monacoRef.current = monaco;
 
-    // Aplicar tema correcto inmediatamente al montar (por si resolvedTheme llegó tarde)
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs');
+    monaco.editor.setTheme(getIsDark() ? 'vs-dark' : 'vs');
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       handleRunTests();
@@ -420,7 +422,7 @@ export default function CodeEditor({
       className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl dark:border-slate-800/50 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
     >
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white dark:border-slate-800/80 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
+      <div className="relative z-10 border-b border-gray-200 bg-white dark:border-slate-800/80 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
         <div className="px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -487,7 +489,7 @@ export default function CodeEditor({
                 </button>
 
                 {showSettings && (
-                  <div className="absolute right-0 z-50 mt-2 min-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-slate-700/50 dark:bg-slate-900/95 dark:backdrop-blur-xl">
+                  <div className="absolute right-0 z-50 mt-2 min-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-slate-700/50 dark:bg-slate-900 dark:shadow-black/60">
                     <div className="space-y-4">
                       <div>
                         <label className="mb-2 block text-xs font-medium text-gray-600 dark:text-slate-400">
@@ -616,7 +618,7 @@ export default function CodeEditor({
               value={code}
               onChange={(value) => setCode(value || '')}
               onMount={handleEditorDidMount}
-              theme={isDark ? 'vs-dark' : 'vs'}
+              theme={getIsDark() ? 'vs-dark' : 'vs'}
               options={{
                 minimap: { enabled: true, scale: 1 },
                 fontSize,
