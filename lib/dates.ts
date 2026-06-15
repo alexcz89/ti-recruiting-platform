@@ -12,7 +12,8 @@ export function getAge(input: Date | string | null | undefined): number | null {
 
 // “hace X …” (relative time)
 export function fromNow(input: Date | string | number): string {
-  const d = typeof input === "string" ? parseISO(input) : new Date(input);
+  const d = typeof input === “string” ? parseISO(input) : new Date(input);
+  if (isNaN(d.getTime())) return “”;
   return formatDistanceToNow(d, { addSuffix: true, locale: es });
 }
 

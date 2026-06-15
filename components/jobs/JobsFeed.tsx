@@ -433,14 +433,14 @@ export default function JobsFeed({
                   {/* Descripción removida — se ve completa en el panel de detalle */}
                 </div>
 
-                <time
-                  className="text-[11px] text-zinc-600 dark:text-zinc-400 shrink-0 whitespace-nowrap"
-                  title={new Date(
-                    j.updatedAt ?? j.createdAt
-                  ).toLocaleString()}
-                >
-                  {fromNow(new Date(j.updatedAt ?? j.createdAt))}
-                </time>
+                {(j.updatedAt ?? j.createdAt) && (
+                  <time
+                    className="text-[11px] text-zinc-600 dark:text-zinc-400 shrink-0 whitespace-nowrap"
+                    title={new Date(j.updatedAt ?? j.createdAt).toLocaleString()}
+                  >
+                    {fromNow(new Date(j.updatedAt ?? j.createdAt))}
+                  </time>
+                )}
               </div>
             </li>
           );
