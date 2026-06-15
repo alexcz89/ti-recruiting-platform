@@ -10,10 +10,10 @@ export function getAge(input: Date | string | null | undefined): number | null {
   return differenceInYears(new Date(), d);
 }
 
-// “hace X …” (relative time)
+// "hace X ..." (relative time)
 export function fromNow(input: Date | string | number): string {
-  const d = typeof input === “string” ? parseISO(input) : new Date(input);
-  if (isNaN(d.getTime())) return “”;
+  const d = typeof input === "string" ? parseISO(input) : new Date(input);
+  if (isNaN(d.getTime())) return "";
   return formatDistanceToNow(d, { addSuffix: true, locale: es });
 }
 
@@ -30,6 +30,6 @@ export function formatDateTime(input: Date | string | number): string {
 }
 
 /**
- * @deprecated Usa `formatDate` (mismo comportamiento, nombre canónico).
+ * @deprecated Usa `formatDate` (mismo comportamiento, nombre canonico).
  */
 export const formatShort = formatDate;
