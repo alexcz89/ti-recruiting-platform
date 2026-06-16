@@ -68,8 +68,8 @@ export const CREDIT_PACKAGES = [
     name:          "Básico",
     codingTests:   10,
     credits:       50,         // 10 tests × 5 créditos
-    price:         299,        // MXN
-    pricePerTest:  29.9,
+    price:         499,        // MXN
+    pricePerTest:  49.9,
     recommended:   false,
     stripePriceId: "price_1T70lC1xbuY0ledy16xKrkqx",
   },
@@ -78,8 +78,8 @@ export const CREDIT_PACKAGES = [
     name:          "Popular",
     codingTests:   25,
     credits:       125,        // 25 tests × 5 créditos
-    price:         599,        // MXN
-    pricePerTest:  23.96,
+    price:         999,        // MXN
+    pricePerTest:  39.96,
     recommended:   true,
     stripePriceId: "price_1T70lQ1xbuY0ledyNG8842LL",
   },
@@ -88,8 +88,8 @@ export const CREDIT_PACKAGES = [
     name:          "Pro",
     codingTests:   50,
     credits:       250,        // 50 tests × 5 créditos
-    price:         999,        // MXN
-    pricePerTest:  19.98,
+    price:         1799,       // MXN
+    pricePerTest:  35.98,
     recommended:   false,
     stripePriceId: "price_1T70lx1xbuY0ledy6UEr9igh",
   },
@@ -98,8 +98,8 @@ export const CREDIT_PACKAGES = [
     name:          "Enterprise",
     codingTests:   100,
     credits:       500,        // 100 tests × 5 créditos
-    price:         1599,       // MXN
-    pricePerTest:  15.99,
+    price:         2999,       // MXN
+    pricePerTest:  29.99,
     recommended:   false,
     stripePriceId: "price_1T70o51xbuY0ledymTNKMxWf",
   },
@@ -107,7 +107,7 @@ export const CREDIT_PACKAGES = [
 
 export type CreditPackage = typeof CREDIT_PACKAGES[number];
 
-export const CREDIT_ADDON_PRICE = 29.9; // MXN por coding test adicional (pack Básico)
+export const CREDIT_ADDON_PRICE = 49.9; // MXN por coding test adicional (pack Básico)
 
 export interface CreditUsageStats {
   available: number;
