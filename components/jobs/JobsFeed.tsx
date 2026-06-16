@@ -242,13 +242,18 @@ export default function JobsFeed({
     const has = j.salaryMin != null || j.salaryMax != null;
     if (!has) return null;
     const currency = j.currency ?? "MXN";
-    const min =
-      j.salaryMin != null ? Number(j.salaryMin).toLocaleString("es-MX") : "—";
-    const max =
-      j.salaryMax != null ? Number(j.salaryMax).toLocaleString("es-MX") : "—";
+    const fmt = (n: number) => Number(n).toLocaleString("es-MX");
+    let label: string;
+    if (j.salaryMin != null && j.salaryMax != null) {
+      label = `${fmt(j.salaryMin)} – ${fmt(j.salaryMax)} ${currency}`;
+    } else if (j.salaryMin != null) {
+      label = `Desde ${fmt(j.salaryMin)} ${currency}`;
+    } else {
+      label = `Hasta ${fmt(j.salaryMax)} ${currency}`;
+    }
     return (
       <span className={`${chipBase} ${chipEmerald}`}>
-        {min} – {max} {currency}
+        {label}
       </span>
     );
   };

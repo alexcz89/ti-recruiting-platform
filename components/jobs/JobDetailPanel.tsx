@@ -812,9 +812,13 @@ export default function JobDetailPanel({
                 <p className="text-[11px] text-muted">Sueldo</p>
                 <p className="truncate text-sm font-medium text-default">
                   {showSalaryExplicit
-                    ? `${salaryMin?.toLocaleString() ?? "—"} – ${
-                        salaryMax?.toLocaleString() ?? "—"
-                      } ${currency}`
+                    ? salaryMin && salaryMax
+                      ? `${salaryMin.toLocaleString("es-MX")} – ${salaryMax.toLocaleString("es-MX")} ${currency}`
+                      : salaryMin
+                      ? `Desde ${salaryMin.toLocaleString("es-MX")} ${currency}`
+                      : salaryMax
+                      ? `Hasta ${salaryMax.toLocaleString("es-MX")} ${currency}`
+                      : "A convenir"
                     : "Oculto"}
                 </p>
               </div>
