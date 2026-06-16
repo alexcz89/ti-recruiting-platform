@@ -67,8 +67,8 @@ export const CREDIT_PACKAGES = [
     id:             "basic",
     name:           "Básico",
     credits:        10,
-    price:          149,       // MXN
-    pricePerCredit: 14.9,
+    price:          299,       // MXN
+    pricePerCredit: 29.9,
     recommended:    false,
     stripePriceId:  "price_1T70lC1xbuY0ledy16xKrkqx",
   },
@@ -76,8 +76,8 @@ export const CREDIT_PACKAGES = [
     id:             "popular",
     name:           "Popular",
     credits:        25,
-    price:          299,       // MXN
-    pricePerCredit: 11.96,
+    price:          599,       // MXN
+    pricePerCredit: 23.96,
     recommended:    true,
     stripePriceId:  "price_1T70lQ1xbuY0ledyNG8842LL",
   },
@@ -85,8 +85,8 @@ export const CREDIT_PACKAGES = [
     id:             "pro",
     name:           "Pro",
     credits:        50,
-    price:          499,       // MXN
-    pricePerCredit: 9.98,
+    price:          999,       // MXN
+    pricePerCredit: 19.98,
     recommended:    false,
     stripePriceId:  "price_1T70lx1xbuY0ledy6UEr9igh",
   },
@@ -94,8 +94,8 @@ export const CREDIT_PACKAGES = [
     id:             "enterprise",
     name:           "Enterprise",
     credits:        100,
-    price:          799,       // MXN
-    pricePerCredit: 7.99,
+    price:          1599,      // MXN
+    pricePerCredit: 15.99,
     recommended:    false,
     stripePriceId:  "price_1T70o51xbuY0ledymTNKMxWf",
   },
