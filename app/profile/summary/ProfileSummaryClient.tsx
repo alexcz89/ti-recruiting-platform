@@ -1737,6 +1737,16 @@ export default function ProfileSummaryClient({
               <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                 CV
               </h2>
+
+              {/* Hidden file input — shared between "Reemplazar CV" and "Cargar CV" */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,application/pdf"
+                className="hidden"
+                onChange={handleCvReplace}
+              />
+
               {user.resumeUrl ? (
                 <div className="space-y-3">
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-3 dark:border-emerald-800/40 dark:bg-emerald-950/20">
@@ -1785,14 +1795,6 @@ export default function ProfileSummaryClient({
                     Abrir en nueva pestaña
                   </a>
 
-                  {/* Reemplazar CV */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,application/pdf"
-                    className="hidden"
-                    onChange={handleCvReplace}
-                  />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -1815,17 +1817,15 @@ export default function ProfileSummaryClient({
                     )}
                   </button>
 
-                  {/* Feedback */}
                   {cvSuccess && (
                     <p className="text-center text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                      ✓ CV reemplazado correctamente
+                      ✓ CV subido correctamente
                     </p>
                   )}
                   {cvError && (
                     <p className="text-center text-xs text-red-500">{cvError}</p>
                   )}
 
-                  {/* Nota informativa */}
                   <div className="flex items-start gap-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2">
                     <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-zinc-400" />
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
@@ -1862,7 +1862,7 @@ export default function ProfileSummaryClient({
                       Sin CV
                     </h3>
                     <p className="mt-1 text-xs text-zinc-500">
-                      Crea tu currículum profesional
+                      Crea tu curriculo o sube un PDF existente
                     </p>
                   </div>
 
@@ -1872,6 +1872,37 @@ export default function ProfileSummaryClient({
                   >
                     Crear CV en CV Builder
                   </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={cvUploading}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 transition-colors disabled:opacity-50"
+                  >
+                    {cvUploading ? (
+                      <>
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Subiendo…
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4" />
+                        Cargar CV (PDF)
+                      </>
+                    )}
+                  </button>
+
+                  {cvSuccess && (
+                    <p className="text-center text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                      ✓ CV subido correctamente
+                    </p>
+                  )}
+                  {cvError && (
+                    <p className="text-center text-xs text-red-500">{cvError}</p>
+                  )}
                 </div>
               )}
             </section>
