@@ -76,7 +76,8 @@ export function generateJobMetaDescription(job: any): string {
 
   // Company
   if (job.company && !job.companyConfidential) {
-    parts.push(`en ${job.company}`);
+    const companyName = typeof job.company === "string" ? job.company : job.company?.name;
+    if (companyName) parts.push(`en ${companyName}`);
   }
 
   // Location
