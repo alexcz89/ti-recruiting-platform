@@ -4,6 +4,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { PLANS, type PlanConfig } from "@/config/plans";
+import { CREDIT_PACKAGES } from "@/lib/assessments/pricing";
 
 const USD_RATE = 17.5;
 const ANNUAL_DISCOUNT = 0.8;
@@ -71,7 +72,7 @@ function PricingCard({
 }) {
   const isHighlight = plan.highlight;
   const price = formatPrice(plan.priceMonthly, currency, billing);
-  const credits = plan.assessments.monthlyCredits;
+  const codingTests = plan.assessments.monthlyCredits / 5;
   const vacantes =
     plan.limits.maxActiveJobs === null ? "Ilimitadas" : plan.limits.maxActiveJobs;
   const reclutadores =
@@ -157,7 +158,7 @@ function PricingCard({
         <div className="flex items-center justify-between py-0.5 text-xs">
           <span className="text-slate-500 dark:text-slate-400">Coding tests/mes</span>
           <span className="font-semibold tabular-nums text-slate-900 dark:text-white">
-            {credits.toLocaleString("es-MX")}
+            {codingTests.toLocaleString("es-MX")}
           </span>
         </div>
         <div className="flex items-center justify-between py-0.5 text-xs">
@@ -220,6 +221,85 @@ function TogglePill<T extends string>({
           {opt.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function CreditPacksStrip() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="mt-8">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="mx-auto flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors"
+      >
+        <svg
+          className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+        {open ? "Ocultar packs adicionales" : "¿Necesitas más coding tests? Ver packs adicionales"}
+      </button>
+
+      {open && (
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-700 dark:bg-slate-900">
+          <div className="mb-4 text-center">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              Packs de coding tests — sin vencimiento
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+              Se suman a los tests de tu plan. Se usan cuando los mensuales se agotan.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {CREDIT_PACKAGES.map((pkg) => (
+              <div
+                key={pkg.id}
+                className={[
+                  "relative flex flex-col items-center rounded-xl border px-3 py-4 text-center transition",
+                  pkg.recommended
+                    ? "border-emerald-400 bg-white shadow-sm ring-1 ring-emerald-400/30 dark:bg-slate-800 dark:border-emerald-500"
+                    : "border-slate-200 bg-white dark:bg-slate-800/60 dark:border-slate-700",
+                ].join(" ")}
+              >
+                {pkg.recommended && (
+                  <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-600 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Más popular
+                  </span>
+                )}
+
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                  {pkg.name}
+                </p>
+                <p className="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+                  {pkg.codingTests}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">coding tests</p>
+
+                <div className="mt-3 w-full border-t border-slate-100 pt-3 dark:border-slate-700">
+                  <p className="text-base font-bold text-slate-900 dark:text-white">
+                    ${pkg.price.toLocaleString("es-MX")}
+                    <span className="ml-1 text-xs font-normal text-slate-400">MXN</span>
+                  </p>
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                    ${pkg.pricePerTest.toFixed(0)}/test
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 text-center text-[11px] text-slate-400 dark:text-slate-500">
+            Los packs se compran desde el dashboard de tu empresa · Sin vencimiento · Créditos inmediatos
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -298,6 +378,9 @@ export default function PricingSection() {
             />
           ))}
         </div>
+
+        {/* Credit packs add-on strip */}
+        <CreditPacksStrip />
 
         <div className="mt-10 flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-5 dark:border-emerald-900/50 dark:bg-emerald-950/30 sm:flex-row sm:items-center sm:justify-between">
           <div>
