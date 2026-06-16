@@ -60,7 +60,7 @@ export default function ClientSplitView({ filters }: { filters: Filters }) {
 
   const handleShare = React.useCallback(async () => {
     if (!selectedJob?.id) return;
-    const url = `${window.location.origin}/jobs/${selectedJob.id}`;
+    const url = `${window.location.origin}/jobs/${selectedJob.slug ?? selectedJob.id}`;
     try {
       if ((navigator as any).share) {
         await (navigator as any).share({ title: selectedJob.title || "Vacante", url });

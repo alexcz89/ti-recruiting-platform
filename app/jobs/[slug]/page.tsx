@@ -350,6 +350,7 @@ export default async function JobDetail({ params }: Params) {
 
   const panelJob = {
     id: job.id,
+    slug: job.slug ?? null,
     title: job.title,
     company: job.company?.name ?? null,
     location: job.location,
