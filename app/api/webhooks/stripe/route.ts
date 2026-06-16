@@ -12,12 +12,12 @@ const PRICE_TO_PLAN: Record<string, string> = {
   "price_1T70gQ1xbuY0ledyv9Tv3h2G": "PRO",
 };
 
-// Mapeo de Price ID → créditos
+// Mapeo de Price ID → créditos internos (1 coding test = 5 créditos)
 const PRICE_TO_CREDITS: Record<string, number> = {
-  "price_1T70lC1xbuY0ledy16xKrkqx": 10,
-  "price_1T70lQ1xbuY0ledyNG8842LL": 25,
-  "price_1T70lx1xbuY0ledy6UEr9igh": 50,
-  "price_1T70o51xbuY0ledymTNKMxWf": 100,
+  "price_1T70lC1xbuY0ledy16xKrkqx": 50,  // 10 coding tests
+  "price_1T70lQ1xbuY0ledyNG8842LL": 125, // 25 coding tests
+  "price_1T70lx1xbuY0ledy6UEr9igh": 250, // 50 coding tests
+  "price_1T70o51xbuY0ledymTNKMxWf": 500, // 100 coding tests
 };
 
 export async function POST(req: NextRequest) {

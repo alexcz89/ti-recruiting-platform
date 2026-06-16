@@ -120,10 +120,10 @@ export default function CreditsPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100">
-          Créditos de Evaluaciones
+          Coding Tests
         </h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Gestiona tus créditos para evaluaciones técnicas
+          Gestiona tus evaluaciones técnicas de código · MCQ ilimitados en tu plan
         </p>
       </div>
 
@@ -148,28 +148,48 @@ export default function CreditsPage() {
       {/* Balance Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6">
         {[
-          { label: "Disponibles",     value: balance?.available       || 0, color: "text-emerald-600 dark:text-emerald-400", sub: "Listos para usar"     },
-          { label: "Reservados",      value: balance?.reserved        || 0, color: "text-amber-600 dark:text-amber-400",    sub: "Invites pendientes"   },
-          { label: "Usados (mes)",    value: balance?.used            || 0, color: "text-violet-600 dark:text-violet-400",  sub: "Este ciclo"           },
-          { label: "Balance efectivo",value: balance?.effectiveBalance|| 0, color: "text-blue-600 dark:text-blue-400",      sub: "Disponible - Reservado" },
+          {
+            label: "Tests disponibles",
+            value: Math.floor((balance?.available || 0) / 5),
+            color: "text-emerald-600 dark:text-emerald-400",
+            sub: `${formatCredits(balance?.available || 0)} créditos`,
+          },
+          {
+            label: "Tests reservados",
+            value: Math.floor((balance?.reserved || 0) / 5),
+            color: "text-amber-600 dark:text-amber-400",
+            sub: "Invites enviados pendientes",
+          },
+          {
+            label: "Tests usados (mes)",
+            value: Math.floor((balance?.used || 0) / 5),
+            color: "text-violet-600 dark:text-violet-400",
+            sub: "Este ciclo de facturación",
+          },
+          {
+            label: "Balance efectivo",
+            value: Math.floor((balance?.effectiveBalance || 0) / 5),
+            color: "text-blue-600 dark:text-blue-400",
+            sub: "Disponibles - Reservados",
+          },
         ].map(({ label, value, color, sub }) => (
           <div key={label} className="p-4 sm:p-6 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
             <p className="text-xs sm:text-sm font-medium text-zinc-600 dark:text-zinc-400 leading-tight">{label}</p>
-            <p className={`text-2xl sm:text-3xl font-bold mt-1 ${color}`}>{formatCredits(value)}</p>
+            <p className={`text-2xl sm:text-3xl font-bold mt-1 ${color}`}>{value}</p>
             <p className="text-xs text-zinc-500 mt-1 hidden sm:block">{sub}</p>
           </div>
         ))}
       </div>
 
-      {/* Warning pocos créditos */}
-      {balance && balance.effectiveBalance < 5 && (
+      {/* Warning pocos tests */}
+      {balance && balance.effectiveBalance < 25 && (
         <div className="p-4 sm:p-6 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800">
           <div className="flex items-start gap-4">
             <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1">Créditos Bajos</h3>
+              <h3 className="text-base font-semibold text-amber-900 dark:text-amber-100 mb-1">Pocos coding tests disponibles</h3>
               <p className="text-sm text-amber-800 dark:text-amber-200">
-                Te quedan menos de 5 créditos efectivos. Compra más para seguir enviando evaluaciones.
+                Te quedan menos de 5 coding tests efectivos. Compra un pack para seguir evaluando candidatos.
               </p>
             </div>
           </div>
@@ -183,7 +203,7 @@ export default function CreditsPage() {
             <Zap className="h-4 w-4 text-white" />
           </div>
           <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-            Comprar Créditos
+            Comprar coding tests
           </h2>
         </div>
 
@@ -208,17 +228,17 @@ export default function CreditsPage() {
               <div className="mb-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{pkg.name}</p>
                 <p className="text-3xl font-black text-zinc-900 dark:text-white mt-0.5">
-                  {pkg.credits}
-                  <span className="text-base font-semibold text-zinc-500 ml-1">créditos</span>
+                  {pkg.codingTests}
+                  <span className="text-base font-semibold text-zinc-500 ml-1">coding tests</span>
                 </p>
               </div>
 
               <div className="mb-4 space-y-1">
                 <p className="text-2xl font-black text-zinc-900 dark:text-white">
-                  ${pkg.price}
+                  ${pkg.price.toLocaleString("es-MX")}
                   <span className="text-xs font-normal text-zinc-400 ml-1">MXN</span>
                 </p>
-                <p className="text-xs text-zinc-500">${pkg.pricePerCredit.toFixed(2)} MXN por crédito</p>
+                <p className="text-xs text-zinc-500">${pkg.pricePerTest.toFixed(2)} MXN por test</p>
               </div>
 
               <div className="flex-1" />
@@ -234,7 +254,7 @@ export default function CreditsPage() {
               >
                 {buying === pkg.id
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Procesando...</>
-                  : `Comprar ${pkg.credits} créditos`
+                  : `Comprar ${pkg.codingTests} tests`
                 }
               </button>
             </div>
@@ -242,7 +262,7 @@ export default function CreditsPage() {
         </div>
 
         <p className="mt-3 text-center text-xs text-zinc-400">
-          Pago seguro procesado por Stripe · Los créditos se acreditan inmediatamente · Sin vencimiento
+          Pago seguro procesado por Stripe · Los tests se acreditan inmediatamente · Sin vencimiento
         </p>
       </div>
 

@@ -47,38 +47,50 @@ export type CreditPack = {
 export const CREDIT_PACKS: CreditPack[] = [
   {
     id: "pack_50",
-    credits: 50,
-    label: "Pack Básico — 50 créditos",
+    credits: 50,        // 10 coding tests × 5 créditos
+    label: "Pack Básico — 10 coding tests",
     basePriceMxn: 299,
     priceByPlan: {
-      FREE:     299, // $5.98/créd — sin descuento, el dolor ayuda a convertir
-      STARTER:  249, // $4.98/créd
-      PRO:      199, // $3.98/créd — 33% más barato que en FREE
-      BUSINESS: 149, // $2.98/créd — 50% más barato que en FREE
+      FREE:     299, // $29.90/test — sin descuento, el dolor ayuda a convertir
+      STARTER:  249, // $24.90/test
+      PRO:      199, // $19.90/test — 33% más barato que en FREE
+      BUSINESS: 149, // $14.90/test — 50% más barato que en FREE
     },
   },
   {
-    id: "pack_200",
-    credits: 200,
-    label: "Pack Pro — 200 créditos",
+    id: "pack_125",
+    credits: 125,       // 25 coding tests × 5 créditos
+    label: "Pack Popular — 25 coding tests",
+    basePriceMxn: 599,
+    priceByPlan: {
+      FREE:     599, // $23.96/test
+      STARTER:  499, // $19.96/test
+      PRO:      399, // $15.96/test
+      BUSINESS: 299, // $11.96/test
+    },
+  },
+  {
+    id: "pack_250",
+    credits: 250,       // 50 coding tests × 5 créditos
+    label: "Pack Pro — 50 coding tests",
     basePriceMxn: 999,
     priceByPlan: {
-      FREE:     999, // $4.99/créd
-      STARTER:  849, // $4.25/créd — ahorro vs pack pequeño en FREE
-      PRO:      699, // $3.50/créd
-      BUSINESS: 549, // $2.75/créd
+      FREE:     999, // $19.98/test
+      STARTER:  849, // $16.98/test
+      PRO:      699, // $13.98/test
+      BUSINESS: 549, // $10.98/test
     },
   },
   {
-    id: "pack_600",
-    credits: 600,
-    label: "Pack Enterprise — 600 créditos",
-    basePriceMxn: 2699,
+    id: "pack_500",
+    credits: 500,       // 100 coding tests × 5 créditos
+    label: "Pack Enterprise — 100 coding tests",
+    basePriceMxn: 1599,
     priceByPlan: {
-      FREE:     2699, // $4.50/créd — libre solo si de verdad lo necesita
-      STARTER:  2299, // $3.83/créd
-      PRO:      1799, // $3.00/créd — 33% de descuento vs FREE
-      BUSINESS: 1399, // $2.33/créd — mejor deal para volumen alto
+      FREE:     1599, // $15.99/test
+      STARTER:  1349, // $13.49/test
+      PRO:      1099, // $10.99/test
+      BUSINESS:  799, // $7.99/test
     },
   },
 ];
@@ -166,7 +178,7 @@ export const PLANS: PlanConfig[] = [
     },
     aiMatchLimit: 0,
     assessments: {
-      monthlyCredits:  10,  // 10 coding tests — MCQ separado (20 fijo)
+      monthlyCredits:  50,  // 10 coding tests × 5 créditos — MCQ separado (20 fijo)
       codingEnabled:   true,
       packsAvailable:  true,
       packDiscountPct: 0,
@@ -209,7 +221,7 @@ export const PLANS: PlanConfig[] = [
     },
     aiMatchLimit: 10,
     assessments: {
-      monthlyCredits:  50,  // 50 coding tests — MCQ ilimitado
+      monthlyCredits:  250, // 50 coding tests × 5 créditos — MCQ ilimitado
       codingEnabled:   true,
       packsAvailable:  true,
       packDiscountPct: 17,
@@ -248,7 +260,7 @@ export const PLANS: PlanConfig[] = [
     },
     aiMatchLimit: null,
     assessments: {
-      monthlyCredits:  150, // 150 coding tests — MCQ ilimitado
+      monthlyCredits:  750, // 150 coding tests × 5 créditos — MCQ ilimitado
       codingEnabled:   true,
       packsAvailable:  true,
       packDiscountPct: 33,
@@ -287,7 +299,7 @@ export const PLANS: PlanConfig[] = [
     },
     aiMatchLimit: null,
     assessments: {
-      monthlyCredits:  500, // 500 coding tests — MCQ ilimitado
+      monthlyCredits:  2500, // 500 coding tests × 5 créditos — MCQ ilimitado
       codingEnabled:   true,
       packsAvailable:  true,
       packDiscountPct: 50,

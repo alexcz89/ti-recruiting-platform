@@ -23,14 +23,14 @@ export const ASSESSMENT_PRICING: Record<
     SENIOR: { reserve: 0.5, complete: 0.5, total: 1.0 },
   },
   CODING: {
-    JUNIOR: { reserve: 0.5, complete: 2.0, total: 2.5 },
-    MID:    { reserve: 0.5, complete: 2.5, total: 3.0 },
-    SENIOR: { reserve: 0.5, complete: 3.5, total: 4.0 },
+    JUNIOR: { reserve: 0.5, complete: 4.5, total: 5.0 },
+    MID:    { reserve: 0.5, complete: 4.5, total: 5.0 },
+    SENIOR: { reserve: 0.5, complete: 4.5, total: 5.0 },
   },
   MIXED: {
-    JUNIOR: { reserve: 0.5, complete: 2.5, total: 3.0 },
-    MID:    { reserve: 0.5, complete: 3.0, total: 3.5 },
-    SENIOR: { reserve: 0.5, complete: 4.0, total: 4.5 },
+    JUNIOR: { reserve: 0.5, complete: 4.5, total: 5.0 },
+    MID:    { reserve: 0.5, complete: 4.5, total: 5.0 },
+    SENIOR: { reserve: 0.5, complete: 4.5, total: 5.0 },
   },
 } as const;
 
@@ -64,46 +64,50 @@ export function getCurrentBillingCycle(): number {
  */
 export const CREDIT_PACKAGES = [
   {
-    id:             "basic",
-    name:           "Básico",
-    credits:        10,
-    price:          299,       // MXN
-    pricePerCredit: 29.9,
-    recommended:    false,
-    stripePriceId:  "price_1T70lC1xbuY0ledy16xKrkqx",
+    id:            "basic",
+    name:          "Básico",
+    codingTests:   10,
+    credits:       50,         // 10 tests × 5 créditos
+    price:         299,        // MXN
+    pricePerTest:  29.9,
+    recommended:   false,
+    stripePriceId: "price_1T70lC1xbuY0ledy16xKrkqx",
   },
   {
-    id:             "popular",
-    name:           "Popular",
-    credits:        25,
-    price:          599,       // MXN
-    pricePerCredit: 23.96,
-    recommended:    true,
-    stripePriceId:  "price_1T70lQ1xbuY0ledyNG8842LL",
+    id:            "popular",
+    name:          "Popular",
+    codingTests:   25,
+    credits:       125,        // 25 tests × 5 créditos
+    price:         599,        // MXN
+    pricePerTest:  23.96,
+    recommended:   true,
+    stripePriceId: "price_1T70lQ1xbuY0ledyNG8842LL",
   },
   {
-    id:             "pro",
-    name:           "Pro",
-    credits:        50,
-    price:          999,       // MXN
-    pricePerCredit: 19.98,
-    recommended:    false,
-    stripePriceId:  "price_1T70lx1xbuY0ledy6UEr9igh",
+    id:            "pro",
+    name:          "Pro",
+    codingTests:   50,
+    credits:       250,        // 50 tests × 5 créditos
+    price:         999,        // MXN
+    pricePerTest:  19.98,
+    recommended:   false,
+    stripePriceId: "price_1T70lx1xbuY0ledy6UEr9igh",
   },
   {
-    id:             "enterprise",
-    name:           "Enterprise",
-    credits:        100,
-    price:          1599,      // MXN
-    pricePerCredit: 15.99,
-    recommended:    false,
-    stripePriceId:  "price_1T70o51xbuY0ledymTNKMxWf",
+    id:            "enterprise",
+    name:          "Enterprise",
+    codingTests:   100,
+    credits:       500,        // 100 tests × 5 créditos
+    price:         1599,       // MXN
+    pricePerTest:  15.99,
+    recommended:   false,
+    stripePriceId: "price_1T70o51xbuY0ledymTNKMxWf",
   },
 ] as const;
 
 export type CreditPackage = typeof CREDIT_PACKAGES[number];
 
-export const CREDIT_ADDON_PRICE = 14.9; // MXN por crédito individual
+export const CREDIT_ADDON_PRICE = 29.9; // MXN por coding test adicional (pack Básico)
 
 export interface CreditUsageStats {
   available: number;
