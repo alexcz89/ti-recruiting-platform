@@ -80,28 +80,30 @@ export default async function Home() {
 
             {/* Dual CTAs */}
             <div className="mt-10 flex flex-col gap-3 sm:flex-row w-full max-w-md animate-fade-in-up animation-delay-300">
+              {/* Candidato — texto casi negro sobre esmeralda: ratio >7:1 */}
               <Link
                 href="/unete"
-                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl bg-emerald-400 px-6 py-4 text-[#082B33] shadow-xl shadow-emerald-400/20 transition-all duration-200 hover:bg-emerald-300 hover:-translate-y-0.5 active:translate-y-0"
+                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl bg-emerald-400 px-6 py-4 text-zinc-950 shadow-xl shadow-emerald-400/20 transition-all duration-200 hover:bg-emerald-300 hover:-translate-y-0.5 active:translate-y-0"
               >
                 <div className="flex items-center gap-2 font-bold text-base">
                   <UserCircle className="h-5 w-5" />
                   Soy candidato
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </div>
-                <span className="text-xs text-[#082B33]/60 font-normal">Siempre gratis</span>
+                <span className="text-xs text-emerald-950 font-normal">Siempre gratis</span>
               </Link>
 
+              {/* Empresa — fondo blanco, texto oscuro: máximo contraste */}
               <Link
                 href="/auth/signup/recruiter"
-                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-sm px-6 py-4 text-white shadow-sm transition-all duration-200 hover:bg-white/15 hover:-translate-y-0.5 active:translate-y-0"
+                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl border border-white/30 bg-white/15 px-6 py-4 text-white shadow-sm transition-all duration-200 hover:bg-white/22 hover:-translate-y-0.5 active:translate-y-0"
               >
                 <div className="flex items-center gap-2 font-bold text-base">
                   <Building2 className="h-5 w-5" />
                   Soy empresa
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </div>
-                <span className="text-xs text-white/50 font-normal">14 días gratis · Sin tarjeta</span>
+                <span className="text-xs text-white/75 font-normal">14 días gratis · Sin tarjeta</span>
               </Link>
             </div>
 
