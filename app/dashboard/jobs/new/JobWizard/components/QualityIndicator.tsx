@@ -10,6 +10,15 @@ type QualityIndicatorProps = {
   compact?: boolean;
 };
 
+// Maps useQualityScore step numbers to wizard step labels (step 3 = Prestaciones, step 4 = Detalles)
+const STEP_LABEL_MAP: Record<number, string> = {
+  1: "Básicos",
+  2: "Prestaciones",
+  3: "Prestaciones",
+  4: "Detalles",
+  5: "Evaluaciones",
+};
+
 export default function QualityIndicator({
   score,
   compact = false,
@@ -19,7 +28,7 @@ export default function QualityIndicator({
     if (value >= 75) return "text-emerald-600 dark:text-emerald-400";
     if (value >= 60) return "text-yellow-600 dark:text-yellow-400";
     if (value >= 40) return "text-orange-600 dark:text-orange-400";
-    return "text-red-600 dark:text-red-400";
+    return "text-zinc-500 dark:text-zinc-400";
   };
 
   const getScoreGradient = (value: number) => {
@@ -27,7 +36,7 @@ export default function QualityIndicator({
     if (value >= 75) return "from-emerald-500 to-emerald-600";
     if (value >= 60) return "from-yellow-500 to-orange-500";
     if (value >= 40) return "from-orange-500 to-red-500";
-    return "from-red-500 to-red-600";
+    return "from-zinc-300 to-zinc-400 dark:from-zinc-600 dark:to-zinc-500";
   };
 
   const getLevelLabel = (value: number) => {
@@ -38,40 +47,18 @@ export default function QualityIndicator({
     return "Baja";
   };
 
-  const stepsToGood = (() => {
-    if (score.overall >= 60) return 0;
-    const uniqueSteps = new Set(score.issues.map((issue) => issue.step)).size;
-    return uniqueSteps > 0 ? uniqueSteps : Math.max(1, Math.ceil((60 - score.overall) / 10));
+  // Tells the user which specific wizard step to complete, not how many abstract "pasos"
+  const progressMessage = (() => {
+    if (score.overall >= 60) return `Nivel actual: ${getLevelLabel(score.overall)}`;
+    const stepsWithIssues = [...new Set(score.issues.map((i) => i.step))];
+    if (stepsWithIssues.length === 0) return `Nivel actual: ${getLevelLabel(score.overall)}`;
+    const stepNames = [...new Set(stepsWithIssues.map((s) => STEP_LABEL_MAP[s] ?? `Paso ${s}`))];
+    if (stepNames.length === 1) return `Completa ${stepNames[0]} para subir`;
+    return `Completa ${stepNames.length} pasos para subir`;
   })();
 
-  const progressMessage =
-    stepsToGood > 0
-      ? stepsToGood === 1
-        ? `Falta 1 paso para llegar a Buena`
-        : `Faltan ${stepsToGood} pasos para llegar a Buena`
-      : `Nivel actual: ${getLevelLabel(score.overall)}`;
-
-  const missingItems = Array.from(
-    new Set(
-      score.issues.map((issue): string | null => {
-        const msg = issue.message.toLowerCase();
-
-        if (msg.includes("skills")) return "Skills";
-        if (msg.includes("prestaciones")) return "Prestaciones";
-        if (msg.includes("sueldo") || msg.includes("rango salarial")) return "Sueldo";
-        if (msg.includes("ingl") || msg.includes("idiomas")) return "Idiomas";
-        if (msg.includes("educa") || msg.includes("acad")) return "Educación";
-        if (msg.includes("descrip")) return "Descripción";
-        if (msg.includes("horario")) return "Horario";
-        if (msg.includes("evaluación") || msg.includes("evaluacion")) return "Evaluación";
-        if (msg.includes("demasiados") || msg.includes("requisitos")) return "Muchos requisitos";
-        if (msg.includes("salarial") || msg.includes("rango")) return "Sueldo";
-        return null;
-      })
-    )
-  ).filter((item): item is string => item !== null).slice(0, 5);
-
   const topIssues = score.issues.slice(0, 3);
+  const isNew = score.overall < 40;
 
   if (compact) {
     return (
@@ -100,7 +87,7 @@ export default function QualityIndicator({
             {score.overall}%
           </span>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            {progressMessage}
+            {isNew ? "Ve completando los pasos" : progressMessage}
           </span>
         </div>
       </div>
@@ -117,30 +104,17 @@ export default function QualityIndicator({
         </div>
       </div>
 
-      <div className="mb-4 grid grid-cols-2 gap-4">
-        <div className="text-sm">
-          <div className="mb-1 text-zinc-500 dark:text-zinc-400">Completitud</div>
-          <div className="font-semibold">{score.completeness}%</div>
-        </div>
-        <div className="text-sm">
-          <div className="mb-1 text-zinc-500 dark:text-zinc-400">Calidad</div>
-          <div className="font-semibold">{score.quality}%</div>
-        </div>
-      </div>
-
-      {missingItems.length > 0 && (
-        <div className="mb-4 rounded-lg border border-zinc-200/70 bg-zinc-50/70 p-3 dark:border-zinc-800 dark:bg-zinc-900/50">
-          <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Áreas a reforzar
+      {/* Completitud/Calidad solo aparece cuando hay suficiente contenido para que sean útiles */}
+      {!isNew && (
+        <div className="mb-4 grid grid-cols-2 gap-4">
+          <div className="text-sm">
+            <div className="mb-1 text-zinc-500 dark:text-zinc-400">Completitud</div>
+            <div className="font-semibold">{score.completeness}%</div>
           </div>
-          <ul className="mt-2 grid gap-1 text-xs text-zinc-600 dark:text-zinc-400">
-            {missingItems.map((item) => (
-              <li key={item} className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="text-sm">
+            <div className="mb-1 text-zinc-500 dark:text-zinc-400">Calidad</div>
+            <div className="font-semibold">{score.quality}%</div>
+          </div>
         </div>
       )}
 
