@@ -509,7 +509,7 @@ export default function Step3Details({
       descriptionPlain.trim() ||
       requiredSkills.length > 0 ||
       niceSkills.length > 0 ||
-      languages.length > 0;
+      (languages?.length ?? 0) > 0;
     if (hasExisting) {
       setShowAiOverwriteModal(true);
     } else {
