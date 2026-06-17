@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/server/auth';
 import JobSearchBar from "@/components/JobSearchBar";
 import ClientSplitView from "@/components/jobs/ClientSplitView";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
 import Footer from "@/components/Footer";
 
@@ -51,7 +52,9 @@ export default async function PublicJobsPage({ searchParams }: { searchParams: S
         <JobSearchBar />
 
         {/* Chips de filtros activos */}
-        <ActiveFilterChips />
+        <Suspense fallback={null}>
+          <ActiveFilterChips />
+        </Suspense>
 
         <header className="space-y-1 pt-2">
           <h1 className="text-3xl font-bold">Vacantes disponibles</h1>

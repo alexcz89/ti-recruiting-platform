@@ -60,7 +60,7 @@ function getBaseUrl() {
 const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; dot: string }> = {
   JUNIOR: { label: "Junior",    dot: "bg-emerald-500", color: "bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50" },
   MID:    { label: "Mid Level", dot: "bg-blue-500",    color: "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800/50" },
-  SENIOR: { label: "Senior",    dot: "bg-violet-500",  color: "bg-violet-50 text-violet-700 border border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800/50" },
+  SENIOR: { label: "Senior",    dot: "bg-rose-500",    color: "bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50" },
 };
 
 const TYPE_CONFIG: Record<AssessmentType, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -136,12 +136,12 @@ export default async function TemplateDetailPage({ params }: PageProps) {
 
         {/* Header card */}
         <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm overflow-hidden">
-          <div className="h-1.5 w-full bg-gradient-to-r from-violet-500 to-blue-500" />
+          <div className="h-1.5 w-full bg-emerald-500" />
           <div className="p-5 sm:p-6">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold ${template.type === "CODING" ? "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold ${template.type === "CODING" ? "bg-zinc-900 text-zinc-100 dark:bg-zinc-100 dark:text-zinc-900" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"}`}>
                     <TypeIcon className="h-3.5 w-3.5" />
                     {typeLabel}
                   </span>
@@ -179,7 +179,7 @@ export default async function TemplateDetailPage({ params }: PageProps) {
                 )}
                 <Link
                   href={`/dashboard/jobs?assignTemplate=${template.id}`}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 px-3 py-2 text-sm font-bold text-white shadow-md shadow-violet-500/20 hover:shadow-lg transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-2 text-sm font-bold text-white shadow-md shadow-emerald-500/20 transition"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   Asignar a vacante
@@ -334,7 +334,7 @@ export default async function TemplateDetailPage({ params }: PageProps) {
                 Editar template
               </Link>
             )}
-            <Link href={`/dashboard/jobs?assignTemplate=${template.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-500/20 hover:shadow-lg transition">
+            <Link href={`/dashboard/jobs?assignTemplate=${template.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 px-4 py-2 text-sm font-bold text-white shadow-md shadow-emerald-500/20 transition">
               <Sparkles className="h-3.5 w-3.5" />
               Asignar a vacante
             </Link>

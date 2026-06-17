@@ -34,15 +34,15 @@ function getBaseUrl() {
   return (env ? (env.startsWith("http") ? env : `https://${env}`) : "http://localhost:3000").replace(/\/$/, "");
 }
 
-const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; dot: string; row: string }> = {
-  JUNIOR: { label: "Junior",    dot: "bg-emerald-500", color: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50", row: "border-l-emerald-500" },
-  MID:    { label: "Mid Level", dot: "bg-blue-500",    color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800/50",                   row: "border-l-blue-500" },
-  SENIOR: { label: "Senior",    dot: "bg-violet-500",  color: "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800/50",       row: "border-l-violet-500" },
+const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; color: string; dot: string }> = {
+  JUNIOR: { label: "Junior",    dot: "bg-emerald-500", color: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50" },
+  MID:    { label: "Mid Level", dot: "bg-blue-500",    color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800/50" },
+  SENIOR: { label: "Senior",    dot: "bg-rose-500",    color: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/30 dark:text-rose-300 dark:border-rose-800/50" },
 };
 
 const TYPE_CONFIG: Record<AssessmentType, { label: string; icon: React.ComponentType<{ className?: string }>; badge: string }> = {
   MCQ:    { label: "Opción múltiple", icon: CheckCircle2, badge: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300" },
-  CODING: { label: "Código",          icon: Code2,        badge: "bg-violet-50 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300" },
+  CODING: { label: "Código",          icon: Code2,        badge: "bg-zinc-900 text-zinc-100 dark:bg-zinc-100 dark:text-zinc-900" },
   MIXED:  { label: "Mixto",           icon: Layers,       badge: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300" },
 };
 
@@ -95,8 +95,8 @@ export default async function AssessmentTemplatesPage({ searchParams }: PageProp
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 p-2 shadow-lg shadow-violet-500/20">
-              <BookOpen className="h-5 w-5 text-white" />
+            <div className="rounded-xl bg-[#082B33] dark:bg-zinc-800 p-2">
+              <BookOpen className="h-5 w-5 text-emerald-400" />
             </div>
             <div>
               <h1 className="text-xl font-black tracking-tight text-zinc-900 dark:text-white">
@@ -111,7 +111,7 @@ export default async function AssessmentTemplatesPage({ searchParams }: PageProp
           <div className="flex items-center gap-2">
             <Link
               href="/dashboard/assessments/builder"
-              className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 px-4 py-2 text-sm font-bold text-white shadow-md shadow-violet-500/20 hover:shadow-lg transition-all"
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm shadow-emerald-500/20 hover:bg-emerald-500 transition-colors"
             >
               <Plus className="h-4 w-4" />
               Crear template
@@ -128,7 +128,7 @@ export default async function AssessmentTemplatesPage({ searchParams }: PageProp
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { value: totalTemplates,    label: "Templates",    color: "text-violet-600 dark:text-violet-400" },
+            { value: totalTemplates,    label: "Templates",    color: "text-zinc-800 dark:text-zinc-100" },
             { value: totalQuestions,    label: "Preguntas",    color: "text-blue-600 dark:text-blue-400" },
             { value: `${avgTime} min`,  label: "Tiempo prom.", color: "text-emerald-600 dark:text-emerald-400" },
             { value: customCount,       label: "Mis templates",color: "text-amber-600 dark:text-amber-400" },
@@ -176,7 +176,7 @@ export default async function AssessmentTemplatesPage({ searchParams }: PageProp
           <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center dark:border-zinc-700 dark:bg-zinc-900">
             <BookOpen className="mx-auto h-10 w-10 text-zinc-300 dark:text-zinc-600" />
             <p className="mt-3 text-base font-bold text-zinc-600 dark:text-zinc-300">Sin resultados</p>
-            <Link href="/dashboard/assessments/templates" className="mt-2 inline-block text-xs text-violet-600 hover:underline">
+            <Link href="/dashboard/assessments/templates" className="mt-2 inline-block text-xs text-emerald-600 hover:underline dark:text-emerald-400">
               Limpiar filtros
             </Link>
           </div>
@@ -242,7 +242,7 @@ function TemplateRow({ template, isAdmin }: { template: Template; isAdmin: boole
   const canEdit = !template.isGlobal || isAdmin;
 
   return (
-    <tr className={`group hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors border-l-2 ${diffConfig.row}`}>
+    <tr className="group hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors">
       {/* Name + description */}
       <td className="px-4 py-3 max-w-xs">
         <div className="flex items-start gap-2">
@@ -347,7 +347,7 @@ function TemplateRow({ template, isAdmin }: { template: Template; isAdmin: boole
           {/* Asignar */}
           <Link
             href={`/dashboard/jobs?assignTemplate=${template.id}`}
-            className="inline-flex items-center gap-1 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm shadow-violet-500/20 hover:shadow-md transition"
+            className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm shadow-emerald-500/20 hover:bg-emerald-500 transition-colors"
           >
             <Sparkles className="h-3.5 w-3.5" />
             Asignar
@@ -367,7 +367,7 @@ function TemplateMobileCard({ template, isAdmin }: { template: Template; isAdmin
   const canEdit = !template.isGlobal || isAdmin;
 
   return (
-    <div className={`rounded-xl border bg-white dark:bg-zinc-900 dark:border-zinc-800 shadow-sm border-l-2 ${diffConfig.row} p-4`}>
+    <div className="rounded-xl border border-zinc-200 bg-white dark:bg-zinc-900 dark:border-zinc-800 shadow-sm p-4">
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 flex-wrap mb-1">
@@ -401,7 +401,7 @@ function TemplateMobileCard({ template, isAdmin }: { template: Template; isAdmin
             <Pencil className="h-3.5 w-3.5" /> Editar
           </Link>
         )}
-        <Link href={`/dashboard/jobs?assignTemplate=${template.id}`} className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 py-2 text-[11px] font-bold text-white shadow-sm transition">
+        <Link href={`/dashboard/jobs?assignTemplate=${template.id}`} className="flex-1 flex items-center justify-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 py-2 text-[11px] font-bold text-white shadow-sm shadow-emerald-500/20 transition">
           <Sparkles className="h-3.5 w-3.5" /> Asignar
         </Link>
       </div>
@@ -427,7 +427,7 @@ function FilterChip({ href, active, children }: { href: string; active: boolean;
       href={href}
       className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[10px] font-semibold border transition whitespace-nowrap
         ${active
-          ? "bg-violet-600 text-white border-violet-600 shadow-sm"
+          ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
           : "bg-white text-zinc-600 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-800"
         }`}
     >
