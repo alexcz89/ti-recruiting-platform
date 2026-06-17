@@ -3,20 +3,21 @@ import "./globals.css";
 import "react-phone-input-2/lib/style.css";
 import type { Metadata } from "next";
 
-import { Inter } from "next/font/google";
+import { Inter, Bricolage_Grotesque } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider";
 import { generateOrganizationSchema, generateWebsiteSchema } from "@/lib/seo/schema";
 
-// ✅ Font Optimization: Use variable font with display swap
-// - display: 'swap' prevents invisible text while font loads (FOIT → FOUT)
-// - Variable font reduces payload vs multiple weights
-// - Weights: 400 (normal), 500 (medium), 600 (semibold), 700 (bold)
 const inter = Inter({
   subsets: ["latin"],
-  display: "swap", // Prevents font flash while loading
-  variable: "--font-inter", // CSS variable for usage
+  display: "swap",
+  variable: "--font-inter",
+});
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
 });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
@@ -45,7 +46,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   const websiteSchema = generateWebsiteSchema();
 
   return (
-    <html lang="es" suppressHydrationWarning className={`${inter.className} h-full`}>
+    <html lang="es" suppressHydrationWarning className={`${inter.variable} ${bricolage.variable} h-full`}>
       <head>
         <ThemeScript />
         <meta name="apple-mobile-web-app-title" content="TaskIO" />
