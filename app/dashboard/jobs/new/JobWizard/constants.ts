@@ -34,7 +34,7 @@ export const BENEFITS = [
   { key: "combustible", label: "Combustible", def: false },
   { key: "comedor", label: "Comedor subsidiado", def: false },
   { key: "celular", label: "Celular", def: false },
-  { key: "sgmm", label: "SGMM", def: false },
+  { key: "sgmm", label: "Seguro GMM", def: false },
   { key: "vida", label: "Seguro de vida", def: false },
   { key: "auto", label: "Automóvil", def: false },
   { key: "otros", label: "Otros", def: false },

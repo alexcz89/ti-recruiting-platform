@@ -16,7 +16,7 @@ type Props = {
 };
 
 export default function Step3Benefits({ onNext, onBack }: Props) {
-  const { watch, setValue, register } = useFormContext<JobForm>();
+  const { watch, setValue } = useFormContext<JobForm>();
 
   const benefits     = watch("benefits");
   const showBenefits = watch("showBenefits");
@@ -71,10 +71,23 @@ export default function Step3Benefits({ onNext, onBack }: Props) {
             Recomendado: aumenta conversiones
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" {...register("showBenefits")} />
-          {showBenefits ? "Si" : "No"}
-        </label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showBenefits}
+          onClick={() => setValue("showBenefits", !showBenefits, { shouldDirty: true })}
+          className={clsx(
+            "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1",
+            showBenefits ? "bg-emerald-600" : "bg-zinc-300 dark:bg-zinc-600"
+          )}
+        >
+          <span
+            className={clsx(
+              "inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200",
+              showBenefits ? "translate-x-4" : "translate-x-0"
+            )}
+          />
+        </button>
       </div>
 
       {/* Grid de prestaciones */}
@@ -101,8 +114,13 @@ export default function Step3Benefits({ onNext, onBack }: Props) {
                     if (isVales && !e.target.checked) setValue("valesMonto", null, { shouldDirty: true });
                   }}
                 />
-                <span className="min-w-0 flex-1 text-sm font-medium text-zinc-800 dark:text-zinc-100 whitespace-normal break-normal hyphens-none leading-tight">
-                  {b.label}
+                <span className="min-w-0 flex-1 whitespace-normal break-normal hyphens-none leading-tight">
+                  <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100">{b.label}</span>
+                  {b.key === "otros" && (
+                    <span className="block text-[11px] font-normal text-zinc-400 dark:text-zinc-500 mt-0.5">
+                      Agrega beneficios personalizados
+                    </span>
+                  )}
                 </span>
                 <div className="ml-auto flex items-center gap-3 shrink-0">
                   {checked && b.key === "aguinaldo" && (

@@ -1,16 +1,17 @@
 // JobWizard/components/QualityIndicator.tsx
 "use client";
 
-import { Lightbulb, TrendingUp, AlertTriangle } from "lucide-react";
+import { Check, Lightbulb, TrendingUp, AlertTriangle } from "lucide-react";
 import { QualityScore } from "../hooks/useQualityScore";
 import clsx from "clsx";
 
 type QualityIndicatorProps = {
   score: QualityScore;
   compact?: boolean;
+  currentStep?: number;
 };
 
-// Maps useQualityScore step numbers to wizard step labels (step 3 = Prestaciones, step 4 = Detalles)
+// Maps useQualityScore step numbers to wizard step labels
 const STEP_LABEL_MAP: Record<number, string> = {
   1: "Básicos",
   2: "Prestaciones",
@@ -19,9 +20,19 @@ const STEP_LABEL_MAP: Record<number, string> = {
   5: "Evaluaciones",
 };
 
+// Maps useQualityScore step numbers → wizard visual step (1–5)
+// useQualityScore uses: 1=Básicos, 3=Prestaciones, 4=Detalles, 5=Evaluaciones
+const SCORE_STEP_TO_WIZARD: Record<number, number> = {
+  1: 1,
+  3: 2,
+  4: 3,
+  5: 4,
+};
+
 export default function QualityIndicator({
   score,
   compact = false,
+  currentStep,
 }: QualityIndicatorProps) {
   const getScoreColor = (value: number) => {
     if (value >= 90) return "text-green-600 dark:text-green-400";
@@ -47,6 +58,14 @@ export default function QualityIndicator({
     return "Baja";
   };
 
+  // Filter issues to only those relevant to current or past wizard steps
+  const visibleIssues = currentStep != null
+    ? score.issues.filter(i => (SCORE_STEP_TO_WIZARD[i.step] ?? 99) <= currentStep)
+    : score.issues;
+
+  const hasFutureIssues = currentStep != null && visibleIssues.length === 0 && score.issues.length > 0;
+  const topIssues = visibleIssues.slice(0, 3);
+
   // Tells the user which specific wizard step to complete, not how many abstract "pasos"
   const progressMessage = (() => {
     if (score.overall >= 60) return `Nivel actual: ${getLevelLabel(score.overall)}`;
@@ -57,7 +76,6 @@ export default function QualityIndicator({
     return `Completa ${stepNames.length} pasos para subir`;
   })();
 
-  const topIssues = score.issues.slice(0, 3);
   const isNew = score.overall < 40;
 
   if (compact) {
@@ -115,6 +133,14 @@ export default function QualityIndicator({
             <div className="mb-1 text-zinc-500 dark:text-zinc-400">Calidad</div>
             <div className="font-semibold">{score.quality}%</div>
           </div>
+        </div>
+      )}
+
+      {/* Feedback positivo cuando el paso actual no tiene issues pendientes */}
+      {hasFutureIssues && (
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 dark:border-emerald-800 dark:bg-emerald-950/20">
+          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <span className="text-xs text-emerald-700 dark:text-emerald-400">Este paso se ve bien</span>
         </div>
       )}
 

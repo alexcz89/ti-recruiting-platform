@@ -462,7 +462,7 @@ export default function JobWizard({
               </div>
 
               <div className="lg:hidden">
-                <QualityIndicator score={qualityScore} compact />
+                <QualityIndicator score={qualityScore} compact currentStep={step} />
               </div>
             </div>
 
@@ -539,7 +539,7 @@ export default function JobWizard({
 
               <div className="hidden lg:block">
                 <div className="sticky top-6">
-                  <QualityIndicator score={qualityScore} />
+                  <QualityIndicator score={qualityScore} currentStep={step} />
                 </div>
               </div>
             </div>
