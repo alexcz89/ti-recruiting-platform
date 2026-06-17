@@ -67,7 +67,7 @@ export default async function Home() {
           <div className="flex flex-col items-center pt-16 pb-20 text-center sm:pt-20 lg:pt-32 lg:pb-28">
 
             {/* Headline */}
-            <h1 className="font-display max-w-4xl text-5xl font-extrabold tracking-tight text-[#082B33] dark:text-white sm:text-6xl lg:text-[5.5rem] lg:leading-[0.95] animate-fade-in-up" style={{textWrap: "balance" as never}}>
+            <h1 className="font-display max-w-4xl text-5xl font-extrabold tracking-tight text-[#082B33] dark:text-white sm:text-6xl lg:text-[5.5rem] lg:leading-[0.95] animate-fade-in-up [text-wrap:balance]">
               El reclutamiento TI
               <br className="hidden sm:block" />
               {" "}<span className="text-emerald-600 dark:text-emerald-400">que sí funciona.</span>
@@ -245,7 +245,7 @@ export default async function Home() {
                 </div>
                 <div>
                   <h3 className="font-bold text-zinc-900 dark:text-zinc-50">Para candidatos</h3>
-                  <p className="text-xs text-zinc-400">Siempre gratis</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">Siempre gratis</p>
                 </div>
               </div>
               <div className="space-y-5">
@@ -286,7 +286,7 @@ export default async function Home() {
                 </div>
                 <div>
                   <h3 className="font-bold text-zinc-900 dark:text-zinc-50">Para empresas</h3>
-                  <p className="text-xs text-zinc-400">14 días gratis</p>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">14 días gratis</p>
                 </div>
               </div>
               <div className="space-y-5">
@@ -331,7 +331,7 @@ export default async function Home() {
             <h2 className="font-display text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl">
               Mira Taskio por dentro
             </h2>
-            <p className="mt-3 text-sm text-zinc-400 dark:text-zinc-500 max-w-lg mx-auto">
+            <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400 max-w-lg mx-auto">
               Dashboard de reclutador — candidatos rankeados por AI, estado del pipeline y evaluaciones en un solo lugar.
             </p>
           </div>
@@ -515,7 +515,7 @@ export default async function Home() {
                   Crear cuenta gratis
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </Link>
-                <p className="mt-3 text-center text-xs text-zinc-400 dark:text-zinc-500">
+                <p className="mt-3 text-center text-xs text-zinc-500 dark:text-zinc-400">
                   Sin tarjeta de crédito · Siempre gratis
                 </p>
               </div>
@@ -741,7 +741,7 @@ export default async function Home() {
               <div className="mt-4 grid grid-cols-3 gap-1.5">
                 {([["Postulados", "12", "zinc"], ["Evaluación", "6", "amber"], ["Oferta", "2", "emerald"]] as const).map(([col, n, c]) => (
                   <div key={col} className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-2 text-center">
-                    <div className="text-[9px] font-medium text-zinc-400 dark:text-zinc-500 truncate">{col}</div>
+                    <div className="text-[9px] font-medium text-zinc-500 dark:text-zinc-400 truncate">{col}</div>
                     <div className="mt-0.5 text-xl font-black text-zinc-800 dark:text-zinc-100">{n}</div>
                   </div>
                 ))}
@@ -774,7 +774,7 @@ export default async function Home() {
                   <div key={i} className="flex-1 rounded-sm bg-rose-200 dark:bg-rose-800/60" style={{ height: `${h}%` }} />
                 ))}
               </div>
-              <div className="mt-1 flex justify-between text-[9px] text-zinc-400 dark:text-zinc-500">
+              <div className="mt-1 flex justify-between text-[9px] text-zinc-500 dark:text-zinc-400">
                 <span>Lun</span><span>Dom</span>
               </div>
             </div>
@@ -791,10 +791,7 @@ export default async function Home() {
 
           {/* ── Planes de suscripción ── */}
           <div className="text-center mb-12 sm:mb-16">
-            <h2
-              className="font-display text-3xl font-bold text-zinc-900 dark:text-white sm:text-4xl"
-              style={{ textWrap: "balance" as never }}
-            >
+            <h2 className="font-display text-3xl font-bold text-zinc-900 dark:text-white sm:text-4xl [text-wrap:balance]">
               Empieza gratis. Escala cuando crezcas.
             </h2>
             <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400 sm:text-lg">
@@ -835,7 +832,7 @@ export default async function Home() {
                     </div>
                     <div>
                       <h3 className="font-display text-base font-bold text-zinc-900 dark:text-white">{plan.name}</h3>
-                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-tight">{plan.tagline}</p>
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-tight">{plan.tagline}</p>
                     </div>
                   </div>
 
@@ -844,19 +841,19 @@ export default async function Home() {
                     {plan.priceMonthly === 0 ? (
                       <>
                         <span className="font-display text-4xl font-black text-zinc-900 dark:text-white">$0</span>
-                        <span className="pb-1 text-sm text-zinc-400 dark:text-zinc-500">MXN/mes</span>
+                        <span className="pb-1 text-sm text-zinc-500 dark:text-zinc-400">MXN/mes</span>
                       </>
                     ) : (
                       <>
-                        <span className="text-lg font-medium text-zinc-400 dark:text-zinc-400">$</span>
+                        <span className="text-lg font-medium text-zinc-500 dark:text-zinc-400">$</span>
                         <span className="font-display text-4xl font-black text-zinc-900 dark:text-white">
                           {plan.priceMonthly.toLocaleString("es-MX")}
                         </span>
-                        <span className="pb-1 text-sm text-zinc-400 dark:text-zinc-500">MXN/mes</span>
+                        <span className="pb-1 text-sm text-zinc-500 dark:text-zinc-400">MXN/mes</span>
                       </>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-600">
+                  <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-500">
                     {plan.priceMonthly === 0 ? "Sin costo, para siempre" : "Facturado mensualmente"}
                   </p>
 
@@ -919,7 +916,7 @@ export default async function Home() {
                       </div>
                     )}
 
-                    <p className="text-[11px] font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase">
+                    <p className="text-[11px] font-bold tracking-widest text-zinc-500 dark:text-zinc-400 uppercase">
                       {pack.id === "pack_50" ? "Básico"
                         : pack.id === "pack_200" ? "Popular"
                         : "Enterprise"}
@@ -927,16 +924,16 @@ export default async function Home() {
 
                     <div className="mt-2 flex items-baseline gap-1">
                       <span className="font-display text-4xl font-black text-zinc-900 dark:text-white">{codingTests}</span>
-                      <span className="text-sm text-zinc-400 dark:text-zinc-500">coding tests</span>
+                      <span className="text-sm text-zinc-500 dark:text-zinc-400">coding tests</span>
                     </div>
 
                     <div className="mt-3">
                       <span className="font-display text-2xl font-bold text-zinc-900 dark:text-white">
                         ${pack.basePriceMxn.toLocaleString("es-MX")}
                       </span>
-                      <span className="ml-1 text-sm text-zinc-400 dark:text-zinc-500">MXN</span>
+                      <span className="ml-1 text-sm text-zinc-500 dark:text-zinc-400">MXN</span>
                     </div>
-                    <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
+                    <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-500">
                       ${Math.round(pack.basePriceMxn / codingTests)}/test
                     </p>
 
@@ -951,7 +948,7 @@ export default async function Home() {
             </div>
           </div>
 
-          <p className="mt-10 text-center text-xs text-zinc-600">
+          <p className="mt-10 text-center text-xs text-zinc-600 dark:text-zinc-400">
             Precios en MXN · Impuestos no incluidos · Cancela cuando quieras
           </p>
         </div>
@@ -988,7 +985,7 @@ export default async function Home() {
               Demo para empresas
             </Link>
           </div>
-          <p className="mt-6 text-sm text-zinc-400 dark:text-zinc-500">
+          <p className="mt-6 text-sm text-zinc-500 dark:text-zinc-400">
             Candidatos: siempre gratis · Empresas: 14 días de prueba sin tarjeta
           </p>
         </div>
