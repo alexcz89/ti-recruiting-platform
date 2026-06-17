@@ -1,7 +1,7 @@
 // JobWizard/components/QualityIndicator.tsx
 "use client";
 
-import { CheckCircle, TrendingUp, AlertTriangle } from "lucide-react";
+import { Lightbulb, TrendingUp, AlertTriangle } from "lucide-react";
 import { QualityScore } from "../hooks/useQualityScore";
 import clsx from "clsx";
 
@@ -46,7 +46,9 @@ export default function QualityIndicator({
 
   const progressMessage =
     stepsToGood > 0
-      ? `Faltan ${stepsToGood} pasos para llegar a Buena`
+      ? stepsToGood === 1
+        ? `Falta 1 paso para llegar a Buena`
+        : `Faltan ${stepsToGood} pasos para llegar a Buena`
       : `Nivel actual: ${getLevelLabel(score.overall)}`;
 
   const missingItems = Array.from(
@@ -134,7 +136,7 @@ export default function QualityIndicator({
           <ul className="mt-2 grid gap-1 text-xs text-zinc-600 dark:text-zinc-400">
             {missingItems.map((item) => (
               <li key={item} className="flex items-center gap-2">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
                 <span>{item}</span>
               </li>
             ))}
@@ -172,7 +174,7 @@ export default function QualityIndicator({
               key={idx}
               className="flex items-start gap-3 text-xs text-zinc-600 dark:text-zinc-400"
             >
-              <CheckCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-emerald-500" />
+              <Lightbulb className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-blue-400 dark:text-blue-400" />
               <span>{suggestion}</span>
             </div>
           ))}
