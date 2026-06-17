@@ -617,13 +617,15 @@ export default async function JobApplicationsPage({
               <p className="text-base font-semibold text-zinc-800 dark:text-zinc-100">
                 {activeFiltersCount > 0
                   ? "Ningún candidato coincide con los filtros."
-                  : chosenInterest
-                    ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
-                    : "Aún no hay postulaciones."}
+                  : total === 0
+                    ? "Aún no hay postulaciones."
+                    : chosenInterest
+                      ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
+                      : "Aún no hay postulaciones."}
               </p>
-              {!activeFiltersCount && !chosenInterest && (
+              {!activeFiltersCount && total === 0 && (
                 <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                  Comparte la vacante para atraer candidatos
+                  Tu vacante está activa. Compártela para atraer candidatos.
                 </p>
               )}
             </div>
@@ -632,7 +634,7 @@ export default async function JobApplicationsPage({
                 className="inline-block text-sm text-emerald-600 underline hover:no-underline">
                 Limpiar filtros
               </Link>
-            ) : !chosenInterest && (
+            ) : total === 0 && (
               <ShareLinkedInButton jobId={job.id} jobTitle={job.title} jobLocation={job.location} />
             )}
           </div>

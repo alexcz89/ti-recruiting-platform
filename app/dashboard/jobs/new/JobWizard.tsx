@@ -518,6 +518,7 @@ export default function JobWizard({
                     busy={busy}
                     onBack={() => setStep(4)}
                     isEditing={isEditing}
+                    jobId={initial?.id}
                     onEditStep={(targetStep) => {
                       setStep(targetStep);
                       setMaxStepVisited((prev) => Math.max(prev, targetStep));
@@ -528,6 +529,9 @@ export default function JobWizard({
                       setStep3Tab(tab);
                       setMaxStepVisited((prev) => Math.max(prev, 3));
                       window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    onSaveDraft={() => {
+                      router.push("/dashboard/jobs");
                     }}
                   />
                 )}

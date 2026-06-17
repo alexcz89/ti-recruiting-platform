@@ -44,6 +44,7 @@ export default function Stepper({
                 type="button"
                 onClick={() => canJump && onJump?.(n)}
                 disabled={!canJump}
+                title={canJump && !active ? `Ir a ${STEP_LABELS[idx] || `Paso ${n}`}` : undefined}
                 className={clsx(
                   "group relative flex w-full flex-col items-center gap-1.5 transition-all duration-200",
                   canJump ? "cursor-pointer" : "cursor-not-allowed opacity-50"

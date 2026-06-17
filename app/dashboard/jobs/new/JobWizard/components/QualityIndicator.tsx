@@ -62,10 +62,12 @@ export default function QualityIndicator({
         if (msg.includes("descrip")) return "Descripción";
         if (msg.includes("horario")) return "Horario";
         if (msg.includes("evaluación") || msg.includes("evaluacion")) return "Evaluación";
-        return issue.message;
+        if (msg.includes("demasiados") || msg.includes("requisitos")) return "Muchos requisitos";
+        if (msg.includes("salarial") || msg.includes("rango")) return "Sueldo";
+        return null;
       })
     )
-  ).slice(0, 5);
+  ).filter((item): item is string => item !== null).slice(0, 5);
 
   const topIssues = score.issues.slice(0, 3);
 
@@ -88,8 +90,11 @@ export default function QualityIndicator({
           <TrendingUp className="h-5 w-5 text-emerald-500" />
           <h3 className="font-semibold">Calidad de la vacante</h3>
         </div>
-        <div className="flex flex-col items-end">
-          <span className={clsx("text-2xl font-semibold", getScoreColor(score.overall))}>
+        <div className="flex flex-col items-end gap-0.5">
+          <span
+            className={clsx("text-2xl font-semibold", getScoreColor(score.overall))}
+            title="Puntuación basada en título, descripción, skills, sueldo, prestaciones, educación, idiomas y evaluaciones técnicas."
+          >
             {score.overall}%
           </span>
           <span className="text-xs text-zinc-500 dark:text-zinc-400">

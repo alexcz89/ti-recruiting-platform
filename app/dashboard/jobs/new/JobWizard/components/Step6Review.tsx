@@ -11,6 +11,9 @@ import {
   ClipboardCheck,
   Globe,
   AlertTriangle,
+  X,
+  MapPin,
+  ExternalLink,
 } from "lucide-react";
 import { JobForm, PresetCompany } from "../types";
 import { BENEFITS } from "../constants";
@@ -32,9 +35,12 @@ type Props = {
   presetCompany: PresetCompany;
   busy: boolean;
   isEditing: boolean;
+  jobId?: string;
+  jobSlug?: string;
   onBack: () => void;
   onEditStep: (step: number) => void;
   onEditTab: (tab: Tab) => void;
+  onSaveDraft?: () => void;
 };
 
 function getLabel(
@@ -130,13 +136,17 @@ export default function Step6Review({
   presetCompany,
   busy,
   isEditing,
+  jobId,
+  jobSlug,
   onBack,
   onEditStep,
   onEditTab,
+  onSaveDraft,
 }: Props) {
   const { watch } = useFormContext<JobForm>();
   const v = watch();
   const [showPublishWarningModal, setShowPublishWarningModal] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   // Cargar títulos de los assessments seleccionados para mostrarlos en el review
   const [assessmentTitles, setAssessmentTitles] = useState<Record<string, string>>({});
@@ -207,6 +217,9 @@ export default function Step6Review({
     certs: v.certs,
     languages: v.languages,
     assessmentTemplateId: v.assessmentTemplateId,
+    assessmentTemplateIds: v.assessmentTemplateIds,
+    benefits: v.benefits,
+    minDegree: v.minDegree,
   });
 
   const tone = qualityTone(quality.score);
@@ -239,9 +252,31 @@ export default function Step6Review({
 
   return (
     <div className="space-y-8 rounded-xl border border-zinc-200 bg-white p-6 shadow-sm md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
-      <h3 className="text-lg font-bold text-zinc-900 sm:text-xl dark:text-zinc-100">
-        6) Revisión y publicación
-      </h3>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-lg font-bold text-zinc-900 sm:text-xl dark:text-zinc-100">
+          5) Revisión y publicación
+        </h3>
+        {isEditing && jobId ? (
+          <a
+            href={`/jobs/${jobSlug ?? jobId}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:border-emerald-300 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-700/40 dark:hover:text-emerald-300"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Ver como candidato
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:border-emerald-300 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-700/40 dark:hover:text-emerald-300"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Vista previa
+          </button>
+        )}
+      </div>
 
       <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 dark:border-zinc-800 dark:bg-zinc-950/30">
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -336,7 +371,18 @@ export default function Step6Review({
           onEdit={() => onEditStep(1)}
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Row label="Sueldo" value={salaryText} />
+            <Row
+              label={
+                salaryMin != null && salaryMax != null
+                  ? "Rango salarial"
+                  : salaryMax != null
+                  ? "Sueldo máximo"
+                  : salaryMin != null
+                  ? "Sueldo mínimo"
+                  : "Sueldo"
+              }
+              value={salaryText}
+            />
             <Row label="Tipo de empleo" value={employmentLabel} />
             {v.schedule && <Row label="Horario" value={v.schedule} />}
           </div>
@@ -401,9 +447,12 @@ export default function Step6Review({
           <div className="grid gap-4">
             {(v.requiredSkills?.length > 0 || v.niceSkills?.length > 0) && (
               <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                  Skills
-                </p>
+                <div className="mb-2 flex items-baseline justify-between gap-2">
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Skills</p>
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    <span className="text-emerald-500">★</span> Obligatoria · sin estrella = Deseable
+                  </p>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {v.requiredSkills?.map((s) => (
                     <span
@@ -518,17 +567,28 @@ export default function Step6Review({
       </div>
 
       <div className="mt-10 border-t border-zinc-200 pt-10 dark:border-zinc-800">
-        <div className="flex justify-between gap-4">
-          <button
-            type="button"
-            className="rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-            onClick={() => {
-              setShowPublishWarningModal(false);
-              onBack();
-            }}
-          >
-            Atrás
-          </button>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-zinc-300 px-6 py-2.5 text-sm font-medium transition hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              onClick={() => {
+                setShowPublishWarningModal(false);
+                onBack();
+              }}
+            >
+              Atrás
+            </button>
+            {!isEditing && onSaveDraft && (
+              <button
+                type="button"
+                className="rounded-md px-4 py-2.5 text-sm font-medium text-zinc-500 transition hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                onClick={onSaveDraft}
+              >
+                Guardar borrador
+              </button>
+            )}
+          </div>
 
           <button
             ref={submitBtnRef}
@@ -543,6 +603,99 @@ export default function Step6Review({
           </button>
         </div>
       </div>
+
+      {previewOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 backdrop-blur-sm sm:p-8"
+          onClick={(e) => e.target === e.currentTarget && setPreviewOpen(false)}
+        >
+          <div className="relative w-full max-w-2xl rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900">
+            <button
+              type="button"
+              onClick={() => setPreviewOpen(false)}
+              className="absolute right-4 top-4 rounded-full p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+              aria-label="Cerrar vista previa"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="border-b border-zinc-100 px-6 pb-5 pt-6 dark:border-zinc-800">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-zinc-400">
+                Vista previa · Como lo verá el candidato
+              </p>
+              <h2 className="text-xl font-bold text-zinc-900 sm:text-2xl dark:text-zinc-50">
+                {v.title || "—"}
+              </h2>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
+                <span>
+                  {v.companyMode === "external" ? v.companyOtherName || "Empresa externa" : presetCompany?.name || "Mi empresa"}
+                </span>
+                {(v.city || v.locationType === "REMOTE") && (
+                  <span className="flex items-center gap-1">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {v.locationType === "REMOTE" ? "Remoto" : `${locationLabel} · ${v.city}`}
+                  </span>
+                )}
+                {v.showSalary && salaryMin == null && salaryMax == null ? null : v.showSalary ? (
+                  <span className="font-medium text-emerald-600 dark:text-emerald-400">{salaryText}</span>
+                ) : null}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                  {employmentLabel}
+                </span>
+                {v.schedule && (
+                  <span className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400">
+                    {v.schedule}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto px-6 py-5 space-y-5">
+              {safeDescHtml.trim() ? (
+                <div
+                  className="prose prose-sm max-w-none text-zinc-700 dark:prose-invert dark:text-zinc-300"
+                  dangerouslySetInnerHTML={{ __html: safeDescHtml }}
+                />
+              ) : (
+                <p className="text-sm text-zinc-400 italic">Sin descripción aún.</p>
+              )}
+
+              {(v.requiredSkills?.length > 0 || v.niceSkills?.length > 0) && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Skills requeridas</p>
+                  <div className="flex flex-wrap gap-2">
+                    {v.requiredSkills?.map((s) => (
+                      <span key={s} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50/60 px-3 py-1 text-xs font-medium text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-100">
+                        {s}
+                      </span>
+                    ))}
+                    {v.niceSkills?.map((s) => (
+                      <span key={s} className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {benefitsList.length > 0 && v.showBenefits && (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Prestaciones</p>
+                  <div className="flex flex-wrap gap-2">
+                    {benefitsList.map((b) => (
+                      <span key={b} className="inline-flex items-center rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+                        {b}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <WizardWarningModal
         open={showPublishWarningModal}
