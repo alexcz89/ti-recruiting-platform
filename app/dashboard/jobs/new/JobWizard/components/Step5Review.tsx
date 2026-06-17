@@ -1,4 +1,4 @@
-// app/dashboard/jobs/new/JobWizard/components/Step6Review.tsx
+// app/dashboard/jobs/new/JobWizard/components/Step5Review.tsx
 "use client";
 
 import { useRef, useState, useEffect } from "react";
@@ -132,7 +132,7 @@ function parseSalary(value: unknown) {
   return undefined;
 }
 
-export default function Step6Review({
+export default function Step5Review({
   presetCompany,
   busy,
   isEditing,

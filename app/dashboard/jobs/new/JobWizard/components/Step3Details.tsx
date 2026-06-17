@@ -1,4 +1,4 @@
-// app/dashboard/jobs/new/JobWizard/components/Step5Details.tsx
+// app/dashboard/jobs/new/JobWizard/components/Step3Details.tsx
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
@@ -16,15 +16,15 @@ import WizardWarningModal from "./WizardWarningModal";
 import { toastError, toastSuccess } from "@/lib/ui/toast";
 import { DEGREE_OPTIONS, normalizeDegreeValue } from "../lib/job-enums";
 
-export type Step5Tab = "desc" | "skills" | "langs" | "edu";
+export type Step3Tab = "desc" | "skills" | "langs" | "edu";
 
 type Props = {
   skillsOptions: string[];
   certOptions: string[];
   onNext: () => void;
   onBack: () => void;
-  activeTab?: Step5Tab;
-  onTabChange?: (tab: Step5Tab) => void;
+  activeTab?: Step3Tab;
+  onTabChange?: (tab: Step3Tab) => void;
 };
 
 type AiMode = "generate-all" | "improve-description" | "extract-structure";
@@ -77,7 +77,7 @@ function plainToBasicHtml(plain: string): string {
     .join("");
 }
 
-export default function Step5Details({
+export default function Step3Details({
   skillsOptions,
   certOptions,
   onNext,
@@ -94,7 +94,7 @@ export default function Step5Details({
     formState: { errors },
   } = useFormContext<JobForm>();
 
-  const [tab, setTab] = useState<Step5Tab>(activeTab);
+  const [tab, setTab] = useState<Step3Tab>(activeTab);
   const [skillQuery, setSkillQuery] = useState("");
   const [certQuery, setCertQuery] = useState("");
   const [educationQuery, setEducationQuery] = useState("");
@@ -156,7 +156,7 @@ export default function Step5Details({
     }
   }, [hasSkills, showMissingSkillsModal]);
 
-  function changeTab(next: Step5Tab) {
+  function changeTab(next: Step3Tab) {
     setTab(next);
     onTabChange?.(next);
   }
@@ -732,15 +732,15 @@ export default function Step5Details({
   }
 
   const tabItems = [
-    { k: "desc" as Step5Tab, lbl: "Descripción", done: descLength > 0 },
+    { k: "desc" as Step3Tab, lbl: "Descripción", done: descLength > 0 },
     {
-      k: "skills" as Step5Tab,
+      k: "skills" as Step3Tab,
       lbl: "Skills / Certs",
       done: requiredSkills.length + niceSkills.length + certs.length > 0,
     },
-    { k: "langs" as Step5Tab, lbl: "Idiomas", done: languageFields.length > 0 },
+    { k: "langs" as Step3Tab, lbl: "Idiomas", done: languageFields.length > 0 },
     {
-      k: "edu" as Step5Tab,
+      k: "edu" as Step3Tab,
       lbl: "Educación",
       done: eduRequired.length + eduNice.length > 0,
     },

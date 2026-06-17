@@ -26,10 +26,10 @@ import {
 import Stepper from "./JobWizard/components/Stepper";
 import QualityIndicator from "./JobWizard/components/QualityIndicator";
 import Step1Basic from "./JobWizard/components/Step1Basic";
-import Step3Benefits from "./JobWizard/components/Step3Benefits";
+import Step2Benefits from "./JobWizard/components/Step2Benefits";
 import Step4Assessments from "./JobWizard/components/Step4Assessments";
-import Step5Details, { type Step5Tab } from "./JobWizard/components/Step5Details";
-import Step6Review from "./JobWizard/components/Step6Review";
+import Step3Details, { type Step3Tab } from "./JobWizard/components/Step3Details";
+import Step5Review from "./JobWizard/components/Step5Review";
 
 // Pasos: 1=Básicos, 2=Prestaciones, 3=Detalles, 4=Evaluaciones, 5=Revisión
 
@@ -119,7 +119,7 @@ export default function JobWizard({
     false,
   ]);
   const [busy, setBusy] = useState(false);
-  const [step3Tab, setStep3Tab] = useState<Step5Tab>("desc");
+  const [step3Tab, setStep3Tab] = useState<Step3Tab>("desc");
 
   const methods = useForm<any>({
     resolver: zodResolver(jobSchema),
@@ -488,14 +488,14 @@ export default function JobWizard({
                 )}
 
                 {step === 2 && (
-                  <Step3Benefits
+                  <Step2Benefits
                     onNext={() => goNextStep(3)}
                     onBack={() => setStep(1)}
                   />
                 )}
 
                 {step === 3 && (
-                  <Step5Details
+                  <Step3Details
                     skillsOptions={skillsOptions}
                     certOptions={certOptions}
                     onNext={() => goNextStep(4)}
@@ -513,7 +513,7 @@ export default function JobWizard({
                 )}
 
                 {step === 5 && (
-                  <Step6Review
+                  <Step5Review
                     presetCompany={presetCompany ?? null}
                     busy={busy}
                     onBack={() => setStep(4)}

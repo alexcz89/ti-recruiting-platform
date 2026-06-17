@@ -1,4 +1,4 @@
-// app/dashboard/jobs/new/JobWizard/components/Step3Benefits.tsx
+// app/dashboard/jobs/new/JobWizard/components/Step2Benefits.tsx
 "use client";
 
 import { useFormContext } from "react-hook-form";
@@ -15,7 +15,7 @@ type Props = {
   onBack: () => void;
 };
 
-export default function Step3Benefits({ onNext, onBack }: Props) {
+export default function Step2Benefits({ onNext, onBack }: Props) {
   const { watch, setValue } = useFormContext<JobForm>();
 
   const benefits     = watch("benefits");
