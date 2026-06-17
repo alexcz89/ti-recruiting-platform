@@ -766,106 +766,104 @@ export default function Step3Details({
 
   return (
     <div className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm md:space-y-6 md:p-8 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/10">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-200">
-            <Sparkles className="h-4 w-4 shrink-0" />
-            <span>Asistente AI para redactar la vacante</span>
+      {/* Panel AI: solo visible en las tabs donde aplica */}
+      {tab === "desc" && (
+        <div className="flex flex-col gap-3 rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/10">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900 dark:text-emerald-200">
+              <Sparkles className="h-4 w-4 shrink-0" />
+              <span>Asistente AI para redactar la vacante</span>
+            </div>
+            <p className="text-xs leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+              Genera o mejora la descripción usando el título, el contexto capturado y
+              la base escrita por el reclutador.
+            </p>
           </div>
-          <p className="text-xs leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
-            Genera o mejora la descripción usando el título, el contexto capturado y
-            la base escrita por el reclutador.
-          </p>
-        </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          <button
-            type="button"
-            onClick={requestGenerateWithAi}
-            disabled={isGeneratingAi || isImprovingDescription || isExtractingStructure}
-            className={clsx(
-              "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition",
-              isGeneratingAi || isImprovingDescription || isExtractingStructure
-                ? "cursor-not-allowed bg-emerald-300 text-white"
-                : "bg-emerald-600 text-white hover:bg-emerald-500"
-            )}
-          >
-            {isGeneratingAi ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                Generando...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4 shrink-0" />
-                Generar con AI
-              </>
-            )}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={requestGenerateWithAi}
+              disabled={isGeneratingAi || isImprovingDescription || isExtractingStructure}
+              className={clsx(
+                "inline-flex min-h-10 items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition",
+                isGeneratingAi || isImprovingDescription || isExtractingStructure
+                  ? "cursor-not-allowed bg-emerald-300 text-white"
+                  : "bg-emerald-600 text-white hover:bg-emerald-500"
+              )}
+            >
+              {isGeneratingAi ? (
+                <><Loader2 className="h-4 w-4 animate-spin shrink-0" />Generando...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 shrink-0" />Generar con AI</>
+              )}
+            </button>
 
-          <button
-            type="button"
-            onClick={handleImproveDescriptionWithAi}
-            disabled={
-              isGeneratingAi ||
-              isImprovingDescription ||
-              isExtractingStructure ||
-              !descriptionPlain.trim()
-            }
-            className={clsx(
-              "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-center text-sm font-semibold transition",
-              isGeneratingAi || isImprovingDescription || isExtractingStructure
-                ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
-                : !descriptionPlain.trim()
+            <button
+              type="button"
+              onClick={handleImproveDescriptionWithAi}
+              disabled={isGeneratingAi || isImprovingDescription || isExtractingStructure || !descriptionPlain.trim()}
+              className={clsx(
+                "inline-flex min-h-10 items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition",
+                isGeneratingAi || isImprovingDescription || isExtractingStructure || !descriptionPlain.trim()
                   ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
                   : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/20"
-            )}
-          >
-            {isImprovingDescription ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                Mejorando...
-              </>
-            ) : (
-              <>
-                <Wand2 className="h-4 w-4 shrink-0" />
-                Mejorar descripción
-              </>
-            )}
-          </button>
+              )}
+            >
+              {isImprovingDescription ? (
+                <><Loader2 className="h-4 w-4 animate-spin shrink-0" />Mejorando...</>
+              ) : (
+                <><Wand2 className="h-4 w-4 shrink-0" />Mejorar descripción</>
+              )}
+            </button>
 
+            <button
+              type="button"
+              onClick={handleExtractStructureWithAi}
+              disabled={isGeneratingAi || isImprovingDescription || isExtractingStructure || !descriptionPlain.trim()}
+              className={clsx(
+                "inline-flex min-h-10 items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold transition",
+                isGeneratingAi || isImprovingDescription || isExtractingStructure || !descriptionPlain.trim()
+                  ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
+                  : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/20"
+              )}
+            >
+              {isExtractingStructure ? (
+                <><Loader2 className="h-4 w-4 animate-spin shrink-0" />Extrayendo...</>
+              ) : (
+                <><Sparkles className="h-4 w-4 shrink-0" />Extraer skills y requisitos</>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* En tab Skills: hint compacto de extracción solo si hay descripción */}
+      {tab === "skills" && descriptionPlain.trim() && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 px-4 py-2.5 dark:border-emerald-900/50 dark:bg-emerald-950/10">
+          <div className="flex items-center gap-2 text-xs text-emerald-800 dark:text-emerald-300">
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span>¿Quieres extraer skills automáticamente desde tu descripción?</span>
+          </div>
           <button
             type="button"
             onClick={handleExtractStructureWithAi}
-            disabled={
-              isGeneratingAi ||
-              isImprovingDescription ||
-              isExtractingStructure ||
-              !descriptionPlain.trim()
-            }
+            disabled={isGeneratingAi || isImprovingDescription || isExtractingStructure}
             className={clsx(
-              "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-center text-sm font-semibold transition sm:col-span-2 xl:col-span-1",
-              isGeneratingAi || isImprovingDescription || isExtractingStructure
-                ? "cursor-not-allowed border-zinc-200 bg-zinc-100 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
-                : !descriptionPlain.trim()
-                  ? "cursor-not-allowed border-zinc-200 bg-zinc-50 text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500"
-                  : "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/20"
+              "shrink-0 rounded-md border px-3 py-1.5 text-xs font-semibold transition",
+              isExtractingStructure
+                ? "cursor-not-allowed border-zinc-200 text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
+                : "border-emerald-300 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
             )}
           >
             {isExtractingStructure ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                Extrayendo...
-              </>
+              <span className="flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" />Extrayendo...</span>
             ) : (
-              <>
-                <Sparkles className="h-4 w-4 shrink-0" />
-                Extraer skills y requisitos
-              </>
+              "Extraer con AI"
             )}
           </button>
         </div>
-      </div>
+      )}
 
       <div
         role="tablist"
@@ -888,15 +886,13 @@ export default function Step3Details({
             onClick={() => changeTab(t.k)}
           >
             <span className="whitespace-nowrap">{t.lbl}</span>
-            {t.done ? (
+            {t.done && (
               <CheckCircle2
                 className={clsx(
                   "h-3.5 w-3.5 shrink-0",
                   tab === t.k ? "text-white/90" : "text-emerald-500"
                 )}
               />
-            ) : (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600" />
             )}
           </button>
         ))}
