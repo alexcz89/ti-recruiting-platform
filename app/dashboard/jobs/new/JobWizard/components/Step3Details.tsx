@@ -104,6 +104,7 @@ export default function Step3Details({
   const [isImprovingDescription, setIsImprovingDescription] = useState(false);
   const [isExtractingStructure, setIsExtractingStructure] = useState(false);
   const [showMissingSkillsModal, setShowMissingSkillsModal] = useState(false);
+  const [showAiOverwriteModal, setShowAiOverwriteModal] = useState(false);
 
   const educationDropdownRef = useRef<HTMLDivElement | null>(null);
   const skillsDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -499,6 +500,23 @@ export default function Step3Details({
     };
   }
 
+  function requestGenerateWithAi() {
+    if (!title?.trim() || title.trim().length < 3) {
+      toastError("Primero captura un título válido para la vacante.");
+      return;
+    }
+    const hasExisting =
+      descriptionPlain.trim() ||
+      requiredSkills.length > 0 ||
+      niceSkills.length > 0 ||
+      languages.length > 0;
+    if (hasExisting) {
+      setShowAiOverwriteModal(true);
+    } else {
+      handleGenerateWithAi();
+    }
+  }
+
   async function handleGenerateWithAi() {
     if (!title?.trim() || title.trim().length < 3) {
       toastError("Primero captura un título válido para la vacante.");
@@ -763,7 +781,7 @@ export default function Step3Details({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
           <button
             type="button"
-            onClick={handleGenerateWithAi}
+            onClick={requestGenerateWithAi}
             disabled={isGeneratingAi || isImprovingDescription || isExtractingStructure}
             className={clsx(
               "inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-center text-sm font-semibold transition",
@@ -924,10 +942,18 @@ export default function Step3Details({
           <div
             className={clsx(
               "text-xs leading-relaxed",
-              canNext ? "text-emerald-600" : "text-red-500"
+              canNext
+                ? "text-emerald-600 dark:text-emerald-400"
+                : descLength === 0
+                  ? "text-zinc-400 dark:text-zinc-500"
+                  : "text-amber-600 dark:text-amber-400"
             )}
           >
-            chars: {descLength}/500&nbsp;&nbsp;palabras: {wordCount}/80
+            {canNext
+              ? `${descLength} caracteres · ${wordCount} palabras`
+              : descLength === 0
+                ? "Escribe al menos 50 caracteres para continuar"
+                : `${descLength}/50 caracteres mínimos`}
           </div>
 
           {errors.descriptionPlain && (
@@ -981,7 +1007,7 @@ export default function Step3Details({
 
                   if (e.key === "Enter" || e.key === "Tab") {
                     e.preventDefault();
-                    addSkill(getHighlightedSkill() || skillQuery.trim(), "req");
+                    addSkill(getHighlightedSkill() || skillQuery.trim(), e.shiftKey ? "nice" : "req");
                   }
                 }}
               />
@@ -993,27 +1019,43 @@ export default function Step3Details({
                   ) : (
                     <>
                       <div className="border-b border-zinc-100 px-3 py-2 text-[11px] text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                        Enter agrega la opción seleccionada • ↑ ↓ para navegar
+                        Enter → Obligatoria · Shift+Enter → Deseable · ↑ ↓ navegar
                       </div>
 
                       {filteredSkills.map((s, idx) => {
                         const isActive = idx === highlightedSkillIndex;
 
                         return (
-                          <button
+                          <div
                             key={s}
-                            type="button"
                             className={clsx(
-                              "block w-full px-3 py-2.5 text-left text-sm transition",
+                              "flex items-center gap-1 pr-2 transition",
                               isActive
-                                ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
+                                ? "bg-emerald-50 dark:bg-emerald-900/20"
                                 : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
                             )}
                             onMouseEnter={() => setHighlightedSkillIndex(idx)}
-                            onClick={() => addSkill(s, "req")}
                           >
-                            {renderHighlightedText(s, skillQuery)}
-                          </button>
+                            <span className="flex-1 px-3 py-2.5 text-sm text-zinc-800 dark:text-zinc-100">
+                              {renderHighlightedText(s, skillQuery)}
+                            </span>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                              onClick={() => addSkill(s, "req")}
+                              title="Agregar como obligatoria"
+                            >
+                              Req
+                            </button>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded px-2 py-1 text-[11px] font-semibold text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-700/50"
+                              onClick={() => addSkill(s, "nice")}
+                              title="Agregar como deseable"
+                            >
+                              Nice
+                            </button>
+                          </div>
                         );
                       })}
                     </>
@@ -1358,6 +1400,20 @@ export default function Step3Details({
         onConfirm={() => {
           setShowMissingSkillsModal(false);
           onNext();
+        }}
+      />
+
+      <WizardWarningModal
+        open={showAiOverwriteModal}
+        title="Reemplazar contenido con AI"
+        description="Esto sobreescribirá la descripción, skills, idiomas y educación que ya capturaste."
+        items={["Se reemplazará la descripción actual", "Skills, idiomas y educación se recalcularán"]}
+        confirmLabel="Sí, reemplazar todo"
+        cancelLabel="Cancelar"
+        onCancel={() => setShowAiOverwriteModal(false)}
+        onConfirm={() => {
+          setShowAiOverwriteModal(false);
+          handleGenerateWithAi();
         }}
       />
     </div>
