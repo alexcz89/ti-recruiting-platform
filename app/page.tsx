@@ -74,7 +74,7 @@ export default async function Home() {
             </h1>
 
             <p className="mt-8 max-w-xl text-base text-zinc-500 dark:text-[#7ab5bf] leading-relaxed sm:text-lg animate-fade-in-up animation-delay-200">
-              Evaluaciones técnicas con <strong className="text-[#082B33] dark:text-white font-semibold">código real</strong>, AI Match inteligente y ATS con pipeline Kanban.
+              Evaluaciones técnicas con <strong className="text-[#082B33] dark:text-white font-semibold">código real</strong>, AI Match inteligente y <abbr title="Applicant Tracking System" className="underline decoration-dotted underline-offset-2 cursor-help">ATS</abbr> con pipeline Kanban.
               La plataforma de reclutamiento TI para toda Latinoamérica.
             </p>
 
@@ -293,7 +293,7 @@ export default async function Home() {
                 {[
                   { step: "01", icon: Briefcase, title: "Publica tu vacante en 2 minutos", desc: "Wizard guiado con skills requeridas, seniority y modalidad. La vacante aparece en la bolsa pública TI." },
                   { step: "02", icon: Brain, title: "AI filtra automáticamente", desc: "La IA rankea candidatos por compatibilidad real. No más revisar 200 CVs irrelevantes." },
-                  { step: "03", icon: ClipboardCheck, title: "Evalúa técnicamente antes de entrevistar", desc: "Envía assessments MCQ o de código con un link. El sistema califica automáticamente." },
+                  { step: "03", icon: ClipboardCheck, title: "Evalúa técnicamente antes de entrevistar", desc: "Envía assessments de opción múltiple o de código con un link. El sistema califica automáticamente." },
                   { step: "04", icon: BadgeCheck, title: "Contrata con certeza", desc: "Pipeline Kanban completo: de postulación a oferta. Analytics y reportes de todo el proceso." },
                 ].map((item) => (
                   <div key={item.step} className="flex gap-4">
