@@ -57,46 +57,47 @@ export default async function Home() {
       {/* ══════════════════════════════════════════════
           HERO — Dual audience, diferenciado
       ══════════════════════════════════════════════ */}
-      <section className="relative bg-[#082B33] overflow-hidden">
-        {/* Subtle dot texture */}
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle,rgba(16,185,129,0.07)_1px,transparent_1px)] bg-[size:28px_28px]" />
-        {/* Center glow */}
-        <div aria-hidden="true" className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] bg-emerald-500/6 blur-[120px] rounded-full" />
+      <section className="relative bg-teal-50 dark:bg-[#082B33] overflow-hidden">
+        {/* Subtle dot texture — teal dots on light, emerald on dark */}
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle,rgba(8,43,51,0.05)_1px,transparent_1px)] dark:bg-[radial-gradient(circle,rgba(16,185,129,0.07)_1px,transparent_1px)] bg-[size:28px_28px]" />
+        {/* Center glow — only in dark mode */}
+        <div aria-hidden="true" className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[500px] dark:bg-emerald-500/6 blur-[120px] rounded-full" />
 
         <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center pt-16 pb-20 text-center sm:pt-20 lg:pt-32 lg:pb-28">
 
             {/* Headline */}
-            <h1 className="font-display max-w-4xl text-5xl font-extrabold tracking-tight text-white sm:text-6xl lg:text-[5.5rem] lg:leading-[0.95] animate-fade-in-up" style={{textWrap: "balance" as never}}>
+            <h1 className="font-display max-w-4xl text-5xl font-extrabold tracking-tight text-[#082B33] dark:text-white sm:text-6xl lg:text-[5.5rem] lg:leading-[0.95] animate-fade-in-up" style={{textWrap: "balance" as never}}>
               El reclutamiento TI
               <br className="hidden sm:block" />
-              {" "}<span className="text-emerald-400">que sí funciona.</span>
+              {" "}<span className="text-emerald-600 dark:text-emerald-400">que sí funciona.</span>
             </h1>
 
-            <p className="mt-8 max-w-xl text-base text-[#7ab5bf] leading-relaxed sm:text-lg animate-fade-in-up animation-delay-200">
-              Evaluaciones técnicas con <strong className="text-white font-semibold">código real</strong>, AI Match inteligente y ATS con pipeline Kanban.
-              La plataforma completa para talento TI en México.
+            <p className="mt-8 max-w-xl text-base text-zinc-500 dark:text-[#7ab5bf] leading-relaxed sm:text-lg animate-fade-in-up animation-delay-200">
+              Evaluaciones técnicas con <strong className="text-[#082B33] dark:text-white font-semibold">código real</strong>, AI Match inteligente y ATS con pipeline Kanban.
+              La plataforma de reclutamiento TI para toda Latinoamérica.
             </p>
 
             {/* Dual CTAs */}
             <div className="mt-10 flex flex-col gap-3 sm:flex-row w-full max-w-md animate-fade-in-up animation-delay-300">
               {/* Candidato — texto casi negro sobre esmeralda: ratio >7:1 */}
+              {/* Candidato: emerald-500+white en luz, emerald-400+zinc-950 en oscuro */}
               <Link
                 href="/unete"
-                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl bg-emerald-400 px-6 py-4 text-zinc-950 shadow-xl shadow-emerald-400/20 transition-all duration-200 hover:bg-emerald-300 hover:-translate-y-0.5 active:translate-y-0"
+                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl bg-emerald-500 px-6 py-4 text-white shadow-xl shadow-emerald-500/20 transition-all duration-200 hover:bg-emerald-600 hover:-translate-y-0.5 active:translate-y-0 dark:bg-emerald-400 dark:text-zinc-950 dark:shadow-emerald-400/20 dark:hover:bg-emerald-300"
               >
                 <div className="flex items-center gap-2 font-bold text-base">
                   <UserCircle className="h-5 w-5" />
                   Soy candidato
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
                 </div>
-                <span className="text-xs text-emerald-950 font-normal">Siempre gratis</span>
+                <span className="text-xs font-normal text-white/80 dark:text-emerald-950">Siempre gratis</span>
               </Link>
 
-              {/* Empresa — fondo blanco, texto oscuro: máximo contraste */}
+              {/* Empresa: sólido oscuro en luz, ghost en oscuro — ambos tienen bg oscuro → text-white funciona */}
               <Link
                 href="/auth/signup/recruiter"
-                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl border border-white/30 bg-white/15 px-6 py-4 text-white shadow-sm transition-all duration-200 hover:bg-white/22 hover:-translate-y-0.5 active:translate-y-0"
+                className="group flex flex-1 flex-col items-center gap-0.5 rounded-2xl border border-[#082B33] bg-[#082B33] px-6 py-4 text-white shadow-sm transition-all duration-200 hover:bg-[#0a3840] hover:-translate-y-0.5 active:translate-y-0 dark:border-white/30 dark:bg-white/15 dark:hover:bg-white/22"
               >
                 <div className="flex items-center gap-2 font-bold text-base">
                   <Building2 className="h-5 w-5" />
@@ -108,18 +109,18 @@ export default async function Home() {
             </div>
 
             {/* Trust signals */}
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-5 text-xs text-[#4a8a96] animate-fade-in-up animation-delay-400">
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-5 text-xs text-zinc-500 dark:text-[#4a8a96] animate-fade-in-up animation-delay-400">
               <div className="flex items-center gap-1.5">
                 <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
                 <span>Código en sandbox real</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle className="h-3.5 w-3.5 text-emerald-500" />
-                <span>AI Match con GPT-4</span>
+                <span>AI Match inteligente</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Hecho para México</span>
+                <span>Hecho para LATAM</span>
               </div>
             </div>
           </div>
@@ -174,7 +175,7 @@ export default async function Home() {
                 AI Match, no sorteo
               </h3>
               <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                GPT-4 analiza skills, experiencia y seniority del candidato contra los requerimientos de la vacante. Ranking objetivo.
+                Nuestro motor de IA analiza skills, experiencia y seniority del candidato contra los requerimientos de la vacante. Ranking objetivo.
               </p>
               <div className="mt-5 space-y-2">
                 {[
@@ -291,7 +292,7 @@ export default async function Home() {
               <div className="space-y-5">
                 {[
                   { step: "01", icon: Briefcase, title: "Publica tu vacante en 2 minutos", desc: "Wizard guiado con skills requeridas, seniority y modalidad. La vacante aparece en la bolsa pública TI." },
-                  { step: "02", icon: Brain, title: "AI filtra automáticamente", desc: "GPT-4 rankea candidatos por compatibilidad real. No más revisar 200 CVs irrelevantes." },
+                  { step: "02", icon: Brain, title: "AI filtra automáticamente", desc: "La IA rankea candidatos por compatibilidad real. No más revisar 200 CVs irrelevantes." },
                   { step: "03", icon: ClipboardCheck, title: "Evalúa técnicamente antes de entrevistar", desc: "Envía assessments MCQ o de código con un link. El sistema califica automáticamente." },
                   { step: "04", icon: BadgeCheck, title: "Contrata con certeza", desc: "Pipeline Kanban completo: de postulación a oferta. Analytics y reportes de todo el proceso." },
                 ].map((item) => (
@@ -361,7 +362,7 @@ export default async function Home() {
                 {/* Sidebar */}
                 <div className="hidden w-14 shrink-0 flex-col items-center gap-4 border-r border-zinc-100 dark:border-zinc-800 py-6 sm:flex">
                   {[LayoutDashboard, Briefcase, Users, ClipboardCheck, TrendingUp].map((Icon, i) => (
-                    <div key={i} className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${i === 1 ? "bg-emerald-600 text-white" : "text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
+                    <div key={i} className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${i === 1 ? "bg-emerald-600 text-white" : "text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"}`}>
                       <Icon className="h-4 w-4" />
                     </div>
                   ))}
@@ -675,7 +676,7 @@ export default async function Home() {
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { icon: FileText, title: "CV Profesional", description: "Constructor drag & drop con plantillas ATS-friendly. Descarga PDF o comparte con link único.", color: "emerald" },
-              { icon: Brain, title: "AI Match Score", description: "GPT-4 analiza compatibilidad candidato ↔ vacante. Top candidatos en segundos, no en horas.", color: "violet" },
+              { icon: Brain, title: "AI Match Score", description: "IA analiza compatibilidad candidato ↔ vacante. Top candidatos en segundos, no en horas.", color: "teal" },
               { icon: Code2, title: "Evaluaciones de Código", description: "Código real ejecutado en entorno seguro. El candidato demuestra lo que dice saber, no solo lo que escribe en el CV.", color: "blue" },
               { icon: Kanban, title: "Pipeline Kanban", description: "Gestión visual de candidatos por etapa. Arrastra, comenta y colabora con tu equipo.", color: "amber" },
               { icon: Shield, title: "Perfiles Verificados", description: "Skills validados con evaluaciones reales. Reduce el 60% del tiempo de screening.", color: "teal" },
