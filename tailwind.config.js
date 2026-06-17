@@ -36,7 +36,8 @@ export default {
         'fade-in': 'fade-in 0.3s ease-out',
       },
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui"], // 👈 fuente base
+        sans: ["var(--font-inter)", "ui-sans-serif", "system-ui"],
+        display: ["var(--font-display)", "var(--font-inter)", "ui-sans-serif"],
       },
       colors: {
         brand: {

@@ -3,12 +3,17 @@ import "./globals.css";
 import "react-phone-input-2/lib/style.css";
 import type { Metadata } from "next";
 
-import { Inter } from "next/font/google";
+import { Inter, Bricolage_Grotesque } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
 import { ThemeScript } from "@/components/ThemeProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
 
@@ -33,7 +38,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" suppressHydrationWarning className={`${inter.className} h-full`}>
+    <html lang="es" suppressHydrationWarning className={`${inter.variable} ${bricolage.variable} h-full`}>
       <head>
         <ThemeScript />
         <meta name="apple-mobile-web-app-title" content="TaskIO" />
