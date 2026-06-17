@@ -701,18 +701,18 @@ export default async function Home() {
       {/* ══════════════════════════════════════════════
           PRICING
       ══════════════════════════════════════════════ */}
-      <section className="py-20 sm:py-28 bg-zinc-950">
+      <section className="py-20 sm:py-28 bg-zinc-50 dark:bg-zinc-950">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 
           {/* ── Planes de suscripción ── */}
           <div className="text-center mb-12 sm:mb-16">
             <h2
-              className="font-display text-3xl font-bold text-white sm:text-4xl"
+              className="font-display text-3xl font-bold text-zinc-900 dark:text-white sm:text-4xl"
               style={{ textWrap: "balance" as never }}
             >
               Empieza gratis. Escala cuando crezcas.
             </h2>
-            <p className="mt-3 text-base text-zinc-400 sm:text-lg">
+            <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400 sm:text-lg">
               Sin contratos forzosos. Cancela cuando quieras.
             </p>
           </div>
@@ -729,24 +729,28 @@ export default async function Home() {
                   key={plan.id}
                   className={`relative flex flex-col rounded-2xl p-6 transition-all duration-300 ${
                     hi
-                      ? "bg-zinc-900 ring-2 ring-emerald-400 shadow-xl shadow-emerald-400/10 lg:-mt-3 lg:pb-9"
-                      : "bg-zinc-900 ring-1 ring-white/8 hover:-translate-y-0.5 hover:ring-white/20"
+                      ? "bg-white dark:bg-zinc-900 ring-2 ring-emerald-500 shadow-xl shadow-emerald-500/10 lg:-mt-3 lg:pb-9"
+                      : "bg-white dark:bg-zinc-900 ring-1 ring-zinc-200 dark:ring-white/8 hover:-translate-y-0.5 hover:ring-zinc-300 dark:hover:ring-white/20"
                   }`}
                 >
                   {hi && plan.popularLabel && (
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-400 px-3 py-1 text-[11px] font-bold tracking-wide text-zinc-950">
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-bold tracking-wide text-white">
                       MÁS POPULAR
                     </div>
                   )}
 
                   {/* Icono + nombre */}
                   <div className="flex items-center gap-3">
-                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${hi ? "bg-emerald-400/15 text-emerald-400" : "bg-white/8 text-zinc-300"}`}>
+                    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
+                      hi
+                        ? "bg-emerald-50 dark:bg-emerald-400/15 text-emerald-600 dark:text-emerald-400"
+                        : "bg-zinc-100 dark:bg-white/8 text-zinc-500 dark:text-zinc-300"
+                    }`}>
                       <PlanIcon className="h-4 w-4" />
                     </div>
                     <div>
-                      <h3 className="font-display text-base font-bold text-white">{plan.name}</h3>
-                      <p className="text-[11px] text-zinc-500 leading-tight">{plan.tagline}</p>
+                      <h3 className="font-display text-base font-bold text-zinc-900 dark:text-white">{plan.name}</h3>
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-tight">{plan.tagline}</p>
                     </div>
                   </div>
 
@@ -754,20 +758,20 @@ export default async function Home() {
                   <div className="mt-6 flex items-end gap-1">
                     {plan.priceMonthly === 0 ? (
                       <>
-                        <span className="font-display text-4xl font-black text-white">$0</span>
-                        <span className="pb-1 text-sm text-zinc-500">MXN/mes</span>
+                        <span className="font-display text-4xl font-black text-zinc-900 dark:text-white">$0</span>
+                        <span className="pb-1 text-sm text-zinc-400 dark:text-zinc-500">MXN/mes</span>
                       </>
                     ) : (
                       <>
-                        <span className="text-lg font-medium text-zinc-400">$</span>
-                        <span className="font-display text-4xl font-black text-white">
+                        <span className="text-lg font-medium text-zinc-400 dark:text-zinc-400">$</span>
+                        <span className="font-display text-4xl font-black text-zinc-900 dark:text-white">
                           {plan.priceMonthly.toLocaleString("es-MX")}
                         </span>
-                        <span className="pb-1 text-sm text-zinc-500">MXN/mes</span>
+                        <span className="pb-1 text-sm text-zinc-400 dark:text-zinc-500">MXN/mes</span>
                       </>
                     )}
                   </div>
-                  <p className="mt-1 text-[11px] text-zinc-600">
+                  <p className="mt-1 text-[11px] text-zinc-400 dark:text-zinc-600">
                     {plan.priceMonthly === 0 ? "Sin costo, para siempre" : "Facturado mensualmente"}
                   </p>
 
@@ -776,22 +780,22 @@ export default async function Home() {
                     href={plan.id === "BUSINESS" ? "/contacto" : "/auth/signup/recruiter"}
                     className={`mt-5 inline-flex w-full items-center justify-center rounded-xl py-2.5 text-sm font-bold transition-all duration-200 ${
                       hi
-                        ? "bg-emerald-400 text-zinc-950 hover:bg-emerald-300 shadow-lg shadow-emerald-400/20"
-                        : "border border-white/15 text-white hover:bg-white/8"
+                        ? "bg-emerald-500 text-white hover:bg-emerald-400 shadow-lg shadow-emerald-500/20"
+                        : "border border-zinc-200 dark:border-white/15 text-zinc-700 dark:text-white hover:bg-zinc-50 dark:hover:bg-white/8"
                     }`}
                   >
                     {plan.ctaLabel}
                   </Link>
 
                   {/* Separador */}
-                  <div className="my-5 h-px bg-white/8" />
+                  <div className="my-5 h-px bg-zinc-100 dark:bg-white/8" />
 
                   {/* Features */}
                   <ul className="flex flex-col gap-2.5">
                     {plan.features.map((feat, i) => (
                       <li key={i} className="flex items-start gap-2.5">
-                        <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
-                        <span className="text-sm leading-snug text-zinc-400">{feat}</span>
+                        <CheckCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-500 dark:text-emerald-400" />
+                        <span className="text-sm leading-snug text-zinc-600 dark:text-zinc-400">{feat}</span>
                       </li>
                     ))}
                   </ul>
@@ -803,10 +807,10 @@ export default async function Home() {
           {/* ── Packs de créditos (add-on) ── */}
           <div className="mt-16">
             <div className="text-center mb-8">
-              <h3 className="font-display text-xl font-bold text-white sm:text-2xl">
+              <h3 className="font-display text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">
                 Packs de evaluaciones adicionales
               </h3>
-              <p className="mt-2 text-sm text-zinc-500">
+              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-500">
                 Los créditos no expiran. Se descuentan después de agotar tu cuota mensual.
               </p>
             </div>
@@ -820,40 +824,40 @@ export default async function Home() {
                     key={pack.id}
                     className={`relative flex flex-col rounded-2xl p-5 transition-all duration-200 ${
                       isPopular
-                        ? "bg-zinc-900 ring-2 ring-emerald-400 shadow-lg shadow-emerald-400/10"
-                        : "bg-zinc-900 ring-1 ring-white/8 hover:ring-white/20"
+                        ? "bg-white dark:bg-zinc-900 ring-2 ring-emerald-500 shadow-lg shadow-emerald-500/10"
+                        : "bg-white dark:bg-zinc-900 ring-1 ring-zinc-200 dark:ring-white/8 hover:ring-zinc-300 dark:hover:ring-white/20"
                     }`}
                   >
                     {isPopular && (
-                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-400 px-3 py-1 text-[11px] font-bold tracking-wide text-zinc-950">
+                      <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-500 px-3 py-1 text-[11px] font-bold tracking-wide text-white">
                         MÁS POPULAR
                       </div>
                     )}
 
-                    <p className="text-[11px] font-bold tracking-widest text-zinc-500 uppercase">
+                    <p className="text-[11px] font-bold tracking-widest text-zinc-400 dark:text-zinc-500 uppercase">
                       {pack.id === "pack_50" ? "Básico"
                         : pack.id === "pack_200" ? "Popular"
                         : "Enterprise"}
                     </p>
 
                     <div className="mt-2 flex items-baseline gap-1">
-                      <span className="font-display text-4xl font-black text-white">{codingTests}</span>
-                      <span className="text-sm text-zinc-500">coding tests</span>
+                      <span className="font-display text-4xl font-black text-zinc-900 dark:text-white">{codingTests}</span>
+                      <span className="text-sm text-zinc-400 dark:text-zinc-500">coding tests</span>
                     </div>
 
                     <div className="mt-3">
-                      <span className="font-display text-2xl font-bold text-white">
+                      <span className="font-display text-2xl font-bold text-zinc-900 dark:text-white">
                         ${pack.basePriceMxn.toLocaleString("es-MX")}
                       </span>
-                      <span className="ml-1 text-sm text-zinc-500">MXN</span>
+                      <span className="ml-1 text-sm text-zinc-400 dark:text-zinc-500">MXN</span>
                     </div>
-                    <p className="mt-0.5 text-[11px] text-zinc-600">
+                    <p className="mt-0.5 text-[11px] text-zinc-400 dark:text-zinc-600">
                       ${Math.round(pack.basePriceMxn / codingTests)}/test
                     </p>
 
-                    <div className="my-4 h-px bg-white/8" />
+                    <div className="my-4 h-px bg-zinc-100 dark:bg-white/8" />
 
-                    <p className="text-xs text-zinc-500 leading-relaxed">
+                    <p className="text-xs text-zinc-500 dark:text-zinc-500 leading-relaxed">
                       {pack.credits} créditos · MCQ o evaluaciones de código
                     </p>
                   </div>
