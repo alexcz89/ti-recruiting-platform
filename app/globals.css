@@ -550,4 +550,10 @@ p, span, div {
   .marquee-track-reverse {
     animation: none !important;
   }
+  .animate-fade-in-up,
+  .animate-fade-in {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
 }

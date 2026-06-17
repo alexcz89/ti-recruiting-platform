@@ -674,29 +674,111 @@ export default async function Home() {
             </p>
           </div>
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[
-              { icon: FileText, title: "CV Profesional", description: "Constructor drag & drop con plantillas ATS-friendly. Descarga PDF o comparte con link único.", color: "emerald" },
-              { icon: Brain, title: "AI Match Score", description: "IA analiza compatibilidad candidato ↔ vacante. Top candidatos en segundos, no en horas.", color: "teal" },
-              { icon: Code2, title: "Evaluaciones de Código", description: "Código real ejecutado en entorno seguro. El candidato demuestra lo que dice saber, no solo lo que escribe en el CV.", color: "blue" },
-              { icon: Kanban, title: "Pipeline Kanban", description: "Gestión visual de candidatos por etapa. Arrastra, comenta y colabora con tu equipo.", color: "amber" },
-              { icon: Shield, title: "Perfiles Verificados", description: "Skills validados con evaluaciones reales. Reduce el 60% del tiempo de screening.", color: "teal" },
-              { icon: TrendingUp, title: "Analytics & Insights", description: "Métricas de tiempo de contratación, fuentes de candidatos y eficiencia del proceso.", color: "rose" },
-            ].map((feature, i) => (
-              <div
-                key={i}
-                className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-300 hover:border-zinc-300 dark:hover:border-zinc-700 hover:shadow-lg hover:-translate-y-1"
-              >
-                <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 transition-transform duration-300 group-hover:scale-110">
-                  <feature.icon className="h-6 w-6" />
-                </div>
-                <h3 className="mt-5 text-lg font-bold text-zinc-900 dark:text-zinc-50">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                  {feature.description}
-                </p>
+
+            {/* CV Profesional — mini document preview */}
+            <div className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/40">
+                <FileText className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
               </div>
-            ))}
+              <h3 className="mt-4 text-base font-bold text-zinc-900 dark:text-zinc-50">CV Profesional</h3>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">Constructor guiado con plantillas ATS-friendly. PDF o link único.</p>
+              <div className="mt-4 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-4 w-4 rounded-full bg-emerald-200 dark:bg-emerald-800 shrink-0" />
+                  <div className="h-2 w-24 rounded-full bg-zinc-200 dark:bg-zinc-700" />
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-700/60" />
+                <div className="h-1.5 w-4/5 rounded-full bg-zinc-100 dark:bg-zinc-700/60" />
+                <div className="flex gap-1 pt-0.5">
+                  {["React", "TS", "Node"].map((s) => (
+                    <span key={s} className="rounded bg-emerald-100 dark:bg-emerald-900/50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">{s}</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* AI Match Score — ranking bars */}
+            <div className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/40">
+                <Brain className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              </div>
+              <h3 className="mt-4 text-base font-bold text-zinc-900 dark:text-zinc-50">AI Match Score</h3>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">IA analiza compatibilidad candidato ↔ vacante. Top candidatos en segundos.</p>
+              <div className="mt-4 space-y-2">
+                {([["Ana G.", 94, "bg-emerald-500"], ["Luis T.", 81, "bg-teal-500"], ["María R.", 68, "bg-blue-400"]] as const).map(([name, pct, color]) => (
+                  <div key={name} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-12 truncate text-zinc-500 dark:text-zinc-400">{name}</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-zinc-100 dark:bg-zinc-700">
+                      <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="w-7 text-right font-bold text-zinc-700 dark:text-zinc-200">{pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Evaluaciones de Código — code snippet */}
+            <div className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/40">
+                <Code2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="mt-4 text-base font-bold text-zinc-900 dark:text-zinc-50">Evaluaciones de Código</h3>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">Código real ejecutado en sandbox seguro. Ves el output, no solo el CV.</p>
+              <div className="mt-4 rounded-xl bg-zinc-900 dark:bg-zinc-800 p-3 font-mono text-[10px] leading-relaxed">
+                <span className="text-zinc-500"># def solve(arr): ...</span>
+                <br /><span className="text-emerald-400">✓ Tests pasados: 8/10</span>
+                <br /><span className="text-zinc-400">  Runtime: 42ms · Python 3.11</span>
+              </div>
+            </div>
+
+            {/* Pipeline Kanban — mini column counts */}
+            <div className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-900/40">
+                <Kanban className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h3 className="mt-4 text-base font-bold text-zinc-900 dark:text-zinc-50">Pipeline Kanban</h3>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">Gestión visual por etapa. Arrastra, comenta y colabora con tu equipo.</p>
+              <div className="mt-4 grid grid-cols-3 gap-1.5">
+                {([["Postulados", "12", "zinc"], ["Evaluación", "6", "amber"], ["Oferta", "2", "emerald"]] as const).map(([col, n, c]) => (
+                  <div key={col} className="rounded-lg bg-zinc-50 dark:bg-zinc-800 p-2 text-center">
+                    <div className="text-[9px] font-medium text-zinc-400 dark:text-zinc-500 truncate">{col}</div>
+                    <div className="mt-0.5 text-xl font-black text-zinc-800 dark:text-zinc-100">{n}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Perfiles Verificados — validated skill badges */}
+            <div className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/40">
+                <Shield className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+              </div>
+              <h3 className="mt-4 text-base font-bold text-zinc-900 dark:text-zinc-50">Perfiles Verificados</h3>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">Skills validados con evaluaciones reales. Reduce el 60% del tiempo de screening.</p>
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {["React ✓", "AWS ✓", "Node.js ✓", "TypeScript ✓"].map((s) => (
+                  <span key={s} className="rounded-full border border-teal-200 dark:border-teal-800/60 bg-teal-50 dark:bg-teal-900/30 px-2.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:text-teal-300">{s}</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Analytics & Insights — mini bar chart */}
+            <div className="group rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-1">
+              <div className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100 dark:bg-rose-900/40">
+                <TrendingUp className="h-5 w-5 text-rose-500 dark:text-rose-400" />
+              </div>
+              <h3 className="mt-4 text-base font-bold text-zinc-900 dark:text-zinc-50">Analytics & Insights</h3>
+              <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">Métricas de tiempo de contratación, fuentes y eficiencia del proceso.</p>
+              <div className="mt-4 flex items-end gap-1 h-10">
+                {[40, 60, 50, 80, 65, 90, 72].map((h, i) => (
+                  <div key={i} className="flex-1 rounded-sm bg-rose-200 dark:bg-rose-800/60" style={{ height: `${h}%` }} />
+                ))}
+              </div>
+              <div className="mt-1 flex justify-between text-[9px] text-zinc-400 dark:text-zinc-500">
+                <span>Lun</span><span>Dom</span>
+              </div>
+            </div>
+
           </div>
         </div>
       </section>
