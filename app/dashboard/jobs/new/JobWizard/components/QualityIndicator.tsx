@@ -51,7 +51,7 @@ export default function QualityIndicator({
 
   const missingItems = Array.from(
     new Set(
-      score.issues.map((issue) => {
+      score.issues.map((issue): string | null => {
         const msg = issue.message.toLowerCase();
 
         if (msg.includes("skills")) return "Skills";
