@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { PLANS } from "@/config/plans";
 import Footer from "@/components/Footer";
 import TechMarquee from "@/components/landing/TechMarquee";
 import {
@@ -694,6 +695,109 @@ export default async function Home() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════
+          PRICING
+      ══════════════════════════════════════════════ */}
+      <section className="py-20 sm:py-28 bg-zinc-50 dark:bg-zinc-900/50">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12 sm:mb-16">
+            <h2
+              className="font-display text-3xl font-bold text-zinc-900 dark:text-zinc-50 sm:text-4xl"
+              style={{ textWrap: "balance" as never }}
+            >
+              Empieza gratis.<br className="hidden sm:block" /> Escala cuando crezcas.
+            </h2>
+            <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400 sm:text-lg">
+              Sin contratos forzosos. Cancela cuando quieras.
+            </p>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4 lg:items-start">
+            {PLANS.map((plan) => {
+              const hi = plan.highlight;
+              return (
+                <div
+                  key={plan.id}
+                  className={`relative flex flex-col rounded-2xl p-6 sm:p-7 transition-all duration-300 ${
+                    hi
+                      ? "bg-[#082B33] text-white shadow-2xl shadow-[#082B33]/25 ring-1 ring-[#082B33] lg:-mt-3"
+                      : "bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:shadow-lg hover:-translate-y-0.5"
+                  }`}
+                >
+                  {hi && plan.popularLabel && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-emerald-400 px-3 py-1 text-xs font-bold text-[#082B33]">
+                      {plan.popularLabel}
+                    </div>
+                  )}
+
+                  {/* Nombre + tagline */}
+                  <div>
+                    <h3 className={`font-display text-xl font-bold ${hi ? "text-white" : "text-zinc-900 dark:text-zinc-50"}`}>
+                      {plan.name}
+                    </h3>
+                    <p className={`mt-1 text-xs leading-relaxed ${hi ? "text-[#7ab5bf]" : "text-zinc-400 dark:text-zinc-500"}`}>
+                      {plan.tagline}
+                    </p>
+                  </div>
+
+                  {/* Precio */}
+                  <div className="mt-5 flex items-end gap-1">
+                    {plan.priceMonthly === 0 ? (
+                      <span className={`font-display text-4xl font-black ${hi ? "text-white" : "text-zinc-900 dark:text-zinc-50"}`}>
+                        Gratis
+                      </span>
+                    ) : (
+                      <>
+                        <span className={`text-sm font-medium ${hi ? "text-[#7ab5bf]" : "text-zinc-400 dark:text-zinc-500"}`}>$</span>
+                        <span className={`font-display text-4xl font-black ${hi ? "text-white" : "text-zinc-900 dark:text-zinc-50"}`}>
+                          {plan.priceMonthly.toLocaleString("es-MX")}
+                        </span>
+                        <span className={`pb-1 text-sm ${hi ? "text-[#7ab5bf]" : "text-zinc-400 dark:text-zinc-500"}`}>
+                          MXN/mes
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* CTA */}
+                  <Link
+                    href={plan.id === "BUSINESS" ? "/contacto" : "/auth/signup/recruiter"}
+                    className={`mt-5 inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-bold transition-all duration-200 ${
+                      hi
+                        ? "bg-emerald-400 text-[#082B33] hover:bg-emerald-300 shadow-lg shadow-emerald-400/20"
+                        : plan.id === "FREE"
+                        ? "border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                        : "bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
+                    }`}
+                  >
+                    {plan.ctaLabel}
+                  </Link>
+
+                  {/* Separador */}
+                  <div className={`my-5 h-px ${hi ? "bg-white/10" : "bg-zinc-100 dark:bg-zinc-800"}`} />
+
+                  {/* Features */}
+                  <ul className="flex flex-col gap-2.5">
+                    {plan.features.map((feat, i) => (
+                      <li key={i} className="flex items-start gap-2.5">
+                        <CheckCircle className={`mt-0.5 h-4 w-4 shrink-0 ${hi ? "text-emerald-400" : "text-emerald-500"}`} />
+                        <span className={`text-sm leading-snug ${hi ? "text-zinc-300" : "text-zinc-600 dark:text-zinc-400"}`}>
+                          {feat}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="mt-8 text-center text-xs text-zinc-400 dark:text-zinc-500">
+            Precios en MXN. Impuestos no incluidos. Cancela en cualquier momento.
+          </p>
         </div>
       </section>
 
