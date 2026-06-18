@@ -269,7 +269,7 @@ export default async function OverviewPage() {
     <main className="w-full">
       <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-4 px-3 py-3 sm:space-y-6 sm:px-6 sm:py-5 lg:px-10">
         <div className="flex flex-wrap items-center gap-2.5 pb-1">
-          <h1 className="text-2xl font-bold leading-tight text-default sm:text-3xl">
+          <h1 className="font-display text-2xl font-bold leading-tight text-default sm:text-3xl">
             Panel
           </h1>
 
@@ -315,36 +315,25 @@ export default async function OverviewPage() {
         />
 
         {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {/* Por revisar — card destacada */}
-          <KpiCard
-            icon={Inbox}
-            label="Por revisar"
-            value={nf(appsPending)}
-            tone={appsPending > 0 ? "amber" : "emerald"}
-            badge={appsPending > 0 ? "Prioritario" : "Al día"}
-            linkHref={appsPending > 0 ? "/dashboard/candidates/pending" : undefined}
-            linkLabel={appsPending > 0 ? "Revisar candidatos" : undefined}
-            featured={appsPending > 0}
-          />
-          <KpiCard
-            icon={Briefcase}
-            label="Vacantes abiertas"
-            value={nf(openJobs)}
-            tone="zinc"
-          />
-          <KpiCard
-            icon={Users}
-            label="Postulaciones totales"
-            value={nf(appsTotal)}
-            tone="zinc"
-          />
-          <KpiCard
-            icon={CalendarDays}
-            label="Nuevas esta semana"
-            value={nf(apps7d)}
-            tone="zinc"
-          />
+        <section className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-12">
+          {/* Por revisar — acción dominante */}
+          <div className="lg:col-span-5">
+            <FeaturedKpiCard
+              icon={Inbox}
+              label="Por revisar"
+              value={nf(appsPending)}
+              tone={appsPending > 0 ? "amber" : "emerald"}
+              badge={appsPending > 0 ? "Prioritario" : "Al día"}
+              linkHref={appsPending > 0 ? "/dashboard/candidates/pending" : undefined}
+              linkLabel="Revisar candidatos"
+            />
+          </div>
+          {/* Métricas de contexto */}
+          <div className="grid grid-cols-3 gap-3 sm:gap-4 lg:col-span-7">
+            <KpiCard icon={Briefcase} label="Vacantes abiertas" value={nf(openJobs)} />
+            <KpiCard icon={Users} label="Postulaciones totales" value={nf(appsTotal)} />
+            <KpiCard icon={CalendarDays} label="Nuevas esta semana" value={nf(apps7d)} />
+          </div>
         </section>
 
         <section className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
@@ -352,7 +341,7 @@ export default async function OverviewPage() {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-blue-500" />
-                <h2 className="text-sm font-semibold text-default sm:text-base">
+                <h2 className="font-display text-sm font-semibold text-default sm:text-base">
                   Pipeline de candidatos
                 </h2>
               </div>
@@ -444,7 +433,7 @@ export default async function OverviewPage() {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-emerald-500" />
-                <h2 className="text-sm font-semibold text-default sm:text-base">
+                <h2 className="font-display text-sm font-semibold text-default sm:text-base">
                   AI Match por vacante
                 </h2>
               </div>
@@ -533,7 +522,7 @@ export default async function OverviewPage() {
         <section className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12">
           <div className="rounded-2xl border glass-card p-3 sm:p-4 md:p-5 lg:col-span-7">
             <div className="mb-3 flex items-center justify-between sm:mb-4">
-              <h2 className="text-sm font-semibold text-default sm:text-base">
+              <h2 className="font-display text-sm font-semibold text-default sm:text-base">
                 Postulaciones recientes
               </h2>
               <Link
@@ -596,7 +585,7 @@ export default async function OverviewPage() {
 
           <div className="rounded-2xl border glass-card p-3 sm:p-4 md:p-5 lg:col-span-5">
             <div className="mb-3 flex items-center justify-between sm:mb-4">
-              <h2 className="text-sm font-semibold text-default sm:text-base">
+              <h2 className="font-display text-sm font-semibold text-default sm:text-base">
                 Actividad reciente
               </h2>
             </div>
@@ -659,88 +648,128 @@ export default async function OverviewPage() {
   );
 }
 
-function KpiCard({
+function FeaturedKpiCard({
   icon: Icon,
   label,
   value,
-  tone = "zinc",
+  tone,
   badge,
   linkHref,
   linkLabel,
-  featured = false,
 }: {
   icon: LucideIcon;
   label: string;
   value: string | number;
-  tone?: "zinc" | "emerald" | "amber" | "blue";
+  tone: "amber" | "emerald";
   badge?: string;
   linkHref?: string;
   linkLabel?: string;
-  featured?: boolean;
 }) {
-  const tones: Record<string, { card: string; iconBg: string; iconColor: string; badge: string }> = {
-    zinc: {
-      card: "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800",
-      iconBg: "bg-zinc-100 dark:bg-zinc-800",
-      iconColor: "text-zinc-500 dark:text-zinc-400",
-      badge: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-    },
-    emerald: {
-      card: "bg-emerald-50/70 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/60",
-      iconBg: "bg-emerald-100 dark:bg-emerald-900/40",
-      iconColor: "text-emerald-600 dark:text-emerald-400",
-      badge: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-300",
-    },
-    amber: {
-      card: "bg-amber-50/70 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/60",
-      iconBg: "bg-amber-100 dark:bg-amber-900/40",
-      iconColor: "text-amber-600 dark:text-amber-400",
-      badge: "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300",
-    },
-    blue: {
-      card: "bg-blue-50/60 dark:bg-blue-900/15 border-blue-200 dark:border-blue-800/50",
-      iconBg: "bg-blue-100 dark:bg-blue-900/40",
-      iconColor: "text-blue-600 dark:text-blue-400",
-      badge: "border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/40 dark:text-blue-300",
-    },
-  };
-
-  const t = tones[tone] ?? tones.zinc;
+  const isAmber = tone === "amber";
 
   return (
     <div
       className={clsx(
-        "rounded-xl border p-4 shadow-sm transition hover:shadow-md",
-        t.card,
-        featured && "ring-1 ring-amber-300/60 dark:ring-amber-500/30"
+        "flex h-full min-h-[148px] flex-col rounded-xl border-2 p-5 shadow-sm",
+        isAmber
+          ? "border-amber-300 bg-amber-50 dark:border-amber-700/60 dark:bg-amber-950/30"
+          : "border-emerald-200 bg-emerald-50/60 dark:border-emerald-800/50 dark:bg-emerald-950/20"
       )}
     >
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div className={clsx("flex h-8 w-8 items-center justify-center rounded-lg shrink-0", t.iconBg)}>
-          <Icon className={clsx("h-4 w-4", t.iconColor)} />
+      <div className="flex items-center justify-between gap-2">
+        <div
+          className={clsx(
+            "flex h-9 w-9 items-center justify-center rounded-lg",
+            isAmber
+              ? "bg-amber-200 dark:bg-amber-900/50"
+              : "bg-emerald-100 dark:bg-emerald-900/40"
+          )}
+        >
+          <Icon
+            className={clsx(
+              "h-5 w-5",
+              isAmber
+                ? "text-amber-700 dark:text-amber-300"
+                : "text-emerald-600 dark:text-emerald-400"
+            )}
+          />
         </div>
         {badge && (
-          <span className={clsx("rounded-full border px-2 py-0.5 text-xs font-semibold", t.badge)}>
+          <span
+            className={clsx(
+              "rounded-full border px-2.5 py-1 text-xs font-semibold",
+              isAmber
+                ? "border-amber-300 bg-amber-100 text-amber-800 dark:border-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+                : "border-emerald-200 bg-emerald-100 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+            )}
+          >
             {badge}
           </span>
         )}
       </div>
 
-      <p className="text-sm font-medium text-muted">{label}</p>
+      <p
+        className={clsx(
+          "mt-4 text-sm font-medium",
+          isAmber
+            ? "text-amber-800 dark:text-amber-400"
+            : "text-emerald-800 dark:text-emerald-400"
+        )}
+      >
+        {label}
+      </p>
 
-      <p className={clsx("mt-0.5 font-bold text-default", featured ? "text-3xl" : "text-2xl")}>
+      <p
+        className={clsx(
+          "font-display mt-1 text-6xl font-black leading-none tracking-tight",
+          isAmber
+            ? "text-amber-950 dark:text-amber-100"
+            : "text-emerald-900 dark:text-emerald-100"
+        )}
+      >
         {value}
       </p>
 
       {linkHref && linkLabel && (
-        <Link
-          href={linkHref}
-          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline"
-        >
-          {linkLabel}
-          <ArrowRight className="h-3 w-3" />
-        </Link>
+        <div className="mt-auto pt-4">
+          <Link
+            href={linkHref}
+            className={clsx(
+              "inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white transition",
+              isAmber
+                ? "bg-amber-600 hover:bg-amber-700"
+                : "bg-emerald-600 hover:bg-emerald-700"
+            )}
+          >
+            {linkLabel}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
       )}
+    </div>
+  );
+}
+
+function KpiCard({
+  icon: Icon,
+  label,
+  value,
+}: {
+  icon: LucideIcon;
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-3 flex h-7 w-7 items-center justify-center rounded-md bg-zinc-100 dark:bg-zinc-800">
+        <Icon className="h-3.5 w-3.5 text-zinc-500 dark:text-zinc-400" />
+      </div>
+      <p className="font-display text-2xl font-bold leading-none text-default">
+        {value}
+      </p>
+      <p className="mt-1.5 text-xs font-medium leading-tight text-muted">
+        {label}
+      </p>
     </div>
   );
 }
