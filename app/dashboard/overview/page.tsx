@@ -15,7 +15,19 @@ import {
   Users,
   Sparkles,
   ArrowRight,
+  Inbox,
+  Briefcase,
+  CalendarDays,
+  type LucideIcon,
 } from "lucide-react";
+
+const STATUS_LABELS: Record<string, string> = {
+  REVIEWING: "En revisión",
+  INTERVIEW: "A entrevista",
+  OFFER: "Con oferta",
+  HIRED: "Contratado",
+  REJECTED: "Rechazado",
+};
 import QuickActionButtons from "./QuickActionButtons";
 import {
   buildCandidateSkillInputs,
@@ -306,26 +318,30 @@ export default async function OverviewPage() {
         <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {/* Por revisar — card destacada */}
           <KpiCard
+            icon={Inbox}
             label="Por revisar"
             value={nf(appsPending)}
             tone={appsPending > 0 ? "amber" : "emerald"}
             badge={appsPending > 0 ? "Prioritario" : "Al día"}
             linkHref={appsPending > 0 ? "/dashboard/candidates/pending" : undefined}
-            linkLabel={appsPending > 0 ? "Revisar candidatos →" : undefined}
+            linkLabel={appsPending > 0 ? "Revisar candidatos" : undefined}
             featured={appsPending > 0}
           />
           <KpiCard
+            icon={Briefcase}
             label="Vacantes abiertas"
             value={nf(openJobs)}
             tone="zinc"
           />
           <KpiCard
+            icon={Users}
             label="Postulaciones totales"
             value={nf(appsTotal)}
             tone="zinc"
           />
           <KpiCard
-            label="Últimos 7 días"
+            icon={CalendarDays}
+            label="Nuevas esta semana"
             value={nf(apps7d)}
             tone="zinc"
           />
@@ -521,7 +537,7 @@ export default async function OverviewPage() {
                 Postulaciones recientes
               </h2>
               <Link
-                href="/dashboard/jobs"
+                href="/dashboard/candidates/pending"
                 className="whitespace-nowrap text-xs text-blue-600 hover:underline dark:text-blue-400 sm:text-sm"
               >
                 Ver todas →
@@ -619,7 +635,11 @@ export default async function OverviewPage() {
                             </>
                           ) : (
                             <>
-                              Actualización en{" "}
+                              <span className="font-medium">
+                                {activity.candidate?.name ?? "Candidato"}
+                              </span>
+                              {" — "}
+                              {STATUS_LABELS[activity.status] ?? "Actualización"}{" en "}
                               <span className="font-medium">
                                 {activity.job.title}
                               </span>
@@ -640,6 +660,7 @@ export default async function OverviewPage() {
 }
 
 function KpiCard({
+  icon: Icon,
   label,
   value,
   tone = "zinc",
@@ -648,39 +669,39 @@ function KpiCard({
   linkLabel,
   featured = false,
 }: {
+  icon: LucideIcon;
   label: string;
   value: string | number;
-  tone?: "zinc" | "emerald" | "amber" | "blue" | "violet";
+  tone?: "zinc" | "emerald" | "amber" | "blue";
   badge?: string;
   linkHref?: string;
   linkLabel?: string;
   featured?: boolean;
 }) {
-  const tones: Record<string, { card: string; accent: string; badge: string }> = {
+  const tones: Record<string, { card: string; iconBg: string; iconColor: string; badge: string }> = {
     zinc: {
-      card: "glass-card",
-      accent: "bg-zinc-200 dark:bg-zinc-700",
+      card: "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800",
+      iconBg: "bg-zinc-100 dark:bg-zinc-800",
+      iconColor: "text-zinc-500 dark:text-zinc-400",
       badge: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
     },
     emerald: {
-      card: "glass-card border-emerald-300/60 dark:border-emerald-400/25 bg-emerald-50/70 dark:bg-emerald-900/25",
-      accent: "bg-emerald-200 dark:bg-emerald-800",
+      card: "bg-emerald-50/70 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/60",
+      iconBg: "bg-emerald-100 dark:bg-emerald-900/40",
+      iconColor: "text-emerald-600 dark:text-emerald-400",
       badge: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-300",
     },
     amber: {
-      card: "glass-card border-amber-300/60 dark:border-amber-400/25 bg-amber-50/70 dark:bg-amber-900/25",
-      accent: "bg-amber-200 dark:bg-amber-800",
+      card: "bg-amber-50/70 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/60",
+      iconBg: "bg-amber-100 dark:bg-amber-900/40",
+      iconColor: "text-amber-600 dark:text-amber-400",
       badge: "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300",
     },
     blue: {
-      card: "glass-card border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
-      accent: "bg-blue-100 dark:bg-blue-800",
+      card: "bg-blue-50/60 dark:bg-blue-900/15 border-blue-200 dark:border-blue-800/50",
+      iconBg: "bg-blue-100 dark:bg-blue-900/40",
+      iconColor: "text-blue-600 dark:text-blue-400",
       badge: "border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/40 dark:text-blue-300",
-    },
-    violet: {
-      card: "glass-card border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
-      accent: "bg-violet-100 dark:bg-violet-800",
-      badge: "border-violet-200 bg-violet-100 text-violet-700 dark:border-violet-500/40 dark:bg-violet-900/40 dark:text-violet-300",
     },
   };
 
@@ -689,44 +710,32 @@ function KpiCard({
   return (
     <div
       className={clsx(
-        "rounded-xl border p-3 shadow-sm transition hover:shadow-md",
+        "rounded-xl border p-4 shadow-sm transition hover:shadow-md",
         t.card,
         featured && "ring-1 ring-amber-300/60 dark:ring-amber-500/30"
       )}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className={clsx("h-5 w-5 shrink-0 rounded-md", t.accent)} />
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div className={clsx("flex h-8 w-8 items-center justify-center rounded-lg shrink-0", t.iconBg)}>
+          <Icon className={clsx("h-4 w-4", t.iconColor)} />
+        </div>
         {badge && (
-          <span
-            className={clsx(
-              "whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide sm:text-[10px]",
-              t.badge
-            )}
-          >
+          <span className={clsx("rounded-full border px-2 py-0.5 text-xs font-semibold", t.badge)}>
             {badge}
           </span>
         )}
       </div>
 
-      <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-muted sm:text-[11px]">
-        {label}
-      </p>
+      <p className="text-sm font-medium text-muted">{label}</p>
 
-      <p
-        className={clsx(
-          "mt-1 font-bold text-default",
-          featured
-            ? "text-2xl sm:text-3xl md:text-4xl"
-            : "text-xl sm:text-2xl md:text-3xl"
-        )}
-      >
+      <p className={clsx("mt-0.5 font-bold text-default", featured ? "text-3xl" : "text-2xl")}>
         {value}
       </p>
 
       {linkHref && linkLabel && (
         <Link
           href={linkHref}
-          className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline"
+          className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-300 hover:underline"
         >
           {linkLabel}
           <ArrowRight className="h-3 w-3" />
