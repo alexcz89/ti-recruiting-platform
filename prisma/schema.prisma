@@ -180,6 +180,8 @@ model User {
   experiences               WorkExperience[]
   notificationPreferences   NotificationPreference[]
   notifications             Notification[]
+  candidateLiveInterviews   LiveInterview[]          @relation("CandidateLiveInterviews")
+  interviewerSessions       LiveInterview[]          @relation("InterviewerSessions")
 
   @@index([email])
   @@index([role])
@@ -294,6 +296,7 @@ model Job {
   assessments           JobAssessment[]
   requiredSkills        JobRequiredSkill[]
   matchExplanations     MatchExplanationCache[]
+  liveInterviews        LiveInterview[]
 
   @@index([companyId])
   @@index([title])
@@ -349,6 +352,7 @@ model Application {
   assessmentAttempts AssessmentAttempt[]
   assessmentInvites  AssessmentInvite[]
   messages           Message[]
+  liveInterviews     LiveInterview[]
 
   @@unique([candidateId, jobId])
   @@index([candidateId]) // ✅ NEW: Fast candidate application lookups
@@ -1239,4 +1243,109 @@ enum CompanySize {
   FIFTY_ONE_TO_TWO_HUNDRED
   TWO_HUNDRED_ONE_TO_FIVE_HUNDRED
   FIVE_HUNDRED_PLUS
+}
+
+// ─── Live Interview ──────────────────────────────────────────────────────────
+
+enum LiveInterviewStatus {
+  SCHEDULED
+  CODING_PHASE
+  REVIEW_PAUSE
+  QA_PHASE
+  COMPLETED
+  CANCELLED
+}
+
+enum InterviewRecommendation {
+  HIRE
+  MAYBE
+  REJECT
+}
+
+model LiveInterview {
+  id                   String                   @id @default(cuid())
+  applicationId        String
+  jobId                String
+  candidateId          String
+  interviewerId        String
+  companyId            String
+
+  // Challenge (50 min coding phase)
+  challengeTitle       String
+  challengeDescription String
+  apiName              String?
+  apiDocsUrl           String?
+  videoCallUrl         String?
+  codingMinutes        Int                      @default(50)
+
+  // Q&A phase (40 min)
+  qaMinutes            Int                      @default(40)
+
+  // Candidate deliverables
+  githubUrl            String?
+  liveUrl              String?
+  submittedAt          DateTime?
+
+  // Session lifecycle
+  status               LiveInterviewStatus      @default(SCHEDULED)
+  scheduledAt          DateTime?
+  codingStartedAt      DateTime?
+  codingEndedAt        DateTime?
+  qaStartedAt          DateTime?
+  qaEndedAt            DateTime?
+  completedAt          DateTime?
+
+  // Final evaluation
+  codingScore          Int?
+  qaScore              Int?
+  finalScore           Int?
+  interviewerNotes     String?
+  recommendation       InterviewRecommendation?
+
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @default(now()) @updatedAt
+
+  application          Application              @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job                  Job                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate            User                     @relation("CandidateLiveInterviews", fields: [candidateId], references: [id])
+  interviewer          User                     @relation("InterviewerSessions", fields: [interviewerId], references: [id])
+  qaScores             LiveInterviewQAScore[]
+
+  @@index([applicationId])
+  @@index([candidateId])
+  @@index([companyId])
+  @@index([status])
+}
+
+model LiveInterviewQuestion {
+  id             String                 @id @default(cuid())
+  companyId      String?
+  techStack      String?
+  seniority      Seniority?
+  category       String?
+  question       String
+  expectedTopics String[]
+  isActive       Boolean                @default(true)
+  orderIndex     Int                    @default(0)
+  createdAt      DateTime               @default(now())
+
+  qaScores       LiveInterviewQAScore[]
+
+  @@index([techStack, seniority])
+  @@index([companyId])
+}
+
+model LiveInterviewQAScore {
+  id          String                @id @default(cuid())
+  interviewId String
+  questionId  String
+  score       Int
+  notes       String?
+  answeredAt  DateTime?
+
+  interview   LiveInterview         @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  question    LiveInterviewQuestion @relation(fields: [questionId], references: [id])
+
+  @@unique([interviewId, questionId])
+  @@index([interviewId])
 }

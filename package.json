@@ -12,6 +12,7 @@
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
     "seed": "tsx prisma/seed.ts",
+    "seed:live-questions": "tsx prisma/seed-live-interview-questions.ts",
     "backfill:company": "tsx scripts/backfill-companyId.ts",
     "refresh:skills": "tsx scripts/refresh-skills.ts",
     "refresh:languages": "tsx scripts/refresh-languages.ts",

@@ -1114,11 +1114,17 @@ export default async function JobApplicationsPage({
                             {candidateHref && (
                               <Link
                                 href={candidateHref}
-                                className="inline-flex items-center rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-600 whitespace-nowrap transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-700/40 dark:hover:text-emerald-300"
+                                className="inline-flex items-center rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-700 whitespace-nowrap transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-emerald-700/40 dark:hover:text-emerald-200"
                               >
                                 Ver perfil
                               </Link>
                             )}
+                            <Link
+                              href={`/dashboard/jobs/${job.id}/applications/${a.id}/live-interview`}
+                              className="inline-flex items-center rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 whitespace-nowrap transition-colors hover:bg-blue-100 dark:border-blue-800/50 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
+                            >
+                              Entrevista en vivo
+                            </Link>
                             <ActionsMenu
                               applicationId={a.id}
                               jobId={job.id}
