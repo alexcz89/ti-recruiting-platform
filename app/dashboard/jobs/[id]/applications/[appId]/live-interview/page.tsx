@@ -56,7 +56,6 @@ export default async function LiveInterviewPage({
         candidate: application.candidate,
         job: application.job,
       }}
-      interviewerId={user.id}
       existingInterview={existingInterview ? {
         id: existingInterview.id,
         status: existingInterview.status as any,

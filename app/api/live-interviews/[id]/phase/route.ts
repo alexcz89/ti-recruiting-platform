@@ -17,7 +17,15 @@ const PhaseSchema = z.object({
   action: z.enum(["start_coding", "end_coding", "start_qa", "cancel"]),
 });
 
-// PATCH /api/live-interviews/[id]/phase — recruiter transitions the session state
+// Valid transitions: [currentStatus] → action is allowed
+const ALLOWED: Record<string, string[]> = {
+  SCHEDULED:     ["start_coding", "cancel"],
+  CODING_PHASE:  ["end_coding", "cancel"],
+  REVIEW_PAUSE:  ["start_qa", "cancel"],
+  QA_PHASE:      ["cancel"],
+};
+
+// PATCH /api/live-interviews/[id]/phase
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return json({ error: "No autorizado" }, 401);
@@ -36,13 +44,22 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (user.companyId && interview.companyId !== user.companyId) return json({ error: "Forbidden" }, 403);
 
   const { action } = parsed.data;
+
+  // Guard: only allow valid transitions from the current status
+  const allowed = ALLOWED[interview.status] ?? [];
+  if (!allowed.includes(action)) {
+    return json({
+      error: `No se puede '${action}' desde el estado '${interview.status}'`,
+    }, 409);
+  }
+
   const now = new Date();
 
   const transitions: Record<string, { status: string; field: string }> = {
     start_coding: { status: "CODING_PHASE", field: "codingStartedAt" },
-    end_coding: { status: "REVIEW_PAUSE", field: "codingEndedAt" },
-    start_qa: { status: "QA_PHASE", field: "qaStartedAt" },
-    cancel: { status: "CANCELLED", field: "completedAt" },
+    end_coding:   { status: "REVIEW_PAUSE", field: "codingEndedAt" },
+    start_qa:     { status: "QA_PHASE",     field: "qaStartedAt" },
+    cancel:       { status: "CANCELLED",    field: "completedAt" },
   };
 
   const t = transitions[action];

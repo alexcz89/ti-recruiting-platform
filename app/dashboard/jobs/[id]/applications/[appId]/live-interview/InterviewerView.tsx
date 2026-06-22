@@ -59,7 +59,6 @@ interface Props {
     candidate: { id: string; name: string | null; email: string };
     job: { id: string; title: string };
   };
-  interviewerId: string;
   existingInterview: ExistingInterview | null;
   questionBank: Question[];
 }
@@ -83,9 +82,8 @@ function fmt(s: number) {
 
 // ── Setup form (create new interview) ────────────────────────────────────────
 
-function SetupForm({ application, interviewerId, onCreated }: {
+function SetupForm({ application, onCreated }: {
   application: Props["application"];
-  interviewerId: string;
   onCreated: (iv: ExistingInterview) => void;
 }) {
   const [challengeTitle, setChallengeTitle] = useState("");
@@ -259,6 +257,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
         <button
           key={n}
           type="button"
+          aria-label={`${n} de 5 estrellas`}
           onClick={() => onChange(n)}
           onMouseEnter={() => setHover(n)}
           onMouseLeave={() => setHover(0)}
@@ -313,7 +312,7 @@ function QuestionCard({
     finally { setSaving(false); }
   };
 
-  const scored = !!existingScore || score > 0;
+  const scored = !!existingScore;
 
   return (
     <div className={clsx(
@@ -385,21 +384,39 @@ function QuestionCard({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function InterviewerView({ application, interviewerId, existingInterview, questionBank }: Props) {
+export default function InterviewerView({ application, existingInterview, questionBank }: Props) {
   const [interview, setInterview] = useState<ExistingInterview | null>(existingInterview);
   const [phase, setPhase] = useState<Phase>(existingInterview?.status ?? "SCHEDULED");
   const [phaseLoading, setPhaseLoading] = useState(false);
   const [qaScores, setQaScores] = useState<QAScore[]>(existingInterview?.qaScores ?? []);
 
   // Final eval form
-  const [codingScore, setCodingScore] = useState(existingInterview?.codingScore ?? 70);
-  const [qaScore, setQaScore] = useState(existingInterview?.qaScore ?? 70);
+  const [codingScore, setCodingScore] = useState(existingInterview?.codingScore ?? 0);
+  const [qaScore, setQaScore] = useState(existingInterview?.qaScore ?? 0);
   const [notes, setNotes] = useState(existingInterview?.interviewerNotes ?? "");
   const [recommendation, setRecommendation] = useState<Rec | "">(existingInterview?.recommendation ?? "");
   const [completing, setCompleting] = useState(false);
 
   // Link copy
   const [copied, setCopied] = useState(false);
+
+  // Poll during active phases so recruiter sees candidate URL delivery without refreshing
+  useEffect(() => {
+    if (!interview || phase === "SCHEDULED" || phase === "COMPLETED" || phase === "CANCELLED") return;
+    const id = setInterval(async () => {
+      const res = await fetch(`/api/live-interviews/${interview.id}`).catch(() => null);
+      if (!res?.ok) return;
+      const { interview: updated } = await res.json().catch(() => ({}));
+      if (!updated) return;
+      setInterview((iv) => iv ? {
+        ...iv,
+        githubUrl: updated.githubUrl ?? iv.githubUrl,
+        liveUrl: updated.liveUrl ?? iv.liveUrl,
+        submittedAt: updated.submittedAt ?? iv.submittedAt,
+      } : iv);
+    }, 10_000);
+    return () => clearInterval(id);
+  }, [phase, interview?.id]);
 
   const codingSeconds = useCountdown(interview?.codingStartedAt ?? null, interview?.codingMinutes ?? 50);
   const qaSeconds = useCountdown(interview?.qaStartedAt ?? null, interview?.qaMinutes ?? 40);
@@ -450,18 +467,13 @@ export default function InterviewerView({ application, interviewerId, existingIn
     finally { setCompleting(false); }
   }, [interview, codingScore, qaScore, notes, recommendation]);
 
-  const handleQAScored = (questionId: string, score: number, notes: string) => {
+  const handleQAScored = (questionId: string, score: number, questionNotes: string) => {
     const q = questionBank.find((q) => q.id === questionId)!;
     setQaScores((prev) => {
       const without = prev.filter((s) => s.questionId !== questionId);
-      return [...without, { questionId, score, notes, question: { id: q.id, question: q.question, expectedTopics: q.expectedTopics, category: q.category } }];
+      return [...without, { questionId, score, notes: questionNotes, question: { id: q.id, question: q.question, expectedTopics: q.expectedTopics, category: q.category } }];
     });
-    // Auto-update qaScore based on average
-    const allScores = [...qaScores.filter((s) => s.questionId !== questionId), { questionId, score }];
-    if (allScores.length > 0) {
-      const avg = allScores.reduce((a, s) => a + s.score, 0) / allScores.length;
-      setQaScore(Math.round((avg / 5) * 100));
-    }
+    // autoQaScore is computed reactively from qaScores state on every render
   };
 
   const isUrgent = (codingSeconds ?? Infinity) < 300;
@@ -488,7 +500,6 @@ export default function InterviewerView({ application, interviewerId, existingIn
         </div>
         <SetupForm
           application={application}
-          interviewerId={interviewerId}
           onCreated={(iv) => { setInterview(iv); setPhase("SCHEDULED"); }}
         />
       </div>

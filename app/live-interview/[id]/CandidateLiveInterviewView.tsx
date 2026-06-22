@@ -295,7 +295,7 @@ export default function CandidateLiveInterviewView({ interview }: Props) {
               </p>
             </div>
 
-            {submitted && (
+            {submitted ? (
               <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <p className="mb-2 text-xs font-semibold text-zinc-500 dark:text-zinc-400">LO QUE ENTREGASTE</p>
                 {githubUrl && (
@@ -308,6 +308,51 @@ export default function CandidateLiveInterviewView({ interview }: Props) {
                     <Globe className="h-4 w-4" /> {liveUrl}
                   </a>
                 )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+                <h3 className="mb-1 font-semibold text-zinc-900 dark:text-zinc-100">Entrega tus links</h3>
+                <p className="mb-4 text-sm text-zinc-500">Todavía puedes compartir tu repositorio y deploy.</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      Repositorio GitHub <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 dark:border-zinc-700 dark:bg-zinc-800">
+                      <Github className="h-4 w-4 shrink-0 text-zinc-400" />
+                      <input
+                        type="url"
+                        placeholder="https://github.com/tu-usuario/mi-app"
+                        value={githubUrl}
+                        onChange={(e) => setGithubUrl(e.target.value)}
+                        className="h-11 flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      URL del deploy (opcional)
+                    </label>
+                    <div className="flex items-center gap-2 rounded-lg border border-zinc-300 bg-zinc-50 px-3 dark:border-zinc-700 dark:bg-zinc-800">
+                      <Globe className="h-4 w-4 shrink-0 text-zinc-400" />
+                      <input
+                        type="url"
+                        placeholder="https://mi-app.vercel.app"
+                        value={liveUrl}
+                        onChange={(e) => setLiveUrl(e.target.value)}
+                        className="h-11 flex-1 bg-transparent text-sm text-zinc-900 placeholder-zinc-400 outline-none dark:text-zinc-100"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={submitting || !githubUrl.trim()}
+                    className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Entregar links
+                  </button>
+                </div>
               </div>
             )}
           </div>
