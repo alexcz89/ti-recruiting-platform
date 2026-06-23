@@ -72,10 +72,7 @@ export default function TechMarquee() {
     <section className="overflow-hidden bg-zinc-50/60 py-16 dark:bg-zinc-900/40 md:py-24">
       {/* ── Header ── */}
       <div className="mb-12 px-4 text-center">
-        <span className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-4 py-1.5 text-xs font-semibold text-violet-700 dark:border-violet-800/60 dark:bg-violet-950/40 dark:text-violet-300">
-          Evaluaciones técnicas
-        </span>
-        <h2 className="mt-3 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl">
+        <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 sm:text-4xl">
           Evalúa cualquier tecnología
         </h2>
         <p className="mt-3 text-base text-zinc-500 dark:text-zinc-400">
