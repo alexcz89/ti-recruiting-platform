@@ -209,18 +209,13 @@ export default async function CompanyAssessmentsPage({
 
         {/* Header */}
         <div className="relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-gradient-to-br from-white via-zinc-50/50 to-white p-6 shadow-sm dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
-          <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-gradient-to-br from-violet-100 to-blue-100 opacity-20 blur-3xl dark:from-violet-900 dark:to-blue-900 dark:opacity-10" />
-          <div className="pointer-events-none absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-gradient-to-br from-emerald-100 to-teal-100 opacity-20 blur-3xl dark:from-emerald-900 dark:to-teal-900 dark:opacity-10" />
           <div className="relative">
-            <div className="flex items-center gap-2">
-              <div className="rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 p-2 shadow-lg shadow-violet-500/20">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-teal-600 p-2 shadow-sm">
                 <ListChecks className="h-4 w-4 text-white" />
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Panel de reclutador
-              </span>
             </div>
-            <h1 className="mt-3 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 bg-clip-text text-3xl font-black tracking-tight text-transparent dark:from-white dark:via-zinc-100 dark:to-white">
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-900 dark:text-white">
               Evaluaciones
             </h1>
             <p className="mt-1.5 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
@@ -231,7 +226,7 @@ export default async function CompanyAssessmentsPage({
 
         {/* Métricas */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <MetricCard label="Pendientes" value={mPending} icon={Clock} color="violet" total={mTotal} />
+          <MetricCard label="Pendientes" value={mPending} icon={Clock} color="zinc" total={mTotal} />
           <MetricCard label="En progreso" value={mInProgress} icon={TrendingUp} color="blue" total={mTotal} />
           <MetricCard label="Completadas" value={mCompleted} icon={CheckCircle2} color="emerald" total={mTotal} />
           <MetricCard label="Inactivas" value={mInactive} icon={Users} color="zinc" total={mTotal} />
@@ -247,7 +242,7 @@ export default async function CompanyAssessmentsPage({
         )}
 
         {/* Filtros */}
-        <form className="group relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-white/80 shadow-sm backdrop-blur-sm transition-all hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80">
+        <form className="group relative overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
           <div className="p-5">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
               {/* Buscar */}
@@ -387,7 +382,7 @@ export default async function CompanyAssessmentsPage({
                 </a>
                 <button
                   type="submit"
-                  className="group inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-4 text-xs font-bold text-white shadow-lg shadow-violet-500/25 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/30 active:scale-[0.98] dark:from-violet-500 dark:to-blue-500"
+                  className="group inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-teal-700 hover:shadow-md active:scale-[0.98]"
                 >
                   <Filter className="h-3.5 w-3.5 transition-transform group-hover:rotate-12" />
                   Aplicar filtros
@@ -490,20 +485,20 @@ export default async function CompanyAssessmentsPage({
                   return (
                     <tr
                       key={inv.id}
-                      className="group relative bg-white transition-all hover:bg-violet-50/30 dark:bg-zinc-900/50 dark:hover:bg-violet-950/10"
+                      className="group relative bg-white transition-all hover:bg-teal-50/40 dark:bg-zinc-900/50 dark:hover:bg-teal-950/10"
                     >
                       {/* Col 1: Candidato */}
                       <td className="relative px-5 py-4">
-                        <div className="absolute left-0 top-0 h-full w-0.5 bg-gradient-to-b from-violet-500 to-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
+                        <div className="absolute left-0 top-0 h-full w-0.5 bg-teal-500 opacity-0 transition-opacity group-hover:opacity-100" />
                         <Link
                           href={`/dashboard/candidates/${inv.candidate?.id || "#"}`}
                           className="flex items-center gap-2.5 transition-all hover:opacity-80"
                         >
-                          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-blue-100 text-xs font-bold text-violet-700 dark:from-violet-900/40 dark:to-blue-900/40 dark:text-violet-300">
+                          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
                             {(inv.candidate?.name || "?").charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate font-bold text-zinc-900 hover:text-violet-600 dark:text-zinc-50 dark:hover:text-violet-400">
+                            <p className="truncate font-bold text-zinc-900 hover:text-teal-600 dark:text-zinc-50 dark:hover:text-teal-400">
                               {inv.candidate?.name || "Sin nombre"}
                             </p>
                             <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
@@ -688,7 +683,7 @@ function PagerLink({
   return (
     <Link
       href={href}
-      className="inline-flex items-center rounded-xl border-2 border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition-all hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-violet-700 dark:hover:bg-violet-900/20 dark:hover:text-violet-300"
+      className="inline-flex items-center rounded-xl border-2 border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition-all hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-teal-700 dark:hover:bg-teal-900/20 dark:hover:text-teal-300"
     >
       {children}
     </Link>
@@ -708,14 +703,13 @@ function MetricCard({
   label: string;
   value: string | number;
   icon: any;
-  color: "violet" | "blue" | "emerald" | "zinc" | "teal" | "amber";
+  color: "blue" | "emerald" | "zinc" | "teal" | "amber";
   total?: number;
   isPercentage?: boolean;
   isAlert?: boolean;
   alertHref?: string;
 }) {
   const colors = {
-    violet: { bg: "from-violet-500 to-purple-500", shadow: "shadow-violet-500/25", text: "text-violet-600 dark:text-violet-400", bar: "bg-violet-500" },
     blue: { bg: "from-blue-500 to-cyan-500", shadow: "shadow-blue-500/25", text: "text-blue-600 dark:text-blue-400", bar: "bg-blue-500" },
     emerald: { bg: "from-emerald-500 to-teal-500", shadow: "shadow-emerald-500/25", text: "text-emerald-600 dark:text-emerald-400", bar: "bg-emerald-500" },
     zinc: { bg: "from-zinc-400 to-zinc-500", shadow: "shadow-zinc-500/25", text: "text-zinc-600 dark:text-zinc-400", bar: "bg-zinc-500" },

@@ -299,7 +299,7 @@ export default function SignupMultiStep({
   // ── Render ────────────────────────────────────────────────
   return (
     <div className="mx-auto w-full max-w-md px-4 py-6 sm:px-0">
-      <div className="rounded-2xl border border-zinc-200/80 dark:border-zinc-800/80 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-sm shadow-xl shadow-zinc-900/5 dark:shadow-zinc-900/30 overflow-hidden">
+      <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl shadow-zinc-900/5 dark:shadow-zinc-900/30 overflow-hidden">
 
         {/* Header */}
         <div className="px-6 pt-6 pb-4 text-center border-b border-zinc-100 dark:border-zinc-800">

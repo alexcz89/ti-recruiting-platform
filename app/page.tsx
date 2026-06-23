@@ -581,10 +581,6 @@ export default async function Home() {
 
             <div className="relative grid gap-10 lg:grid-cols-2 lg:gap-16 items-center">
               <div>
-                <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1.5 text-xs font-bold text-white uppercase tracking-wide mb-6">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  Herramienta gratuita
-                </div>
                 <h2 className="text-3xl font-black text-white sm:text-4xl lg:text-5xl leading-tight">
                   Tu CV profesional
                   <br />
