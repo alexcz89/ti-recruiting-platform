@@ -12,7 +12,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import { PhoneNumberUtil } from "google-libphonenumber";
-import { toastPromise, toastSuccess } from "@/lib/ui/toast";
+import { toastPromise, toastSuccess, toastError } from "@/lib/ui/toast";
 import UploadCvButton from "@/components/upload/UploadCvButton";
 import PhoneInputField from "@/components/PhoneInputField";
 import { MonthYearPicker, FullDatePicker } from "@/components/ui/WheelPicker";
@@ -338,8 +338,8 @@ export default function ProfileForm({
       education: (initial.education ?? []).map((ed, i) => ({
         id: ed.id, level: ed.level ?? null, status: "COMPLETED",
         institution: ed.institution ?? "", program: ed.program ?? "",
-        startDate: (ed.startDate || "")?.slice(0, 7) || "",
-        endDate: (ed.endDate || "")?.slice(0, 7) || "",
+        startDate: ed.startDate ? String(ed.startDate).slice(0, 7) : null,
+        endDate: ed.endDate ? String(ed.endDate).slice(0, 7) : null,
         sortIndex: ed.sortIndex ?? i,
       })),
       seniority: initial.seniority ?? undefined,
@@ -395,8 +395,8 @@ export default function ProfileForm({
       education: (initial.education ?? []).map((ed, i) => ({
         id: ed.id, level: ed.level ?? null, status: "COMPLETED",
         institution: ed.institution ?? "", program: ed.program ?? "",
-        startDate: (ed.startDate || "")?.slice(0, 7) || "",
-        endDate: (ed.endDate || "")?.slice(0, 7) || "",
+        startDate: ed.startDate ? String(ed.startDate).slice(0, 7) : null,
+        endDate: ed.endDate ? String(ed.endDate).slice(0, 7) : null,
         sortIndex: ed.sortIndex ?? i,
       })),
       seniority: initial.seniority ?? undefined,
@@ -816,7 +816,9 @@ export default function ProfileForm({
   return (
     <FormProvider {...methods}>
       <form
-        onSubmit={handleSubmit(onSubmitRHF)}
+        onSubmit={handleSubmit(onSubmitRHF, () =>
+          toastError("Revisa los campos con errores antes de guardar")
+        )}
         className="space-y-6 max-w-5xl mx-auto"
         encType="multipart/form-data"
       >

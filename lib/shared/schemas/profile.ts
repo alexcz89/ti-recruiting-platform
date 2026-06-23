@@ -75,6 +75,11 @@ export const EducationLevel = z.enum([
 
 export const EducationStatus = z.enum(["ONGOING", "COMPLETED", "INCOMPLETE"]);
 
+const OptionalMonthDate = z.preprocess(
+  (v) => (v === "" ? null : v),
+  z.string().regex(MONTH_RE).optional().nullable()
+);
+
 export const EducationSchema = z
   .object({
     id: z.string().optional(),
@@ -84,8 +89,8 @@ export const EducationSchema = z
     program: z.string().optional().nullable(),
     country: z.string().optional().nullable(),
     city: z.string().optional().nullable(),
-    startDate: z.string().regex(MONTH_RE).optional().nullable(),
-    endDate: z.string().regex(MONTH_RE).optional().nullable(),
+    startDate: OptionalMonthDate,
+    endDate: OptionalMonthDate,
     grade: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
     sortIndex: z.number().int().min(0),
