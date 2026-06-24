@@ -139,11 +139,19 @@ p, span, div {
     background: color-mix(in oklab, white 95%, rgb(var(--bg-elev-1)));
     border-color: rgb(var(--border));
   }
+  .dark .glass-card{
+    background: rgb(var(--card));
+    border-color: rgb(var(--border));
+  }
 
   /* Paneles un poco más sólidos */
   .soft-panel{
     @apply rounded-2xl border shadow-sm;
     background: color-mix(in oklab, transparent, rgb(var(--bg-elev-2)));
+    border-color: rgb(var(--border));
+  }
+  .dark .soft-panel{
+    background: rgb(var(--card));
     border-color: rgb(var(--border));
   }
 
