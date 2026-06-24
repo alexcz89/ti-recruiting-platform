@@ -51,6 +51,16 @@ body {
   padding: 0;
 }
 
+/* Bricolage Grotesque para display — aplica globalmente a headings */
+h1, h2 {
+  font-family: var(--font-display), var(--font-inter), ui-sans-serif;
+  letter-spacing: -0.02em;
+}
+h3 {
+  font-family: var(--font-display), var(--font-inter), ui-sans-serif;
+  letter-spacing: -0.01em;
+}
+
 /* Links */
 a { @apply text-blue-600 hover:underline dark:text-blue-400; }
 
@@ -190,7 +200,7 @@ p {
 
   /* Chips / Badges (base) */
   .badge{
-    @apply inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium;
+    @apply inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-medium;
     border-color: rgb(var(--border));
     background: color-mix(in oklab, transparent, rgb(var(--bg-elev-1)));
     color: rgb(var(--text));

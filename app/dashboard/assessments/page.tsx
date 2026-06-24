@@ -58,7 +58,7 @@ function tone(state: Exclude<StateFilter, "ALL">) {
     return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800/50";
   if (state === "INACTIVE")
     return "bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400 dark:border-zinc-700";
-  return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-950/30 dark:text-violet-300 dark:border-violet-800/50";
+  return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50";
 }
 
 function fmtScore(n: any) {
@@ -161,7 +161,7 @@ export default async function CompanyAssessmentsPage({
     return (
       <main className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
         <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-8 dark:border-red-900/50 dark:bg-red-950/20">
+          <div className="rounded-xl border border-red-200 bg-red-50 p-8 dark:border-red-900/50 dark:bg-red-950/20">
             <p className="text-lg font-semibold text-red-900 dark:text-red-200">
               Error cargando evaluaciones
             </p>
@@ -251,12 +251,12 @@ export default async function CompanyAssessmentsPage({
                   Buscar
                 </label>
                 <div className="group/input relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-violet-500" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
                   <input
                     name="q"
                     defaultValue={q}
                     placeholder="Nombre, email o assessment..."
-                    className="h-10 w-full rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-3 text-sm text-zinc-900 shadow-sm outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-10 w-full rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-3 text-sm text-zinc-900 shadow-sm outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   />
                 </div>
               </div>
@@ -267,11 +267,11 @@ export default async function CompanyAssessmentsPage({
                   Vacante
                 </label>
                 <div className="group/input relative">
-                  <Briefcase className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-violet-500" />
+                  <Briefcase className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
                   <select
                     name="jobId"
                     defaultValue={jobId}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   >
                     <option value="">Todas</option>
                     {jobs.map((j) => (
@@ -294,11 +294,11 @@ export default async function CompanyAssessmentsPage({
                   Estado
                 </label>
                 <div className="group/input relative">
-                  <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-violet-500" />
+                  <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
                   <select
                     name="state"
                     defaultValue={state}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   >
                     <option value="ALL">Todos</option>
                     <option value="PENDING">Pendiente</option>
@@ -320,11 +320,11 @@ export default async function CompanyAssessmentsPage({
                   Intentos
                 </label>
                 <div className="group/input relative">
-                  <ListChecks className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-violet-500" />
+                  <ListChecks className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
                   <select
                     name="hasAttempt"
                     defaultValue={hasAttempt}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   >
                     <option value="">Todos</option>
                     <option value="1">Con intento</option>
@@ -348,7 +348,7 @@ export default async function CompanyAssessmentsPage({
                   <select
                     name="sort"
                     defaultValue={sort}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   >
                     <option value="recent">Más reciente</option>
                     <option value="score_desc">Score alto → bajo</option>
@@ -366,7 +366,7 @@ export default async function CompanyAssessmentsPage({
             <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200/70 pt-4 dark:border-zinc-700/70 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-zinc-600 dark:text-zinc-300">
                 Mostrando{" "}
-                <span className="font-bold text-violet-600 dark:text-violet-400">{mTotal}</span>{" "}
+                <span className="font-bold text-teal-600 dark:text-teal-400">{mTotal}</span>{" "}
                 de{" "}
                 <span className="font-bold text-zinc-900 dark:text-zinc-100">{total}</span>{" "}
                 resultados
@@ -400,9 +400,9 @@ export default async function CompanyAssessmentsPage({
 
         {/* ✅ Tabla rediseñada — 5 columnas, sin scroll horizontal */}
         {rows.length === 0 ? (
-          <div className="relative overflow-hidden rounded-3xl border border-dashed border-zinc-300 bg-white/50 p-12 text-center backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+          <div className="relative overflow-hidden rounded-xl border border-dashed border-zinc-300 bg-white/50 p-12 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
             <div className="mx-auto max-w-md">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-700">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
                 <Search className="h-8 w-8 text-zinc-400" />
               </div>
               <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">No hay resultados</p>
@@ -520,7 +520,7 @@ export default async function CompanyAssessmentsPage({
                               {inv.application?.job?.id ? (
                                 <Link
                                   href={`/dashboard/jobs/${inv.application.job.id}/applications`}
-                                  className="truncate font-medium text-violet-600 hover:underline dark:text-violet-400"
+                                  className="truncate font-medium text-teal-600 hover:underline dark:text-teal-400"
                                 >
                                   {inv.application.job.title}
                                 </Link>
@@ -543,7 +543,7 @@ export default async function CompanyAssessmentsPage({
                         {/* Estado badge */}
                         <div className="mb-2">
                           <span
-                            className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}
+                            className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}
                           >
                             {st === "COMPLETED" && (
                               <CheckCircle2 className="h-2.5 w-2.5" />
@@ -595,7 +595,7 @@ export default async function CompanyAssessmentsPage({
                         {st === "COMPLETED" && resultsUrl && (
                           <Link
                             href={resultsUrl}
-                            className="mt-1.5 inline-flex items-center gap-1 rounded-lg bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700 transition-colors hover:bg-violet-100 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40"
+                            className="mt-1.5 inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 transition-colors hover:bg-teal-100 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
                           >
                             Ver resultados →
                           </Link>
@@ -638,10 +638,10 @@ export default async function CompanyAssessmentsPage({
             </table>
 
             {/* Paginación */}
-            <div className="flex flex-col gap-2 rounded-b-3xl border-t border-zinc-200/80 bg-gradient-to-r from-zinc-50/50 via-white to-zinc-50/50 px-5 py-3 dark:border-zinc-800/50 dark:from-zinc-900/50 dark:via-zinc-900/30 dark:to-zinc-900/50 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 rounded-b-xl border-t border-zinc-200/80 bg-zinc-50/60 px-5 py-3 dark:border-zinc-800/50 dark:bg-zinc-900/40 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-zinc-600 dark:text-zinc-300">
                 Página{" "}
-                <span className="font-black text-violet-600 dark:text-violet-400">{page}</span>{" "}
+                <span className="font-black text-teal-600 dark:text-teal-400">{page}</span>{" "}
                 de{" "}
                 <span className="font-black text-zinc-900 dark:text-zinc-100">{totalPages}</span>
               </p>
@@ -755,7 +755,7 @@ function MetricCard({
   );
 
   const wrapperClass =
-    "group relative overflow-hidden rounded-2xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm backdrop-blur-sm transition-all hover:scale-[1.02] hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80";
+    "group relative overflow-hidden rounded-xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm transition-all hover:scale-[1.02] hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80";
 
   if (alertHref && isAlert && typeof value === "number" && value > 0) {
     return (

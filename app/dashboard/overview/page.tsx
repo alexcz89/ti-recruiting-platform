@@ -267,7 +267,7 @@ export default async function OverviewPage() {
 
   return (
     <main className="w-full">
-      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-4 px-3 py-3 sm:space-y-6 sm:px-6 sm:py-5 lg:px-10">
+      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-5 px-3 py-3 sm:space-y-8 sm:px-6 sm:py-5 lg:px-10">
         <div className="flex flex-wrap items-center gap-2.5 pb-1">
           <h1 className="text-2xl font-bold leading-tight text-default sm:text-3xl">
             Panel
@@ -331,7 +331,7 @@ export default async function OverviewPage() {
             icon={Briefcase}
             label="Vacantes abiertas"
             value={nf(openJobs)}
-            tone="zinc"
+            tone="teal"
           />
           <KpiCard
             icon={Users}
@@ -347,11 +347,11 @@ export default async function OverviewPage() {
           />
         </section>
 
-        <section className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-2">
-          <div className="rounded-2xl border glass-card p-4 sm:p-5">
+        <section className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-2">
+          <div className="glass-card rounded-xl p-4 sm:p-5">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-500" />
+                <Users className="h-4 w-4 text-teal-500" />
                 <h2 className="text-sm font-semibold text-default sm:text-base">
                   Pipeline de candidatos
                 </h2>
@@ -440,7 +440,7 @@ export default async function OverviewPage() {
             )}
           </div>
 
-          <div className="rounded-2xl border glass-card p-4 sm:p-5">
+          <div className="glass-card rounded-xl p-4 sm:p-5">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-emerald-500" />
@@ -530,15 +530,15 @@ export default async function OverviewPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-12">
-          <div className="rounded-2xl border glass-card p-3 sm:p-4 md:p-5 lg:col-span-7">
+        <section className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-12">
+          <div className="glass-card rounded-2xl p-3 sm:p-4 md:p-5 lg:col-span-7">
             <div className="mb-3 flex items-center justify-between sm:mb-4">
               <h2 className="text-sm font-semibold text-default sm:text-base">
                 Postulaciones recientes
               </h2>
               <Link
                 href="/dashboard/candidates/pending"
-                className="whitespace-nowrap text-xs text-blue-600 hover:underline dark:text-blue-400 sm:text-sm"
+                className="whitespace-nowrap text-xs text-teal-600 hover:underline dark:text-teal-400 sm:text-sm"
               >
                 Ver todas →
               </Link>
@@ -594,7 +594,7 @@ export default async function OverviewPage() {
             )}
           </div>
 
-          <div className="rounded-2xl border glass-card p-3 sm:p-4 md:p-5 lg:col-span-5">
+          <div className="glass-card rounded-xl p-3 sm:p-4 md:p-5 lg:col-span-5">
             <div className="mb-3 flex items-center justify-between sm:mb-4">
               <h2 className="text-sm font-semibold text-default sm:text-base">
                 Actividad reciente
@@ -672,7 +672,7 @@ function KpiCard({
   icon: LucideIcon;
   label: string;
   value: string | number;
-  tone?: "zinc" | "emerald" | "amber" | "blue";
+  tone?: "zinc" | "emerald" | "amber" | "blue" | "teal";
   badge?: string;
   linkHref?: string;
   linkLabel?: string;
@@ -684,6 +684,12 @@ function KpiCard({
       iconBg: "bg-zinc-100 dark:bg-zinc-800",
       iconColor: "text-zinc-500 dark:text-zinc-400",
       badge: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+    },
+    teal: {
+      card: "bg-teal-50/60 dark:bg-teal-900/15 border-teal-200 dark:border-teal-800/50",
+      iconBg: "bg-teal-100 dark:bg-teal-900/40",
+      iconColor: "text-teal-600 dark:text-teal-400",
+      badge: "border-teal-200 bg-teal-100 text-teal-700 dark:border-teal-500/40 dark:bg-teal-900/40 dark:text-teal-300",
     },
     emerald: {
       card: "bg-emerald-50/70 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/60",
@@ -720,7 +726,7 @@ function KpiCard({
           <Icon className={clsx("h-4 w-4", t.iconColor)} />
         </div>
         {badge && (
-          <span className={clsx("rounded-full border px-2 py-0.5 text-xs font-semibold", t.badge)}>
+          <span className={clsx("rounded border px-2 py-0.5 text-xs font-semibold", t.badge)}>
             {badge}
           </span>
         )}
@@ -728,7 +734,7 @@ function KpiCard({
 
       <p className="text-sm font-medium text-muted">{label}</p>
 
-      <p className={clsx("mt-0.5 font-bold text-default", featured ? "text-3xl" : "text-2xl")}>
+      <p className={clsx("mt-0.5 font-bold text-default font-display tracking-tight", featured ? "text-3xl" : "text-2xl")}>
         {value}
       </p>
 
@@ -757,7 +763,7 @@ function EmptyState({
   ctaLabel?: string;
 }) {
   return (
-    <div className="glass-card rounded-2xl border border-dashed p-5 text-center sm:p-8">
+    <div className="glass-card rounded-xl border border-dashed p-5 text-center sm:p-8">
       <p className="text-sm font-medium text-default sm:text-base">{title}</p>
       {body && <p className="mt-1 text-xs text-muted sm:text-sm">{body}</p>}
       {ctaHref && ctaLabel && (
