@@ -29,35 +29,26 @@ html {
   font-family: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
     sans-serif;
-  scroll-behavior: smooth;
-
-  /* ✅ Font Optimization */
-  /* Enable font ligatures and kerning for better typography */
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  /* Prevent bold synthesis and italic synthesis if font has variants */
   font-synthesis: none;
-
-  /* Enable OpenType features: ligatures, kerning */
   font-feature-settings: "kern" 1, "liga" 1;
   text-rendering: optimizeLegibility;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
 }
 
 /* Reset base */
 * { @apply box-border; }
 
 body {
-  @apply min-h-screen antialiased;
-  background-color: #fafafa !important; /* zinc-50 - gris muy claro profesional */
-  color: #18181b; /* zinc-900 */
+  @apply min-h-screen;
+  background-color: rgb(var(--background));
+  color: rgb(var(--text));
   margin: 0;
   padding: 0;
-}
-
-.dark body {
-  background-color: #09090b !important; /* zinc-950 - negro suave */
-  color: #fafafa; /* zinc-50 */
 }
 
 /* Links */
@@ -71,20 +62,18 @@ button { @apply cursor-pointer; }
 ::-webkit-scrollbar-thumb { @apply bg-zinc-400/50 rounded-md dark:bg-zinc-700/70; }
 ::-webkit-scrollbar-track { @apply bg-transparent; }
 
-/* 🔧 Evitar desbordes de texto largo sin espacios */
-p, span, div {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  white-space: normal;
-  hyphens: none;
+/* Evitar desbordes de texto largo sin espacios — solo en prose, no en layouts */
+p {
+  overflow-wrap: break-word;
 }
 
 /* Para tarjetas/listas de vacantes */
 .jobs-list li,
-.job-detail {
+.job-detail,
+.prose p,
+.prose span {
   overflow-wrap: anywhere;
   word-break: break-word;
-  white-space: normal;
   max-width: 100%;
 }
 
@@ -162,8 +151,16 @@ p, span, div {
   /* Campos de formulario */
   .field{
     @apply w-full rounded-xl border px-3 py-2 text-sm outline-none transition;
+    /* min-height 44px para tap targets en mobile */
+    min-height: 44px;
     border-color: rgb(var(--border));
     background-color: color-mix(in oklab, white 2%, rgb(var(--bg-elev-1)));
+    color: rgb(var(--text));
+  }
+  .dark .field{
+    background-color: rgb(var(--card));
+    color: rgb(var(--text));
+    border-color: rgb(var(--border));
   }
   .field:focus{
     box-shadow: 0 0 0 .2rem rgba(var(--ring));
@@ -177,8 +174,8 @@ p, span, div {
   .btn-primary { 
     @apply bg-emerald-600 text-white hover:bg-emerald-700 disabled:hover:bg-emerald-600; 
   }
-  .btn-secondary { 
-    @apply bg-violet-600 text-white hover:bg-violet-700 disabled:hover:bg-violet-600; 
+  .btn-secondary {
+    @apply bg-teal-600 text-white hover:bg-teal-700 disabled:hover:bg-teal-600;
   }
 
   /* Ghost con mismas dimensiones que .btn */
@@ -347,20 +344,20 @@ p, span, div {
 /* ====== Dark mode ====== */
 
 .dark .bt-phone-input .bt-phone-input-input.form-control {
-  background-color: #09090b;
-  color: #f9fafb;
-  border-color: #3f3f46; /* zinc-700 */
+  background-color: rgb(var(--background));
+  color: rgb(var(--text));
+  border-color: rgb(var(--border));
 }
 
 .dark .bt-phone-input .flag-dropdown.bt-phone-input-flag {
-  background-color: #09090b;
-  border-color: #3f3f46;
+  background-color: rgb(var(--background));
+  border-color: rgb(var(--border));
 }
 
 .dark .bt-phone-input .country-list {
-  background-color: #09090b;
-  color: #e5e5e5;
-  border-color: #3f3f46;
+  background-color: rgb(var(--background));
+  color: rgb(var(--text));
+  border-color: rgb(var(--border));
 }
 
 /* ==============================
@@ -394,9 +391,9 @@ p, span, div {
 /* ===== Dark mode ===== */
 
 .dark .bt-phone-input .country-list {
-  background-color: #09090b;
-  color: #e5e7eb;
-  border-color: #3f3f46;
+  background-color: rgb(var(--background));
+  color: rgb(var(--text));
+  border-color: rgb(var(--border));
 }
 
 .dark .bt-phone-input .country-list .country:hover,
@@ -499,29 +496,12 @@ p, span, div {
   animation: gradient 3s ease infinite;
 }
 
-.animation-delay-200 {
-  animation-delay: 0.2s;
-  opacity: 0;
-}
-
-.animation-delay-300 {
-  animation-delay: 0.3s;
-  opacity: 0;
-}
-
-.animation-delay-400 {
-  animation-delay: 0.4s;
-  opacity: 0;
-}
-
-.animation-delay-500 {
-  animation-delay: 0.5s;
-  opacity: 0;
-}
-
-.animation-delay-600 {
-  animation-delay: 0.6s;
-  opacity: 0;
+@media (prefers-reduced-motion: no-preference) {
+  .animation-delay-200 { animation-delay: 0.2s; opacity: 0; }
+  .animation-delay-300 { animation-delay: 0.3s; opacity: 0; }
+  .animation-delay-400 { animation-delay: 0.4s; opacity: 0; }
+  .animation-delay-500 { animation-delay: 0.5s; opacity: 0; }
+  .animation-delay-600 { animation-delay: 0.6s; opacity: 0; }
 }
 
 /* ==============================
