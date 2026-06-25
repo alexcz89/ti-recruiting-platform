@@ -15,6 +15,9 @@ import {
   Users,
   Sparkles,
   ArrowRight,
+  Briefcase,
+  CalendarDays,
+  Inbox,
 } from "lucide-react";
 import QuickActionButtons from "./QuickActionButtons";
 import {
@@ -244,6 +247,7 @@ export default async function OverviewPage() {
           .reduce((a, j) => a + (j.avgMatch ?? 0), 0) /
         topJobs.filter((j) => j.avgMatch !== null).length
       : null;
+  const pendingShare = appsTotal > 0 ? Math.round((appsPending / appsTotal) * 100) : 0;
 
   return (
     <main className="w-full">
@@ -293,33 +297,69 @@ export default async function OverviewPage() {
           profile={profile}
           company={company}
         />
-
-        {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
-        <section className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {/* Por revisar — card destacada */}
+        {/* KPI Cards */}
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           <KpiCard
-            label="Por revisar"
+            icon={Inbox}
+            eyebrow="Accion requerida"
+            label="Candidatos por revisar"
             value={nf(appsPending)}
             tone={appsPending > 0 ? "amber" : "emerald"}
-            badge={appsPending > 0 ? "Prioritario" : "Al día"}
+            badge={appsPending > 0 ? "Prioritario" : "Al dia"}
+            description={
+              appsPending > 0
+                ? `${pendingShare}% del pipeline necesita una decision`
+                : "No tienes candidatos pendientes"
+            }
+            metricLabel="Pendientes"
+            metricValue={appsPending > 0 ? "Revisar hoy" : "Al dia"}
             linkHref={appsPending > 0 ? "/dashboard/jobs?filter=pending" : undefined}
-            linkLabel={appsPending > 0 ? "Revisar candidatos →" : undefined}
+            linkLabel={appsPending > 0 ? "Revisar candidatos" : undefined}
             featured={appsPending > 0}
           />
           <KpiCard
+            icon={Briefcase}
+            eyebrow="Oferta activa"
             label="Vacantes abiertas"
             value={nf(openJobs)}
-            tone="zinc"
+            tone="emerald"
+            description={
+              jobsWithoutApps > 0
+                ? `${jobsWithoutApps} sin postulaciones despues de 15 dias`
+                : "Todas tus vacantes tienen movimiento"
+            }
+            metricLabel="Riesgo"
+            metricValue={jobsWithoutApps > 0 ? `${jobsWithoutApps} ajustar` : "Sin alertas"}
+            linkHref="/dashboard/jobs"
+            linkLabel="Ver vacantes"
           />
           <KpiCard
-            label="Postulaciones totales"
+            icon={Users}
+            eyebrow="Pipeline total"
+            label="Postulaciones"
             value={nf(appsTotal)}
-            tone="zinc"
+            tone="blue"
+            description={`${nf(funnel.ACCEPTED)} aceptados � ${nf(funnel.MAYBE)} en duda`}
+            metricLabel="Conversion"
+            metricValue={appsTotal > 0 ? `${pct((funnel.ACCEPTED / appsTotal) * 100)} aceptados` : "Sin datos"}
+            linkHref="/dashboard/jobs"
+            linkLabel="Abrir pipeline"
           />
           <KpiCard
-            label="Últimos 7 días"
+            icon={CalendarDays}
+            eyebrow="Ultimos 7 dias"
+            label="Nuevas entradas"
             value={nf(apps7d)}
-            tone="zinc"
+            tone="violet"
+            description={
+              apps7d > 0
+                ? "Nueva actividad de candidatos esta semana"
+                : "Sin postulaciones nuevas esta semana"
+            }
+            metricLabel="Ritmo"
+            metricValue={apps7d > 0 ? `${nf(apps7d)} nuevas` : "Bajo"}
+            linkHref="/dashboard/jobs"
+            linkLabel="Ver recientes"
           />
         </section>
 
@@ -632,47 +672,88 @@ export default async function OverviewPage() {
 }
 
 function KpiCard({
+  icon: Icon,
+  eyebrow,
   label,
   value,
   tone = "zinc",
   badge,
+  description,
+  metricLabel,
+  metricValue,
   linkHref,
   linkLabel,
   featured = false,
 }: {
+  icon: React.ComponentType<{ className?: string }>;
+  eyebrow: string;
   label: string;
   value: string | number;
   tone?: "zinc" | "emerald" | "amber" | "blue" | "violet";
   badge?: string;
+  description: string;
+  metricLabel: string;
+  metricValue: string;
   linkHref?: string;
   linkLabel?: string;
   featured?: boolean;
 }) {
-  const tones: Record<string, { card: string; accent: string; badge: string }> = {
+  const tones: Record<
+    string,
+    {
+      card: string;
+      icon: string;
+      iconBg: string;
+      badge: string;
+      value: string;
+      bar: string;
+      link: string;
+    }
+  > = {
     zinc: {
-      card: "glass-card",
-      accent: "bg-zinc-200 dark:bg-zinc-700",
+      card: "glass-card border-zinc-200/80 dark:border-zinc-800",
+      icon: "text-zinc-600 dark:text-zinc-300",
+      iconBg: "bg-zinc-100 dark:bg-zinc-800",
       badge: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+      value: "text-zinc-950 dark:text-zinc-50",
+      bar: "from-zinc-300 to-zinc-500 dark:from-zinc-600 dark:to-zinc-400",
+      link: "text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white",
     },
     emerald: {
-      card: "glass-card border-emerald-300/60 dark:border-emerald-400/25 bg-emerald-50/70 dark:bg-emerald-900/25",
-      accent: "bg-emerald-200 dark:bg-emerald-800",
+      card: "border-emerald-200 bg-emerald-50/55 shadow-emerald-900/5 dark:border-emerald-500/25 dark:bg-emerald-950/20",
+      icon: "text-emerald-700 dark:text-emerald-300",
+      iconBg: "bg-emerald-100 dark:bg-emerald-900/50",
       badge: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-300",
+      value: "text-emerald-950 dark:text-emerald-100",
+      bar: "from-emerald-300 to-emerald-600",
+      link: "text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100",
     },
     amber: {
-      card: "glass-card border-amber-300/60 dark:border-amber-400/25 bg-amber-50/70 dark:bg-amber-900/25",
-      accent: "bg-amber-200 dark:bg-amber-800",
+      card: "border-amber-200 bg-amber-50/70 shadow-amber-900/5 dark:border-amber-500/30 dark:bg-amber-950/20",
+      icon: "text-amber-700 dark:text-amber-300",
+      iconBg: "bg-amber-100 dark:bg-amber-900/50",
       badge: "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300",
+      value: "text-amber-950 dark:text-amber-100",
+      bar: "from-amber-300 to-orange-500",
+      link: "text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100",
     },
     blue: {
-      card: "glass-card border-blue-300/50 dark:border-blue-400/20 bg-blue-50/60 dark:bg-blue-900/20",
-      accent: "bg-blue-100 dark:bg-blue-800",
-      badge: "border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/40 dark:text-blue-300",
+      card: "border-sky-200 bg-sky-50/60 shadow-sky-900/5 dark:border-sky-500/25 dark:bg-sky-950/20",
+      icon: "text-sky-700 dark:text-sky-300",
+      iconBg: "bg-sky-100 dark:bg-sky-900/50",
+      badge: "border-sky-200 bg-sky-100 text-sky-700 dark:border-sky-500/40 dark:bg-sky-900/40 dark:text-sky-300",
+      value: "text-sky-950 dark:text-sky-100",
+      bar: "from-sky-300 to-blue-600",
+      link: "text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-100",
     },
     violet: {
-      card: "glass-card border-violet-300/50 dark:border-violet-400/20 bg-violet-50/60 dark:bg-violet-900/20",
-      accent: "bg-violet-100 dark:bg-violet-800",
+      card: "border-violet-200 bg-violet-50/60 shadow-violet-900/5 dark:border-violet-500/25 dark:bg-violet-950/20",
+      icon: "text-violet-700 dark:text-violet-300",
+      iconBg: "bg-violet-100 dark:bg-violet-900/50",
       badge: "border-violet-200 bg-violet-100 text-violet-700 dark:border-violet-500/40 dark:bg-violet-900/40 dark:text-violet-300",
+      value: "text-violet-950 dark:text-violet-100",
+      bar: "from-violet-300 to-fuchsia-600",
+      link: "text-violet-700 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-100",
     },
   };
 
@@ -681,17 +762,32 @@ function KpiCard({
   return (
     <div
       className={clsx(
-        "rounded-xl border p-3 shadow-sm transition hover:shadow-md",
+        "relative flex min-h-[168px] flex-col overflow-hidden rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:p-5",
         t.card,
-        featured && "ring-1 ring-amber-300/60 dark:ring-amber-500/30"
+        featured && "ring-1 ring-amber-300/70 dark:ring-amber-500/40"
       )}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className={clsx("h-5 w-5 shrink-0 rounded-md", t.accent)} />
+      <div className={clsx("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", t.bar)} />
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className={clsx("flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl", t.iconBg)}>
+            <Icon className={clsx("h-5 w-5", t.icon)} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
+              {eyebrow}
+            </p>
+            <h3 className="mt-1 truncate text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+              {label}
+            </h3>
+          </div>
+        </div>
+
         {badge && (
           <span
             className={clsx(
-              "whitespace-nowrap rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide sm:text-[10px]",
+              "shrink-0 whitespace-nowrap rounded-full border px-2 py-1 text-[10px] font-bold",
               t.badge
             )}
           >
@@ -700,34 +796,46 @@ function KpiCard({
         )}
       </div>
 
-      <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-muted sm:text-[11px]">
-        {label}
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <p className={clsx("font-display text-4xl font-black leading-none tracking-tight", t.value)}>
+          {value}
+        </p>
+        <div className="rounded-xl border border-white/60 bg-white/65 px-2.5 py-1.5 text-right shadow-sm dark:border-white/10 dark:bg-zinc-950/35">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            {metricLabel}
+          </p>
+          <p className="mt-0.5 whitespace-nowrap text-xs font-semibold text-zinc-700 dark:text-zinc-200">
+            {metricValue}
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-3 min-h-[34px] text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+        {description}
       </p>
 
-      <p
-        className={clsx(
-          "mt-1 font-bold text-default",
-          featured
-            ? "text-2xl sm:text-3xl md:text-4xl"
-            : "text-xl sm:text-2xl md:text-3xl"
+      <div className="mt-auto pt-3">
+        {linkHref && linkLabel ? (
+          <Link
+            href={linkHref}
+            className={clsx(
+              "inline-flex items-center gap-1.5 text-xs font-bold transition hover:underline",
+              t.link
+            )}
+          >
+            {linkLabel}
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 dark:text-zinc-500">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Sin acciones pendientes
+          </span>
         )}
-      >
-        {value}
-      </p>
-
-      {linkHref && linkLabel && (
-        <Link
-          href={linkHref}
-          className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:underline"
-        >
-          {linkLabel}
-          <ArrowRight className="h-3 w-3" />
-        </Link>
-      )}
+      </div>
     </div>
   );
 }
-
 function EmptyState({
   title,
   body,
