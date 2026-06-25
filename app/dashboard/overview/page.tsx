@@ -339,7 +339,7 @@ export default async function OverviewPage() {
             label="Postulaciones"
             value={nf(appsTotal)}
             tone="blue"
-            description={`${nf(funnel.ACCEPTED)} aceptados · ${nf(funnel.MAYBE)} en duda`}
+            description={`${nf(funnel.ACCEPTED)} aceptados - ${nf(funnel.MAYBE)} en duda`}
             metricLabel="Conversion"
             metricValue={appsTotal > 0 ? `${pct((funnel.ACCEPTED / appsTotal) * 100)} aceptados` : "Sin datos"}
             linkHref="/dashboard/jobs"
