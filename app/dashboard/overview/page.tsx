@@ -224,6 +224,8 @@ export default async function OverviewPage() {
   }
 
   const funnelTotal = Object.values(funnel).reduce((a, b) => a + b, 0);
+  const activePipeline = funnel.REVIEW + funnel.MAYBE + funnel.ACCEPTED;
+  const activePipelineShare = funnelTotal > 0 ? Math.round((activePipeline / funnelTotal) * 100) : 0;
 
   // Process top jobs with match scores
   const topJobs = topJobsRaw.map((job) => {
@@ -353,13 +355,13 @@ export default async function OverviewPage() {
           />
           <KpiCard
             icon={Users}
-            eyebrow="Pipeline total"
-            label="Postulaciones"
-            value={nf(appsTotal)}
+            eyebrow="Carga operativa"
+            label="Pipeline activo"
+            value={nf(activePipeline)}
             tone="blue"
-            description={`${nf(funnel.ACCEPTED)} aceptados - ${nf(funnel.MAYBE)} en duda`}
-            metricLabel="Conversion"
-            metricValue={appsTotal > 0 ? `${pct((funnel.ACCEPTED / appsTotal) * 100)} aceptados` : "Sin datos"}
+            description={`${nf(funnel.REVIEW)} sin revisar - ${nf(funnel.MAYBE)} en duda - ${nf(funnel.ACCEPTED)} aceptados`}
+            metricLabel="Activo"
+            metricValue={funnelTotal > 0 ? `${activePipelineShare}% del total` : "Sin datos"}
             linkHref="/dashboard/jobs"
             linkLabel="Abrir pipeline"
           />
