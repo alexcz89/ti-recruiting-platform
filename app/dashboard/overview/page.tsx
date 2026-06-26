@@ -111,6 +111,8 @@ export default async function OverviewPage() {
     }),
   ]);
 
+  const pendingShare = appsTotal > 0 ? Math.round((appsPending / appsTotal) * 100) : 0;
+
   // Batch all independent queries in parallel
   const [
     jobsWithoutApps,
