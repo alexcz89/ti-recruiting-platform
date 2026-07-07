@@ -17,6 +17,8 @@ type OptionLike = Record<string, unknown>;
 type FlagsMeta = {
   questionOrder?: string[];
   optionOrderByQuestion?: Record<string, string[]>;
+  /** true cuando questionOrder es una muestra aleatoria del pool (exámenes de badge) */
+  sampled?: boolean;
 } | null;
 
 type StartBody = {
@@ -168,7 +170,11 @@ function buildQuestionsPayload(questionsRaw: QuestionRow[], meta: FlagsMeta) {
     const ordered = questionOrder
       .map((id) => map.get(id))
       .filter(Boolean) as typeof questions;
-    const leftovers = questions.filter((q) => !questionOrder.includes(q.id));
+    // Meta muestreado (badge): el examen es EXACTAMENTE el subset sorteado.
+    // Meta completo (empresa): se anexan preguntas agregadas después del inicio.
+    const leftovers = meta?.sampled
+      ? []
+      : questions.filter((q) => !questionOrder.includes(q.id));
     questions = [...ordered, ...leftovers];
   }
 
@@ -201,7 +207,8 @@ function buildQuestionsPayload(questionsRaw: QuestionRow[], meta: FlagsMeta) {
 
 async function ensureMeta(
   templateId: string,
-  shuffleQuestions: boolean
+  shuffleQuestions: boolean,
+  sampleSize?: number | null
 ): Promise<Prisma.InputJsonObject> {
   const base = await prisma.assessmentQuestion.findMany({
     where: { templateId, isActive: true },
@@ -214,6 +221,20 @@ async function ensureMeta(
   }));
 
   if (shuffleQuestions) shuffleInPlace(q);
+
+  // Exámenes de badge: muestra aleatoria de N preguntas del pool completo.
+  // El shuffle previo garantiza aleatoriedad; sampled marca el meta para que
+  // payload y scoring se limiten al subset.
+  let sampled = false;
+  if (
+    typeof sampleSize === "number" &&
+    sampleSize > 0 &&
+    q.length > sampleSize
+  ) {
+    if (!shuffleQuestions) shuffleInPlace(q);
+    q = q.slice(0, sampleSize);
+    sampled = true;
+  }
 
   const optionOrderByQuestion: Record<string, string[]> = {};
   q = q.map((qq) => {
@@ -235,6 +256,7 @@ async function ensureMeta(
   return {
     questionOrder: q.map((qq) => qq.id),
     optionOrderByQuestion,
+    ...(sampled ? { sampled: true } : {}),
   };
 }
 
@@ -336,6 +358,8 @@ export async function POST(
         maxAttempts: true,
         timeLimit: true,
         shuffleQuestions: true,
+        isBadgeExam: true,
+        totalQuestions: true,
       },
     });
 
@@ -345,6 +369,11 @@ export async function POST(
 
     const tmplTimeLimit = template.timeLimit ?? null;
     const tmplShuffleQuestions = true;
+    // Exámenes de badge sortean totalQuestions del pool completo del template
+    const tmplSampleSize =
+      template.isBadgeExam && (template.totalQuestions ?? 0) > 0
+        ? template.totalQuestions
+        : null;
     const tmplAllowRetry = Boolean(template.allowRetry);
     const tmplMaxAttempts = template.maxAttempts ?? 1;
 
@@ -505,7 +534,7 @@ export async function POST(
       oldInviteId?: string | null;
       applicationIdToUse: string | null;
     }) {
-      const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions);
+      const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize);
       const newExpiresAt = computeExpiresAt(now, tmplTimeLimit);
 
       const created = await prisma.$transaction(async (tx) => {
@@ -619,7 +648,8 @@ export async function POST(
         if (!hasMeta) {
           meta = (await ensureMeta(
             params.templateId,
-            tmplShuffleQuestions
+            tmplShuffleQuestions,
+            tmplSampleSize
           )) as unknown as FlagsMeta;
         }
 
@@ -727,7 +757,8 @@ export async function POST(
       if (!hasMeta) {
         meta = (await ensureMeta(
           params.templateId,
-          tmplShuffleQuestions
+          tmplShuffleQuestions,
+          tmplSampleSize
         )) as unknown as FlagsMeta;
       }
 
@@ -784,7 +815,7 @@ export async function POST(
     }
 
     const expiresAt = computeExpiresAt(now, tmplTimeLimit);
-    const meta = await ensureMeta(params.templateId, tmplShuffleQuestions);
+    const meta = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize);
     const questions = buildQuestionsPayload(
       questionsRaw as unknown as QuestionRow[],
       meta as unknown as FlagsMeta

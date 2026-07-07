@@ -114,7 +114,7 @@ export async function POST(
       0
     );
 
-    const activeQuestions = await prisma.assessmentQuestion.findMany({
+    let activeQuestions = await prisma.assessmentQuestion.findMany({
       where: {
         templateId: attempt.templateId,
         isActive: true,
@@ -125,6 +125,22 @@ export async function POST(
         type: true,
       },
     });
+
+    // Exámenes de badge con pool muestreado: el examen del candidato es el
+    // subset sorteado en flagsJson.questionOrder — el score se calcula sobre
+    // esas N preguntas, no sobre el pool completo del template.
+    const attemptMeta = attempt.flagsJson as {
+      sampled?: boolean;
+      questionOrder?: string[];
+    } | null;
+    if (
+      attemptMeta?.sampled &&
+      Array.isArray(attemptMeta.questionOrder) &&
+      attemptMeta.questionOrder.length > 0
+    ) {
+      const sampledIds = new Set(attemptMeta.questionOrder);
+      activeQuestions = activeQuestions.filter((q) => sampledIds.has(q.id));
+    }
 
     // Guard: template must have active questions
     if (activeQuestions.length === 0) {

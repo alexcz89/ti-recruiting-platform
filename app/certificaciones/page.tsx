@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
-import { badgeLevelLabel } from "@/lib/badges";
+import { badgeLevelLabel, BADGE_RETRY_COOLDOWN_DAYS } from "@/lib/badges";
 import { Award, Clock, ListChecks, Lock, CheckCircle2 } from "lucide-react";
 import { StartBadgeExamButton } from "./StartBadgeExamButton";
 
@@ -43,6 +43,30 @@ export default async function CertificacionesPage() {
   ]);
 
   const earned = new Set(myBadges.map((b) => `${b.termId}:${b.level}`));
+
+  // Cooldown: exámenes reprobados en los últimos 30 días → fecha de reintento
+  const cooldownMs = BADGE_RETRY_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+  const retryAtByTemplate = new Map<string, Date>();
+  if (isCandidate && user?.id && exams.length > 0) {
+    const failed = await prisma.assessmentAttempt.findMany({
+      where: {
+        candidateId: user.id,
+        templateId: { in: exams.map((e) => e.id) },
+        inviteId: null,
+        applicationId: null,
+        status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
+        passed: false,
+        submittedAt: { gt: new Date(Date.now() - cooldownMs) },
+      },
+      select: { templateId: true, submittedAt: true },
+    });
+    for (const f of failed) {
+      if (!f.submittedAt) continue;
+      const retryAt = new Date(f.submittedAt.getTime() + cooldownMs);
+      const prev = retryAtByTemplate.get(f.templateId);
+      if (!prev || retryAt > prev) retryAtByTemplate.set(f.templateId, retryAt);
+    }
+  }
 
   // Agrupar exámenes por skill
   const bySkill = new Map<
@@ -119,6 +143,7 @@ export default async function CertificacionesPage() {
                       // Avanzado (3+) requiere el nivel anterior del mismo skill
                       const isLocked =
                         level >= 3 && !earned.has(`${termId}:${level - 1}`);
+                      const retryAt = retryAtByTemplate.get(exam.id) ?? null;
 
                       return (
                         <li
@@ -157,6 +182,18 @@ export default async function CertificacionesPage() {
                             >
                               <Lock className="h-3 w-3" />
                               Requiere {badgeLevelLabel(level - 1)}
+                            </span>
+                          ) : retryAt ? (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+                              title="Podrás reintentar cuando termine el periodo de espera"
+                            >
+                              <Clock className="h-3 w-3" />
+                              Disponible el{" "}
+                              {retryAt.toLocaleDateString("es-MX", {
+                                day: "numeric",
+                                month: "short",
+                              })}
                             </span>
                           ) : isCandidate ? (
                             <StartBadgeExamButton templateId={exam.id} />
