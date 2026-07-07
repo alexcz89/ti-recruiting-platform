@@ -75,6 +75,7 @@ function DesktopNav() {
   return (
     <nav className="flex items-center gap-1.5">
       <NavLink href="/jobs">Vacantes</NavLink>
+      <NavLink href="/certificaciones">Certificaciones</NavLink>
     </nav>
   );
 }
@@ -197,6 +198,9 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
       <nav className="flex flex-col gap-2">
         <MobileNavLink href="/jobs" onClick={onClose}>
           Vacantes
+        </MobileNavLink>
+        <MobileNavLink href="/certificaciones" onClick={onClose}>
+          Certificaciones
         </MobileNavLink>
 
         {isAuthenticated ? (
