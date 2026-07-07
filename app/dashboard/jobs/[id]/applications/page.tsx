@@ -217,6 +217,14 @@ export default async function JobApplicationsPage({
               term: { select: { id: true, label: true, aliases: true } },
             },
           },
+          candidateBadges: {
+            orderBy: [{ level: "desc" }, { earnedAt: "desc" }],
+            take: 3,
+            select: {
+              level: true,
+              term: { select: { label: true } },
+            },
+          },
           candidateLanguages: {
             select: {
               level: true,
@@ -946,6 +954,21 @@ export default async function JobApplicationsPage({
                             )}
 
                             <span className="text-xs text-zinc-500">{a.candidate?.location ?? "—"}</span>
+
+                            {((a.candidate as any)?.candidateBadges?.length ?? 0) > 0 && (
+                              <span className="flex flex-wrap gap-1">
+                                {((a.candidate as any).candidateBadges as { level: number; term: { label: string } }[]).map((b, i) => (
+                                  <span
+                                    key={i}
+                                    className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
+                                    title={`Skill verificado con examen (${b.level === 1 ? "Básico" : b.level === 2 ? "Intermedio" : "Avanzado"})`}
+                                  >
+                                    ✓ {b.term.label}
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+
                             {(a.candidate as any)?.desiredSalaryMin != null && (
                               <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-950/30 dark:text-emerald-300">
                                 💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes

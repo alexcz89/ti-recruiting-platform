@@ -122,6 +122,9 @@ export default async function CandidateDetailPage({
         },
         orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
       },
+      candidateBadges: {
+        select: { termId: true, level: true },
+      },
       candidateLanguages: {
         select: {
           level: true,
@@ -426,8 +429,21 @@ export default async function CandidateDetailPage({
     ? `${candidate.resumeUrl}${candidate.resumeUrl.includes("#") ? "" : "#toolbar=1&navpanes=0&scrollbar=1"}`
     : null;
 
+  // Badge verificado más alto por skill (1=Básico 2=Intermedio 3=Avanzado)
+  const verifiedByTerm = new Map<string, number>();
+  for (const b of candidate.candidateBadges || []) {
+    const prev = verifiedByTerm.get(b.termId) ?? 0;
+    if (b.level > prev) verifiedByTerm.set(b.termId, b.level);
+  }
+
   const detailedSkills = (candidate.candidateSkills || [])
-    .map((s) => ({ id: s.id, label: s.term?.label || "", level: s.level ?? null, termId: s.term?.id || "" }))
+    .map((s) => ({
+      id: s.id,
+      label: s.term?.label || "",
+      level: s.level ?? null,
+      termId: s.term?.id || "",
+      verifiedLevel: s.term?.id ? (verifiedByTerm.get(s.term.id) ?? null) : null,
+    }))
     .filter((s) => s.label);
 
   const languageItems = (candidate.candidateLanguages || [])
@@ -659,6 +675,14 @@ export default async function CandidateDetailPage({
                 return (
                   <span key={s.id} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${chipClass}`}>
                     {s.label}
+                    {s.verifiedLevel != null && (
+                      <span
+                        className="rounded bg-teal-600 px-1 py-0.5 text-[9px] font-bold text-white"
+                        title={`Skill verificado con examen: nivel ${s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}`}
+                      >
+                        ✓ {s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}
+                      </span>
+                    )}
                     {isJobRequired && <span className="rounded-full bg-emerald-200 px-1 py-0.5 text-[9px] font-bold uppercase text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-200">REQ</span>}
                     {isJobNice && !isJobRequired && <span className="rounded-full bg-sky-100 px-1 py-0.5 text-[9px] font-bold uppercase text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Nice</span>}
                     {hasLevel && <span className={`rounded-full px-1 py-0.5 text-[9px] font-bold ${lvlClass}`}>L{s.level}</span>}
