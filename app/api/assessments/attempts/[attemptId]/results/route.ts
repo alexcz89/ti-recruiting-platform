@@ -177,6 +177,17 @@ export async function GET(
     const canSeeSolutions = isAdmin || recruiterCanView;
     const canSeeFlags = isAdmin || recruiterCanView;
 
+    // Un recruiter/admin que abre los resultados marca el intento como evaluado.
+    // updateMany con guard de status para no pisar COMPLETED ni competir entre requests.
+    if (canSeeSolutions && String(attemptBase.status).toUpperCase() === "SUBMITTED") {
+      await prisma.assessmentAttempt
+        .updateMany({
+          where: { id: attemptBase.id, status: "SUBMITTED" },
+          data: { status: "EVALUATED" },
+        })
+        .catch(() => {});
+    }
+
     const [answeredCount, totalQuestions] = await Promise.all([
       prisma.attemptAnswer.count({ where: { attemptId: attemptBase.id } }),
       prisma.assessmentQuestion.count({

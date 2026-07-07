@@ -11,13 +11,14 @@ import clsx from "clsx";
 import {
   CheckCircle2,
   TrendingUp,
-  Bell,
   Users,
   Sparkles,
   ArrowRight,
   Inbox,
   Briefcase,
   CalendarDays,
+  ClipboardCheck,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ import {
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
 const pct = (n: number) => `${Math.round(n)}%`;
+const d3 = 3 * 24 * 60 * 60 * 1000;
 const d7 = 7 * 24 * 60 * 60 * 1000;
 const d15 = 15 * 24 * 60 * 60 * 1000;
 
@@ -94,7 +96,7 @@ export default async function OverviewPage() {
     }),
   ]);
 
-  const [openJobs, appsTotal, apps7d, appsPending] = await Promise.all([
+  const [openJobs, appsTotal, apps7d, appsPending, attemptsToReview, staleInvites] = await Promise.all([
     prisma.job.count({ where: { companyId } }),
     prisma.application.count({ where: { job: { companyId } } }),
     prisma.application.count({
@@ -107,6 +109,24 @@ export default async function OverviewPage() {
       where: {
         job: { companyId },
         recruiterInterest: { notIn: ["MAYBE", "ACCEPTED", "REJECTED"] },
+      },
+    }),
+    // Evaluaciones completadas que ningún recruiter ha abierto (SUBMITTED → EVALUATED al verlas)
+    prisma.assessmentAttempt.count({
+      where: {
+        status: "SUBMITTED",
+        OR: [
+          { invite: { job: { companyId } } },
+          { application: { job: { companyId } } },
+        ],
+      },
+    }),
+    // Invitaciones enviadas hace más de 3 días que el candidato no ha abierto
+    prisma.assessmentInvite.count({
+      where: {
+        status: "SENT",
+        createdAt: { lt: new Date(Date.now() - d3) },
+        job: { companyId },
       },
     }),
   ]);
@@ -294,17 +314,6 @@ export default async function OverviewPage() {
             </span>
           )}
 
-          {appsPending > 0 && (
-            <Link
-              href="/dashboard/candidates/pending"
-              className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-100 px-2.5 py-1 transition hover:bg-amber-200 dark:border-amber-500/40 dark:bg-amber-900/40 dark:hover:bg-amber-900/60"
-            >
-              <Bell className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300" />
-              <span className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                {appsPending} sin revisar
-              </span>
-            </Link>
-          )}
         </div>
 
         {emailUnverified && <BannerEmailUnverified />}
@@ -317,25 +326,65 @@ export default async function OverviewPage() {
           profile={profile}
           company={company}
         />
+
+        {/* Hoy — lista de acción del día */}
+        <TodaySection
+          items={[
+            {
+              count: appsPending,
+              label: appsPending === 1 ? "candidato por revisar" : "candidatos por revisar",
+              icon: Inbox,
+              href: "/dashboard/candidates/pending",
+              cta: "Revisar",
+            },
+            {
+              count: attemptsToReview,
+              label:
+                attemptsToReview === 1
+                  ? "evaluación completada sin revisar"
+                  : "evaluaciones completadas sin revisar",
+              icon: ClipboardCheck,
+              href: "/dashboard/assessments?state=COMPLETED&sort=recent",
+              cta: "Ver resultados",
+            },
+            {
+              count: staleInvites,
+              label:
+                staleInvites === 1
+                  ? "invitación sin respuesta desde hace 3+ días"
+                  : "invitaciones sin respuesta desde hace 3+ días",
+              icon: Clock,
+              href: "/dashboard/assessments?state=PENDING",
+              cta: "Dar seguimiento",
+            },
+            {
+              count: jobsWithoutApps,
+              label:
+                jobsWithoutApps === 1
+                  ? "vacante sin postulaciones en 15 días"
+                  : "vacantes sin postulaciones en 15 días",
+              icon: Briefcase,
+              href: "/dashboard/jobs",
+              cta: "Ajustar",
+            },
+          ]}
+        />
+
         {/* KPI Cards */}
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
           <KpiCard
             icon={Inbox}
-            eyebrow="Accion requerida"
+            eyebrow="Pipeline de entrada"
             label="Candidatos por revisar"
             value={nf(appsPending)}
-            tone={appsPending > 0 ? "amber" : "emerald"}
-            badge={appsPending > 0 ? "Prioritario" : "Al dia"}
+            tone="zinc"
             description={
               appsPending > 0
                 ? `${pendingShare}% del pipeline necesita una decision`
                 : "No tienes candidatos pendientes"
             }
             metricLabel="Pendientes"
-            metricValue={appsPending > 0 ? "Revisar hoy" : "Al dia"}
-            linkHref={appsPending > 0 ? "/dashboard/candidates/pending" : undefined}
-            linkLabel={appsPending > 0 ? "Revisar candidatos" : undefined}
-            featured={appsPending > 0}
+            metricValue={appsPending > 0 ? `${pendingShare}% del total` : "Al dia"}
           />
           <KpiCard
             icon={Briefcase}
@@ -692,6 +741,64 @@ export default async function OverviewPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+type TodayItem = {
+  count: number;
+  label: string;
+  icon: LucideIcon;
+  href: string;
+  cta: string;
+};
+
+function TodaySection({ items }: { items: TodayItem[] }) {
+  const pending = items.filter((i) => i.count > 0);
+
+  return (
+    <section className="glass-card rounded-xl p-4 sm:p-5">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-default sm:text-base">Hoy</h2>
+        {pending.length > 0 && (
+          <span className="text-xs text-muted">
+            {pending.length} {pending.length === 1 ? "pendiente" : "pendientes"}
+          </span>
+        )}
+      </div>
+
+      {pending.length === 0 ? (
+        <p className="flex items-center gap-2 py-1 text-sm text-muted">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+          Todo al día — no tienes pendientes por ahora.
+        </p>
+      ) : (
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          {pending.map((item) => {
+            const Icon = item.icon;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className="group -mx-2 flex min-h-[44px] items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" />
+                  <span className="flex-1 text-sm text-default">
+                    <span className="font-display text-base font-bold tracking-tight">
+                      {nf(item.count)}
+                    </span>{" "}
+                    {item.label}
+                  </span>
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-teal-600 group-hover:underline dark:text-teal-400">
+                    {item.cta}
+                    <ArrowRight className="h-3 w-3" />
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }
 
