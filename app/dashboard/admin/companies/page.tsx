@@ -18,7 +18,7 @@ function formatDate(d: Date) {
 const PLAN_COLORS: Record<string, string> = {
   FREE:     "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
   PRO:      "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  BUSINESS: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+  BUSINESS: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
   AGENCY:   "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
 };
 

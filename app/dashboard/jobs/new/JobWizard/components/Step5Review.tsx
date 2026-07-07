@@ -509,7 +509,7 @@ export default function Step5Review({
                   {v.certs.map((c) => (
                     <span
                       key={c}
-                      className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50/60 px-3 py-1 text-xs font-medium text-violet-900 dark:border-violet-800 dark:bg-violet-950/20 dark:text-violet-100"
+                      className="inline-flex items-center rounded-full border border-teal-200 bg-teal-50/60 px-3 py-1 text-xs font-medium text-teal-900 dark:border-teal-800 dark:bg-teal-950/20 dark:text-teal-100"
                     >
                       {c}
                     </span>

@@ -242,7 +242,7 @@ function CodingAnswerCard({ answer, index }: { answer: Answer; index: number }) 
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-gray-400 dark:text-gray-500">#{index + 1}</span>
-            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">
+            <span className="rounded bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
               Coding
             </span>
             {answer.section && (
@@ -267,7 +267,7 @@ function CodingAnswerCard({ answer, index }: { answer: Answer; index: number }) 
               </span>
             )}
           </div>
-          <div className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-gray-200 prose-code:rounded prose-code:bg-violet-500/10 prose-code:px-1 prose-code:text-violet-700 prose-pre:bg-gray-100 dark:prose-code:text-violet-400 dark:prose-pre:bg-gray-800">
+          <div className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-gray-200 prose-code:rounded prose-code:bg-teal-500/10 prose-code:px-1 prose-code:text-teal-700 prose-pre:bg-gray-100 dark:prose-code:text-teal-400 dark:prose-pre:bg-gray-800">
             <ReactMarkdown>{answer.questionText}</ReactMarkdown>
           </div>
         </div>
@@ -341,7 +341,7 @@ function AnswerCard({ answer, index }: { answer: Answer; index: number }) {
               </span>
             )}
           </div>
-          <div className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-gray-200 prose-code:rounded prose-code:bg-violet-500/10 prose-code:px-1 prose-code:text-violet-700 prose-pre:bg-gray-100 dark:prose-code:text-violet-400 dark:prose-pre:bg-gray-800">
+          <div className="prose prose-sm max-w-none text-gray-800 dark:prose-invert dark:text-gray-200 prose-code:rounded prose-code:bg-teal-500/10 prose-code:px-1 prose-code:text-teal-700 prose-pre:bg-gray-100 dark:prose-code:text-teal-400 dark:prose-pre:bg-gray-800">
             <ReactMarkdown>{answer.questionText}</ReactMarkdown>
           </div>
         </div>
@@ -532,7 +532,7 @@ export default async function AttemptResultsPage({
                           ? `/dashboard/candidates/${candidate.id}?jobId=${ctxJobId}&applicationId=${ctxApplicationId}`
                           : `/dashboard/candidates/${candidate.id}`
                       }
-                      className="ml-1 text-xs text-violet-600 hover:underline dark:text-violet-400"
+                      className="ml-1 text-xs text-teal-600 hover:underline dark:text-teal-400"
                     >
                       Ver perfil →
                     </Link>

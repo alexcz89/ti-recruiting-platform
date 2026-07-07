@@ -463,7 +463,7 @@ export default function AIQuestionGenerator({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 rounded-xl border-2 border-dashed border-violet-300 bg-violet-50 px-4 py-2.5 text-sm font-semibold text-violet-700 transition-all hover:border-violet-500 hover:bg-violet-100 dark:border-violet-700 dark:bg-violet-950/20 dark:text-violet-300 dark:hover:bg-violet-900/30"
+        className="inline-flex items-center gap-2 rounded-xl border-2 border-dashed border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-700 transition-all hover:border-teal-500 hover:bg-teal-100 dark:border-teal-700 dark:bg-teal-950/20 dark:text-teal-300 dark:hover:bg-teal-900/30"
       >
         <Sparkles className="h-4 w-4" />
         Generar con AI
@@ -476,8 +476,8 @@ export default function AIQuestionGenerator({
             {/* Header */}
             <div className="flex items-center justify-between border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-100 dark:bg-violet-900/40">
-                  <Wand2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-100 dark:bg-teal-900/40">
+                  <Wand2 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Generador de preguntas con AI</h2>
@@ -502,7 +502,7 @@ export default function AIQuestionGenerator({
                     <button key={opt.value} type="button" onClick={() => setQuestionType(opt.value as any)}
                       className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-medium transition-all ${
                         questionType === opt.value
-                          ? "border-violet-500 bg-violet-50 text-violet-700 dark:border-violet-500 dark:bg-violet-950/30 dark:text-violet-300"
+                          ? "border-teal-500 bg-teal-50 text-teal-700 dark:border-teal-500 dark:bg-teal-950/30 dark:text-teal-300"
                           : "border-zinc-200 text-zinc-600 hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-400"
                       }`}>
                       <span>{opt.icon}</span>{opt.label}
@@ -510,12 +510,12 @@ export default function AIQuestionGenerator({
                   ))}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 rounded-xl border-2 border-violet-500 bg-violet-50 dark:bg-violet-950/30 px-3 py-2.5">
+                <div className="flex items-center gap-2 rounded-xl border-2 border-teal-500 bg-teal-50 dark:bg-teal-950/30 px-3 py-2.5">
                   <span>{currentType === "CODING" ? "</>" : "✓"}</span>
-                  <span className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                  <span className="text-sm font-medium text-teal-700 dark:text-teal-300">
                     {currentType === "CODING" ? "Código" : "Opción múltiple"}
                   </span>
-                  <span className="ml-auto text-[10px] text-violet-500">Definido por el template</span>
+                  <span className="ml-auto text-[10px] text-teal-500">Definido por el template</span>
                 </div>
               )}
 
@@ -525,7 +525,7 @@ export default function AIQuestionGenerator({
                   <div>
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Lenguaje</label>
                     <select value={language} onChange={e => setLanguage(e.target.value)}
-                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500">
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500">
                       {Object.entries(LANGUAGE_LABELS).map(([val, label]) => (
                         <option key={val} value={val}>{label}</option>
                       ))}
@@ -537,7 +537,7 @@ export default function AIQuestionGenerator({
                     Cuántas preguntas generar
                   </label>
                   <select value={count} onChange={e => setCount(Number(e.target.value))}
-                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500">
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500">
                     {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} pregunta{n>1?"s":""}</option>)}
                   </select>
                 </div>
@@ -562,12 +562,12 @@ export default function AIQuestionGenerator({
                     : `Ej: ${examples[0] ?? "Preguntas sobre conceptos del lenguaje"}...`
                   }
                   rows={3}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
                 />
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {examples.map(ex => (
                     <button key={ex} type="button" onClick={() => setPrompt(ex)}
-                      className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-[10px] text-zinc-500 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-violet-700 dark:hover:text-violet-400 transition-colors">
+                      className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-[10px] text-zinc-500 hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:border-teal-700 dark:hover:text-teal-400 transition-colors">
                       {ex}
                     </button>
                   ))}
@@ -590,22 +590,22 @@ export default function AIQuestionGenerator({
                       {preview.length} pregunta{preview.length>1?"s":""} generada{preview.length>1?"s":""} — selecciona cuáles agregar
                     </p>
                     <button type="button" onClick={() => setSelected(selected.size===preview.length ? new Set() : new Set(preview.map((_,i)=>i)))}
-                      className="text-[10px] text-violet-600 hover:underline dark:text-violet-400">
+                      className="text-[10px] text-teal-600 hover:underline dark:text-teal-400">
                       {selected.size===preview.length ? "Deseleccionar todas" : "Seleccionar todas"}
                     </button>
                   </div>
                   {preview.map((q, i) => (
                     <button key={i} type="button" onClick={() => toggleSelect(i)}
                       className={`w-full text-left rounded-xl border-2 p-3 transition-all ${
-                        selected.has(i) ? "border-violet-400 bg-violet-50 dark:border-violet-600 dark:bg-violet-950/20" : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700"
+                        selected.has(i) ? "border-teal-400 bg-teal-50 dark:border-teal-600 dark:bg-teal-950/20" : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700"
                       }`}>
                       <div className="flex items-start gap-2.5">
-                        <div className={`mt-0.5 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${selected.has(i) ? "border-violet-500 bg-violet-500" : "border-zinc-300 dark:border-zinc-600"}`}>
+                        <div className={`mt-0.5 h-4 w-4 shrink-0 rounded border-2 flex items-center justify-center transition-colors ${selected.has(i) ? "border-teal-500 bg-teal-500" : "border-zinc-300 dark:border-zinc-600"}`}>
                           {selected.has(i) && <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7"/></svg>}
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-[10px] font-bold uppercase tracking-wide text-violet-600 dark:text-violet-400">{q.section}</span>
+                            <span className="text-[10px] font-bold uppercase tracking-wide text-teal-600 dark:text-teal-400">{q.section}</span>
                             <span className="text-[10px] text-zinc-400">·</span>
                             <span className="text-[10px] text-zinc-400">{q.difficulty}</span>
                             {q.testCases && <><span className="text-[10px] text-zinc-400">·</span><span className="text-[10px] text-zinc-400">{q.testCases.length} test cases</span></>}
@@ -655,7 +655,7 @@ export default function AIQuestionGenerator({
               <div className="flex gap-2">
                 {preview.length === 0 ? (
                   <button type="button" onClick={handleGenerate} disabled={loading || !prompt.trim()}
-                    className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                    className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                     {loading ? <><Loader2 className="h-4 w-4 animate-spin"/>Generando...</> : <><Sparkles className="h-4 w-4"/>Generar</>}
                   </button>
                 ) : (
@@ -665,7 +665,7 @@ export default function AIQuestionGenerator({
                       <Sparkles className="h-3.5 w-3.5"/>Regenerar
                     </button>
                     <button type="button" onClick={handleAdd} disabled={selected.size===0}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
                       <Plus className="h-4 w-4"/>Agregar {selected.size>0 ? `(${selected.size})` : ""}
                     </button>
                   </>

@@ -207,9 +207,9 @@ export default function CandidateSummaryCard({ candidateId, jobId }: Props) {
 
       {open && summary && (
         <div className="mt-4 space-y-4 border-t border-zinc-200 pt-4 dark:border-zinc-700">
-          <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 dark:border-violet-700/40 dark:bg-violet-950/20">
+          <div className="rounded-xl border border-teal-200 bg-teal-50/60 p-3 dark:border-teal-700/40 dark:bg-teal-950/20">
             <div className="mb-2 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-violet-500" />
+              <Sparkles className="h-4 w-4 text-teal-500" />
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                 {summary.headline || "Resumen AI del candidato"}
               </h3>

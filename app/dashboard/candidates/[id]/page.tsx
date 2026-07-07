@@ -654,7 +654,7 @@ export default async function CandidateDetailPage({
                 const isJobNice = matchResult?.details.find((d) => d.termId === s.termId && !d.must && d.matched);
                 const hasLevel = s.level != null;
                 const chipClass = isJobRequired ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/50 dark:bg-emerald-900/20 dark:text-emerald-200" : "border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300";
-                const levelBadgeClass: Record<number, string> = { 1: "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300", 2: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300", 3: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300", 4: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300", 5: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" };
+                const levelBadgeClass: Record<number, string> = { 1: "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300", 2: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300", 3: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300", 4: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300", 5: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" };
                 const lvlClass = hasLevel ? (levelBadgeClass[s.level as number] ?? "bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300") : "";
                 return (
                   <span key={s.id} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${chipClass}`}>
@@ -753,7 +753,7 @@ export default async function CandidateDetailPage({
           SENT:      { label: "Pendiente",          badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" },
           STARTED:   { label: "En progreso",        badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
           EXPIRED:   { label: "Expirada",           badge: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" },
-          COMPLETED: { label: "Completada",         badge: a.passed === true ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : a.passed === false ? "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400" : "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300" },
+          COMPLETED: { label: "Completada",         badge: a.passed === true ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : a.passed === false ? "bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400" : "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300" },
         }[a.state];
 
         return (
@@ -782,7 +782,7 @@ export default async function CandidateDetailPage({
                   <div className={`flex h-14 w-14 flex-col items-center justify-center rounded-full border-2 font-black ${
                     a.passed === true  ? "border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-500 dark:bg-emerald-900/20 dark:text-emerald-300"
                     : a.passed === false ? "border-red-300 bg-red-50 text-red-600 dark:border-red-600 dark:bg-red-900/20 dark:text-red-400"
-                    : "border-violet-300 bg-violet-50 text-violet-700 dark:border-violet-500 dark:bg-violet-900/20 dark:text-violet-300"
+                    : "border-teal-300 bg-teal-50 text-teal-700 dark:border-teal-500 dark:bg-teal-900/20 dark:text-teal-300"
                   }`}>
                     <span className="text-base leading-none">{Math.round(a.score)}%</span>
                   </div>

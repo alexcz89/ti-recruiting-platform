@@ -46,7 +46,7 @@ type Props = {
 const DIFF_COLOR: Record<string, string> = {
   JUNIOR: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
   MID: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
-  SENIOR: "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300",
+  SENIOR: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
 };
 
 const DIFF_LABEL: Record<string, string> = {
@@ -157,16 +157,16 @@ export default function AssignTemplateModal({
         className="relative z-10 w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden rounded-3xl border border-zinc-200/80 bg-white shadow-2xl outline-none dark:border-zinc-800/50 dark:bg-zinc-900"
       >
         {/* Header */}
-        <div className="relative overflow-hidden border-b border-zinc-100 bg-gradient-to-br from-violet-50 to-blue-50 p-5 dark:border-zinc-800 dark:from-violet-950/30 dark:to-blue-950/30">
-          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-violet-200 to-blue-200 opacity-30 blur-2xl dark:from-violet-800 dark:to-blue-800" />
+        <div className="relative overflow-hidden border-b border-zinc-100 bg-teal-50 p-5 dark:border-zinc-800 dark:bg-teal-950/30">
+          <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-teal-200 opacity-30 blur-2xl dark:bg-teal-800" />
 
           <div className="relative flex items-start justify-between gap-3">
             <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 p-2 shadow-lg shadow-violet-500/20">
+              <div className="rounded-xl bg-teal-600 p-2 shadow-lg shadow-teal-500/20">
                 <Sparkles className="h-4 w-4 text-white" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
                   Asignar evaluación
                 </p>
                 <h2
@@ -323,7 +323,7 @@ function JobRow({
       className={`flex items-center gap-3 rounded-2xl border px-4 py-3 transition-all ${
         isSuccess
           ? "border-emerald-300 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-950/20"
-          : "border-zinc-200 bg-white hover:border-violet-200 hover:bg-violet-50/30 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-violet-800/50 dark:hover:bg-violet-950/10"
+          : "border-zinc-200 bg-white hover:border-teal-200 hover:bg-teal-50/30 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-teal-800/50 dark:hover:bg-teal-950/10"
       }`}
     >
       <div className="flex-1 min-w-0">
@@ -352,7 +352,7 @@ function JobRow({
         className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold transition-all ${
           isSuccess
             ? "bg-emerald-600 text-white"
-            : "bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow-md shadow-violet-500/20 hover:scale-[1.03] hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+            : "bg-teal-600 text-white shadow-md shadow-teal-500/20 hover:scale-[1.03] hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
         }`}
       >
         {isSuccess ? (

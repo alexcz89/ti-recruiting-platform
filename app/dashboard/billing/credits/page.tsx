@@ -107,7 +107,7 @@ export default function CreditsPage() {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
-          <Loader2 className="inline-block h-8 w-8 animate-spin text-violet-600" />
+          <Loader2 className="inline-block h-8 w-8 animate-spin text-teal-600" />
           <p className="mt-4 text-sm text-zinc-500">Cargando créditos...</p>
         </div>
       </div>
@@ -163,7 +163,7 @@ export default function CreditsPage() {
           {
             label: "Tests usados (mes)",
             value: Math.floor((balance?.used || 0) / 5),
-            color: "text-violet-600 dark:text-violet-400",
+            color: "text-teal-600 dark:text-teal-400",
             sub: "Este ciclo de facturación",
           },
           {
@@ -199,7 +199,7 @@ export default function CreditsPage() {
       {/* Paquetes de créditos */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <div className="rounded-xl bg-gradient-to-br from-violet-500 to-blue-500 p-2">
+          <div className="rounded-xl bg-teal-600 p-2">
             <Zap className="h-4 w-4 text-white" />
           </div>
           <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
@@ -213,13 +213,13 @@ export default function CreditsPage() {
               key={pkg.id}
               className={`relative flex flex-col rounded-3xl border-2 p-5 transition-all hover:shadow-md
                 ${pkg.recommended
-                  ? "border-violet-400 dark:border-violet-600 bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 ring-2 ring-violet-500/20"
+                  ? "border-teal-400 dark:border-teal-600 bg-teal-50 dark:bg-teal-900/20 ring-2 ring-teal-500/20"
                   : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900"
                 }`}
             >
               {pkg.recommended && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 whitespace-nowrap">
-                  <span className="rounded-full bg-gradient-to-r from-violet-600 to-blue-600 px-3 py-1 text-[11px] font-bold text-white shadow-md">
+                  <span className="rounded-full bg-teal-600 px-3 py-1 text-[11px] font-bold text-white shadow-md">
                     MÁS POPULAR
                   </span>
                 </div>
@@ -248,7 +248,7 @@ export default function CreditsPage() {
                 disabled={!!buying}
                 className={`mt-4 w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold transition-all disabled:opacity-60
                   ${pkg.recommended
-                    ? "bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow-md shadow-violet-500/20 hover:shadow-lg"
+                    ? "bg-teal-600 text-white shadow-md shadow-teal-500/20 hover:shadow-lg"
                     : "border-2 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
                   }`}
               >
@@ -282,7 +282,7 @@ export default function CreditsPage() {
                 onClick={() => setFilter(f.key as any)}
                 className={`px-3 py-1 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
                   filter === f.key
-                    ? "bg-violet-600 text-white"
+                    ? "bg-teal-600 text-white"
                     : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
                 }`}
               >

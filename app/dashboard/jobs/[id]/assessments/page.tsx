@@ -142,11 +142,11 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
         </header>
 
         {/* ✅ NUEVO: Balance de Créditos */}
-        <section className="rounded-2xl border border-violet-200/70 bg-gradient-to-r from-violet-50/50 to-purple-50/50 p-4 shadow-sm dark:border-violet-800/70 dark:from-violet-900/10 dark:to-purple-900/10">
+        <section className="rounded-xl border border-teal-200/70 bg-teal-50/50 p-4 shadow-sm dark:border-teal-800/70 dark:bg-teal-900/10">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                <svg className="w-4 h-4 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="w-4 h-4 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                 </svg>
                 Balance de Créditos
@@ -158,7 +158,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
 
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <p className="text-2xl font-bold text-violet-600 dark:text-violet-400">
+                <p className="text-2xl font-bold text-teal-600 dark:text-teal-400">
                   {formatCredits(availableCredits)}
                 </p>
                 <p className="text-xs text-zinc-500">disponibles</p>
@@ -173,7 +173,7 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
               )}
               <Link
                 href="/dashboard/billing/credits"
-                className="rounded-full border border-violet-200 dark:border-violet-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-violet-50 dark:hover:bg-violet-900/20 transition-colors"
+                className="rounded-lg border border-teal-200 dark:border-teal-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-medium hover:bg-teal-50 dark:hover:bg-teal-900/20 transition-colors"
               >
                 Ver historial →
               </Link>

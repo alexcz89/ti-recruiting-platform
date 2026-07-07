@@ -63,7 +63,7 @@ export default async function AdminUsersPage() {
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-gradient-to-br from-violet-500 to-purple-500 p-2.5 shadow-md">
+            <div className="rounded-xl bg-teal-600 p-2.5 shadow-md">
               <Users className="h-5 w-5 text-white" />
             </div>
             <div>

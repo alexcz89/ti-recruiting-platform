@@ -888,7 +888,7 @@ export default async function JobApplicationsPage({
                                 "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
                                 assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
                                   : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                  : "border-violet-200 bg-violet-50 text-violet-700",
+                                  : "border-teal-200 bg-teal-50 text-teal-700",
                               ].join(" ")}>
                                 {assessMeta.state === "STARTED" ? "Assessment: iniciado"
                                   : assessMeta.state === "EXPIRED" ? "Assessment: expirado"
@@ -1019,7 +1019,7 @@ export default async function JobApplicationsPage({
                                         "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
                                         assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
                                           : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                          : "border-violet-200 bg-violet-50 text-violet-700",
+                                          : "border-teal-200 bg-teal-50 text-teal-700",
                                       ].join(" ")}>
                                         {assessMeta.state === "STARTED" ? "Iniciado"
                                           : assessMeta.state === "EXPIRED" ? "Expirado"

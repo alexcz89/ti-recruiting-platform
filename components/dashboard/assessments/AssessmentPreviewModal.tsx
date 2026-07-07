@@ -144,7 +144,7 @@ export default function AssessmentPreviewModal({ form, questions, onClose }: Pro
               title={`Pregunta ${i + 1}`}
               className={`h-2 rounded-full transition-all duration-200 ${
                 isCurrent
-                  ? "w-6 bg-violet-500"
+                  ? "w-6 bg-teal-500"
                   : isAnswered
                   ? "w-2 bg-emerald-400"
                   : "w-2 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300"
@@ -158,11 +158,11 @@ export default function AssessmentPreviewModal({ form, questions, onClose }: Pro
       <div className="flex items-start gap-3 mb-4">
         <div className={`shrink-0 rounded-lg p-2 mt-0.5 ${
           isCoding
-            ? "bg-violet-100 dark:bg-violet-900/40"
+            ? "bg-teal-100 dark:bg-teal-900/40"
             : "bg-emerald-100 dark:bg-emerald-900/40"
         }`}>
           {isCoding
-            ? <Code2 className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+            ? <Code2 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
             : <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
           }
         </div>
@@ -210,26 +210,26 @@ export default function AssessmentPreviewModal({ form, questions, onClose }: Pro
                 onClick={() => toggleOption(opt.id)}
                 className={`w-full flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all duration-150 ${
                   isSelected
-                    ? "border-violet-500 bg-violet-50 dark:bg-violet-950/30 shadow-sm shadow-violet-200 dark:shadow-violet-900/20"
+                    ? "border-teal-500 bg-teal-50 dark:bg-teal-950/30 shadow-sm shadow-teal-200 dark:shadow-teal-900/20"
                     : "border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800/50 hover:border-zinc-300 dark:hover:border-zinc-600"
                 }`}
               >
                 <span className={`shrink-0 h-7 w-7 rounded-lg flex items-center justify-center text-xs font-bold transition-colors ${
                   isSelected
-                    ? "bg-violet-500 text-white"
+                    ? "bg-teal-500 text-white"
                     : "bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400"
                 }`}>
                   {label}
                 </span>
                 <span className={`text-sm ${
                   isSelected
-                    ? "text-violet-900 dark:text-violet-100 font-medium"
+                    ? "text-teal-900 dark:text-teal-100 font-medium"
                     : "text-zinc-700 dark:text-zinc-300"
                 }`}>
                   {opt.text || <span className="italic opacity-50">Opción sin texto</span>}
                 </span>
                 {isSelected && (
-                  <span className="ml-auto shrink-0 text-violet-500">
+                  <span className="ml-auto shrink-0 text-teal-500">
                     <CheckCircle2 className="h-4 w-4" />
                   </span>
                 )}
@@ -253,7 +253,7 @@ export default function AssessmentPreviewModal({ form, questions, onClose }: Pro
               placeholder={`// Escribe tu solución aquí en ${form.language || "el lenguaje indicado"}...`}
               rows={10}
               spellCheck={false}
-              className="w-full rounded-xl border border-zinc-700 bg-zinc-950 text-green-400 font-mono px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y leading-relaxed"
+              className="w-full rounded-xl border border-zinc-700 bg-zinc-950 text-green-400 font-mono px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-y leading-relaxed"
             />
           </div>
 
@@ -304,7 +304,7 @@ export default function AssessmentPreviewModal({ form, questions, onClose }: Pro
         {currentIdx < total - 1 ? (
           <button
             onClick={() => setCurrentIdx(i => Math.min(total - 1, i + 1))}
-            className="flex items-center gap-1.5 rounded-xl bg-violet-600 hover:bg-violet-700 px-4 py-2 text-sm font-semibold text-white transition"
+            className="flex items-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 px-4 py-2 text-sm font-semibold text-white transition"
           >
             Siguiente <ChevronRight className="h-4 w-4" />
           </button>
@@ -366,7 +366,7 @@ function ModalShell({
           {/* Header — simula el header del assessment del candidato */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
             <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 flex items-center justify-center text-white text-xs font-black">
+              <div className="h-8 w-8 rounded-lg bg-teal-600 flex items-center justify-center text-white text-xs font-black">
                 T
               </div>
               <div>

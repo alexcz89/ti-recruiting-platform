@@ -192,7 +192,7 @@ export default function CodingQuestionCreator({
           onChange={(e) => setQuestion(prev => ({ ...prev, text: e.target.value }))}
           placeholder="Describe el problema que el candidato debe resolver..."
           rows={6}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-3 text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-3 text-white placeholder:text-zinc-500 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         />
         <p className="mt-1 text-xs text-zinc-500">
           Puedes usar Markdown para formatear el texto
@@ -209,7 +209,7 @@ export default function CodingQuestionCreator({
           min={1}
           value={question.points}
           onChange={(e) => setQuestion(prev => ({ ...prev, points: parseInt(e.target.value) || 1 }))}
-          className="w-32 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-white focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+          className="w-32 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-white focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         />
       </div>
 
@@ -222,7 +222,7 @@ export default function CodingQuestionCreator({
           <select
             value={question.language}
             onChange={(e) => handleLanguageChange(e.target.value)}
-            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-white focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+            className="w-full rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-white focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
           >
             {SUPPORTED_LANGUAGES.map(lang => (
               <option key={lang.value} value={lang.value}>
@@ -255,7 +255,7 @@ export default function CodingQuestionCreator({
                       }));
                     }
                   }}
-                  className="h-4 w-4 rounded border-zinc-600 bg-zinc-700 text-violet-600 focus:ring-2 focus:ring-violet-500/20"
+                  className="h-4 w-4 rounded border-zinc-600 bg-zinc-700 text-teal-600 focus:ring-2 focus:ring-teal-500/20"
                 />
                 <span className="text-sm text-zinc-300">{lang.label}</span>
               </label>
@@ -274,7 +274,7 @@ export default function CodingQuestionCreator({
           onChange={(e) => setQuestion(prev => ({ ...prev, starterCode: e.target.value }))}
           placeholder="Código que verá el candidato al inicio..."
           rows={8}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 font-mono text-sm text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 font-mono text-sm text-white placeholder:text-zinc-500 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         />
       </div>
 
@@ -288,7 +288,7 @@ export default function CodingQuestionCreator({
           onChange={(e) => setQuestion(prev => ({ ...prev, solutionCode: e.target.value }))}
           placeholder="Tu solución de referencia (solo tú podrás verla)..."
           rows={8}
-          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 font-mono text-sm text-white placeholder:text-zinc-500 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20"
+          className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-3 font-mono text-sm text-white placeholder:text-zinc-500 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20"
         />
       </div>
 
@@ -303,7 +303,7 @@ export default function CodingQuestionCreator({
           </div>
           <button
             onClick={addTestCase}
-            className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-violet-700"
+            className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
           >
             <Plus className="h-4 w-4" />
             Agregar Test
@@ -318,7 +318,7 @@ export default function CodingQuestionCreator({
             >
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Code2 className="h-5 w-5 text-violet-400" />
+                  <Code2 className="h-5 w-5 text-teal-400" />
                   <span className="font-semibold text-white">Test Case {idx + 1}</span>
                   {testCase.isHidden && (
                     <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-400">
@@ -344,7 +344,7 @@ export default function CodingQuestionCreator({
                     onChange={(e) => updateTestCase(testCase.id, { input: e.target.value })}
                     placeholder="Input del test..."
                     rows={3}
-                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 font-mono text-sm text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 font-mono text-sm text-white placeholder:text-zinc-600 focus:border-teal-500 focus:outline-none"
                   />
                 </div>
 
@@ -357,7 +357,7 @@ export default function CodingQuestionCreator({
                     onChange={(e) => updateTestCase(testCase.id, { expectedOutput: e.target.value })}
                     placeholder="Output esperado..."
                     rows={3}
-                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 font-mono text-sm text-white placeholder:text-zinc-600 focus:border-violet-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 font-mono text-sm text-white placeholder:text-zinc-600 focus:border-teal-500 focus:outline-none"
                   />
                 </div>
               </div>
@@ -372,7 +372,7 @@ export default function CodingQuestionCreator({
                     min={0}
                     value={testCase.points}
                     onChange={(e) => updateTestCase(testCase.id, { points: parseInt(e.target.value) || 0 })}
-                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
                   />
                 </div>
 
@@ -386,7 +386,7 @@ export default function CodingQuestionCreator({
                     step={1000}
                     value={testCase.timeoutMs}
                     onChange={(e) => updateTestCase(testCase.id, { timeoutMs: parseInt(e.target.value) || 5000 })}
-                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
                   />
                 </div>
 
@@ -400,7 +400,7 @@ export default function CodingQuestionCreator({
                     step={64}
                     value={testCase.memoryLimitMb}
                     onChange={(e) => updateTestCase(testCase.id, { memoryLimitMb: parseInt(e.target.value) || 256 })}
-                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-violet-500 focus:outline-none"
+                    className="w-full rounded-lg border border-zinc-600 bg-zinc-900 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
                   />
                 </div>
 
@@ -447,7 +447,7 @@ export default function CodingQuestionCreator({
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:scale-105 disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-6 py-3 font-semibold text-white shadow-lg transition-all hover:scale-105 disabled:opacity-50"
         >
           {isSaving ? (
             <>

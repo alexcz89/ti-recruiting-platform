@@ -42,8 +42,8 @@ const COLOR_CLASSES: Record<InterestKey, string> = {
     "bg-zinc-100 text-zinc-700 border-zinc-300 " +
     "dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-600",
   MAYBE:
-    "bg-violet-100 text-violet-800 border-violet-300 " +
-    "dark:bg-violet-500/25 dark:text-violet-50 dark:border-violet-500/60",
+    "bg-amber-100 text-amber-800 border-amber-300 " +
+    "dark:bg-amber-500/25 dark:text-amber-50 dark:border-amber-500/60",
   ACCEPTED:
     "bg-sky-100 text-sky-800 border-sky-300 " +
     "dark:bg-sky-500/25 dark:text-sky-50 dark:border-sky-500/60",
@@ -55,7 +55,7 @@ const COLOR_CLASSES: Record<InterestKey, string> = {
 // Puntito de color en el menú
 const DOT_COLOR: Record<InterestKey, string> = {
   REVIEW: "bg-zinc-400",
-  MAYBE: "bg-violet-500",
+  MAYBE: "bg-amber-500",
   ACCEPTED: "bg-sky-500",
   REJECTED: "bg-rose-500",
 };

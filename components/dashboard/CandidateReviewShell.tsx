@@ -78,7 +78,7 @@ export type ShellProps = {
 // REVIEW → "Por revisar" | MAYBE → "Preselecto" | ACCEPTED → "Entrevista" | REJECTED → "Descartado"
 const INTEREST_MAP: Record<string, { label: string; short: string; color: string; activeColor: string }> = {
   REVIEW:    { label: "Por revisar",  short: "Revisar",     color: "border-zinc-300 text-zinc-500 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800",                                                             activeColor: "border-zinc-500 bg-zinc-100 text-zinc-900 font-semibold dark:border-zinc-400 dark:bg-zinc-700 dark:text-zinc-100" },
-  MAYBE:     { label: "Preselecto",   short: "Preselecto",  color: "border-violet-300 text-violet-600 hover:bg-violet-50 dark:border-violet-600/50 dark:text-violet-400 dark:hover:bg-violet-900/20",                                            activeColor: "border-violet-500 bg-violet-100 text-violet-900 font-semibold dark:border-violet-400 dark:bg-violet-900/40 dark:text-violet-100" },
+  MAYBE:     { label: "Preselecto",   short: "Preselecto",  color: "border-teal-300 text-teal-600 hover:bg-teal-50 dark:border-teal-600/50 dark:text-teal-400 dark:hover:bg-teal-900/20",                                            activeColor: "border-teal-500 bg-teal-100 text-teal-900 font-semibold dark:border-teal-400 dark:bg-teal-900/40 dark:text-teal-100" },
   ACCEPTED:  { label: "Entrevista",   short: "Entrevista",  color: "border-sky-300 text-sky-600 hover:bg-sky-50 dark:border-sky-600/50 dark:text-sky-400 dark:hover:bg-sky-900/20",                                                              activeColor: "border-sky-500 bg-sky-100 text-sky-900 font-semibold dark:border-sky-400 dark:bg-sky-900/40 dark:text-sky-100" },
   REJECTED:  { label: "Descartado",   short: "Descartar",   color: "border-red-300 text-red-500 hover:bg-red-50 dark:border-red-700/50 dark:text-red-400 dark:hover:bg-red-900/20",                                                              activeColor: "border-red-500 bg-red-100 text-red-900 font-semibold dark:border-red-400 dark:bg-red-900/40 dark:text-red-100" },
 };
@@ -94,7 +94,7 @@ const INTEREST_ICON: Record<string, React.ReactNode> = {
 };
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
-  MAYBE:     <ThumbsUp className="h-3 w-3 text-violet-500 dark:text-violet-400" />,   // Preselecto
+  MAYBE:     <ThumbsUp className="h-3 w-3 text-teal-500 dark:text-teal-400" />,   // Preselecto
   ACCEPTED:  <User className="h-3 w-3 text-sky-500 dark:text-sky-400" />,              // Entrevista
   REJECTED:  <XCircle className="h-3 w-3 text-red-500 dark:text-red-400" />,           // Descartado
 };
@@ -264,7 +264,7 @@ export default function CandidateReviewShell({
                 {entry.recruiterInterest !== "REVIEW" && (
                   <span className={`text-[9px] font-medium ${
                     entry.recruiterInterest === "MAYBE"
-                      ? "text-violet-600 dark:text-violet-400"
+                      ? "text-teal-600 dark:text-teal-400"
                       : entry.recruiterInterest === "ACCEPTED"
                       ? "text-sky-600 dark:text-sky-400"
                       : "text-zinc-400 dark:text-zinc-500"
@@ -298,7 +298,7 @@ export default function CandidateReviewShell({
                     {candidateName ?? "Candidato"}
                   </span>
                   {candidateSeniority && (
-                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                    <span className="rounded-full bg-teal-100 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
                       {SENIORITY_LABEL[candidateSeniority] ?? candidateSeniority}
                     </span>
                   )}

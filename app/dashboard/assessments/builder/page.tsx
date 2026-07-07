@@ -134,7 +134,7 @@ export default function AssessmentBuilderPage() {
     <Suspense fallback={
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="h-8 w-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="h-8 w-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm text-zinc-500">Cargando...</p>
         </div>
       </div>
@@ -377,7 +377,7 @@ function BuilderInner() {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
         <div className="text-center space-y-3">
-          <div className="h-8 w-8 border-4 border-violet-500 border-t-transparent rounded-full animate-spin mx-auto" />
+          <div className="h-8 w-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto" />
           <p className="text-sm text-zinc-500">Cargando template...</p>
         </div>
       </div>
@@ -440,7 +440,7 @@ function BuilderInner() {
                 value={form.title}
                 onChange={e => setField("title", e.target.value)}
                 placeholder="Ej: React Senior — Evaluación técnica"
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
 
@@ -452,7 +452,7 @@ function BuilderInner() {
                 onChange={e => setField("description", e.target.value)}
                 placeholder="Describe qué evalúa este template..."
                 rows={2}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
               />
             </div>
 
@@ -462,7 +462,7 @@ function BuilderInner() {
               <select
                 value={form.type}
                 onChange={e => setField("type", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 <option value="MCQ">Opción múltiple</option>
                 <option value="CODING">Código</option>
@@ -476,7 +476,7 @@ function BuilderInner() {
               <select
                 value={form.difficulty}
                 onChange={e => setField("difficulty", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 {DIFFICULTIES.map(d => <option key={d} value={d}>{d === "JUNIOR" ? "Junior" : d === "MID" ? "Mid Level" : "Senior"}</option>)}
               </select>
@@ -491,7 +491,7 @@ function BuilderInner() {
               <select
                 value={form.language}
                 onChange={e => setField("language", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
                 {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
@@ -508,7 +508,7 @@ function BuilderInner() {
                   type="number" min={1} max={100}
                   value={form.passingScore}
                   onChange={e => setField("passingScore", Number(e.target.value))}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 pr-8 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">%</span>
               </div>
@@ -525,7 +525,7 @@ function BuilderInner() {
                   type="number" min={5} max={180}
                   value={form.timeLimit}
                   onChange={e => setField("timeLimit", Number(e.target.value))}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 pr-12 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 pr-12 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-zinc-400">min</span>
               </div>
@@ -543,7 +543,7 @@ function BuilderInner() {
                   type="button"
                   onClick={() => setField("allowRetry", !form.allowRetry)}
                   className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none ${
-                    form.allowRetry ? "bg-violet-600" : "bg-zinc-200 dark:bg-zinc-700"
+                    form.allowRetry ? "bg-teal-600" : "bg-zinc-200 dark:bg-zinc-700"
                   }`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${
@@ -563,7 +563,7 @@ function BuilderInner() {
                   type="number" min={2} max={10}
                   value={form.maxAttempts}
                   onChange={e => setField("maxAttempts", Number(e.target.value))}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
                 <p className="text-[10px] text-zinc-400 mt-1">Entre 2 y 10 intentos</p>
               </div>
@@ -583,7 +583,7 @@ function BuilderInner() {
             <div className="rounded-xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 p-8 text-center space-y-2">
               <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Sin preguntas aún</p>
               <p className="text-xs text-zinc-400 dark:text-zinc-500">
-                Usa <span className="font-semibold text-violet-600">✨ Generar con AI</span> para crearlas automáticamente, o agrégalas manualmente abajo.
+                Usa <span className="font-semibold text-teal-600">✨ Generar con AI</span> para crearlas automáticamente, o agrégalas manualmente abajo.
               </p>
             </div>
           )}
@@ -625,7 +625,7 @@ function BuilderInner() {
               {form.type !== "MCQ" && (
                 <button
                   onClick={() => addQuestion("CODING")}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-700 px-4 py-2.5 text-sm font-semibold text-violet-700 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-950/30 transition"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-teal-300 dark:border-teal-700 px-4 py-2.5 text-sm font-semibold text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-950/30 transition"
                 >
                   <Plus className="h-4 w-4 shrink-0" />
                   <Code2 className="h-4 w-4 shrink-0" />
@@ -659,7 +659,7 @@ function BuilderInner() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-violet-500/20 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-teal-500/20 hover:bg-teal-700 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <Save className="h-4 w-4" />
             {saving ? "Guardando..." : editId ? "Actualizar template" : "Guardar template"}
@@ -697,7 +697,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
 
   return (
     <div className={`rounded-2xl border bg-white dark:bg-zinc-900 overflow-hidden transition-all
-      ${isCoding ? "border-violet-200 dark:border-violet-800/40" : "border-zinc-200 dark:border-zinc-800"}`}
+      ${isCoding ? "border-teal-200 dark:border-teal-800/40" : "border-zinc-200 dark:border-zinc-800"}`}
     >
       {/* Header de la pregunta */}
       <div
@@ -707,10 +707,10 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
         <GripVertical className="h-4 w-4 text-zinc-300 dark:text-zinc-600 shrink-0" />
 
         <div className={`shrink-0 rounded-lg p-1.5
-          ${isCoding ? "bg-violet-100 dark:bg-violet-900/40" : "bg-emerald-100 dark:bg-emerald-900/40"}`}
+          ${isCoding ? "bg-teal-100 dark:bg-teal-900/40" : "bg-emerald-100 dark:bg-emerald-900/40"}`}
         >
           {isCoding
-            ? <Code2 className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
+            ? <Code2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
             : <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
           }
         </div>
@@ -746,7 +746,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                   value={q.section}
                   onChange={e => onUpdate({ section: e.target.value })}
                   placeholder="General"
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
             </div>
@@ -760,7 +760,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
               onChange={e => onUpdate({ questionText: e.target.value })}
               placeholder="Escribe la pregunta o el problema a resolver..."
               rows={3}
-              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
             />
           </div>
 
@@ -780,7 +780,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                     Múltiple respuesta
                   </label>
                   {q.options.length < 6 && (
-                    <button onClick={onAddOption} className="text-xs text-violet-600 hover:underline">+ Opción</button>
+                    <button onClick={onAddOption} className="text-xs text-teal-600 hover:underline">+ Opción</button>
                   )}
                 </div>
               </div>
@@ -803,7 +803,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                       value={opt.text}
                       onChange={e => onUpdateOption(opt.id, { text: e.target.value })}
                       placeholder={`Opción ${q.options.indexOf(opt) + 1}`}
-                      className={`flex-1 rounded-lg border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 dark:bg-zinc-800 dark:text-zinc-100
+                      className={`flex-1 rounded-lg border px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-zinc-800 dark:text-zinc-100
                         ${opt.isCorrect
                           ? "border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30"
                           : "border-zinc-200 dark:border-zinc-700 bg-zinc-50"
@@ -830,7 +830,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                   onChange={e => onUpdate({ codeSnippet: e.target.value })}
                   placeholder="// Código base que verá el candidato (opcional)"
                   rows={4}
-                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-950 text-green-400 font-mono px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-500 resize-y"
+                  className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-950 text-green-400 font-mono px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-teal-500 resize-y"
                 />
               </div>
 
@@ -839,7 +839,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                   <label className="text-[10px] font-semibold text-zinc-400 uppercase">Casos de prueba *</label>
                   <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 mb-2">Inputs y outputs exactos — Judge0 compara caracter por caracter. Casos marcados como <strong>Oculto</strong>: el candidato no los ve.</p>
                   {q.testCases.length < 10 && (
-                    <button onClick={onAddTestCase} className="text-xs text-violet-600 hover:underline">+ Caso</button>
+                    <button onClick={onAddTestCase} className="text-xs text-teal-600 hover:underline">+ Caso</button>
                   )}
                 </div>
                 <div className="space-y-3">
@@ -871,7 +871,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                             value={tc.input}
                             onChange={e => onUpdateTestCase(i, { input: e.target.value })}
                             placeholder="Ej: [1, 2, 3]"
-                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                           />
                         </div>
                         <div>
@@ -880,7 +880,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
                             value={tc.expectedOutput}
                             onChange={e => onUpdateTestCase(i, { expectedOutput: e.target.value })}
                             placeholder="Ej: 6"
-                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-2.5 py-1.5 text-xs font-mono text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
                           />
                         </div>
                       </div>
@@ -899,7 +899,7 @@ function QuestionCard({ q, idx, expanded, onToggle, onRemove, onUpdate, onUpdate
               onChange={e => onUpdate({ explanation: e.target.value })}
               placeholder="Explica la respuesta correcta..."
               rows={2}
-              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-violet-500 resize-none"
+              className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
             />
           </div>
         </div>

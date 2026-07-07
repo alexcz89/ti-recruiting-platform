@@ -192,12 +192,12 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
 
         {/* Banner asignar template */}
         {sp.assignTemplate && (
-          <div className="flex items-center gap-3 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 dark:border-violet-800/50 dark:bg-violet-950/20">
-            <div className="h-2 w-2 shrink-0 rounded-full bg-violet-500 animate-pulse" />
-            <p className="text-sm font-semibold text-violet-800 dark:text-violet-300">
+          <div className="flex items-center gap-3 rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 dark:border-teal-800/50 dark:bg-teal-950/20">
+            <div className="h-2 w-2 shrink-0 rounded-full bg-teal-500 animate-pulse" />
+            <p className="text-sm font-semibold text-teal-800 dark:text-teal-300">
               Elige una vacante para asignar el template de evaluación.
             </p>
-            <Link href="/dashboard/jobs" className="ml-auto shrink-0 text-xs font-bold text-violet-600 hover:underline dark:text-violet-400">
+            <Link href="/dashboard/jobs" className="ml-auto shrink-0 text-xs font-bold text-teal-600 hover:underline dark:text-teal-400">
               Cancelar
             </Link>
           </div>
@@ -347,7 +347,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                             ) : (
                               <Link
                                 href="/dashboard/assessments/templates"
-                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 dark:border-zinc-600 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-violet-400 hover:text-violet-600 dark:hover:border-violet-600 dark:hover:text-violet-400 transition whitespace-nowrap"
+                                className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 dark:border-zinc-600 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-teal-400 hover:text-teal-600 dark:hover:border-teal-600 dark:hover:text-teal-400 transition whitespace-nowrap"
                               >
                                 + Asignar
                               </Link>
@@ -475,7 +475,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                         ) : (
                           <Link
                             href="/dashboard/assessments/templates"
-                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 dark:border-zinc-600 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-violet-400 hover:text-violet-600 transition"
+                            className="inline-flex items-center gap-1 rounded-full border border-dashed border-zinc-300 dark:border-zinc-600 px-2.5 py-1 text-[11px] text-zinc-400 hover:border-teal-400 hover:text-teal-600 transition"
                           >
                             + Asignar evaluación
                           </Link>

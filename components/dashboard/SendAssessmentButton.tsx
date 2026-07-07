@@ -135,7 +135,7 @@ function SingleAssessmentButton({
         return {
           buttonLabel: label ?? "Copiar link",
           Icon: ClipboardCopy,
-          cls: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300",
+          cls: "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300",
         };
       case "STARTED":
         return {
@@ -153,7 +153,7 @@ function SingleAssessmentButton({
         return {
           buttonLabel: label ?? "Enviar assessment",
           Icon: Send,
-          cls: "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300",
+          cls: "border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300",
         };
     }
   })();
@@ -184,7 +184,7 @@ function DropdownItem({
 
   const stateBadge: Record<string, { label: string; cls: string }> = {
     NONE:      { label: "Sin enviar",   cls: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400" },
-    SENT:      { label: "Enviado",      cls: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300" },
+    SENT:      { label: "Enviado",      cls: "bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300" },
     STARTED:   { label: "En progreso",  cls: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300" },
     COMPLETED: { label: a.score != null ? `Completado · ${a.score}%` : "Completado", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" },
     EXPIRED:   { label: "Expirado",     cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300" },
@@ -282,7 +282,7 @@ function DropdownItem({
         </span>
       </div>
       <span className={`flex shrink-0 items-center gap-1 text-xs font-semibold ${
-        pending ? "text-zinc-400" : "text-violet-600 dark:text-violet-400"
+        pending ? "text-zinc-400" : "text-teal-600 dark:text-teal-400"
       }`}>
         {pending ? "..." : <><ActionIcon />{actionLabel()}</>}
       </span>
@@ -324,7 +324,7 @@ export default function SendAssessmentButton({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-medium text-violet-700 shadow-sm transition hover:bg-violet-100 dark:border-violet-900/60 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40"
+        className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700 shadow-sm transition hover:bg-teal-100 dark:border-teal-900/60 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
       >
         <Send className="h-4 w-4 shrink-0" />
         <span>Enviar assessment</span>

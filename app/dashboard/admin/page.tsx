@@ -54,7 +54,7 @@ export default async function AdminPage() {
 
   const stats = [
     { label: "Empresas", value: totalCompanies, icon: Building2, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-950/30", href: "/dashboard/admin/companies" },
-    { label: "Usuarios", value: totalUsers, icon: Users, color: "text-violet-600", bg: "bg-violet-50 dark:bg-violet-950/30", href: "/dashboard/admin/users" },
+    { label: "Usuarios", value: totalUsers, icon: Users, color: "text-teal-600", bg: "bg-teal-50 dark:bg-teal-950/30", href: "/dashboard/admin/users" },
     { label: "Templates activos", value: totalTemplates, icon: BookOpen, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-950/30", href: "/dashboard/admin/templates" },
     { label: "Evaluaciones", value: totalAttempts, icon: BarChart3, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-950/30", href: "#" },
   ];
@@ -73,7 +73,7 @@ export default async function AdminPage() {
       icon: Users,
       title: "Usuarios",
       description: "Administra recruiters y candidatos",
-      color: "from-violet-500 to-purple-500",
+      color: "from-teal-500 to-emerald-500",
       items: [`${totalUsers} usuarios totales`],
     },
     {
@@ -145,7 +145,7 @@ export default async function AdminPage() {
             <p className="text-xs text-zinc-500 mt-1">Score promedio global</p>
           </div>
           <div className="rounded-2xl border border-zinc-200/80 bg-white dark:border-zinc-800/50 dark:bg-zinc-900 p-4 shadow-sm text-center">
-            <p className="text-3xl font-black text-violet-600">{globalTemplates}</p>
+            <p className="text-3xl font-black text-teal-600">{globalTemplates}</p>
             <p className="text-xs text-zinc-500 mt-1">Templates globales</p>
           </div>
         </div>
@@ -186,7 +186,7 @@ export default async function AdminPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-black text-zinc-900 dark:text-white">Empresas recientes</h2>
-            <Link href="/dashboard/admin/companies" className="text-sm text-violet-600 hover:underline">
+            <Link href="/dashboard/admin/companies" className="text-sm text-teal-600 hover:underline">
               Ver todas →
             </Link>
           </div>

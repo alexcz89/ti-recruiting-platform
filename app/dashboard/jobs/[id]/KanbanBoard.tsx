@@ -45,7 +45,7 @@ type AppCard = {
 // Colores por etapa del pipeline
 const COLUMN_ACCENT: Record<string, { header: string; badge: string; drag: string }> = {
   REVIEW:   { header: "text-zinc-700 dark:text-zinc-300",    badge: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",           drag: "border-zinc-400/50 bg-zinc-50/60 dark:bg-zinc-800/20" },
-  MAYBE:    { header: "text-violet-700 dark:text-violet-300", badge: "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-200", drag: "border-violet-400/50 bg-violet-50/50 dark:bg-violet-900/10" },
+  MAYBE:    { header: "text-amber-700 dark:text-amber-300",   badge: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",     drag: "border-amber-400/50 bg-amber-50/50 dark:bg-amber-900/10" },
   ACCEPTED: { header: "text-sky-700 dark:text-sky-300",       badge: "bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200",            drag: "border-sky-400/50 bg-sky-50/50 dark:bg-sky-900/10" },
   REJECTED: { header: "text-rose-600 dark:text-rose-400",     badge: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200",        drag: "border-rose-400/50 bg-rose-50/50 dark:bg-rose-900/10" },
 };
@@ -287,14 +287,14 @@ export default function Kanbanboard({
           ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300"
           : passed === false
           ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-500/30 dark:bg-rose-900/20 dark:text-rose-300"
-          : "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-300";
+          : "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-500/30 dark:bg-teal-900/20 dark:text-teal-300";
 
       const hoverClass =
         passed === true
           ? "hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
           : passed === false
           ? "hover:bg-rose-100 dark:hover:bg-rose-900/40"
-          : "hover:bg-violet-100 dark:hover:bg-violet-900/40";
+          : "hover:bg-teal-100 dark:hover:bg-teal-900/40";
 
       const icon = passed === true ? "✓" : passed === false ? "✗" : "📊";
       const label = passed === true ? "Aprobó" : passed === false ? "No aprobó" : "Completado";
@@ -357,7 +357,7 @@ export default function Kanbanboard({
           {shortTitle && (
             <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">{shortTitle}</p>
           )}
-          <span className="inline-flex w-fit items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-medium text-violet-700 dark:border-violet-500/30 dark:bg-violet-900/20 dark:text-violet-300">
+          <span className="inline-flex w-fit items-center gap-1 rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:border-teal-500/30 dark:bg-teal-900/20 dark:text-teal-300">
             📋 Enviada · pendiente
           </span>
         </div>
@@ -528,7 +528,7 @@ export default function Kanbanboard({
                     ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
                     : singleResult.passed === false
                     ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
-                    : "border-violet-300 bg-violet-50 text-violet-700 hover:bg-violet-100 dark:border-violet-600/40 dark:bg-violet-900/20 dark:text-violet-300",
+                    : "border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-600/40 dark:bg-teal-900/20 dark:text-teal-300",
                 ].join(" ")}
                 title="Ver resultados"
               >

@@ -437,9 +437,9 @@ export default function MatchScorePopover({
             </div>
 
             {candidateId && jobId && (
-              <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-3 dark:border-violet-700/40 dark:bg-violet-950/20">
+              <div className="rounded-lg border border-teal-200 bg-teal-50/70 p-3 dark:border-teal-700/40 dark:bg-teal-950/20">
                 <div className="mb-2 flex items-center gap-1.5">
-                  <Sparkles className="h-3.5 w-3.5 text-violet-500" />
+                  <Sparkles className="h-3.5 w-3.5 text-teal-500" />
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
                     Explicación AI
                   </p>
@@ -578,7 +578,7 @@ export default function MatchScorePopover({
                         </div>
                         <div className="h-1.5 w-full rounded-full bg-zinc-200/70 dark:bg-zinc-700/60">
                           <div
-                            className="h-1.5 rounded-full bg-violet-500"
+                            className="h-1.5 rounded-full bg-teal-500"
                             style={{ width: `${matchResult.mustScore}%` }}
                           />
                         </div>

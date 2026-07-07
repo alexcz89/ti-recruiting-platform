@@ -262,9 +262,9 @@ export default function ActionsMenu(props: Props) {
         iconColor: "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500" };
     if (assessmentCount === 1)
       return { label: "Enviar evaluación", Icon: Send,
-        iconColor: "bg-violet-50 text-violet-600 group-hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400" };
+        iconColor: "bg-teal-50 text-teal-600 group-hover:bg-teal-100 dark:bg-teal-500/10 dark:text-teal-400" };
     return { label: `Enviar evaluaciones (${assessmentCount})`, Icon: Send,
-      iconColor: "bg-violet-50 text-violet-600 group-hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-400" };
+      iconColor: "bg-teal-50 text-teal-600 group-hover:bg-teal-100 dark:bg-teal-500/10 dark:text-teal-400" };
   })();
 
   return (
@@ -279,7 +279,7 @@ export default function ActionsMenu(props: Props) {
             text-zinc-500 shadow-sm transition-all
             hover:bg-zinc-100 hover:text-zinc-700 hover:border-zinc-300
             active:scale-[0.96]
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/40
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40
             disabled:opacity-60
             dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400
             dark:hover:bg-zinc-800 dark:hover:text-zinc-100
@@ -327,7 +327,7 @@ export default function ActionsMenu(props: Props) {
                 const prefix = t.state === "SENT" ? "Enviado · " : t.state === "STARTED" ? "En progreso · " : "Enviar: ";
                 const iconBg = isSentOrStarted
                   ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
-                  : "bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400";
+                  : "bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400";
                 const IconComp = t.state === "SENT" ? Clock : t.state === "STARTED" ? ClipboardCopy : Send;
                 return (
                   <DropdownMenuItem
@@ -514,14 +514,14 @@ function MultiAssessmentModal({
                 onClick={() => toggle(id)}
                 className={`w-full flex items-center gap-3 rounded-xl border-2 p-3 text-left transition-all ${
                   isChecked
-                    ? "border-violet-400 bg-violet-50 dark:border-violet-600 dark:bg-violet-950/20"
+                    ? "border-teal-400 bg-teal-50 dark:border-teal-600 dark:bg-teal-950/20"
                     : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700"
                 }`}
               >
                 {/* Checkbox visual */}
                 <div className={`h-5 w-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors ${
                   isChecked
-                    ? "border-violet-500 bg-violet-500"
+                    ? "border-teal-500 bg-teal-500"
                     : "border-zinc-300 dark:border-zinc-600"
                 }`}>
                   {isChecked && (
@@ -555,7 +555,7 @@ function MultiAssessmentModal({
               type="button"
               onClick={handleSend}
               disabled={sending || selected.size === 0}
-              className="rounded-lg bg-violet-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+              className="rounded-lg bg-teal-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
             >
               {sending ? "Enviando..." : `Enviar ${selected.size > 1 ? `(${selected.size})` : ""}`}
             </button>

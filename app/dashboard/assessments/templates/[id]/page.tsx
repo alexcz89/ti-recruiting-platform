@@ -185,7 +185,7 @@ export default async function TemplateDetailPage({ params }: PageProps) {
             {/* Métricas */}
             <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-zinc-100 dark:border-zinc-800 pt-4">
               {[
-                { value: template.questions.length, label: "Preguntas totales", icon: ListOrdered, color: "text-violet-600 dark:text-violet-400" },
+                { value: template.questions.length, label: "Preguntas totales", icon: ListOrdered, color: "text-teal-600 dark:text-teal-400" },
                 { value: `${template.timeLimit} min`, label: "Tiempo límite", icon: Clock, color: "text-blue-600 dark:text-blue-400" },
                 { value: `${template.passingScore}%`, label: "Puntaje mínimo", icon: BarChart3, color: "text-emerald-600 dark:text-emerald-400" },
                 { value: sectionNames.length, label: "Secciones", icon: Hash, color: "text-amber-600 dark:text-amber-400" },

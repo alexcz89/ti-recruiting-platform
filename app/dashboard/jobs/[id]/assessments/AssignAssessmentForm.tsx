@@ -218,7 +218,7 @@ export default function AssignAssessmentForm({
 
                     {/* ✅ NUEVO: Mostrar costo */}
                     {cost && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 font-medium">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 font-medium">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                         </svg>
@@ -287,7 +287,7 @@ export default function AssignAssessmentForm({
         {selectedTemplate && selectedCost && (
           <div className={`p-4 rounded-xl border ${
             hasEnoughCredits
-              ? "border-violet-200 dark:border-violet-800 bg-violet-50 dark:bg-violet-900/20"
+              ? "border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-900/20"
               : "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20"
           }`}>
             <div className="flex items-start justify-between">
@@ -318,7 +318,7 @@ export default function AssignAssessmentForm({
               <div className="ml-4 text-right">
                 <p className={`text-2xl font-bold ${
                   hasEnoughCredits
-                    ? "text-violet-600 dark:text-violet-400"
+                    ? "text-teal-600 dark:text-teal-400"
                     : "text-red-600 dark:text-red-400"
                 }`}>
                   {formatCredits(selectedCost.total)}
