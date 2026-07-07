@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { badgeLevelLabel } from "@/lib/badges";
 import { Award, Clock, ListChecks, Lock, CheckCircle2 } from "lucide-react";
+import { StartBadgeExamButton } from "./StartBadgeExamButton";
 
 export const metadata = {
   title: "Certificaciones gratuitas | TaskIO",
@@ -157,10 +158,15 @@ export default async function CertificacionesPage() {
                               <Lock className="h-3 w-3" />
                               Requiere {badgeLevelLabel(level - 1)}
                             </span>
+                          ) : isCandidate ? (
+                            <StartBadgeExamButton templateId={exam.id} />
                           ) : (
-                            <span className="inline-flex shrink-0 items-center rounded border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-700 dark:border-teal-800/50 dark:bg-teal-950/30 dark:text-teal-300">
-                              Muy pronto
-                            </span>
+                            <Link
+                              href="/auth/signup"
+                              className="inline-flex shrink-0 items-center rounded border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-100 dark:border-teal-800/50 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
+                            >
+                              Regístrate para presentar
+                            </Link>
                           )}
                         </li>
                       );

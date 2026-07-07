@@ -40,6 +40,9 @@ export async function POST(
           select: {
             passingScore: true,
             sections: true,
+            isBadgeExam: true,
+            badgeTermId: true,
+            badgeLevel: true,
           },
         },
         answers: {
@@ -222,6 +225,41 @@ export async function POST(
 
         if (updatedAttempt.count === 0) {
           throw new Error("STATE_INVALID_OR_ALREADY_SUBMITTED");
+        }
+
+        // Badge de skill verificado: attempts candidato-iniciados (sin invite
+        // ni application) de un examen de badge otorgan el badge al aprobar.
+        // upsert = idempotente si ya existe el badge de ese skill+nivel.
+        const tpl = attempt.template as {
+          isBadgeExam?: boolean;
+          badgeTermId?: string | null;
+          badgeLevel?: number | null;
+        };
+        if (
+          passed &&
+          tpl?.isBadgeExam &&
+          tpl.badgeTermId &&
+          tpl.badgeLevel != null &&
+          !attempt.inviteId &&
+          !attempt.applicationId
+        ) {
+          await tx.candidateBadge.upsert({
+            where: {
+              candidateId_termId_level: {
+                candidateId: user.id,
+                termId: tpl.badgeTermId,
+                level: tpl.badgeLevel,
+              },
+            },
+            create: {
+              candidateId: user.id,
+              termId: tpl.badgeTermId,
+              level: tpl.badgeLevel,
+              attemptId: params.attemptId,
+              earnedAt: now,
+            },
+            update: {},
+          });
         }
 
         let inviteIdForLedger: string | null = attempt.inviteId ?? null;

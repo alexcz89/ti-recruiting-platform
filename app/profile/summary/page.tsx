@@ -80,6 +80,17 @@ export default async function ProfileSummaryPage({
     orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
   });
 
+  // Badges verificados del candidato — nivel más alto por skill
+  const myBadges = await prisma.candidateBadge.findMany({
+    where: { candidateId: me.id },
+    select: { termId: true, level: true },
+  });
+  const verifiedByTerm = new Map<string, number>();
+  for (const b of myBadges) {
+    const prev = verifiedByTerm.get(b.termId) ?? 0;
+    if (b.level > prev) verifiedByTerm.set(b.termId, b.level);
+  }
+
   const myApps = await prisma.application.findMany({
     where: { candidateId: me.id },
     orderBy: { createdAt: "desc" },
@@ -208,6 +219,7 @@ export default async function ProfileSummaryPage({
         termId: s.termId,
         label: s.term.label,
         level: s.level as any,
+        verifiedLevel: verifiedByTerm.get(s.termId) ?? null,
       }))}
       applications={myApps.map((a) => ({
         id: a.id,

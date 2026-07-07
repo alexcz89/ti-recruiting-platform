@@ -91,6 +91,8 @@ export type Skill = {
   termId: string;
   label: string;
   level: SkillLevel;
+  /** Nivel de badge verificado (1=Básico 2=Intermedio 3=Avanzado), si el candidato aprobó el examen del skill */
+  verifiedLevel?: number | null;
 };
 
 export type Application = {
@@ -1176,7 +1178,17 @@ function SectionSkills({
               return (
                 <li key={s.termId} className="soft-panel px-3 py-2">
                   <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 break-words font-medium">{s.label}</span>
+                    <span className="min-w-0 break-words font-medium">
+                      {s.label}
+                      {s.verifiedLevel != null && (
+                        <span
+                          className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
+                          title={`Badge verificado: ${s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}`}
+                        >
+                          ✓ {s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}
+                        </span>
+                      )}
+                    </span>
                     <span
                       className={`shrink-0 text-xs font-medium ${
                         s.level === 5
