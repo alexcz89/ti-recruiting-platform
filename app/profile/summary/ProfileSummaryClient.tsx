@@ -93,6 +93,8 @@ export type Skill = {
   level: SkillLevel;
   /** Nivel de badge verificado (1=Básico 2=Intermedio 3=Avanzado), si el candidato aprobó el examen del skill */
   verifiedLevel?: number | null;
+  /** Slug de la página pública del badge (null si el badge es privado) */
+  verifiedSlug?: string | null;
 };
 
 export type Application = {
@@ -1187,6 +1189,22 @@ function SectionSkills({
                         >
                           ✓ {s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}
                         </span>
+                      )}
+                      {s.verifiedSlug && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const url = `${window.location.origin}/badge/${s.verifiedSlug}`;
+                            navigator.clipboard
+                              .writeText(url)
+                              .then(() => toastSuccess("Link del badge copiado — compártelo en LinkedIn"))
+                              .catch(() => toastError("No se pudo copiar el link"));
+                          }}
+                          className="ml-1 inline-flex items-center rounded px-1 py-0.5 align-middle text-[10px] font-medium text-teal-600 underline-offset-2 hover:underline dark:text-teal-400"
+                          title="Copiar link público del badge"
+                        >
+                          Compartir
+                        </button>
                       )}
                     </span>
                     <span

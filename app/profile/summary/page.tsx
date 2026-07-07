@@ -80,15 +80,17 @@ export default async function ProfileSummaryPage({
     orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
   });
 
-  // Badges verificados del candidato — nivel más alto por skill
+  // Badges verificados del candidato — nivel más alto por skill (con slug público)
   const myBadges = await prisma.candidateBadge.findMany({
     where: { candidateId: me.id },
-    select: { termId: true, level: true },
+    select: { termId: true, level: true, slug: true, isPublic: true },
   });
-  const verifiedByTerm = new Map<string, number>();
+  const verifiedByTerm = new Map<string, { level: number; slug: string; isPublic: boolean }>();
   for (const b of myBadges) {
-    const prev = verifiedByTerm.get(b.termId) ?? 0;
-    if (b.level > prev) verifiedByTerm.set(b.termId, b.level);
+    const prev = verifiedByTerm.get(b.termId);
+    if (!prev || b.level > prev.level) {
+      verifiedByTerm.set(b.termId, { level: b.level, slug: b.slug, isPublic: b.isPublic });
+    }
   }
 
   const myApps = await prisma.application.findMany({
@@ -215,12 +217,16 @@ export default async function ProfileSummaryPage({
         label: l.term.label,
         level: l.level as any,
       }))}
-      skills={candidateSkills.map((s) => ({
-        termId: s.termId,
-        label: s.term.label,
-        level: s.level as any,
-        verifiedLevel: verifiedByTerm.get(s.termId) ?? null,
-      }))}
+      skills={candidateSkills.map((s) => {
+        const badge = verifiedByTerm.get(s.termId) ?? null;
+        return {
+          termId: s.termId,
+          label: s.term.label,
+          level: s.level as any,
+          verifiedLevel: badge?.level ?? null,
+          verifiedSlug: badge && badge.isPublic ? badge.slug : null,
+        };
+      })}
       applications={myApps.map((a) => ({
         id: a.id,
         createdAt: a.createdAt.toISOString(),
