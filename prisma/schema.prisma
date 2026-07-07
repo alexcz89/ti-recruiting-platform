@@ -164,6 +164,7 @@ model User {
   assessmentAttempts        AssessmentAttempt[]
   assessmentInvitesReceived AssessmentInvite[]       @relation("AssessmentInviteCandidate")
   assessmentInvitesSent     AssessmentInvite[]       @relation("AssessmentInviteInvitedBy")
+  candidateBadges           CandidateBadge[]
   autoLoginTokens           AutoLoginToken[]
   aiProfile                 CandidateAIProfile?
   candidateCredentials      CandidateCredential[]
@@ -499,6 +500,8 @@ model TaxonomyTerm {
   candidateLangs  CandidateLanguage[]
   candidateSkills CandidateSkill[]
   requiredByJobs  JobRequiredSkill[]
+  badgeExams      AssessmentTemplate[]  @relation("BadgeExamTerm")
+  candidateBadges CandidateBadge[]      @relation("CandidateBadgeTerm")
 
   @@unique([kind, slug])
   @@index([kind])
@@ -649,15 +652,43 @@ model AssessmentTemplate {
   companyId        String?
   isGlobal         Boolean              @default(true)
   language         String?
+  // Exámenes de badge: certificación gratuita candidato-iniciada (skill + nivel)
+  isBadgeExam      Boolean              @default(false)
+  badgeTermId      String?
+  badgeLevel       Int?
   attempts         AssessmentAttempt[]
   invites          AssessmentInvite[]
   questions        AssessmentQuestion[]
   company          Company?             @relation(fields: [companyId], references: [id])
+  badgeTerm        TaxonomyTerm?        @relation("BadgeExamTerm", fields: [badgeTermId], references: [id])
   codingChallenges CodingChallenge[]
   jobAssessments   JobAssessment[]
 
+  @@unique([badgeTermId, badgeLevel])
   @@index([slug])
   @@index([type, difficulty])
+  @@index([isBadgeExam, isActive])
+}
+
+// Badge de skill verificado — se otorga al aprobar un examen de badge.
+// level: 1=Básico, 2=Intermedio, 3=Avanzado (extensible sin migración).
+model CandidateBadge {
+  id          String            @id @default(cuid())
+  candidateId String
+  termId      String
+  level       Int
+  attemptId   String            @unique
+  slug        String            @unique @default(cuid())
+  isPublic    Boolean           @default(true)
+  earnedAt    DateTime          @default(now())
+  createdAt   DateTime          @default(now())
+  candidate   User              @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  term        TaxonomyTerm      @relation("CandidateBadgeTerm", fields: [termId], references: [id], onDelete: Cascade)
+  attempt     AssessmentAttempt @relation(fields: [attemptId], references: [id])
+
+  @@unique([candidateId, termId, level])
+  @@index([candidateId])
+  @@index([termId, level])
 }
 
 model AssessmentInviteChargeLedger {
@@ -812,6 +843,7 @@ model AssessmentAttempt {
   answers           AttemptAnswer[]
   codeExecutions    CodeExecution[]
   codingSubmissions CodingSubmission[]
+  badge             CandidateBadge?
 
   @@index([candidateId, status])
   @@index([applicationId])
@@ -1263,12 +1295,12 @@ enum InterviewRecommendation {
 }
 
 model LiveInterview {
-  id                   String                   @id @default(cuid())
-  applicationId        String
-  jobId                String
-  candidateId          String
-  interviewerId        String
-  companyId            String
+  id            String @id @default(cuid())
+  applicationId String
+  jobId         String
+  candidateId   String
+  interviewerId String
+  companyId     String
 
   // Challenge (50 min coding phase)
   challengeTitle       String
@@ -1276,40 +1308,40 @@ model LiveInterview {
   apiName              String?
   apiDocsUrl           String?
   videoCallUrl         String?
-  codingMinutes        Int                      @default(50)
+  codingMinutes        Int     @default(50)
 
   // Q&A phase (40 min)
-  qaMinutes            Int                      @default(40)
+  qaMinutes Int @default(40)
 
   // Candidate deliverables
-  githubUrl            String?
-  liveUrl              String?
-  submittedAt          DateTime?
+  githubUrl   String?
+  liveUrl     String?
+  submittedAt DateTime?
 
   // Session lifecycle
-  status               LiveInterviewStatus      @default(SCHEDULED)
-  scheduledAt          DateTime?
-  codingStartedAt      DateTime?
-  codingEndedAt        DateTime?
-  qaStartedAt          DateTime?
-  qaEndedAt            DateTime?
-  completedAt          DateTime?
+  status          LiveInterviewStatus @default(SCHEDULED)
+  scheduledAt     DateTime?
+  codingStartedAt DateTime?
+  codingEndedAt   DateTime?
+  qaStartedAt     DateTime?
+  qaEndedAt       DateTime?
+  completedAt     DateTime?
 
   // Final evaluation
-  codingScore          Int?
-  qaScore              Int?
-  finalScore           Int?
-  interviewerNotes     String?
-  recommendation       InterviewRecommendation?
+  codingScore      Int?
+  qaScore          Int?
+  finalScore       Int?
+  interviewerNotes String?
+  recommendation   InterviewRecommendation?
 
-  createdAt            DateTime                 @default(now())
-  updatedAt            DateTime                 @default(now()) @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  application          Application              @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  job                  Job                      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  candidate            User                     @relation("CandidateLiveInterviews", fields: [candidateId], references: [id])
-  interviewer          User                     @relation("InterviewerSessions", fields: [interviewerId], references: [id])
-  qaScores             LiveInterviewQAScore[]
+  application Application            @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  job         Job                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate   User                   @relation("CandidateLiveInterviews", fields: [candidateId], references: [id])
+  interviewer User                   @relation("InterviewerSessions", fields: [interviewerId], references: [id])
+  qaScores    LiveInterviewQAScore[]
 
   @@index([applicationId])
   @@index([candidateId])
@@ -1318,33 +1350,33 @@ model LiveInterview {
 }
 
 model LiveInterviewQuestion {
-  id             String                 @id @default(cuid())
+  id             String     @id @default(cuid())
   companyId      String?
   techStack      String?
   seniority      Seniority?
   category       String?
   question       String
   expectedTopics String[]
-  isActive       Boolean                @default(true)
-  orderIndex     Int                    @default(0)
-  createdAt      DateTime               @default(now())
+  isActive       Boolean    @default(true)
+  orderIndex     Int        @default(0)
+  createdAt      DateTime   @default(now())
 
-  qaScores       LiveInterviewQAScore[]
+  qaScores LiveInterviewQAScore[]
 
   @@index([techStack, seniority])
   @@index([companyId])
 }
 
 model LiveInterviewQAScore {
-  id          String                @id @default(cuid())
+  id          String    @id @default(cuid())
   interviewId String
   questionId  String
   score       Int
   notes       String?
   answeredAt  DateTime?
 
-  interview   LiveInterview         @relation(fields: [interviewId], references: [id], onDelete: Cascade)
-  question    LiveInterviewQuestion @relation(fields: [questionId], references: [id])
+  interview LiveInterview         @relation(fields: [interviewId], references: [id], onDelete: Cascade)
+  question  LiveInterviewQuestion @relation(fields: [questionId], references: [id])
 
   @@unique([interviewId, questionId])
   @@index([interviewId])

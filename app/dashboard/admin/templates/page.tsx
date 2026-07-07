@@ -5,8 +5,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/server/prisma";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { BookOpen, ArrowLeft, Plus } from "lucide-react";
+import { BookOpen, ArrowLeft, Plus, Award } from "lucide-react";
 import { TemplateActionsClient } from "./TemplateActionsClient";
+import { BADGE_LEVELS, badgeLevelLabel } from "@/lib/badges";
 
 export const metadata = { title: "Admin · Templates" };
 export const dynamic = "force-dynamic";
@@ -16,17 +17,26 @@ export default async function AdminTemplatesPage() {
   if (!session?.user) redirect("/auth/signin");
   if ((session.user as any)?.role !== "ADMIN") redirect("/");
 
-  const templates = await prisma.assessmentTemplate.findMany({
-    where: { isActive: true },
-    orderBy: [{ isGlobal: "desc" }, { createdAt: "desc" }],
-    select: {
-      id: true, title: true, type: true, difficulty: true,
-      language: true, isGlobal: true, passingScore: true,
-      timeLimit: true, totalQuestions: true, createdAt: true,
-      companyId: true,
-      _count: { select: { questions: true } },
-    },
-  });
+  const [templates, skillTerms] = await Promise.all([
+    prisma.assessmentTemplate.findMany({
+      where: { isActive: true },
+      orderBy: [{ isGlobal: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true, title: true, type: true, difficulty: true,
+        language: true, isGlobal: true, passingScore: true,
+        timeLimit: true, totalQuestions: true, createdAt: true,
+        companyId: true,
+        isBadgeExam: true, badgeLevel: true,
+        badgeTerm: { select: { id: true, label: true } },
+        _count: { select: { questions: true } },
+      },
+    }),
+    prisma.taxonomyTerm.findMany({
+      where: { kind: "SKILL" },
+      orderBy: { label: "asc" },
+      select: { id: true, label: true },
+    }),
+  ]);
 
   // Server Action — toggle isGlobal
   async function toggleGlobalAction(fd: FormData) {
@@ -64,6 +74,46 @@ export default async function AdminTemplatesPage() {
     });
 
     revalidatePath("/dashboard/admin/templates");
+    return { ok: true };
+  }
+
+  // Server Action — marcar/desmarcar template como examen de badge
+  async function setBadgeExamAction(fd: FormData) {
+    "use server";
+    const s = await getServerSession(authOptions);
+    if (!s?.user || (s.user as any)?.role !== "ADMIN") return { error: "Sin permisos" };
+
+    const templateId = String(fd.get("templateId") || "");
+    const remove = fd.get("remove") === "true";
+    const badgeTermId = String(fd.get("badgeTermId") || "");
+    const badgeLevel = parseInt(String(fd.get("badgeLevel") || ""), 10);
+
+    if (!templateId) return { error: "Template inválido" };
+
+    if (remove) {
+      await prisma.assessmentTemplate.update({
+        where: { id: templateId },
+        data: { isBadgeExam: false, badgeTermId: null, badgeLevel: null },
+      });
+    } else {
+      if (!badgeTermId || !Number.isInteger(badgeLevel) || badgeLevel < 1) {
+        return { error: "Skill y nivel requeridos" };
+      }
+      // Solo templates globales pueden ser exámenes de badge
+      const tpl = await prisma.assessmentTemplate.findUnique({
+        where: { id: templateId },
+        select: { isGlobal: true },
+      });
+      if (!tpl?.isGlobal) return { error: "Solo templates globales" };
+
+      await prisma.assessmentTemplate.update({
+        where: { id: templateId },
+        data: { isBadgeExam: true, badgeTermId, badgeLevel },
+      });
+    }
+
+    revalidatePath("/dashboard/admin/templates");
+    revalidatePath("/certificaciones");
     return { ok: true };
   }
 
@@ -120,6 +170,7 @@ export default async function AdminTemplatesPage() {
                   <th className="text-left px-4 py-3 text-xs font-bold uppercase text-zinc-400">Título</th>
                   <th className="text-left px-4 py-3 text-xs font-bold uppercase text-zinc-400">Tipo</th>
                   <th className="text-left px-4 py-3 text-xs font-bold uppercase text-zinc-400">Nivel</th>
+                  <th className="text-left px-4 py-3 text-xs font-bold uppercase text-zinc-400">Badge</th>
                   <th className="text-right px-4 py-3 text-xs font-bold uppercase text-zinc-400">Preguntas</th>
                   <th className="text-right px-4 py-3 text-xs font-bold uppercase text-zinc-400">Acciones</th>
                 </tr>
@@ -134,6 +185,55 @@ export default async function AdminTemplatesPage() {
                         {t.difficulty}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      {t.isBadgeExam && t.badgeTerm ? (
+                        <form action={setBadgeExamAction} className="flex items-center gap-2">
+                          <input type="hidden" name="templateId" value={t.id} />
+                          <input type="hidden" name="remove" value="true" />
+                          <span className="inline-flex items-center gap-1 rounded bg-teal-100 px-2 py-0.5 text-[11px] font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+                            <Award className="h-3 w-3" />
+                            {t.badgeTerm.label} · {badgeLevelLabel(t.badgeLevel ?? 0)}
+                          </span>
+                          <button
+                            type="submit"
+                            className="text-[11px] text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                            title="Quitar badge"
+                          >
+                            Quitar
+                          </button>
+                        </form>
+                      ) : (
+                        <form action={setBadgeExamAction} className="flex items-center gap-1.5">
+                          <input type="hidden" name="templateId" value={t.id} />
+                          <select
+                            name="badgeTermId"
+                            defaultValue=""
+                            className="h-7 max-w-[130px] rounded border border-zinc-200 bg-white px-1.5 text-[11px] text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                          >
+                            <option value="">Skill…</option>
+                            {skillTerms.map((s) => (
+                              <option key={s.id} value={s.id}>{s.label}</option>
+                            ))}
+                          </select>
+                          <select
+                            name="badgeLevel"
+                            defaultValue=""
+                            className="h-7 rounded border border-zinc-200 bg-white px-1.5 text-[11px] text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                          >
+                            <option value="">Nivel…</option>
+                            {BADGE_LEVELS.map((lvl) => (
+                              <option key={lvl} value={lvl}>{badgeLevelLabel(lvl)}</option>
+                            ))}
+                          </select>
+                          <button
+                            type="submit"
+                            className="h-7 rounded bg-teal-600 px-2 text-[11px] font-semibold text-white hover:bg-teal-700"
+                          >
+                            Badge
+                          </button>
+                        </form>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right text-zinc-500">{t._count.questions}</td>
                     <td className="px-4 py-3 text-right">
                       <TemplateActionsClient
@@ -146,7 +246,7 @@ export default async function AdminTemplatesPage() {
                   </tr>
                 ))}
                 {globalTemplates.length === 0 && (
-                  <tr><td colSpan={5} className="px-4 py-6 text-center text-zinc-400 text-sm">Sin templates globales</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-zinc-400 text-sm">Sin templates globales</td></tr>
                 )}
               </tbody>
             </table>
