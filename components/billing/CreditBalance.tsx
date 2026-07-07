@@ -65,7 +65,7 @@ export function CreditBalance({
     return (
       <div className={`inline-flex items-center gap-2 ${className}`}>
         <svg
-          className="w-5 h-5 text-violet-600 dark:text-violet-400"
+          className="w-5 h-5 text-teal-600 dark:text-teal-400"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -87,7 +87,7 @@ export function CreditBalance({
   if (variant === "compact") {
     return (
       <div
-        className={`p-4 rounded-xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200 dark:border-violet-800 ${className}`}
+        className={`p-4 rounded-xl bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 ${className}`}
       >
         <div className="flex items-center justify-between">
           <div>
@@ -100,7 +100,7 @@ export function CreditBalance({
               </p>
             )}
           </div>
-          <p className="text-3xl font-bold text-violet-600 dark:text-violet-400">
+          <p className="text-3xl font-bold text-teal-600 dark:text-teal-400">
             {formatCredits(balance.effectiveBalance)}
           </p>
         </div>
@@ -137,7 +137,7 @@ export function CreditBalance({
         </div>
         <a
           href="/dashboard/billing/credits"
-          className="text-sm font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+          className="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
         >
           Ver historial →
         </a>
@@ -179,7 +179,7 @@ export function CreditBalance({
         </div>
         <div className="h-2 bg-zinc-200 dark:bg-zinc-800 rounded-full overflow-hidden">
           <div
-            className="h-full bg-gradient-to-r from-violet-500 to-purple-500 transition-all duration-500"
+            className="h-full bg-teal-500 transition-all duration-500"
             style={{ width: `${Math.min(percentUsed, 100)}%` }}
           />
         </div>

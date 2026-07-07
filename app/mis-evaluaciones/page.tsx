@@ -233,8 +233,8 @@ export default async function MyAssessmentsPage() {
           <StatCard
             label="Pendientes (obligatorias)"
             value={requiredPendingCount}
-            icon={<ClipboardList className="h-5 w-5 text-violet-600" />}
-            accent="violet"
+            icon={<ClipboardList className="h-5 w-5 text-teal-600" />}
+            accent="teal"
           />
           <StatCard
             label="Total completadas"
@@ -275,7 +275,7 @@ export default async function MyAssessmentsPage() {
                     key={invite.id}
                     className={`
                       p-6 rounded-2xl border glass-card
-                      ${expired ? "border-amber-200 dark:border-amber-500/30" : "border-violet-200 dark:border-violet-500/30"}
+                      ${expired ? "border-amber-200 dark:border-amber-500/30" : "border-teal-200 dark:border-teal-500/30"}
                     `}
                   >
                     <div className="flex items-start justify-between gap-4">
@@ -488,15 +488,15 @@ function StatCard({
   label: string;
   value: number;
   icon: ReactNode;
-  accent?: "emerald" | "blue" | "violet";
+  accent?: "emerald" | "blue" | "teal";
 }) {
   const color =
     accent === "emerald"
       ? "text-emerald-600"
       : accent === "blue"
       ? "text-blue-600"
-      : accent === "violet"
-      ? "text-violet-600"
+      : accent === "teal"
+      ? "text-teal-600"
       : "text-default";
 
   return (

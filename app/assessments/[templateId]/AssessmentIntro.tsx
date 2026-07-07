@@ -73,7 +73,7 @@ export default function AssessmentIntro({ template, onStart }: Props) {
             <p className="text-xs text-muted">Minutos</p>
           </div>
           <div className="p-4 rounded-xl border glass-card text-center">
-            <Award className="h-6 w-6 text-violet-600 mx-auto mb-1" />
+            <Award className="h-6 w-6 text-teal-600 mx-auto mb-1" />
             <p className="text-xl font-bold text-default">{formatPercent(template?.passingScore)}</p>
             <p className="text-xs text-muted">Para aprobar</p>
           </div>

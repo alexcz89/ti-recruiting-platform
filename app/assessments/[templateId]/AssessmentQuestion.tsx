@@ -13,9 +13,9 @@ const CodeEditor = dynamic(() => import('@/components/assessments/CodeEditor'), 
       <div className="text-center">
         <div className="relative mb-4">
           <div className="absolute inset-0 animate-ping">
-            <Loader2 className="mx-auto h-12 w-12 text-violet-500/30" />
+            <Loader2 className="mx-auto h-12 w-12 text-teal-500/30" />
           </div>
-          <Loader2 className="relative mx-auto h-12 w-12 animate-spin text-violet-500" />
+          <Loader2 className="relative mx-auto h-12 w-12 animate-spin text-teal-500" />
         </div>
         <p className="text-sm font-medium text-zinc-700 dark:text-slate-300">
           Cargando editor de código...
@@ -108,7 +108,7 @@ function MarkdownContent({ content }: { content: string }) {
             );
           }
           return (
-            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono text-violet-700 dark:bg-zinc-800 dark:text-violet-400">
+            <code className="rounded bg-zinc-100 px-1.5 py-0.5 text-sm font-mono text-teal-700 dark:bg-zinc-800 dark:text-teal-400">
               {children}
             </code>
           );
@@ -128,7 +128,7 @@ function MarkdownContent({ content }: { content: string }) {
           <li className="leading-relaxed">{children}</li>
         ),
         blockquote: ({ children }) => (
-          <blockquote className="mb-3 border-l-4 border-violet-400 pl-4 italic text-zinc-600 dark:text-slate-400">
+          <blockquote className="mb-3 border-l-4 border-teal-400 pl-4 italic text-zinc-600 dark:text-slate-400">
             {children}
           </blockquote>
         ),

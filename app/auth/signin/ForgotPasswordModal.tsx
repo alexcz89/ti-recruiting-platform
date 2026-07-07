@@ -85,7 +85,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
             </p>
             <button
               onClick={handleClose}
-              className="h-12 w-full rounded-2xl bg-gradient-to-r from-violet-600 to-blue-600 text-sm font-bold text-white shadow-lg shadow-violet-500/30 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/40 dark:from-violet-500 dark:to-blue-500"
+              className="h-12 w-full rounded-2xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700"
             >
               Entendido
             </button>
@@ -114,7 +114,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     {...register("email")}
                     type="email"
                     placeholder="tu@email.com"
-                    className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-4 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-4 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   />
                 </div>
                 {errors.email && (
@@ -143,7 +143,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="group relative h-12 flex-1 overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-blue-600 text-sm font-bold text-white shadow-lg shadow-violet-500/30 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:from-violet-500 dark:to-blue-500"
+                  className="group relative h-12 flex-1 overflow-hidden rounded-2xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <span className="flex items-center justify-center gap-2">
@@ -153,7 +153,6 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                   ) : (
                     <span className="relative z-10">Enviar enlace</span>
                   )}
-                  <div className="absolute inset-0 -z-0 bg-gradient-to-r from-violet-500 to-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
                 </button>
               </div>
             </form>

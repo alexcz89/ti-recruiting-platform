@@ -35,7 +35,7 @@ function Chip({
   className = "",
 }: {
   children: React.ReactNode;
-  tone?: "zinc" | "blue" | "emerald" | "amber" | "violet" | "rose";
+  tone?: "zinc" | "blue" | "emerald" | "amber" | "teal" | "rose";
   outline?: boolean;
   className?: string;
 }) {
@@ -44,7 +44,7 @@ function Chip({
     blue: outline ? "border-blue-300 text-blue-700" : "bg-blue-50 text-blue-700",
     emerald: outline ? "border-emerald-300 text-emerald-700" : "bg-emerald-50 text-emerald-700",
     amber: outline ? "border-amber-300 text-amber-700" : "bg-amber-50 text-amber-700",
-    violet: outline ? "border-violet-300 text-violet-700" : "bg-violet-50 text-violet-700",
+    teal: outline ? "border-teal-300 text-teal-700" : "bg-teal-50 text-teal-700",
     rose: outline ? "border-rose-300 text-rose-700" : "bg-rose-50 text-rose-700",
   };
   return (

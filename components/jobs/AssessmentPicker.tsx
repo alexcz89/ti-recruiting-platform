@@ -65,7 +65,7 @@ export function AssessmentPicker({
   return (
     <div className={className}>
       {/* Header con balance de créditos */}
-      <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-900/20 dark:to-purple-900/20 border border-violet-200 dark:border-violet-800">
+      <div className="mb-6 p-4 rounded-xl bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800">
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
@@ -76,7 +76,7 @@ export function AssessmentPicker({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-bold text-violet-600 dark:text-violet-400">
+            <p className="text-3xl font-bold text-teal-600 dark:text-teal-400">
               {formatCredits(companyCredits)}
             </p>
             <p className="text-xs text-zinc-500">créditos disponibles</p>
@@ -116,7 +116,7 @@ export function AssessmentPicker({
               )}
               <div className="flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 text-xs font-medium">
-                  <span className="w-2 h-2 rounded-full bg-violet-500" />
+                  <span className="w-2 h-2 rounded-full bg-teal-500" />
                   {selectedTemplate.type}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-white dark:bg-zinc-800 text-xs font-medium">
@@ -162,14 +162,14 @@ export function AssessmentPicker({
               placeholder="Buscar evaluaciones..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+              className="w-full px-4 py-2 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
 
           {/* Lista de evaluaciones */}
           {loading ? (
             <div className="text-center py-8 text-zinc-500">
-              <div className="inline-block w-6 h-6 border-2 border-zinc-300 border-t-violet-600 rounded-full animate-spin" />
+              <div className="inline-block w-6 h-6 border-2 border-zinc-300 border-t-teal-600 rounded-full animate-spin" />
               <p className="mt-2 text-sm">Cargando evaluaciones...</p>
             </div>
           ) : filteredTemplates.length === 0 ? (
@@ -195,7 +195,7 @@ export function AssessmentPicker({
                       w-full text-left p-4 rounded-xl border-2 transition-all
                       ${
                         canAfford
-                          ? "border-zinc-200 dark:border-zinc-700 hover:border-violet-300 dark:hover:border-violet-600 hover:shadow-md cursor-pointer"
+                          ? "border-zinc-200 dark:border-zinc-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-md cursor-pointer"
                           : "border-zinc-100 dark:border-zinc-800 opacity-50 cursor-not-allowed"
                       }
                       bg-white dark:bg-zinc-900
@@ -232,7 +232,7 @@ export function AssessmentPicker({
                         </div>
                       </div>
                       <div className="ml-4 text-right flex-shrink-0">
-                        <p className="text-xl font-bold text-violet-600 dark:text-violet-400">
+                        <p className="text-xl font-bold text-teal-600 dark:text-teal-400">
                           {formatCredits(cost.total)}
                         </p>
                         <p className="text-xs text-zinc-500 mb-1">créditos</p>

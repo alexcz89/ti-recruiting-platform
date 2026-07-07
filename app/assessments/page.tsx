@@ -64,7 +64,7 @@ function statusTone(state: UiState) {
     return "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/20 dark:text-sky-200 dark:border-sky-800/60";
   if (state === "EXPIRED" || state === "CANCELLED")
     return "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900/40 dark:text-zinc-300 dark:border-zinc-800";
-  return "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-900/20 dark:text-violet-200 dark:border-violet-800/60";
+  return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-200 dark:border-teal-800/60";
 }
 
 function fmtDate(d: any) {
@@ -301,7 +301,7 @@ export default async function CandidateAssessmentsPage() {
 
         {/* ✅ Banner */}
         {badgeCount > 0 && (
-          <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 dark:border-violet-500/30 dark:bg-violet-900/20">
+          <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-500/30 dark:bg-teal-900/20">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
@@ -318,7 +318,7 @@ export default async function CandidateAssessmentsPage() {
 
               <a
                 href={pendingCount > 0 ? "#pendientes" : "#en-progreso"}
-                className="inline-flex items-center justify-center rounded-full bg-violet-600 px-4 py-2 text-xs font-medium text-white hover:bg-violet-700"
+                className="inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2 text-xs font-medium text-white hover:bg-teal-700"
               >
                 {pendingCount > 0 ? "Ir a pendientes" : "Ir a en progreso"}
               </a>

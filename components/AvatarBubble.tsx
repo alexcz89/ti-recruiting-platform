@@ -5,13 +5,13 @@ type Props = {
   className?: string
   label: string
   emoji: string
-  color?: "cyan" | "emerald" | "violet" | "sky"
+  color?: "cyan" | "emerald" | "teal" | "sky"
 }
 
 const colorMap = {
   cyan:  "bg-cyan-500",
   emerald: "bg-emerald-400",
-  violet: "bg-violet-400",
+  teal: "bg-teal-400",
   sky: "bg-sky-400",
 }
 

@@ -59,10 +59,10 @@ export default function RegisterModal() {
 
               <Link
                 href="/auth/signup/recruiter"
-                className="flex items-center gap-3 rounded-lg border-2 border-border bg-background p-4 transition-all duration-200 hover:border-violet-500/50 hover:bg-violet-500/5"
+                className="flex items-center gap-3 rounded-lg border-2 border-border bg-background p-4 transition-all duration-200 hover:border-teal-500/50 hover:bg-teal-500/5"
               >
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-500/15">
-                  <Briefcase className="h-5 w-5 text-violet-600 dark:text-violet-300" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-teal-500/15">
+                  <Briefcase className="h-5 w-5 text-teal-600 dark:text-teal-300" />
                 </div>
                 <div className="flex-1 text-left">
                   <div className="font-semibold text-foreground">

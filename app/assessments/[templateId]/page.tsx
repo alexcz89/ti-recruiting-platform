@@ -632,10 +632,10 @@ export default function AssessmentPage() {
                     className={[
                       'relative h-9 min-w-[2.25rem] px-3 rounded-lg text-sm font-medium transition-all border-2',
                       isCurrent
-                        ? 'bg-violet-600 border-violet-600 text-white shadow-lg shadow-violet-500/30'
+                        ? 'bg-teal-600 border-teal-600 text-white shadow-lg shadow-teal-500/30'
                         : isSubmitted
                         ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-                        : 'bg-white border-zinc-300 text-zinc-600 hover:border-violet-400 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400',
+                        : 'bg-white border-zinc-300 text-zinc-600 hover:border-teal-400 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400',
                       expired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
                     ].join(' ')}
                   >
@@ -740,7 +740,7 @@ export default function AssessmentPage() {
             <button
               onClick={handlePrevious}
               disabled={currentIndex === 0 || expired}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-700 hover:border-violet-400 hover:text-violet-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-700 hover:border-teal-400 hover:text-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
             >
               ← Anterior
             </button>
@@ -755,7 +755,7 @@ export default function AssessmentPage() {
                     // Si CODING sin enviar → color ámbar para indicar que hay algo pendiente
                     isCodingQuestion && !codingSubmitted[currentQuestion.id]
                       ? "border-amber-400 bg-amber-50 text-amber-700 hover:border-amber-500 dark:border-amber-600/50 dark:bg-amber-900/20 dark:text-amber-300"
-                      : "border-zinc-300 bg-white text-zinc-700 hover:border-violet-400 hover:text-violet-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                      : "border-zinc-300 bg-white text-zinc-700 hover:border-teal-400 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
                   ].join(' ')}
                 >
                   {isCodingQuestion && !codingSubmitted[currentQuestion.id] ? '⚠️ Siguiente →' : 'Siguiente →'}
@@ -767,7 +767,7 @@ export default function AssessmentPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || expired}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-sm font-bold text-white shadow-lg shadow-violet-500/30 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 transition-all"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 hover:bg-teal-700 disabled:opacity-50 transition-colors"
                 >
                   {submitting ? 'Enviando...' : 'Finalizar evaluación ✓'}
                 </button>

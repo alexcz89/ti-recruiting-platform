@@ -169,7 +169,7 @@ export default function AssessmentResultsPage() {
             </div>
 
             <div className="p-3 rounded-xl border glass-card text-center">
-              <Clock className="h-6 w-6 text-violet-600 mx-auto mb-1" />
+              <Clock className="h-6 w-6 text-teal-600 mx-auto mb-1" />
               <p className="text-xl font-bold text-default">
                 {Math.floor((attempt.timeSpent || 0) / 60)}
               </p>
@@ -191,7 +191,7 @@ export default function AssessmentResultsPage() {
             </div>
 
             <div className="p-3 rounded-xl border glass-card text-center">
-              <Clock className="h-6 w-6 text-violet-600 mx-auto mb-1" />
+              <Clock className="h-6 w-6 text-teal-600 mx-auto mb-1" />
               <p className="text-xl font-bold text-default">
                 {Math.floor((attempt.timeSpent || 0) / 60)}
               </p>
@@ -346,7 +346,7 @@ export default function AssessmentResultsPage() {
             <Link
               key={inv.id}
               href={`/assessments/${encodeURIComponent(inv.templateId)}?token=${encodeURIComponent(inv.token)}`}
-              className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-6 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm"
             >
               <span>Iniciar siguiente evaluación: {inv.templateTitle ?? inv.templateId}</span>
               <span>→</span>

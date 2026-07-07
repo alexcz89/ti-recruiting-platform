@@ -149,7 +149,7 @@ function Chip({
   className = "",
 }: {
   children: React.ReactNode;
-  tone?: "zinc" | "blue" | "emerald" | "amber" | "violet";
+  tone?: "zinc" | "blue" | "emerald" | "amber" | "teal";
   outline?: boolean;
   className?: string;
 }) {
@@ -162,15 +162,15 @@ function Chip({
       "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-300/50",
     amber:
       "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-300/50",
-    violet:
-      "bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-300/50",
+    teal:
+      "bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-300/50",
   };
   const outlines: Record<string, string> = {
     zinc: "border-zinc-300 text-zinc-700 dark:text-zinc-300",
     blue: "border-blue-300 text-blue-700 dark:text-blue-300",
     emerald: "border-emerald-300 text-emerald-700 dark:text-emerald-300",
     amber: "border-amber-300 text-amber-700 dark:text-amber-300",
-    violet: "border-violet-300 text-violet-700 dark:text-violet-300",
+    teal: "border-teal-300 text-teal-700 dark:text-teal-300",
   };
   return (
     <span
@@ -715,7 +715,7 @@ export default function JobDetailPanel({
             {(meta?.employmentType || job.employmentType) && (
               <Chip tone="blue">{labelEmploymentType(meta?.employmentType || job.employmentType)}</Chip>
             )}
-            {job.seniority && <Chip tone="violet">{job.seniority}</Chip>}
+            {job.seniority && <Chip tone="teal">{job.seniority}</Chip>}
             <Chip tone="emerald">{job.remote ? "Remoto" : "Presencial / Híbrido"}</Chip>
             {schedule && <Chip tone="amber">{schedule}</Chip>}
             {when && (
@@ -775,12 +775,12 @@ export default function JobDetailPanel({
             {niceSkills.length > 0 && (
               <div>
                 <div className="mb-1 flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-violet-600 dark:text-violet-300" />
+                  <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-300" />
                   <p className="text-sm font-medium text-default">Skills deseables</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {niceSkills.map((s) => (
-                    <Chip key={`nice-${s}`} tone="violet" outline>
+                    <Chip key={`nice-${s}`} tone="teal" outline>
                       {s}
                     </Chip>
                   ))}

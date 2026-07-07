@@ -167,7 +167,7 @@ const WORK_MODES = [
     label: "Híbrido",
     icon: Laptop,
     color:
-      "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-600/40 dark:bg-violet-950/30 dark:text-violet-300",
+      "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-600/40 dark:bg-teal-950/30 dark:text-teal-300",
   },
   {
     key: "seekingOnsite" as const,

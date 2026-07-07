@@ -71,7 +71,7 @@ export default function SignupPage() {
               "Pipeline completo de candidatos",
             ]}
             buttonText="Crear cuenta como reclutador"
-            buttonColor="violet"
+            buttonColor="teal"
             onClick={() => router.push("/auth/signup/recruiter")}
           />
         </div>
@@ -102,7 +102,7 @@ interface RoleCardProps {
   description: string;
   features: string[];
   buttonText: string;
-  buttonColor: "emerald" | "violet";
+  buttonColor: "emerald" | "teal";
   onClick: () => void;
 }
 
@@ -126,14 +126,14 @@ function RoleCard({
       check: "text-emerald-500 dark:text-emerald-400",
       glow: "bg-emerald-500",
     },
-    violet: {
-      iconBg: "bg-violet-100 dark:bg-violet-900/30",
-      iconText: "text-violet-600 dark:text-violet-400",
-      button: "bg-violet-600 hover:bg-violet-700 active:scale-[0.98] text-white",
-      border: "hover:border-violet-300 dark:hover:border-violet-700",
-      tag: "bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-400 border border-violet-100 dark:border-violet-900",
-      check: "text-violet-500 dark:text-violet-400",
-      glow: "bg-violet-500",
+    teal: {
+      iconBg: "bg-teal-100 dark:bg-teal-900/30",
+      iconText: "text-teal-600 dark:text-teal-400",
+      button: "bg-teal-600 hover:bg-teal-700 active:scale-[0.98] text-white",
+      border: "hover:border-teal-300 dark:hover:border-teal-700",
+      tag: "bg-teal-50 dark:bg-teal-950/50 text-teal-700 dark:text-teal-400 border border-teal-100 dark:border-teal-900",
+      check: "text-teal-500 dark:text-teal-400",
+      glow: "bg-teal-500",
     },
   }[buttonColor];
 

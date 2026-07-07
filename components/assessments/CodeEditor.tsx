@@ -29,11 +29,11 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
       <div className="text-center">
         <div className="relative">
           <div className="absolute inset-0 animate-ping">
-            <Code2 className="mx-auto h-12 w-12 text-violet-500/30" />
+            <Code2 className="mx-auto h-12 w-12 text-teal-500/30" />
           </div>
-          <Code2 className="relative mx-auto mb-4 h-12 w-12 text-violet-500" />
+          <Code2 className="relative mx-auto mb-4 h-12 w-12 text-teal-500" />
         </div>
-        <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-violet-500 dark:text-violet-400" />
+        <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-teal-500 dark:text-teal-400" />
         <p className="text-sm font-medium text-gray-700 dark:text-slate-300">
           Cargando editor de código...
         </p>
@@ -123,7 +123,7 @@ function MarkdownContent({ content, isDark }: { content: string; isDark: boolean
             );
           }
           return (
-            <code className="rounded bg-violet-500/10 px-1.5 py-0.5 text-xs font-mono text-violet-700 dark:text-violet-400">
+            <code className="rounded bg-teal-500/10 px-1.5 py-0.5 text-xs font-mono text-teal-700 dark:text-teal-400">
               {children}
             </code>
           );
@@ -143,7 +143,7 @@ function MarkdownContent({ content, isDark }: { content: string; isDark: boolean
           <li className="leading-relaxed">{children}</li>
         ),
         blockquote: ({ children }) => (
-          <blockquote className="mb-2 border-l-4 border-violet-400 pl-3 text-sm italic text-gray-500 dark:text-slate-400">
+          <blockquote className="mb-2 border-l-4 border-teal-400 pl-3 text-sm italic text-gray-500 dark:text-slate-400">
             {children}
           </blockquote>
         ),
@@ -427,8 +427,7 @@ export default function CodeEditor({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="relative">
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 opacity-30 blur-lg"></div>
-                <div className="relative rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 p-3">
+                <div className="relative rounded-xl bg-teal-600 p-3">
                   <Code2 className="h-6 w-6 text-white" />
                 </div>
               </div>
@@ -437,7 +436,7 @@ export default function CodeEditor({
                   Pregunta de Código
                 </h3>
                 <div className="mt-1 flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-sm font-medium text-violet-600 dark:text-violet-400">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-sm font-medium text-teal-600 dark:text-teal-400">
                     <Zap className="h-3.5 w-3.5" />
                     {points} puntos
                   </span>
@@ -467,7 +466,7 @@ export default function CodeEditor({
                   <select
                     value={selectedLanguage}
                     onChange={(e) => setSelectedLanguage(e.target.value)}
-                    className="appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2 pr-10 text-sm font-medium text-gray-900 transition-all hover:border-violet-500/50 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-white"
+                    className="appearance-none rounded-lg border border-gray-300 bg-white px-4 py-2 pr-10 text-sm font-medium text-gray-900 transition-all hover:border-teal-500/50 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-white"
                   >
                     {allowedLanguages.map((lang) => (
                       <option key={lang} value={lang}>
@@ -482,7 +481,7 @@ export default function CodeEditor({
               <div className="relative">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
-                  className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-violet-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
+                  className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                   title="Configuración"
                 >
                   <Settings className="h-4 w-4" />
@@ -502,7 +501,7 @@ export default function CodeEditor({
                             max="24"
                             value={fontSize}
                             onChange={(e) => setFontSize(Number(e.target.value))}
-                            className="h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-violet-500 dark:bg-slate-700"
+                            className="h-2 flex-1 cursor-pointer appearance-none rounded-lg bg-gray-300 accent-teal-500 dark:bg-slate-700"
                           />
                           <span className="w-10 text-right text-sm font-semibold text-gray-900 dark:text-white">
                             {fontSize}px
@@ -516,7 +515,7 @@ export default function CodeEditor({
 
               <button
                 onClick={toggleFullscreen}
-                className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-violet-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
+                className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                 title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
               >
                 {isFullscreen ? (
@@ -541,7 +540,7 @@ export default function CodeEditor({
           >
             Descripción
             {activeTab === 'problem' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-600 to-indigo-600" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
             )}
           </button>
           <button
@@ -563,7 +562,7 @@ export default function CodeEditor({
               </span>
             )}
             {activeTab === 'results' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-600 to-indigo-600" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
             )}
           </button>
           <button
@@ -576,7 +575,7 @@ export default function CodeEditor({
           >
             Probar con mi input
             {activeTab === 'custom' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-600 to-indigo-600" />
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
             )}
           </button>
         </div>
@@ -669,7 +668,7 @@ export default function CodeEditor({
                   </span>
                 )}
                 {activeTab !== 'custom' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-600 to-indigo-600" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
                 )}
               </button>
               <button
@@ -682,7 +681,7 @@ export default function CodeEditor({
               >
                 Probar con mi input
                 {activeTab === 'custom' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-violet-600 to-indigo-600" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
                 )}
               </button>
             </div>
@@ -706,7 +705,7 @@ export default function CodeEditor({
                       onChange={(e) => setCustomInput(e.target.value)}
                       placeholder="// Ej: console.log(solution([1,2,3], 5))"
                       rows={4}
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-violet-500 focus:outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
                   <button
@@ -751,7 +750,7 @@ export default function CodeEditor({
                 <div className="bg-gray-50 p-5 dark:bg-slate-900/20">
                   {!testResults && !error && (
                     <div className="flex flex-col items-center justify-center py-8 text-center">
-                      <Terminal className="mb-3 h-10 w-10 text-violet-500/50 dark:text-violet-400/50" />
+                      <Terminal className="mb-3 h-10 w-10 text-teal-500/50 dark:text-teal-400/50" />
                       <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Sin resultados aún</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
                         Ejecuta los tests para ver los resultados
@@ -900,7 +899,7 @@ export default function CodeEditor({
               <button
                 onClick={handleRunTests}
                 disabled={isRunning || isSubmitting || !code.trim() || solutionSubmitted}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50 dark:bg-slate-800 dark:hover:shadow-violet-500/20"
+                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50 dark:bg-slate-800 dark:hover:shadow-teal-500/20"
               >
                 {isRunning ? (
                   <>
@@ -923,7 +922,7 @@ export default function CodeEditor({
                 </div>
               ) : isSubmitting ? (
                 // ✅ Estado: enviando
-                <div className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-violet-500/30">
+                <div className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-600/20">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Enviando...</span>
                 </div>
@@ -932,7 +931,7 @@ export default function CodeEditor({
                 <button
                   onClick={handleSubmit}
                   disabled={isRunning || isSubmitting || !code.trim()}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-violet-500/30 transition-all hover:scale-105 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-50 disabled:hover:scale-100"
+                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700 disabled:opacity-50"
                 >
                   <Send className="h-4 w-4" />
                   <span>Enviar Solución</span>

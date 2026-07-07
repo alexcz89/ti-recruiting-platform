@@ -139,8 +139,6 @@ export default function SignInUnified({
   return (
     <div className="relative overflow-hidden">
       {/* Fondo decorativo */}
-      <div className="pointer-events-none absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-gradient-to-br from-violet-400/10 to-blue-400/10 blur-3xl dark:from-violet-600/10 dark:to-blue-600/10" />
-      <div className="pointer-events-none absolute -bottom-40 -right-40 h-[600px] w-[600px] rounded-full bg-gradient-to-br from-emerald-400/10 to-teal-400/10 blur-3xl dark:from-emerald-600/10 dark:to-teal-600/10" />
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:32px_32px]" />
 
       <div className="relative grid grid-cols-1 gap-6 lg:grid-cols-2 lg:gap-12">
@@ -155,8 +153,8 @@ export default function SignInUnified({
               </div>
 
               <div className="space-y-4 sm:space-y-5">
-                <div className="group flex items-start gap-4 rounded-3xl border border-violet-200/60 bg-gradient-to-br from-violet-50 to-white p-5 backdrop-blur-sm transition-all hover:border-violet-300 hover:shadow-lg dark:border-violet-900/30 dark:from-violet-950/20 dark:to-zinc-900/50 dark:hover:border-violet-800 sm:gap-5 sm:p-6">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-purple-500 shadow-lg shadow-violet-500/30 transition-transform group-hover:scale-110 sm:h-14 sm:w-14">
+                <div className="group flex items-start gap-4 rounded-3xl border border-teal-200/60 bg-teal-50/60 p-5 transition-colors hover:border-teal-300 dark:border-teal-900/30 dark:bg-teal-950/20 dark:hover:border-teal-800 sm:gap-5 sm:p-6">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-teal-600 shadow-sm sm:h-14 sm:w-14">
                     <Users className="h-6 w-6 text-white sm:h-7 sm:w-7" />
                   </div>
                   <div>
@@ -169,8 +167,8 @@ export default function SignInUnified({
                   </div>
                 </div>
 
-                <div className="group flex items-start gap-4 rounded-3xl border border-emerald-200/60 bg-gradient-to-br from-emerald-50 to-white p-5 backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-lg dark:border-emerald-900/30 dark:from-emerald-950/20 dark:to-zinc-900/50 dark:hover:border-emerald-800 sm:gap-5 sm:p-6">
-                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 shadow-lg shadow-emerald-500/30 transition-transform group-hover:scale-110 sm:h-14 sm:w-14">
+                <div className="group flex items-start gap-4 rounded-3xl border border-emerald-200/60 bg-emerald-50/60 p-5 transition-colors hover:border-emerald-300 dark:border-emerald-900/30 dark:bg-emerald-950/20 dark:hover:border-emerald-800 sm:gap-5 sm:p-6">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-emerald-600 shadow-sm sm:h-14 sm:w-14">
                     <Briefcase className="h-6 w-6 text-white sm:h-7 sm:w-7" />
                   </div>
                   <div>
@@ -197,7 +195,7 @@ export default function SignInUnified({
                 onClick={() => setActiveRole("CANDIDATE")}
                 className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
                   activeRole === "CANDIDATE"
-                    ? "bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-lg shadow-violet-500/30"
+                    ? "bg-teal-600 text-white shadow-sm"
                     : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 }`}
               >
@@ -212,7 +210,7 @@ export default function SignInUnified({
                 onClick={() => setActiveRole("RECRUITER")}
                 className={`rounded-xl px-4 py-2.5 text-sm font-bold transition-all ${
                   activeRole === "RECRUITER"
-                    ? "bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-lg shadow-violet-500/30"
+                    ? "bg-teal-600 text-white shadow-sm"
                     : "text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
                 }`}
               >
@@ -307,7 +305,7 @@ export default function SignInUnified({
                     {...register("email")}
                     type="email"
                     placeholder="tu@email.com"
-                    className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-4 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-4 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   />
                 </div>
                 {errors.email && (
@@ -327,7 +325,7 @@ export default function SignInUnified({
                     {...register("password")}
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-12 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                    className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-12 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                   />
                   <button
                     type="button"
@@ -351,7 +349,7 @@ export default function SignInUnified({
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
-                    className="h-4 w-4 rounded border-2 border-zinc-300 text-violet-600 focus:ring-2 focus:ring-violet-500/20 dark:border-zinc-600 dark:bg-zinc-900"
+                    className="h-4 w-4 rounded border-2 border-zinc-300 text-teal-600 focus:ring-2 focus:ring-teal-500/20 dark:border-zinc-600 dark:bg-zinc-900"
                   />
                   <span className="text-sm font-medium text-zinc-600 group-hover:text-zinc-900 dark:text-zinc-400 dark:group-hover:text-zinc-200">
                     Recordarme
@@ -361,7 +359,7 @@ export default function SignInUnified({
                 <button
                   type="button"
                   onClick={() => setShowForgotPasswordModal(true)}
-                  className="text-sm font-semibold text-violet-600 transition-colors hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+                  className="text-sm font-semibold text-teal-600 transition-colors hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
                 >
                   ¿Olvidaste tu contraseña?
                 </button>
@@ -376,7 +374,7 @@ export default function SignInUnified({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="group relative h-12 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-blue-600 text-sm font-bold text-white shadow-lg shadow-violet-500/30 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:from-violet-500 dark:to-blue-500"
+                className="group relative h-12 w-full overflow-hidden rounded-2xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <span className="relative z-10">
                   {isSubmitting
@@ -385,7 +383,6 @@ export default function SignInUnified({
                     ? "Crear cuenta"
                     : "Iniciar sesión"}
                 </span>
-                <div className="absolute inset-0 -z-0 bg-gradient-to-r from-violet-500 to-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
 
               {!isSignup && activeRole === "CANDIDATE" && (
@@ -393,7 +390,7 @@ export default function SignInUnified({
                   ¿No tienes cuenta?{" "}
                   <Link
                     href={signupHref}
-                    className="font-semibold text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+                    className="font-semibold text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
                   >
                     Regístrate
                   </Link>

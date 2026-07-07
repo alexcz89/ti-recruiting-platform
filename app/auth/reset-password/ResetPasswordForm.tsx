@@ -92,8 +92,6 @@ export default function ResetPasswordForm() {
   return (
     <div className="relative min-h-screen overflow-hidden">
       {/* Decoraciones de fondo */}
-      <div className="pointer-events-none absolute -left-40 -top-40 h-[600px] w-[600px] rounded-full bg-gradient-to-br from-violet-400/10 to-blue-400/10 blur-3xl dark:from-violet-600/10 dark:to-blue-600/10" />
-      <div className="pointer-events-none absolute -bottom-40 -right-40 h-[600px] w-[600px] rounded-full bg-gradient-to-br from-emerald-400/10 to-teal-400/10 blur-3xl dark:from-emerald-600/10 dark:to-teal-600/10" />
 
       {/* Grid pattern */}
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:32px_32px]" />
@@ -102,7 +100,7 @@ export default function ResetPasswordForm() {
         <div className="w-full max-w-md">
           {/* Header */}
           <div className="mb-6 text-center sm:mb-8">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 shadow-xl shadow-violet-500/30">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-600 shadow-lg shadow-teal-600/20">
               <ShieldCheck className="h-7 w-7 text-white" />
             </div>
             <h1 className="text-2xl font-black text-zinc-900 dark:text-zinc-50">
@@ -118,7 +116,7 @@ export default function ResetPasswordForm() {
             {/* Loading State */}
             {pageStatus === "loading" && (
               <div className="text-center">
-                <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-violet-600 dark:text-violet-400" />
+                <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-teal-600 dark:text-teal-400" />
                 <h2 className="mb-2 text-2xl font-black text-zinc-900 dark:text-zinc-50">
                   Verificando enlace...
                 </h2>
@@ -142,7 +140,7 @@ export default function ResetPasswordForm() {
                 </p>
                 <button
                   onClick={() => router.push("/auth/signin")}
-                  className="h-12 w-full rounded-2xl bg-gradient-to-r from-violet-600 to-blue-600 text-sm font-bold text-white shadow-lg shadow-violet-500/30 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/40 dark:from-violet-500 dark:to-blue-500"
+                  className="h-12 w-full rounded-2xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700"
                 >
                   Volver al inicio
                 </button>
@@ -193,7 +191,7 @@ export default function ResetPasswordForm() {
                         {...register("password")}
                         type={showPassword ? "text" : "password"}
                         placeholder="••••••••"
-                        className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-12 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                        className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-12 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                       />
                       <button
                         type="button"
@@ -226,7 +224,7 @@ export default function ResetPasswordForm() {
                         {...register("confirmPassword")}
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="••••••••"
-                        className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-12 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-violet-400"
+                        className="h-12 w-full rounded-2xl border-2 border-zinc-200 bg-white/90 pl-12 pr-12 text-sm text-zinc-900 outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-900/90 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
                       />
                       <button
                         type="button"
@@ -263,7 +261,7 @@ export default function ResetPasswordForm() {
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="group relative h-12 w-full overflow-hidden rounded-2xl bg-gradient-to-r from-violet-600 to-blue-600 text-sm font-bold text-white shadow-lg shadow-violet-500/30 transition-all hover:scale-[1.02] hover:shadow-xl hover:shadow-violet-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 dark:from-violet-500 dark:to-blue-500"
+                    className="group relative h-12 w-full overflow-hidden rounded-2xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <span className="flex items-center justify-center gap-2">
@@ -273,7 +271,6 @@ export default function ResetPasswordForm() {
                     ) : (
                       <span className="relative z-10">Restablecer contraseña</span>
                     )}
-                    <div className="absolute inset-0 -z-0 bg-gradient-to-r from-violet-500 to-blue-500 opacity-0 transition-opacity group-hover:opacity-100" />
                   </button>
                 </form>
               </>
@@ -285,7 +282,7 @@ export default function ResetPasswordForm() {
             <div className="mt-6 text-center">
               <button
                 onClick={() => router.push("/auth/signin")}
-                className="text-sm font-semibold text-violet-600 transition-colors hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300"
+                className="text-sm font-semibold text-teal-600 transition-colors hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
               >
                 ← Volver al inicio de sesión
               </button>

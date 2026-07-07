@@ -186,7 +186,7 @@ export default function RecruiterSignupPage() {
         ? "border-red-300 focus:ring-red-400"
         : isValid
         ? "border-emerald-300 focus:ring-emerald-400"
-        : "border-zinc-300 dark:border-zinc-700 focus:ring-violet-500"
+        : "border-zinc-300 dark:border-zinc-700 focus:ring-teal-500"
     }`;
 
   const passwordStrong =
@@ -224,7 +224,7 @@ export default function RecruiterSignupPage() {
                         isCompleted
                           ? "bg-emerald-600 text-white"
                           : isActive
-                          ? "bg-violet-600 text-white ring-4 ring-violet-100 dark:ring-violet-900/30"
+                          ? "bg-teal-600 text-white ring-4 ring-teal-100 dark:ring-teal-900/30"
                           : "bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-600"
                       }`}
                     >
@@ -239,7 +239,7 @@ export default function RecruiterSignupPage() {
                     <span
                       className={`mt-1.5 text-xs font-medium transition-colors ${
                         isActive
-                          ? "text-violet-600 dark:text-violet-400"
+                          ? "text-teal-600 dark:text-teal-400"
                           : "text-zinc-400 dark:text-zinc-500"
                       }`}
                     >
@@ -252,7 +252,7 @@ export default function RecruiterSignupPage() {
           </div>
           <div className="h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden">
             <div
-              className="h-full bg-violet-600 transition-all duration-500 ease-out"
+              className="h-full bg-teal-600 transition-all duration-500 ease-out"
               style={{ width: `${(currentStep / 3) * 100}%` }}
             />
           </div>
@@ -266,7 +266,7 @@ export default function RecruiterSignupPage() {
             <div className="space-y-3">
               <StepHeader
                 icon={
-                  <svg className="w-5 h-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                   </svg>
                 }
@@ -319,7 +319,7 @@ export default function RecruiterSignupPage() {
             <div className="space-y-3">
               <StepHeader
                 icon={
-                  <svg className="w-5 h-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 }
@@ -447,7 +447,7 @@ export default function RecruiterSignupPage() {
             <div className="space-y-3">
               <StepHeader
                 icon={
-                  <svg className="w-5 h-5 text-violet-600 dark:text-violet-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-teal-600 dark:text-teal-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                   </svg>
                 }
@@ -593,7 +593,7 @@ export default function RecruiterSignupPage() {
                 <button
                   onClick={handleNext}
                   disabled={currentStep === 2 && emailValidation === "checking"}
-                  className="ml-auto flex items-center gap-1.5 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="ml-auto flex items-center gap-1.5 rounded-xl bg-teal-600 px-6 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Siguiente
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -604,7 +604,7 @@ export default function RecruiterSignupPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={loading || !passwordStrong || form.password !== form.confirmPassword}
-                  className="ml-auto flex items-center gap-1.5 rounded-xl bg-violet-600 px-6 py-3 text-sm font-semibold text-white hover:bg-violet-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="ml-auto flex items-center gap-1.5 rounded-xl bg-teal-600 px-6 py-3 text-sm font-semibold text-white hover:bg-teal-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
                     <>
@@ -632,7 +632,7 @@ export default function RecruiterSignupPage() {
           ¿Ya tienes cuenta?{" "}
           <a
             href="/auth/signin?role=RECRUITER"
-            className="font-medium text-violet-600 hover:text-violet-700 dark:text-violet-400"
+            className="font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400"
           >
             Inicia sesión
           </a>
@@ -656,7 +656,7 @@ function StepHeader({
     <div className="mb-3">
       {/* Icono visible solo en mobile — en desktop el stepper da el contexto */}
       <div className="flex flex-col items-center text-center mb-2 sm:hidden">
-        <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-violet-100 dark:bg-violet-900/30 mb-1.5">
+        <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-teal-100 dark:bg-teal-900/30 mb-1.5">
           {icon}
         </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">{subtitle}</p>
