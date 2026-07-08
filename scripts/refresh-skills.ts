@@ -1,45 +1,20 @@
 // scripts/refresh-skills.ts
+// Upsert del catálogo de skills (no destructivo: no borra términos
+// existentes ni pisa aliases curados a mano).
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
-import { ALL_SKILLS } from "@/lib/shared/skills-data"; // 👈 asegurate que la ruta sea correcta
+import { ALL_SKILLS } from "@/lib/shared/skills-data";
+import { upsertTaxonomyTerms } from "./lib/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 async function main() {
-  console.log("🌱 Actualizando SKILLs (idempotente)...");
-  const rows = ALL_SKILLS.map((label) => ({
-    kind: TaxonomyKind.SKILL,
-    slug: slugifyLabel(label),
-    label,
-    aliases: [] as string[],
-  }));
+  console.log("🌱 Actualizando SKILLs (upsert idempotente)...");
+  const catalog = await upsertTaxonomyTerms(prisma, TaxonomyKind.SKILL, ALL_SKILLS);
 
-  for (const row of rows) {
-    await prisma.taxonomyTerm.upsert({
-      where: {
-        kind_slug: {
-          kind: row.kind,
-          slug: row.slug,
-        },
-      },
-      create: row,
-      update: {
-        label: row.label,
-        aliases: row.aliases,
-      },
-    });
-  }
-
-  const count = await prisma.taxonomyTerm.count({ where: { kind: TaxonomyKind.SKILL } });
-  console.log(`✅ Insertados ${count} SKILLs.`);
+  const count = await prisma.taxonomyTerm.count({
+    where: { kind: TaxonomyKind.SKILL },
+  });
+  console.log(`✅ Skills: ${catalog.size} en catálogo, ${count} en BD.`);
 }
 
 main()

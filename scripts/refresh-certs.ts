@@ -1,35 +1,20 @@
 // scripts/refresh-certs.ts
+// Upsert del catálogo de certificaciones (no destructivo: no borra términos
+// existentes ni sus relaciones con candidatos/vacantes/badges).
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { CERTIFICATIONS } from "@/lib/shared/skills-data";
+import { upsertTaxonomyTerms } from "./lib/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 async function main() {
-  console.log("🗑️  Borrando CERTIFICATIONS existentes (kind=CERTIFICATION)...");
-  await prisma.taxonomyTerm.deleteMany({ where: { kind: TaxonomyKind.CERTIFICATION } });
+  console.log("🎓 Actualizando CERTIFICATIONs (upsert idempotente)...");
+  const catalog = await upsertTaxonomyTerms(prisma, TaxonomyKind.CERTIFICATION, CERTIFICATIONS);
 
-  console.log("🌱 Insertando certificaciones del catálogo...");
-  await prisma.taxonomyTerm.createMany({
-    data: CERTIFICATIONS.map((label) => ({
-      kind: TaxonomyKind.CERTIFICATION,
-      slug: slugifyLabel(label),
-      label,
-      aliases: [] as string[],
-    })),
-    skipDuplicates: true,
+  const count = await prisma.taxonomyTerm.count({
+    where: { kind: TaxonomyKind.CERTIFICATION },
   });
-
-  const count = await prisma.taxonomyTerm.count({ where: { kind: TaxonomyKind.CERTIFICATION } });
-  console.log(`✅ Certificaciones insertadas: ${count}`);
+  console.log(`✅ Certificaciones: ${catalog.size} en catálogo, ${count} en BD.`);
 }
 
 main()

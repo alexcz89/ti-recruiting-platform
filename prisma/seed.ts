@@ -17,42 +17,25 @@ import {
 
 import { seedAssessmentTemplates } from "./seeds/assessments";
 import { seedDataAnalyst } from "./seeds/data-analyst";
+import {
+  upsertTaxonomyTerms,
+  cleanUnlistedTerms,
+} from "../scripts/lib/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
-const CLEAN_UNLISTED = true;
-
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+// Los terminos fuera del catalogo (p.ej. creados en runtime por candidatos via
+// ensureTerm) solo se borran si NO tienen referencias. Borrar los que estan en
+// uso requiere `npm run seed -- --force-delete` (cascada destructiva sobre
+// CandidateSkill/Language/Credential, JobRequiredSkill y CandidateBadge).
+const FORCE_DELETE_UNLISTED = process.argv.includes("--force-delete");
 
 async function seedTaxonomy(kind: TaxonomyKind, labels: readonly string[]) {
-  const rows = labels.map((label) => ({
-    kind,
-    slug: slugifyLabel(label),
-    label,
-    aliases: [] as string[],
-  }));
+  const catalog = await upsertTaxonomyTerms(prisma, kind, labels);
 
-  await prisma.taxonomyTerm.createMany({
-    data: rows,
-    skipDuplicates: true,
+  await cleanUnlistedTerms(prisma, kind, new Set(catalog.keys()), {
+    forceDelete: FORCE_DELETE_UNLISTED,
   });
-
-  if (CLEAN_UNLISTED) {
-    const allowedSlugs = new Set(rows.map((r) => r.slug));
-    await prisma.taxonomyTerm.deleteMany({
-      where: {
-        kind,
-        slug: { notIn: Array.from(allowedSlugs) },
-      },
-    });
-  }
 
   const final = await prisma.taxonomyTerm.findMany({
     where: { kind },

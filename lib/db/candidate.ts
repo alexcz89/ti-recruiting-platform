@@ -1,6 +1,7 @@
 // lib/db/candidate.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import type { ResumePayload } from "@/types/resume";
+import { slugifyTaxonomyLabel as slugify } from "@/lib/shared/slugify-taxonomy";
 
 export async function upsertCandidateResume(
   prisma: PrismaClient,
@@ -240,15 +241,3 @@ export async function upsertCandidateResume(
   });
 }
 
-// ─────────────────────────────────────────────
-// util básico para slug
-// ─────────────────────────────────────────────
-function slugify(s: string) {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
-}
