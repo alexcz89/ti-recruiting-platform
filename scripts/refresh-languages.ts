@@ -1,35 +1,20 @@
 // scripts/refresh-languages.ts
+// Upsert del catálogo de idiomas (no destructivo: no borra términos
+// existentes ni sus relaciones con candidatos).
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
-import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data"; // asegúrate que el alias @ funcione en tu tsconfig
+import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
+import { upsertTaxonomyTerms } from "./lib/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 async function main() {
-  console.log("🗑️  Borrando LANGUAGES existentes (kind=LANGUAGE)...");
-  await prisma.taxonomyTerm.deleteMany({ where: { kind: TaxonomyKind.LANGUAGE } });
+  console.log("🗣️  Actualizando LANGUAGEs (upsert idempotente)...");
+  const catalog = await upsertTaxonomyTerms(prisma, TaxonomyKind.LANGUAGE, LANGUAGES_FALLBACK);
 
-  console.log("🌱 Insertando idiomas del catálogo (LANGUAGES_FALLBACK)...");
-  await prisma.taxonomyTerm.createMany({
-    data: LANGUAGES_FALLBACK.map((label) => ({
-      kind: TaxonomyKind.LANGUAGE,
-      slug: slugifyLabel(label),
-      label,
-      aliases: [] as string[],
-    })),
-    skipDuplicates: true,
+  const count = await prisma.taxonomyTerm.count({
+    where: { kind: TaxonomyKind.LANGUAGE },
   });
-
-  const count = await prisma.taxonomyTerm.count({ where: { kind: TaxonomyKind.LANGUAGE } });
-  console.log(`✅ Idiomas insertados: ${count}`);
+  console.log(`✅ Idiomas: ${catalog.size} en catálogo, ${count} en BD.`);
 }
 
 main()

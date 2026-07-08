@@ -232,7 +232,8 @@ import { prisma } from "@/lib/server/prisma";
 To update taxonomies:
 1. Edit `lib/skills.ts`
 2. Run `npm run seed` or `npm run refresh:taxonomies`
-3. Scripts upsert terms and optionally delete unlisted ones (controlled by `CLEAN_UNLISTED` flag)
+3. Scripts upsert terms by `[kind, slug]` (shared slugifier in `lib/shared/slugify-taxonomy.ts`, helpers in `scripts/lib/taxonomy-refresh.ts`) — they never mass-delete, since candidate/job/badge relations cascade from `TaxonomyTerm`
+4. Unlisted terms (e.g. created at runtime via `ensureTerm`) are only deleted when they have zero references; deleting in-use terms requires an explicit `--force-delete` flag (prints a report of the rows that would be lost). `refresh:taxonomies` also accepts `--clean` for reference-free cleanup only
 
 ### Job Wizard
 

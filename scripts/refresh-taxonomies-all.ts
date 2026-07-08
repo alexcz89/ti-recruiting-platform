@@ -1,39 +1,32 @@
 // scripts/refresh-taxonomies-all.ts
+//
+// Refresca SKILL, LANGUAGE y CERTIFICATION vía upsert (no destructivo).
+//
+// Flags:
+//   --clean         además borra términos fuera del catálogo SIN referencias
+//   --force-delete  implica --clean y también borra términos EN USO
+//                   (destruye en cascada skills/idiomas/certs de candidatos,
+//                   requisitos de vacantes y badges — imprime reporte antes)
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { ALL_SKILLS, LANGUAGES_FALLBACK, CERTIFICATIONS } from "@/lib/shared/skills-data";
+import { upsertTaxonomyTerms, cleanUnlistedTerms } from "./lib/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+const args = process.argv.slice(2);
+const forceDelete = args.includes("--force-delete");
+const clean = forceDelete || args.includes("--clean");
 
-async function refresh(
-  kind: TaxonomyKind,
-  labels: readonly string[],
-  emoji: string
-) {
-  console.log(`${emoji}  Borrando ${TaxonomyKind[kind]} existentes...`);
-  await prisma.taxonomyTerm.deleteMany({ where: { kind } });
+async function refresh(kind: TaxonomyKind, labels: readonly string[], emoji: string) {
+  console.log(`${emoji}  Upsert de ${kind}...`);
+  const catalog = await upsertTaxonomyTerms(prisma, kind, labels);
 
-  console.log(`🌱 Insertando ${TaxonomyKind[kind]}...`);
-  await prisma.taxonomyTerm.createMany({
-    data: labels.map((label) => ({
-      kind,
-      slug: slugifyLabel(label),
-      label,
-      aliases: [] as string[],
-    })),
-    skipDuplicates: true,
-  });
+  if (clean) {
+    await cleanUnlistedTerms(prisma, kind, new Set(catalog.keys()), { forceDelete });
+  }
 
   const count = await prisma.taxonomyTerm.count({ where: { kind } });
-  console.log(`✅ ${TaxonomyKind[kind]} insertados: ${count}`);
+  console.log(`✅ ${kind}: ${catalog.size} en catálogo, ${count} en BD.`);
 }
 
 async function main() {
