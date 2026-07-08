@@ -2,22 +2,15 @@
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { ALL_SKILLS } from "@/lib/shared/skills-data"; // 👈 asegurate que la ruta sea correcta
 
-const prisma = new PrismaClient();
+import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
 
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+const prisma = new PrismaClient();
 
 async function main() {
   console.log("🌱 Actualizando SKILLs (idempotente)...");
   const rows = ALL_SKILLS.map((label) => ({
     kind: TaxonomyKind.SKILL,
-    slug: slugifyLabel(label),
+    slug: slugifyTaxonomyLabel(label),
     label,
     aliases: [] as string[],
   }));

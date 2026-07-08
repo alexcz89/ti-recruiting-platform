@@ -10,6 +10,7 @@ import {
   EducationLevel,
   Prisma,
 } from "@prisma/client";
+import { slugifyTaxonomyLabel as slugify } from "@/lib/shared/slugify-taxonomy";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -24,14 +25,6 @@ function jsonNoStore(body: unknown, status = 200) {
 /* =======================
  * Helpers
  * ======================= */
-function slugify(s: string) {
-  return s
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
-}
 
 function parseDate(d?: string | null) {
   if (!d) return null;

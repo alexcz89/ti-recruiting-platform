@@ -2,16 +2,9 @@
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data"; // asegúrate que el alias @ funcione en tu tsconfig
 
-const prisma = new PrismaClient();
+import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
 
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+const prisma = new PrismaClient();
 
 async function main() {
   console.log("🗑️  Borrando LANGUAGES existentes (kind=LANGUAGE)...");
@@ -21,7 +14,7 @@ async function main() {
   await prisma.taxonomyTerm.createMany({
     data: LANGUAGES_FALLBACK.map((label) => ({
       kind: TaxonomyKind.LANGUAGE,
-      slug: slugifyLabel(label),
+      slug: slugifyTaxonomyLabel(label),
       label,
       aliases: [] as string[],
     })),

@@ -1,6 +1,7 @@
 // lib/db/candidate.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import type { ResumePayload } from "@/types/resume";
+import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
 
 export async function upsertCandidateResume(
   prisma: PrismaClient,
@@ -139,7 +140,7 @@ export async function upsertCandidateResume(
     // Helpers para TaxonomyTerm
     // ─────────────────────────────────────────────
     async function ensureTerm(kind: TaxonomyKind, label: string) {
-      const slug = slugify(label);
+      const slug = slugifyTaxonomyLabel(label);
       const existing = await tx.taxonomyTerm.findFirst({
         where: { kind, slug },
         select: { id: true },
@@ -238,17 +239,4 @@ export async function upsertCandidateResume(
 
     return { ok: true };
   });
-}
-
-// ─────────────────────────────────────────────
-// util básico para slug
-// ─────────────────────────────────────────────
-function slugify(s: string) {
-  return s
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
 }

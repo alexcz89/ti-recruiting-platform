@@ -17,24 +17,16 @@ import {
 
 import { seedAssessmentTemplates } from "./seeds/assessments";
 import { seedDataAnalyst } from "./seeds/data-analyst";
+import { slugifyTaxonomyLabel } from "../lib/shared/slugify-taxonomy";
 
 const prisma = new PrismaClient();
 
 const CLEAN_UNLISTED = true;
 
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
 async function seedTaxonomy(kind: TaxonomyKind, labels: readonly string[]) {
   const rows = labels.map((label) => ({
     kind,
-    slug: slugifyLabel(label),
+    slug: slugifyTaxonomyLabel(label),
     label,
     aliases: [] as string[],
   }));

@@ -6,6 +6,7 @@ import { prisma } from '@/lib/server/prisma';
 import { revalidatePath } from "next/cache";
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/server/skills";
 import { fromNow } from "@/lib/dates";
+import { slugifyTaxonomyLabel as slugify } from "@/lib/shared/slugify-taxonomy";
 import {
   SkillsFormClient,
   CertsFormClient,
@@ -29,14 +30,6 @@ function listToTextarea(items?: string[] | null): string {
   return (items ?? []).join("\n");
 }
 
-function slugify(label: string): string {
-  return label
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "");
-}
 
 export default async function TaxonomyAdminPage() {
   const session = await getServerSession(authOptions);

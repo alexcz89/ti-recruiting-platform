@@ -189,7 +189,7 @@ export const DEVOPS_TOOLS = [
   
   // ── GitOps & SCM
   "Git","GitHub","GitLab","Bitbucket","Azure Repos","Gitea","Gogs",
-  "ArgoCD","Flux","Fleet","Weave GitOps",
+  "Flux","Fleet","Weave GitOps",
   
   // ── Platform Engineering
   "Backstage","Port","Kratix","Crossplane","KubeVela","Score",

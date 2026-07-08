@@ -10,6 +10,7 @@ import {
   type OnboardingCandidateStep2Input,
   type OnboardingCandidateStep3Input,
 } from "@/lib/shared/validation/candidate/onboarding";
+import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
 
 async function requireCandidate() {
   const session = await getServerSession(authOptions);
@@ -19,12 +20,8 @@ async function requireCandidate() {
   return { userId: user.id as string };
 }
 
-function toSlug(str: string) {
-  return str.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-}
-
 async function findOrCreateTerm(kind: "SKILL" | "CERTIFICATION", label: string) {
-  const slug = toSlug(label);
+  const slug = slugifyTaxonomyLabel(label);
   const existing = await prisma.taxonomyTerm.findUnique({
     where: { kind_slug: { kind, slug } },
     select: { id: true },

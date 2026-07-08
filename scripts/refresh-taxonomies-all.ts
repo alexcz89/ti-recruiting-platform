@@ -1,17 +1,9 @@
 // scripts/refresh-taxonomies-all.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { ALL_SKILLS, LANGUAGES_FALLBACK, CERTIFICATIONS } from "@/lib/shared/skills-data";
+import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
 
 const prisma = new PrismaClient();
-
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 async function refresh(
   kind: TaxonomyKind,
@@ -25,7 +17,7 @@ async function refresh(
   await prisma.taxonomyTerm.createMany({
     data: labels.map((label) => ({
       kind,
-      slug: slugifyLabel(label),
+      slug: slugifyTaxonomyLabel(label),
       label,
       aliases: [] as string[],
     })),

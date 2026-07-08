@@ -1,17 +1,9 @@
 // scripts/refresh-certs.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { CERTIFICATIONS } from "@/lib/shared/skills-data";
+import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
 
 const prisma = new PrismaClient();
-
-function slugifyLabel(s: string) {
-  return s
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 async function main() {
   console.log("🗑️  Borrando CERTIFICATIONS existentes (kind=CERTIFICATION)...");
@@ -21,7 +13,7 @@ async function main() {
   await prisma.taxonomyTerm.createMany({
     data: CERTIFICATIONS.map((label) => ({
       kind: TaxonomyKind.CERTIFICATION,
-      slug: slugifyLabel(label),
+      slug: slugifyTaxonomyLabel(label),
       label,
       aliases: [] as string[],
     })),

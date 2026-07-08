@@ -4,18 +4,11 @@ import { Prisma, TaxonomyKind, LanguageProficiency, EducationLevel } from "@pris
 import { getServerSession } from "next-auth"
 import { authOptions } from '@/lib/server/auth'
 import { prisma } from '@/lib/server/prisma'
+import { slugifyTaxonomyLabel as slugify } from "@/lib/shared/slugify-taxonomy"
 
 // ------------------------------
 // Helpers
 // ------------------------------
-function slugify(s: string) {
-  return s
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)+/g, "")
-}
 
 function parseDate(d?: string | null) {
   if (!d) return null
