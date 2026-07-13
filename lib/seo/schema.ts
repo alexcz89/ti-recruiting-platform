@@ -123,6 +123,7 @@ export function generateOrganizationSchema() {
     "logo": `${APP_URL}/logo.png`,
     "image": `${APP_URL}/og-image.png`,
     "sameAs": [
+      "https://www.linkedin.com/company/112884683/",
       "https://twitter.com/taskio_mx",
       "https://www.facebook.com/taskio.mx",
     ],
