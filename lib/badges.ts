@@ -37,12 +37,14 @@ export function buildLinkedInCertificationUrl({
   slug,
   earnedAt,
   appUrl,
+  organizationId,
 }: {
   skill: string;
   level: number;
   slug: string;
   earnedAt: Date | string;
   appUrl: string;
+  organizationId?: string | null;
 }): string {
   const issuedAt = new Date(earnedAt);
   const expiresAt = badgeExpiresAt(issuedAt);
@@ -53,7 +55,6 @@ export function buildLinkedInCertificationUrl({
   const params = new URLSearchParams({
     startTask: "CERTIFICATION_NAME",
     name: `Certificación TaskIO en ${skill} - ${badgeLevelLabel(level)}`,
-    organizationName: "TaskIO",
     issueYear: String(issuedAt.getUTCFullYear()),
     issueMonth: String(issuedAt.getUTCMonth() + 1),
     expirationYear: String(expiresAt.getUTCFullYear()),
@@ -61,6 +62,13 @@ export function buildLinkedInCertificationUrl({
     certId: badgeCredentialId(slug),
     certUrl: credentialUrl,
   });
+  const normalizedOrganizationId = organizationId?.trim();
+
+  if (normalizedOrganizationId && /^\d+$/.test(normalizedOrganizationId)) {
+    params.set("organizationId", normalizedOrganizationId);
+  } else {
+    params.set("organizationName", "TaskIO");
+  }
 
   return "https://www.linkedin.com/profile/add?" + params.toString();
 }

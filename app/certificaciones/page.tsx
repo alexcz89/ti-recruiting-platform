@@ -177,6 +177,7 @@ export default async function CertificacionesPage() {
         slug: latestPublicBadge.slug,
         earnedAt: latestPublicBadge.earnedAt,
         appUrl,
+        organizationId: process.env.LINKEDIN_ORGANIZATION_ID,
       })
     : null;
 
@@ -387,8 +388,8 @@ export default async function CertificacionesPage() {
                         Presume tu badge de {latestPublicBadge.term.label}
                       </p>
                       <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                        LinkedIn abrirá el formulario con los datos de la
-                        credencial precargados.
+                        Tus datos ya están precargados. Solo revisa la
+                        información antes de guardar.
                       </p>
                       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                         <a
@@ -406,6 +407,13 @@ export default async function CertificacionesPage() {
                           Ver credencial
                         </Link>
                       </div>
+                      <p className="mt-3 text-[11px] text-zinc-600 dark:text-zinc-400">
+                        Paso final: en LinkedIn agrega la aptitud{" "}
+                        <strong className="font-semibold text-zinc-800 dark:text-zinc-200">
+                          {latestPublicBadge.term.label}
+                        </strong>{" "}
+                        y pulsa Guardar.
+                      </p>
                       <a
                         href={
                           "https://www.linkedin.com/sharing/share-offsite/?url=" +
