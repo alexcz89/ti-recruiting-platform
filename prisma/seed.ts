@@ -17,17 +17,24 @@ import {
 
 import { seedAssessmentTemplates } from "./seeds/assessments";
 import { seedDataAnalyst } from "./seeds/data-analyst";
-import { refreshTaxonomyKind } from "../lib/db/taxonomy-refresh";
+import {
+  upsertTaxonomyTerms,
+  cleanUnlistedTerms,
+} from "../scripts/lib/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
-// Solo borra términos fuera de catálogo SIN relaciones (los que tienen
-// candidateSkills, badges, vacantes, etc. se conservan siempre).
-const CLEAN_UNLISTED = true;
+// Los terminos fuera del catalogo (p.ej. creados en runtime por candidatos via
+// ensureTerm) solo se borran si NO tienen referencias. Borrar los que estan en
+// uso requiere `npm run seed -- --force-delete` (cascada destructiva sobre
+// CandidateSkill/Language/Credential, JobRequiredSkill y CandidateBadge).
+const FORCE_DELETE_UNLISTED = process.argv.includes("--force-delete");
 
 async function seedTaxonomy(kind: TaxonomyKind, labels: readonly string[]) {
-  await refreshTaxonomyKind(prisma, kind, labels, {
-    cleanUnlisted: CLEAN_UNLISTED,
+  const catalog = await upsertTaxonomyTerms(prisma, kind, labels);
+
+  await cleanUnlistedTerms(prisma, kind, new Set(catalog.keys()), {
+    forceDelete: FORCE_DELETE_UNLISTED,
   });
 
   const final = await prisma.taxonomyTerm.findMany({

@@ -1,19 +1,20 @@
 // scripts/refresh-languages.ts
+// Upsert del catálogo de idiomas (no destructivo: no borra términos
+// existentes ni sus relaciones con candidatos).
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
-import { refreshTaxonomyKind } from "@/lib/db/taxonomy-refresh";
+import { upsertTaxonomyTerms } from "./lib/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 Sincronizando LANGUAGEs con el catálogo (upsert, no destructivo)...");
-  const result = await refreshTaxonomyKind(
-    prisma,
-    TaxonomyKind.LANGUAGE,
-    LANGUAGES_FALLBACK,
-    { cleanUnlisted: true }
-  );
-  console.log(`✅ Idiomas en DB: ${result.total}`);
+  console.log("🗣️  Actualizando LANGUAGEs (upsert idempotente)...");
+  const catalog = await upsertTaxonomyTerms(prisma, TaxonomyKind.LANGUAGE, LANGUAGES_FALLBACK);
+
+  const count = await prisma.taxonomyTerm.count({
+    where: { kind: TaxonomyKind.LANGUAGE },
+  });
+  console.log(`✅ Idiomas: ${catalog.size} en catálogo, ${count} en BD.`);
 }
 
 main()
