@@ -12,6 +12,7 @@ import {
   BADGE_LEVELS,
   BADGE_RETRY_COOLDOWN_DAYS,
   BADGE_VALIDITY_MONTHS,
+  buildLinkedInCertificationUrl,
   isBadgeCurrent,
 } from "@/lib/badges";
 import { BadgeMedal } from "@/components/badges/BadgeMedal";
@@ -169,6 +170,15 @@ export default async function CertificacionesPage() {
     explore.find((s) => s.examsByLevel.has(1)) ??
     null;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
+  const linkedInCertificationUrl = latestPublicBadge
+    ? buildLinkedInCertificationUrl({
+        skill: latestPublicBadge.term.label,
+        level: latestPublicBadge.level,
+        slug: latestPublicBadge.slug,
+        earnedAt: latestPublicBadge.earnedAt,
+        appUrl,
+      })
+    : null;
 
   // ── Sub-render: filas de niveles de un skill (compartido entre vistas) ──
   const levelRows = (skill: SkillGroup, compactEarned = false) => {
@@ -365,7 +375,7 @@ export default async function CertificacionesPage() {
                   })}
 
                   {/* Card lateral: compartir el logro o siguiente reto */}
-                  {latestPublicBadge ? (
+                  {latestPublicBadge && linkedInCertificationUrl ? (
                     <div className="flex flex-col items-center justify-center rounded-xl border border-teal-200 bg-teal-50/50 p-6 text-center dark:border-teal-800/50 dark:bg-teal-950/20">
                       <BadgeMedal
                         skill={latestPublicBadge.term.label}
@@ -377,12 +387,12 @@ export default async function CertificacionesPage() {
                         Presume tu badge de {latestPublicBadge.term.label}
                       </p>
                       <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                        Añádelo a tu perfil y deja que los reclutadores puedan
-                        verificarlo.
+                        LinkedIn abrirá el formulario con los datos de la
+                        credencial precargados.
                       </p>
                       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                         <a
-                          href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME"
+                          href={linkedInCertificationUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex min-h-[40px] items-center rounded-lg bg-[#0a66c2] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"

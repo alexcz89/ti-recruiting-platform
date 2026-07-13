@@ -26,6 +26,45 @@ export function badgeExpiresAt(earnedAt: Date | string): Date {
   return expiresAt;
 }
 
+export function badgeCredentialId(slug: string): string {
+  const normalized = slug.replace(/[^a-zA-Z0-9]/g, "").slice(-12);
+  return "TASKIO-" + normalized.toUpperCase();
+}
+
+export function buildLinkedInCertificationUrl({
+  skill,
+  level,
+  slug,
+  earnedAt,
+  appUrl,
+}: {
+  skill: string;
+  level: number;
+  slug: string;
+  earnedAt: Date | string;
+  appUrl: string;
+}): string {
+  const issuedAt = new Date(earnedAt);
+  const expiresAt = badgeExpiresAt(issuedAt);
+  const credentialUrl = new URL(
+    "/badge/" + encodeURIComponent(slug),
+    appUrl
+  ).toString();
+  const params = new URLSearchParams({
+    startTask: "CERTIFICATION_NAME",
+    name: `Certificación TaskIO en ${skill} - ${badgeLevelLabel(level)}`,
+    organizationName: "TaskIO",
+    issueYear: String(issuedAt.getUTCFullYear()),
+    issueMonth: String(issuedAt.getUTCMonth() + 1),
+    expirationYear: String(expiresAt.getUTCFullYear()),
+    expirationMonth: String(expiresAt.getUTCMonth() + 1),
+    certId: badgeCredentialId(slug),
+    certUrl: credentialUrl,
+  });
+
+  return "https://www.linkedin.com/profile/add?" + params.toString();
+}
+
 export function badgeValidityCutoff(now: Date = new Date()): Date {
   const cutoff = new Date(now);
   cutoff.setUTCMonth(cutoff.getUTCMonth() - BADGE_VALIDITY_MONTHS);

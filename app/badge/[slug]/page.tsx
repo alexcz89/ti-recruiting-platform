@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/server/prisma";
 import {
+  badgeCredentialId,
   badgeExpiresAt,
   badgeLevelLabel,
   badgeLogoSrc,
@@ -80,10 +81,6 @@ function extractSkillAreas(sections: unknown): string[] {
   return [...new Set(areas)].slice(0, 6);
 }
 
-function credentialId(slug: string): string {
-  const normalized = slug.replace(/[^a-zA-Z0-9]/g, "").slice(-12);
-  return "TASKIO-" + normalized.toUpperCase();
-}
 
 export async function generateMetadata({
   params,
@@ -230,7 +227,7 @@ export default async function PublicBadgePage({
                     ID de credencial
                   </dt>
                   <dd className="mt-0.5 break-all font-mono font-medium text-zinc-900 dark:text-zinc-100">
-                    {credentialId(badge.slug)}
+                    {badgeCredentialId(badge.slug)}
                   </dd>
                 </div>
                 <div>
