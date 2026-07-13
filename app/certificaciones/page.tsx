@@ -57,7 +57,14 @@ export default async function CertificacionesPage() {
     isCandidate && user?.id
       ? prisma.candidateBadge.findMany({
           where: { candidateId: user.id },
-          select: { termId: true, level: true },
+          orderBy: { earnedAt: "desc" },
+          select: {
+            termId: true,
+            level: true,
+            slug: true,
+            isPublic: true,
+            term: { select: { label: true, slug: true } },
+          },
         })
       : Promise.resolve([]),
     isCandidate && user?.id
@@ -110,8 +117,26 @@ export default async function CertificacionesPage() {
     }
     bySkill.get(key)!.examsByLevel.set(exam.badgeLevel, exam);
   }
-  const allSkills = [...bySkill.values()].sort((a, b) =>
-    a.label.localeCompare(b.label)
+  // Orden por demanda de vacantes TI, no alfabético
+  const DEMAND_ORDER = [
+    "javascript",
+    "python",
+    "react",
+    "typescript",
+    "java",
+    "sql",
+    "nodejs",
+    "node-js",
+    "git",
+  ];
+  const demandIndex = (slug: string) => {
+    const i = DEMAND_ORDER.indexOf(slug);
+    return i === -1 ? DEMAND_ORDER.length : i;
+  };
+  const allSkills = [...bySkill.values()].sort(
+    (a, b) =>
+      demandIndex(a.slug) - demandIndex(b.slug) ||
+      a.label.localeCompare(b.label)
   );
 
   const highestEarnedOf = (termId: string) => {
@@ -130,6 +155,14 @@ export default async function CertificacionesPage() {
   const explore = allSkills.filter((s) => !forYouIds.has(s.termId));
 
   const totalEarned = myBadges.length;
+
+  // Card lateral: compartir el badge más reciente, o sugerir el siguiente reto
+  const latestPublicBadge = myBadges.find((b) => b.isPublic) ?? null;
+  const nextChallenge =
+    forYou.find((s) => highestEarnedOf(s.termId) === 0) ??
+    explore.find((s) => s.examsByLevel.has(1)) ??
+    null;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
 
   // ── Sub-render: filas de niveles de un skill (compartido entre vistas) ──
   const levelRows = (skill: SkillGroup) => (
@@ -234,12 +267,16 @@ export default async function CertificacionesPage() {
           </div>
 
           {isCandidate ? (
-            <div className="flex shrink-0 items-center gap-2 rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-2.5 dark:border-teal-800/50 dark:bg-teal-950/20">
+            <Link
+              href="/profile/summary#skills"
+              title="Ver mis badges en el perfil"
+              className="flex min-h-[44px] shrink-0 items-center gap-2 rounded-xl border border-teal-200 bg-teal-50/60 px-4 py-2.5 transition-colors hover:bg-teal-100/60 dark:border-teal-800/50 dark:bg-teal-950/20 dark:hover:bg-teal-900/30"
+            >
               <Award className="h-4 w-4 text-teal-600 dark:text-teal-400" />
               <span className="text-sm font-semibold text-teal-800 dark:text-teal-200">
                 {totalEarned} {totalEarned === 1 ? "badge obtenido" : "badges obtenidos"}
               </span>
-            </div>
+            </Link>
           ) : (
             <Link
               href="/auth/signup"
@@ -306,6 +343,64 @@ export default async function CertificacionesPage() {
                       </div>
                     );
                   })}
+
+                  {/* Card lateral: compartir el logro o siguiente reto */}
+                  {latestPublicBadge ? (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-teal-200 bg-teal-50/50 p-6 text-center dark:border-teal-800/50 dark:bg-teal-950/20">
+                      <BadgeMedal
+                        skill={latestPublicBadge.term.label}
+                        level={latestPublicBadge.level}
+                        size={96}
+                        logoSrc={badgeLogoSrc(latestPublicBadge.term.slug)}
+                      />
+                      <p className="mt-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        Presume tu badge de {latestPublicBadge.term.label}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                        Compártelo en LinkedIn y deja que los reclutadores te
+                        encuentren.
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                        <a
+                          href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${appUrl}/badge/${latestPublicBadge.slug}`)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex min-h-[40px] items-center rounded-lg bg-[#0a66c2] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                        >
+                          Compartir en LinkedIn
+                        </a>
+                        <Link
+                          href={`/badge/${latestPublicBadge.slug}`}
+                          className="inline-flex min-h-[40px] items-center rounded-lg border border-teal-300 px-4 py-2 text-xs font-semibold text-teal-700 transition-colors hover:bg-teal-100/60 dark:border-teal-700 dark:text-teal-300 dark:hover:bg-teal-900/30"
+                        >
+                          Ver página pública
+                        </Link>
+                      </div>
+                    </div>
+                  ) : nextChallenge ? (
+                    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+                      <BadgeMedal
+                        skill={nextChallenge.label}
+                        level={1}
+                        state="available"
+                        size={96}
+                        logoSrc={badgeLogoSrc(nextChallenge.slug)}
+                      />
+                      <p className="mt-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        Tu siguiente reto: {nextChallenge.label}
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                        Gana tu primer badge y destaca ante los reclutadores.
+                      </p>
+                      {nextChallenge.examsByLevel.get(1) && isCandidate && (
+                        <div className="mt-4">
+                          <StartBadgeExamButton
+                            templateId={nextChallenge.examsByLevel.get(1)!.id}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
               </section>
             )}
@@ -338,6 +433,7 @@ export default async function CertificacionesPage() {
                             state={highest > 0 ? "earned" : "available"}
                             size={40}
                             logoSrc={badgeLogoSrc(skill.slug)}
+                            variant="compact"
                           />
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
@@ -354,7 +450,7 @@ export default async function CertificacionesPage() {
                           <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-open:rotate-180" />
                         </summary>
                         <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
-                          {levelRows(skill)}
+                          <div className="max-w-xl">{levelRows(skill)}</div>
                         </div>
                       </details>
                     );

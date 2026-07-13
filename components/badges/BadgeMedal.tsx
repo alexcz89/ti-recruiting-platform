@@ -30,6 +30,7 @@ export function BadgeMedal({
   state = "earned",
   size = 140,
   logoSrc = null,
+  variant = "full",
 }: {
   skill: string;
   level: number;
@@ -37,19 +38,78 @@ export function BadgeMedal({
   size?: number;
   /** Logo oficial de la tecnología; sin logo, el nombre va en texto grande */
   logoSrc?: string | null;
+  /** "compact": solo hexágono + logo, legible en tamaños chicos (<64px).
+   *  En compact el logo va a color aunque no esté obtenido — "por ganar"
+   *  no es "deshabilitado"; el gris se reserva para bloqueado. */
+  variant?: "full" | "compact";
 }) {
   const tier = TIERS[level] ?? TIERS[1];
   const levelLabel = badgeLevelLabel(level).toUpperCase();
   const skillSize =
     skill.length <= 6 ? 27 : skill.length <= 10 ? 21 : skill.length <= 13 ? 17 : 14;
-  const clipId = `medal-clip-${skill.replace(/[^a-zA-Z0-9]/g, "")}-${level}`;
+  const clipId = `medal-clip-${skill.replace(/[^a-zA-Z0-9]/g, "")}-${level}-${variant}`;
+  const compact = variant === "compact";
 
   const stateClass =
     state === "earned"
       ? "drop-shadow-md"
       : state === "available"
-        ? "opacity-70 saturate-[0.15]"
+        ? compact
+          ? ""
+          : "opacity-70 saturate-[0.15]"
         : "opacity-35 saturate-0";
+
+  if (compact) {
+    const ringColor = state === "earned" ? tier.ring : "#d4d4d8";
+    return (
+      <svg
+        width={size}
+        height={(size * 220) / 200}
+        viewBox="0 0 200 220"
+        role="img"
+        aria-label={`Badge ${skill}${state === "earned" ? ` nivel ${badgeLevelLabel(level)} obtenido` : state === "locked" ? " bloqueado" : ""}`}
+        className={stateClass}
+      >
+        <defs>
+          <clipPath id={clipId}>
+            <path d={INNER} />
+          </clipPath>
+        </defs>
+        <path d={OUTER} fill={ringColor} />
+        <path d={INNER} fill="#ffffff" />
+        <g clipPath={`url(#${clipId})`}>
+          {logoSrc ? (
+            <image href={logoSrc} x="48" y="58" width="104" height="104" />
+          ) : (
+            <text
+              x="100"
+              y="128"
+              textAnchor="middle"
+              fontSize="52"
+              fontWeight="800"
+              fill="#18181b"
+              fontFamily="ui-sans-serif, system-ui, sans-serif"
+            >
+              {skill.length <= 4 ? skill : skill.slice(0, 2).toUpperCase()}
+            </text>
+          )}
+        </g>
+        {state === "earned" && (
+          <g transform="translate(158, 60)">
+            <circle r="22" fill={tier.ring} />
+            <path
+              d="M-9 0 L-2.5 7 L10 -8"
+              stroke="#ffffff"
+              strokeWidth="5.5"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </g>
+        )}
+      </svg>
+    );
+  }
 
   return (
     <svg
