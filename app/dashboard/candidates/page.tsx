@@ -1,7 +1,7 @@
 // app/dashboard/candidates/page.tsx
 import Link from "next/link";
 import { prisma } from '@/lib/server/prisma';
-import { badgeLevelLabel } from "@/lib/badges";
+import { badgeLevelLabel, badgeValidityCutoff } from "@/lib/badges";
 import { Award } from "lucide-react";
 
 export const metadata = { title: "Candidatos | Panel" };
@@ -17,10 +17,20 @@ export default async function CandidatesPage({
   const currentPage = Math.max(1, parseInt(searchParams.page || "1"));
   const onlyVerified = searchParams.verified === "1";
   const skip = (currentPage - 1) * PAGE_SIZE;
+  const currentBadgeCutoff = badgeValidityCutoff();
 
   const where = {
     role: "CANDIDATE" as const,
-    ...(onlyVerified ? { candidateBadges: { some: {} } } : {}),
+    ...(onlyVerified
+      ? {
+          candidateBadges: {
+            some: {
+              isPublic: true,
+              earnedAt: { gte: currentBadgeCutoff },
+            },
+          },
+        }
+      : {}),
   };
 
   // Batch queries in parallel
@@ -34,10 +44,15 @@ export default async function CandidatesPage({
         email: true,
         createdAt: true,
         candidateBadges: {
+          where: {
+            isPublic: true,
+            earnedAt: { gte: currentBadgeCutoff },
+          },
           orderBy: [{ level: "desc" }, { earnedAt: "desc" }],
           take: 4,
           select: {
             level: true,
+            slug: true,
             term: { select: { label: true } },
           },
         },
@@ -106,13 +121,17 @@ export default async function CandidatesPage({
                     <td className="py-2">
                       {u.candidateBadges.length > 0 ? (
                         <span className="flex flex-wrap gap-1">
-                          {u.candidateBadges.map((b, i) => (
-                            <span
-                              key={i}
-                              className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
+                          {u.candidateBadges.map((badge) => (
+                            <Link
+                              key={badge.slug}
+                              href={"/badge/" + badge.slug}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 hover:bg-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:hover:bg-teal-900/60"
                             >
-                              ✓ {b.term.label} · {badgeLevelLabel(b.level)}
-                            </span>
+                              ✓ {badge.term.label} ·{" "}
+                              {badgeLevelLabel(badge.level)}
+                            </Link>
                           ))}
                         </span>
                       ) : (

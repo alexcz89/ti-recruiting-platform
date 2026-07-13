@@ -16,6 +16,7 @@ import {
   type JobSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
+import { badgeLevelLabel, badgeValidityCutoff } from "@/lib/badges";
 import { Lock, CheckCircle2, XCircle, ExternalLink, Github, Linkedin } from "lucide-react";
 import CandidateSummaryCard from "@/components/dashboard/CandidateSummaryCard";
 import SendAssessmentButton from "@/components/dashboard/SendAssessmentButton";
@@ -95,6 +96,7 @@ export default async function CandidateDetailPage({
     : null;
 
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
+  const currentBadgeCutoff = badgeValidityCutoff();
 
   const candidate = await prisma.user.findUnique({
     where: { id: params.id },
@@ -123,7 +125,20 @@ export default async function CandidateDetailPage({
         orderBy: [{ level: "desc" }, { term: { label: "asc" } }],
       },
       candidateBadges: {
-        select: { termId: true, level: true },
+        where: {
+          isPublic: true,
+          earnedAt: { gte: currentBadgeCutoff },
+        },
+        orderBy: [{ level: "desc" }, { earnedAt: "desc" }],
+        select: {
+          termId: true,
+          level: true,
+          slug: true,
+          earnedAt: true,
+          term: {
+            select: { id: true, label: true, aliases: true },
+          },
+        },
       },
       candidateLanguages: {
         select: {
@@ -291,7 +306,11 @@ export default async function CandidateDetailPage({
     });
   }
 
-  const candidateSkillsForEngine = buildCandidateSkillInputs(candidate.candidateSkills);
+  const candidateSkillsForEngine = buildCandidateSkillInputs(
+    candidate.candidateSkills,
+    undefined,
+    candidate.candidateBadges
+  );
 
   const jobSeniorityForEngine = toSeniorityLevel(jobForMatch?.seniority);
   const hasJobSkills = (jobForMatch?.requiredSkills?.length ?? 0) > 0;
@@ -429,21 +448,33 @@ export default async function CandidateDetailPage({
     ? `${candidate.resumeUrl}${candidate.resumeUrl.includes("#") ? "" : "#toolbar=1&navpanes=0&scrollbar=1"}`
     : null;
 
-  // Badge verificado más alto por skill (1=Básico 2=Intermedio 3=Avanzado)
-  const verifiedByTerm = new Map<string, number>();
-  for (const b of candidate.candidateBadges || []) {
-    const prev = verifiedByTerm.get(b.termId) ?? 0;
-    if (b.level > prev) verifiedByTerm.set(b.termId, b.level);
+  // Credencial vigente más alta por skill.
+  const verifiedByTerm = new Map<
+    string,
+    (typeof candidate.candidateBadges)[number]
+  >();
+  for (const badge of candidate.candidateBadges) {
+    const previous = verifiedByTerm.get(badge.termId);
+    if (!previous || badge.level > previous.level) {
+      verifiedByTerm.set(badge.termId, badge);
+    }
   }
 
   const detailedSkills = (candidate.candidateSkills || [])
-    .map((s) => ({
-      id: s.id,
-      label: s.term?.label || "",
-      level: s.level ?? null,
-      termId: s.term?.id || "",
-      verifiedLevel: s.term?.id ? (verifiedByTerm.get(s.term.id) ?? null) : null,
-    }))
+    .map((skill) => {
+      const verifiedBadge = skill.term?.id
+        ? (verifiedByTerm.get(skill.term.id) ?? null)
+        : null;
+
+      return {
+        id: skill.id,
+        label: skill.term?.label || "",
+        level: skill.level ?? null,
+        termId: skill.term?.id || "",
+        verifiedLevel: verifiedBadge?.level ?? null,
+        verifiedBadge,
+      };
+    })
     .filter((s) => s.label);
 
   const languageItems = (candidate.candidateLanguages || [])
@@ -675,13 +706,20 @@ export default async function CandidateDetailPage({
                 return (
                   <span key={s.id} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium ${chipClass}`}>
                     {s.label}
-                    {s.verifiedLevel != null && (
-                      <span
-                        className="rounded bg-teal-600 px-1 py-0.5 text-[9px] font-bold text-white"
-                        title={`Skill verificado con examen: nivel ${s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}`}
+                    {s.verifiedBadge && (
+                      <Link
+                        href={"/badge/" + s.verifiedBadge.slug}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded bg-teal-600 px-1.5 py-0.5 text-[9px] font-bold text-white hover:bg-teal-700"
+                        title={
+                          "Abrir credencial Taskio nivel " +
+                          badgeLevelLabel(s.verifiedBadge.level)
+                        }
                       >
-                        ✓ {s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}
-                      </span>
+                        ✓ {badgeLevelLabel(s.verifiedBadge.level)}
+                        <ExternalLink className="h-2.5 w-2.5" />
+                      </Link>
                     )}
                     {isJobRequired && <span className="rounded-full bg-emerald-200 px-1 py-0.5 text-[9px] font-bold uppercase text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-200">REQ</span>}
                     {isJobNice && !isJobRequired && <span className="rounded-full bg-sky-100 px-1 py-0.5 text-[9px] font-bold uppercase text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">Nice</span>}
@@ -694,8 +732,44 @@ export default async function CandidateDetailPage({
         </div>
         <div className="space-y-4">
           <div className="glass-card rounded-2xl border p-4 md:p-5">
-            <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Certificaciones</h2>
-            <List items={candidate.certifications} emptyLabel="Sin certificaciones capturadas" />
+            <h2 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Certificaciones
+            </h2>
+            {candidate.candidateBadges.length > 0 ? (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Credenciales Taskio vigentes
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {candidate.candidateBadges.map((badge) => (
+                    <Link
+                      key={badge.slug}
+                      href={"/badge/" + badge.slug}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1.5 text-xs font-semibold text-teal-700 transition-colors hover:bg-teal-100 dark:border-teal-800/50 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                      {badge.term.label} · {badgeLevelLabel(badge.level)}
+                      <ExternalLink className="h-3 w-3 opacity-60" />
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Sin credenciales Taskio vigentes
+              </p>
+            )}
+
+            {candidate.certifications?.length > 0 && (
+              <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Otras certificaciones
+                </p>
+                <List items={candidate.certifications} />
+              </div>
+            )}
           </div>
           <div className="glass-card rounded-2xl border p-4 md:p-5">
             <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">Idiomas</h2>

@@ -11,6 +11,8 @@ import {
   badgeLogoSrc,
   BADGE_LEVELS,
   BADGE_RETRY_COOLDOWN_DAYS,
+  BADGE_VALIDITY_MONTHS,
+  isBadgeCurrent,
 } from "@/lib/badges";
 import { BadgeMedal } from "@/components/badges/BadgeMedal";
 import { Clock, ListChecks, Lock, CheckCircle2, Award, ChevronDown } from "lucide-react";
@@ -42,7 +44,7 @@ export default async function CertificacionesPage() {
   const user = session?.user as { id?: string; role?: string } | undefined;
   const isCandidate = user?.role === "CANDIDATE";
 
-  const [exams, myBadges, mySkills] = await Promise.all([
+  const [exams, badgeRows, mySkills] = await Promise.all([
     prisma.assessmentTemplate.findMany({
       where: { isBadgeExam: true, isActive: true, isGlobal: true },
       orderBy: [{ badgeLevel: "asc" }],
@@ -63,6 +65,7 @@ export default async function CertificacionesPage() {
             level: true,
             slug: true,
             isPublic: true,
+            earnedAt: true,
             term: { select: { label: true, slug: true } },
           },
         })
@@ -75,6 +78,9 @@ export default async function CertificacionesPage() {
       : Promise.resolve([]),
   ]);
 
+  const myBadges = badgeRows.filter((badge) =>
+    isBadgeCurrent(badge.earnedAt)
+  );
   const earned = new Set(myBadges.map((b) => `${b.termId}:${b.level}`));
   const profileTermIds = new Set(mySkills.map((s) => s.termId));
 
@@ -165,90 +171,103 @@ export default async function CertificacionesPage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
 
   // ── Sub-render: filas de niveles de un skill (compartido entre vistas) ──
-  const levelRows = (skill: SkillGroup) => (
-    <ul className="flex flex-col gap-1.5">
-      {BADGE_LEVELS.map((level) => {
-        const exam = skill.examsByLevel.get(level);
-        const isEarned = earned.has(`${skill.termId}:${level}`);
-        const isLocked =
-          level >= 3 && !earned.has(`${skill.termId}:${level - 1}`);
-        const retryAt = exam ? (retryAtByTemplate.get(exam.id) ?? null) : null;
+  const levelRows = (skill: SkillGroup, compactEarned = false) => {
+    const highest = highestEarnedOf(skill.termId);
+    const levels: number[] =
+      compactEarned && highest > 0
+        ? [
+            highest,
+            ...(highest < BADGE_LEVELS.length ? [highest + 1] : []),
+          ]
+        : [...BADGE_LEVELS];
 
-        return (
-          <li
-            key={level}
-            className="flex min-h-[44px] items-center justify-between gap-3 rounded-lg px-2 py-1.5"
-          >
-            <div className="min-w-0">
-              <p
-                className={`text-sm font-semibold ${
-                  isEarned
-                    ? "text-teal-700 dark:text-teal-300"
-                    : exam
-                      ? "text-zinc-900 dark:text-zinc-100"
-                      : "text-zinc-400 dark:text-zinc-600"
-                }`}
-              >
-                {badgeLevelLabel(level)}
-              </p>
-              {exam && !isEarned && (
-                <p className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-                  <span className="inline-flex items-center gap-1">
-                    <ListChecks className="h-3 w-3" />
-                    {exam.totalQuestions} preguntas
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-3 w-3" />
-                    {exam.timeLimit} min
-                  </span>
+    return (
+      <ul className="flex flex-col gap-1.5">
+        {levels.map((level) => {
+          const exam = skill.examsByLevel.get(level);
+          const isEarned = earned.has(skill.termId + ":" + level);
+          const isLocked =
+            level >= 3 && !earned.has(skill.termId + ":" + (level - 1));
+          const retryAt = exam
+            ? (retryAtByTemplate.get(exam.id) ?? null)
+            : null;
+          const isNextLevel = compactEarned && highest > 0 && level > highest;
+          const levelTextClass = isEarned
+            ? "text-teal-700 dark:text-teal-300"
+            : exam
+              ? "text-zinc-900 dark:text-zinc-100"
+              : "text-zinc-400 dark:text-zinc-600";
+
+          return (
+            <li
+              key={level}
+              className="flex min-h-[44px] items-center justify-between gap-3 rounded-lg px-2 py-1.5"
+            >
+              <div className="min-w-0">
+                <p className={"text-sm font-semibold " + levelTextClass}>
+                  {isNextLevel
+                    ? "Siguiente nivel: " + badgeLevelLabel(level)
+                    : badgeLevelLabel(level)}
                 </p>
-              )}
-            </div>
+                {exam && !isEarned && (
+                  <p className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                    <span className="inline-flex items-center gap-1">
+                      <ListChecks className="h-3 w-3" />
+                      {exam.totalQuestions} preguntas
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {exam.timeLimit} min
+                    </span>
+                  </p>
+                )}
+              </div>
 
-            {isEarned ? (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white">
-                <CheckCircle2 className="h-3 w-3" />
-                Obtenido
-              </span>
-            ) : !exam ? (
-              <span className="inline-flex shrink-0 items-center rounded border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
-                Próximamente
-              </span>
-            ) : isLocked ? (
-              <span
-                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
-                title={`Requiere ${badgeLevelLabel(level - 1)}`}
-              >
-                <Lock className="h-3 w-3" />
-                Requiere {badgeLevelLabel(level - 1)}
-              </span>
-            ) : retryAt ? (
-              <span
-                className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
-                title="Podrás reintentar cuando termine el periodo de espera"
-              >
-                <Clock className="h-3 w-3" />
-                Disponible el{" "}
-                {retryAt.toLocaleDateString("es-MX", {
-                  day: "numeric",
-                  month: "short",
-                })}
-              </span>
-            ) : isCandidate ? (
-              <StartBadgeExamButton templateId={exam.id} />
-            ) : (
-              <Link
-                href="/auth/signup"
-                className="inline-flex shrink-0 items-center rounded border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-100 dark:border-teal-800/50 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
-              >
-                Regístrate para presentar
-              </Link>
-            )}
-          </li>
-        );
-      })}
-    </ul>
-  );
+              {isEarned ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded bg-teal-600 px-2 py-1 text-[11px] font-semibold text-white">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Obtenido
+                </span>
+              ) : !exam ? (
+                <span className="inline-flex shrink-0 items-center rounded border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-400 dark:border-zinc-700 dark:text-zinc-500">
+                  Próximamente
+                </span>
+              ) : isLocked ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-400 dark:border-zinc-700 dark:text-zinc-500"
+                  title={"Requiere " + badgeLevelLabel(level - 1)}
+                >
+                  <Lock className="h-3 w-3" />
+                  Requiere {badgeLevelLabel(level - 1)}
+                </span>
+              ) : retryAt ? (
+                <span
+                  className="inline-flex shrink-0 items-center gap-1 rounded border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
+                  title="Podrás reintentar cuando termine el periodo de espera"
+                >
+                  <Clock className="h-3 w-3" />
+                  Disponible el{" "}
+                  {retryAt.toLocaleDateString("es-MX", {
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </span>
+              ) : isCandidate ? (
+                <StartBadgeExamButton templateId={exam.id} />
+              ) : (
+                <Link
+                  href="/auth/signup"
+                  className="inline-flex shrink-0 items-center rounded border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-100 dark:border-teal-800/50 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
+                >
+                  Regístrate para presentar
+                </Link>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    );
+  };
 
   return (
     <main className="w-full">
@@ -274,7 +293,8 @@ export default async function CertificacionesPage() {
             >
               <Award className="h-4 w-4 text-teal-600 dark:text-teal-400" />
               <span className="text-sm font-semibold text-teal-800 dark:text-teal-200">
-                {totalEarned} {totalEarned === 1 ? "badge obtenido" : "badges obtenidos"}
+                {totalEarned} de {exams.length}{" "}
+                {exams.length === 1 ? "badge obtenido" : "badges obtenidos"}
               </span>
             </Link>
           ) : (
@@ -338,7 +358,7 @@ export default async function CertificacionesPage() {
                           </div>
                         </div>
                         <div className="mt-4 flex-1 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                          {levelRows(skill)}
+                          {levelRows(skill, highest > 0)}
                         </div>
                       </div>
                     );
@@ -357,25 +377,59 @@ export default async function CertificacionesPage() {
                         Presume tu badge de {latestPublicBadge.term.label}
                       </p>
                       <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                        Compártelo en LinkedIn y deja que los reclutadores te
-                        encuentren.
+                        Añádelo a tu perfil y deja que los reclutadores puedan
+                        verificarlo.
                       </p>
                       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
                         <a
-                          href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${appUrl}/badge/${latestPublicBadge.slug}`)}`}
+                          href="https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME"
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex min-h-[40px] items-center rounded-lg bg-[#0a66c2] px-4 py-2 text-xs font-semibold text-white transition-opacity hover:opacity-90"
                         >
-                          Compartir en LinkedIn
+                          Añadir a LinkedIn
                         </a>
                         <Link
-                          href={`/badge/${latestPublicBadge.slug}`}
+                          href={"/badge/" + latestPublicBadge.slug}
                           className="inline-flex min-h-[40px] items-center rounded-lg border border-teal-300 px-4 py-2 text-xs font-semibold text-teal-700 transition-colors hover:bg-teal-100/60 dark:border-teal-700 dark:text-teal-300 dark:hover:bg-teal-900/30"
                         >
-                          Ver página pública
+                          Ver credencial
                         </Link>
                       </div>
+                      <a
+                        href={
+                          "https://www.linkedin.com/sharing/share-offsite/?url=" +
+                          encodeURIComponent(
+                            appUrl + "/badge/" + latestPublicBadge.slug
+                          )
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-2 text-[11px] font-medium text-[#0a66c2] hover:underline"
+                      >
+                        Compartir como publicación
+                      </a>
+
+                      {nextChallenge?.examsByLevel.get(1) && (
+                        <div className="mt-5 w-full border-t border-teal-200 pt-4 text-left dark:border-teal-800/50">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                            Siguiente recomendado
+                          </p>
+                          <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                                {nextChallenge.label} · Básico
+                              </p>
+                              <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                                Continúa fortaleciendo tu perfil técnico
+                              </p>
+                            </div>
+                            <StartBadgeExamButton
+                              templateId={nextChallenge.examsByLevel.get(1)!.id}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : nextChallenge ? (
                     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
@@ -443,11 +497,29 @@ export default async function CertificacionesPage() {
                               {highest > 0
                                 ? `Nivel ${badgeLevelLabel(highest)} obtenido`
                                 : basicExam
-                                  ? `Desde ${basicExam.totalQuestions} preguntas · ${basicExam.timeLimit} min`
+                                  ? `${basicExam.totalQuestions} preguntas · ${basicExam.timeLimit} min`
                                   : "Próximamente"}
                             </p>
                           </div>
-                          <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-open:rotate-180" />
+                          <span
+                            className={
+                              highest > 0
+                                ? "hidden shrink-0 rounded-full bg-teal-100 px-2 py-1 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300 sm:inline-flex"
+                                : basicExam
+                                  ? "hidden shrink-0 rounded-full bg-emerald-100 px-2 py-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 sm:inline-flex"
+                                  : "hidden shrink-0 rounded-full bg-zinc-100 px-2 py-1 text-[10px] font-semibold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 sm:inline-flex"
+                            }
+                          >
+                            {highest > 0
+                              ? "Obtenido"
+                              : basicExam
+                                ? "Disponible"
+                                : "Próximamente"}
+                          </span>
+                          <ChevronDown
+                            className="h-4 w-4 shrink-0 text-zinc-400 transition-transform group-open:rotate-180"
+                            aria-hidden="true"
+                          />
                         </summary>
                         <div className="border-t border-zinc-100 px-4 py-3 dark:border-zinc-800">
                           <div className="max-w-xl">{levelRows(skill)}</div>
@@ -461,11 +533,16 @@ export default async function CertificacionesPage() {
           </>
         )}
 
-        <p className="text-xs text-zinc-400 dark:text-zinc-500">
-          Los badges se otorgan al aprobar el examen correspondiente. El nivel
-          Avanzado incluye retos de código y se desbloquea al obtener el nivel
-          Intermedio del mismo skill.
-        </p>
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-zinc-400">
+          <p className="font-medium text-zinc-700 dark:text-zinc-300">
+            Credenciales con vigencia de {BADGE_VALIDITY_MONTHS} meses
+          </p>
+          <p className="mt-1">
+            Cada intento usa una selección aleatoria del banco y mezcla las
+            opciones. Si no apruebas, podrás reintentar después de{" "}
+            {BADGE_RETRY_COOLDOWN_DAYS} días.
+          </p>
+        </div>
       </div>
     </main>
   );

@@ -274,7 +274,13 @@ export async function POST(
               attemptId: params.attemptId,
               earnedAt: now,
             },
-            update: {},
+            // Renovación de una credencial vencida: conserva su URL pública,
+            // pero la enlaza al intento y fecha vigentes.
+            update: {
+              attemptId: params.attemptId,
+              earnedAt: now,
+              isPublic: true,
+            },
           });
         }
 

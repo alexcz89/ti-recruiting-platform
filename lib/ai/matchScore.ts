@@ -1,4 +1,6 @@
 // lib/ai/matchScore.ts
+import { badgeLevelToSkillLevel } from "@/lib/badges";
+
 // ============================================================
 // AI Match Score Engine — TaskIO
 // Compara JobRequiredSkill[] vs CandidateSkill[]
@@ -102,6 +104,11 @@ type CandidateTaxonomySkillInput = {
   term?: TaxonomyTermInput | null;
 };
 
+type CandidateBadgeInput = {
+  level: number;
+  term?: TaxonomyTermInput | null;
+};
+
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value));
 }
@@ -173,7 +180,7 @@ export function buildJobSkillInputs(
   if (taxonomySkills.length > 0) return taxonomySkills;
 
   return uniqueLegacySkills(legacySkills).map((label) => ({
-    termId: `legacy:${normalizeSkillKey(label)}`,
+    termId: "legacy:" + normalizeSkillKey(label),
     label,
     aliases: [],
     must: true,
@@ -183,7 +190,8 @@ export function buildJobSkillInputs(
 
 export function buildCandidateSkillInputs(
   candidateSkills: CandidateTaxonomySkillInput[] | null | undefined,
-  legacySkills?: string[] | null
+  legacySkills?: string[] | null,
+  verifiedBadges?: CandidateBadgeInput[] | null
 ): CandidateSkillInput[] {
   const taxonomySkills: CandidateSkillInput[] = [];
 
@@ -196,6 +204,30 @@ export function buildCandidateSkillInputs(
       label,
       aliases: cs.term.aliases ?? [],
       level: cs.level ?? null,
+    });
+  }
+
+  // Una credencial vigente aporta evidencia moderada al nivel declarado.
+  // También puede incorporar el skill cuando todavía no está capturado en el
+  // perfil, evitando que una evaluación aprobada quede fuera del matching.
+  for (const badge of verifiedBadges ?? []) {
+    const termId = String(badge.term?.id ?? "").trim();
+    const label = String(badge.term?.label ?? "").trim();
+    if (!termId || !label) continue;
+
+    const verifiedLevel = badgeLevelToSkillLevel(badge.level);
+    const existing = taxonomySkills.find((skill) => skill.termId === termId);
+
+    if (existing) {
+      existing.level = Math.max(existing.level ?? 0, verifiedLevel);
+      continue;
+    }
+
+    taxonomySkills.push({
+      termId,
+      label,
+      aliases: badge.term?.aliases ?? [],
+      level: verifiedLevel,
     });
   }
 

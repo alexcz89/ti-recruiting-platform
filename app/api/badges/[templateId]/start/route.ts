@@ -6,7 +6,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
-import { BADGE_RETRY_COOLDOWN_DAYS } from "@/lib/badges";
+import {
+  BADGE_RETRY_COOLDOWN_DAYS,
+  isBadgeCurrent,
+} from "@/lib/badges";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -65,9 +68,9 @@ export async function POST(
           level: template.badgeLevel,
         },
       },
-      select: { id: true },
+      select: { id: true, earnedAt: true },
     });
-    if (existingBadge) {
+    if (existingBadge && isBadgeCurrent(existingBadge.earnedAt)) {
       return jsonNoStore({ error: "Ya obtuviste este badge" }, 409);
     }
 

@@ -13,8 +13,40 @@ export const BADGE_LEVEL_LABELS: Record<number, string> = {
 /** Días de espera para reintentar un examen de badge reprobado. */
 export const BADGE_RETRY_COOLDOWN_DAYS = 30;
 
+/** Meses durante los que una credencial se considera vigente. */
+export const BADGE_VALIDITY_MONTHS = 12;
+
 export function badgeLevelLabel(level: number): string {
   return BADGE_LEVEL_LABELS[level] ?? `Nivel ${level}`;
+}
+
+export function badgeExpiresAt(earnedAt: Date | string): Date {
+  const expiresAt = new Date(earnedAt);
+  expiresAt.setUTCMonth(expiresAt.getUTCMonth() + BADGE_VALIDITY_MONTHS);
+  return expiresAt;
+}
+
+export function badgeValidityCutoff(now: Date = new Date()): Date {
+  const cutoff = new Date(now);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - BADGE_VALIDITY_MONTHS);
+  return cutoff;
+}
+
+export function isBadgeCurrent(
+  earnedAt: Date | string,
+  now: Date = new Date()
+): boolean {
+  return badgeExpiresAt(earnedAt) > now;
+}
+
+/**
+ * Traduce la evidencia del examen (Básico/Intermedio/Avanzado) a la escala
+ * de nivel 1-5 del matching. Es una señal moderada, no dominio experto.
+ */
+export function badgeLevelToSkillLevel(level: number): number {
+  if (level >= 3) return 4;
+  if (level === 2) return 3;
+  return 2;
 }
 
 /** Logo oficial de la tecnología (public/logos) por slug de TaxonomyTerm.

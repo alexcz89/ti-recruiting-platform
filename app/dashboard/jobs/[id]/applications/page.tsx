@@ -26,6 +26,7 @@ import {
   type JobSkillInput,
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
+import { badgeLevelLabel, badgeValidityCutoff } from "@/lib/badges";
 
 const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
   NATIVE: "Nativo",
@@ -134,6 +135,7 @@ export default async function JobApplicationsPage({
     select: { billingPlan: true, name: true },
   });
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
+  const currentBadgeCutoff = badgeValidityCutoff();
 
   // Nombre del reclutador para el mensaje de WhatsApp (solo primer nombre)
   const session = await getServerSession(authOptions);
@@ -218,11 +220,17 @@ export default async function JobApplicationsPage({
             },
           },
           candidateBadges: {
+            where: {
+              isPublic: true,
+              earnedAt: { gte: currentBadgeCutoff },
+            },
             orderBy: [{ level: "desc" }, { earnedAt: "desc" }],
-            take: 3,
             select: {
               level: true,
-              term: { select: { label: true } },
+              slug: true,
+              term: {
+                select: { id: true, label: true, aliases: true },
+              },
             },
           },
           candidateLanguages: {
@@ -391,7 +399,9 @@ export default async function JobApplicationsPage({
 
   let enriched = allApps.map((a) => {
     const candidateSkillsForEngine = buildCandidateSkillInputs(
-      a.candidate?.candidateSkills ?? []
+      a.candidate?.candidateSkills ?? [],
+      undefined,
+      a.candidate?.candidateBadges ?? []
     );
 
     const matchResult = computeMatchScore({
@@ -957,15 +967,27 @@ export default async function JobApplicationsPage({
 
                             {((a.candidate as any)?.candidateBadges?.length ?? 0) > 0 && (
                               <span className="flex flex-wrap gap-1">
-                                {((a.candidate as any).candidateBadges as { level: number; term: { label: string } }[]).map((b, i) => (
-                                  <span
-                                    key={i}
-                                    className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
-                                    title={`Skill verificado con examen (${b.level === 1 ? "Básico" : b.level === 2 ? "Intermedio" : "Avanzado"})`}
-                                  >
-                                    ✓ {b.term.label}
-                                  </span>
-                                ))}
+                                {(
+                                  (a.candidate as any).candidateBadges as {
+                                    level: number;
+                                    slug: string;
+                                    term: { label: string };
+                                  }[]
+                                )
+                                  .slice(0, 3)
+                                  .map((badge) => (
+                                    <Link
+                                      key={badge.slug}
+                                      href={"/badge/" + badge.slug}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 hover:bg-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:hover:bg-teal-900/60"
+                                      title="Abrir credencial Taskio vigente"
+                                    >
+                                      ✓ {badge.term.label} ·{" "}
+                                      {badgeLevelLabel(badge.level)}
+                                    </Link>
+                                  ))}
                               </span>
                             )}
 
