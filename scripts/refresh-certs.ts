@@ -1,27 +1,19 @@
 // scripts/refresh-certs.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { CERTIFICATIONS } from "@/lib/shared/skills-data";
-import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
+import { refreshTaxonomyKind } from "@/lib/db/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🗑️  Borrando CERTIFICATIONS existentes (kind=CERTIFICATION)...");
-  await prisma.taxonomyTerm.deleteMany({ where: { kind: TaxonomyKind.CERTIFICATION } });
-
-  console.log("🌱 Insertando certificaciones del catálogo...");
-  await prisma.taxonomyTerm.createMany({
-    data: CERTIFICATIONS.map((label) => ({
-      kind: TaxonomyKind.CERTIFICATION,
-      slug: slugifyTaxonomyLabel(label),
-      label,
-      aliases: [] as string[],
-    })),
-    skipDuplicates: true,
-  });
-
-  const count = await prisma.taxonomyTerm.count({ where: { kind: TaxonomyKind.CERTIFICATION } });
-  console.log(`✅ Certificaciones insertadas: ${count}`);
+  console.log("🌱 Sincronizando CERTIFICATIONs con el catálogo (upsert, no destructivo)...");
+  const result = await refreshTaxonomyKind(
+    prisma,
+    TaxonomyKind.CERTIFICATION,
+    CERTIFICATIONS,
+    { cleanUnlisted: true }
+  );
+  console.log(`✅ Certificaciones en DB: ${result.total}`);
 }
 
 main()

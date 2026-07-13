@@ -1,7 +1,7 @@
 // scripts/refresh-taxonomies-all.ts
 import { PrismaClient, TaxonomyKind } from "@prisma/client";
 import { ALL_SKILLS, LANGUAGES_FALLBACK, CERTIFICATIONS } from "@/lib/shared/skills-data";
-import { slugifyTaxonomyLabel } from "@/lib/shared/slugify-taxonomy";
+import { refreshTaxonomyKind } from "@/lib/db/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
@@ -10,22 +10,11 @@ async function refresh(
   labels: readonly string[],
   emoji: string
 ) {
-  console.log(`${emoji}  Borrando ${TaxonomyKind[kind]} existentes...`);
-  await prisma.taxonomyTerm.deleteMany({ where: { kind } });
-
-  console.log(`🌱 Insertando ${TaxonomyKind[kind]}...`);
-  await prisma.taxonomyTerm.createMany({
-    data: labels.map((label) => ({
-      kind,
-      slug: slugifyTaxonomyLabel(label),
-      label,
-      aliases: [] as string[],
-    })),
-    skipDuplicates: true,
+  console.log(`${emoji}  Sincronizando ${TaxonomyKind[kind]} (upsert, no destructivo)...`);
+  const result = await refreshTaxonomyKind(prisma, kind, labels, {
+    cleanUnlisted: true,
   });
-
-  const count = await prisma.taxonomyTerm.count({ where: { kind } });
-  console.log(`✅ ${TaxonomyKind[kind]} insertados: ${count}`);
+  console.log(`✅ ${TaxonomyKind[kind]} en DB: ${result.total}`);
 }
 
 async function main() {

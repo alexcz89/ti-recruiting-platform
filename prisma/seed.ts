@@ -17,34 +17,18 @@ import {
 
 import { seedAssessmentTemplates } from "./seeds/assessments";
 import { seedDataAnalyst } from "./seeds/data-analyst";
-import { slugifyTaxonomyLabel } from "../lib/shared/slugify-taxonomy";
+import { refreshTaxonomyKind } from "../lib/db/taxonomy-refresh";
 
 const prisma = new PrismaClient();
 
+// Solo borra términos fuera de catálogo SIN relaciones (los que tienen
+// candidateSkills, badges, vacantes, etc. se conservan siempre).
 const CLEAN_UNLISTED = true;
 
 async function seedTaxonomy(kind: TaxonomyKind, labels: readonly string[]) {
-  const rows = labels.map((label) => ({
-    kind,
-    slug: slugifyTaxonomyLabel(label),
-    label,
-    aliases: [] as string[],
-  }));
-
-  await prisma.taxonomyTerm.createMany({
-    data: rows,
-    skipDuplicates: true,
+  await refreshTaxonomyKind(prisma, kind, labels, {
+    cleanUnlisted: CLEAN_UNLISTED,
   });
-
-  if (CLEAN_UNLISTED) {
-    const allowedSlugs = new Set(rows.map((r) => r.slug));
-    await prisma.taxonomyTerm.deleteMany({
-      where: {
-        kind,
-        slug: { notIn: Array.from(allowedSlugs) },
-      },
-    });
-  }
 
   const final = await prisma.taxonomyTerm.findMany({
     where: { kind },
