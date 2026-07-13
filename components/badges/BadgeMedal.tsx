@@ -29,11 +29,14 @@ export function BadgeMedal({
   level,
   state = "earned",
   size = 140,
+  logoSrc = null,
 }: {
   skill: string;
   level: number;
   state?: BadgeMedalState;
   size?: number;
+  /** Logo oficial de la tecnología; sin logo, el nombre va en texto grande */
+  logoSrc?: string | null;
 }) {
   const tier = TIERS[level] ?? TIERS[1];
   const levelLabel = badgeLevelLabel(level).toUpperCase();
@@ -75,7 +78,7 @@ export function BadgeMedal({
         {/* Marca */}
         <text
           x="100"
-          y="55"
+          y={logoSrc ? 46 : 55}
           textAnchor="middle"
           fontSize="12"
           fontWeight="700"
@@ -86,22 +89,39 @@ export function BadgeMedal({
           TASKIO
         </text>
 
-        {/* Skill */}
-        <text
-          x="100"
-          y="112"
-          textAnchor="middle"
-          fontSize={skillSize}
-          fontWeight="800"
-          fill="#18181b"
-          fontFamily="ui-sans-serif, system-ui, sans-serif"
-        >
-          {skill}
-        </text>
+        {logoSrc ? (
+          <>
+            {/* Logo oficial de la tecnología */}
+            <image href={logoSrc} x="63" y="56" width="74" height="74" />
+            <text
+              x="100"
+              y="142"
+              textAnchor="middle"
+              fontSize="13"
+              fontWeight="800"
+              fill="#18181b"
+              fontFamily="ui-sans-serif, system-ui, sans-serif"
+            >
+              {skill}
+            </text>
+          </>
+        ) : (
+          <text
+            x="100"
+            y="112"
+            textAnchor="middle"
+            fontSize={skillSize}
+            fontWeight="800"
+            fill="#18181b"
+            fontFamily="ui-sans-serif, system-ui, sans-serif"
+          >
+            {skill}
+          </text>
+        )}
 
         {/* Check de obtenido */}
         {state === "earned" && (
-          <g transform="translate(100, 132)">
+          <g transform={logoSrc ? "translate(151, 63)" : "translate(100, 132)"}>
             <circle r="9" fill={tier.band} />
             <path
               d="M-4 0 L-1.2 3 L4.5 -3.5"

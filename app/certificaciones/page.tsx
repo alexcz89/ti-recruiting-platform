@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
-import { badgeLevelLabel, BADGE_LEVELS, BADGE_RETRY_COOLDOWN_DAYS } from "@/lib/badges";
+import { badgeLevelLabel, badgeLogoSrc, BADGE_LEVELS, BADGE_RETRY_COOLDOWN_DAYS } from "@/lib/badges";
 import { BadgeMedal } from "@/components/badges/BadgeMedal";
 import { Clock, ListChecks, Lock, CheckCircle2, Award } from "lucide-react";
 import { StartBadgeExamButton } from "./StartBadgeExamButton";
@@ -38,7 +38,7 @@ export default async function CertificacionesPage() {
         timeLimit: true,
         totalQuestions: true,
         badgeLevel: true,
-        badgeTerm: { select: { id: true, label: true } },
+        badgeTerm: { select: { id: true, label: true, slug: true } },
       },
     }),
     isCandidate && user?.id
@@ -75,16 +75,20 @@ export default async function CertificacionesPage() {
     }
   }
 
-  // Agrupar exámenes por skill: termId → { label, examsByLevel }
+  // Agrupar exámenes por skill: termId → { label, slug, examsByLevel }
   const bySkill = new Map<
     string,
-    { label: string; examsByLevel: Map<number, ExamRow> }
+    { label: string; slug: string; examsByLevel: Map<number, ExamRow> }
   >();
   for (const exam of exams) {
     if (!exam.badgeTerm || exam.badgeLevel == null) continue;
     const key = exam.badgeTerm.id;
     if (!bySkill.has(key)) {
-      bySkill.set(key, { label: exam.badgeTerm.label, examsByLevel: new Map() });
+      bySkill.set(key, {
+        label: exam.badgeTerm.label,
+        slug: exam.badgeTerm.slug,
+        examsByLevel: new Map(),
+      });
     }
     bySkill.get(key)!.examsByLevel.set(exam.badgeLevel, exam);
   }
@@ -163,6 +167,7 @@ export default async function CertificacionesPage() {
                       level={medalLevel}
                       state={medalState}
                       size={92}
+                      logoSrc={badgeLogoSrc(skill.slug)}
                     />
                     <div className="min-w-0">
                       <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">

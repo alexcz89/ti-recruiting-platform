@@ -5,7 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { prisma } from "@/lib/server/prisma";
-import { badgeLevelLabel } from "@/lib/badges";
+import { badgeLevelLabel, badgeLogoSrc } from "@/lib/badges";
 import { BadgeMedal } from "@/components/badges/BadgeMedal";
 import { CheckCircle2 } from "lucide-react";
 
@@ -21,7 +21,7 @@ async function getBadge(slug: string) {
       level: true,
       isPublic: true,
       earnedAt: true,
-      term: { select: { label: true } },
+      term: { select: { label: true, slug: true } },
       candidate: { select: { name: true, firstName: true, lastName: true } },
     },
   });
@@ -91,7 +91,12 @@ export default async function PublicBadgePage({
         {/* Credencial */}
         <div className="rounded-2xl border border-teal-200 bg-white p-6 text-center shadow-sm dark:border-teal-800/50 dark:bg-zinc-900 sm:p-8">
           <div className="flex justify-center">
-            <BadgeMedal skill={badge.term.label} level={badge.level} size={168} />
+            <BadgeMedal
+              skill={badge.term.label}
+              level={badge.level}
+              size={168}
+              logoSrc={badgeLogoSrc(badge.term.slug)}
+            />
           </div>
 
           <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-teal-600 dark:text-teal-400">
