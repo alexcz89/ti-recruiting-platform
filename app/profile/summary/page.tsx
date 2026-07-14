@@ -285,6 +285,7 @@ export default async function ProfileSummaryPage({
       applications={myApps.map((a) => ({
         id: a.id,
         createdAt: a.createdAt.toISOString(),
+        status: a.status,
         jobId: a.job?.id ?? "",
         jobSlug: a.job?.slug ?? null,
         jobTitle: a.job?.title ?? "—",

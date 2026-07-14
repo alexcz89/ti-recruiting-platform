@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Eye, EyeOff, KeyRound, Loader2, LockKeyhole, ShieldCheck } from "lucide-react";
+import {
+  ChevronDown,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Loader2,
+  LockKeyhole,
+  ShieldCheck,
+} from "lucide-react";
 
 import {
   type PasswordActionState,
@@ -12,6 +20,7 @@ import { toastError, toastSuccess } from "@/lib/ui/toast";
 type Props = {
   hasPassword: boolean;
   compact?: boolean;
+  collapsible?: boolean;
 };
 
 const initialState: PasswordActionState = {
@@ -74,8 +83,10 @@ function PasswordInput({
 export default function PasswordSettingsCard({
   hasPassword: initialHasPassword,
   compact = false,
+  collapsible = false,
 }: Props) {
   const [hasPassword, setHasPassword] = useState(initialHasPassword);
+  const [expanded, setExpanded] = useState(!collapsible);
   const [state, setState] = useState<PasswordActionState>(initialState);
   const [pending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -98,35 +109,60 @@ export default function PasswordSettingsCard({
     };
   }, [hasPassword]);
 
+  const headerContent = (
+    <div className="flex min-w-0 items-start gap-3 text-left">
+      <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+        {hasPassword ? (
+          <LockKeyhole className="h-5 w-5" />
+        ) : (
+          <KeyRound className="h-5 w-5" />
+        )}
+      </div>
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+          {copy.label}
+        </div>
+        <h2 className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+          {copy.title}
+        </h2>
+        <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+          {copy.body}
+        </p>
+      </div>
+    </div>
+  );
+
   return (
     <section
       className={`overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 ${
         compact ? "" : "p-0"
       }`}
     >
-      <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
-            {hasPassword ? (
-              <LockKeyhole className="h-5 w-5" />
-            ) : (
-              <KeyRound className="h-5 w-5" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-              {copy.label}
-            </div>
-            <h2 className="mt-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-              {copy.title}
-            </h2>
-            <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-              {copy.body}
-            </p>
-          </div>
+      {collapsible ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          className={
+            "flex w-full items-center justify-between gap-3 px-5 py-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50 " +
+            (expanded ? "border-b border-zinc-200 dark:border-zinc-800" : "")
+          }
+        >
+          {headerContent}
+          <ChevronDown
+            className={
+              "h-4 w-4 shrink-0 text-zinc-400 transition-transform " +
+              (expanded ? "rotate-180" : "")
+            }
+          />
+        </button>
+      ) : (
+        <div className="border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+          {headerContent}
         </div>
-      </div>
+      )}
 
+      {(!collapsible || expanded) && (
       <form
         ref={formRef}
         action={(formData: FormData) => {
@@ -140,6 +176,7 @@ export default function PasswordSettingsCard({
                 setHasPassword(result.hasPassword);
               }
               formRef.current?.reset();
+              if (collapsible) setExpanded(false);
             } else {
               toastError(result.message);
             }
@@ -194,6 +231,7 @@ export default function PasswordSettingsCard({
           {pending ? "Guardando..." : copy.button}
         </button>
       </form>
+      )}
     </section>
   );
 }

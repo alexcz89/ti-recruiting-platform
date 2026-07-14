@@ -18,6 +18,11 @@ import {
   Home,
   Laptop,
   Building2,
+  BadgeCheck,
+  BriefcaseBusiness,
+  CheckCircle2,
+  GraduationCap,
+  MapPin,
   AlertTriangle,
   Upload,
   Info,
@@ -114,6 +119,7 @@ export type VerifiedBadge = {
 export type Application = {
   id: string;
   createdAt: string;
+  status: string;
   jobId: string;
   jobSlug?: string | null;
   jobTitle: string;
@@ -127,6 +133,48 @@ const SKILL_LEVEL_LABEL: Record<number, string> = {
   3: "Intermedio",
   4: "Avanzado",
   5: "Experto",
+};
+
+const SENIORITY_LABEL: Record<string, string> = {
+  JUNIOR: "Junior",
+  MID: "Mid",
+  SENIOR: "Senior",
+};
+
+const APPLICATION_STATUS_CONFIG: Record<
+  string,
+  { label: string; className: string }
+> = {
+  SUBMITTED: {
+    label: "Enviada",
+    className:
+      "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  },
+  REVIEWING: {
+    label: "En revisi\u00f3n",
+    className:
+      "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
+  },
+  INTERVIEW: {
+    label: "Entrevista",
+    className:
+      "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
+  },
+  OFFER: {
+    label: "Oferta",
+    className:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  },
+  HIRED: {
+    label: "Contratado",
+    className:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  },
+  REJECTED: {
+    label: "No seleccionado",
+    className:
+      "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
+  },
 };
 
 const LANG_LEVEL_LABEL: Record<string, string> = {
@@ -362,12 +410,94 @@ function EditBar({
 /* ════════════════════════════════════════════════════════════
    SECTION: Datos personales
    ════════════════════════════════════════════════════════════ */
+type ProfileStep = {
+  label: string;
+  action: string;
+  href: string;
+  done: boolean;
+};
+
+function ProfileCompletion({ steps }: { steps: ProfileStep[] }) {
+  const completed = steps.filter((step) => step.done).length;
+  const percentage = Math.round((completed / steps.length) * 100);
+  const nextStep = steps.find((step) => !step.done);
+
+  return (
+    <section className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:px-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <CheckCircle2 className="h-5 w-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                Perfil {percentage}% completo
+              </h2>
+              <span className="text-xs text-zinc-400">
+                {completed} de {steps.length} secciones
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              {nextStep
+                ? nextStep.action
+                : "Tu perfil tiene la informaci\u00f3n esencial para los reclutadores."}
+            </p>
+          </div>
+        </div>
+
+        {nextStep && (
+          <Link
+            href={nextStep.href}
+            className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-emerald-700"
+          >
+            Completar ahora
+          </Link>
+        )}
+      </div>
+
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-[width] duration-500"
+          style={{ width: percentage + "%" }}
+        />
+      </div>
+
+      <div className="mt-3 hidden flex-wrap gap-x-4 gap-y-1 sm:flex">
+        {steps.map((step) => (
+          <span
+            key={step.label}
+            className={
+              "inline-flex items-center gap-1 text-[11px] " +
+              (step.done
+                ? "text-emerald-700 dark:text-emerald-300"
+                : "text-zinc-400 dark:text-zinc-500")
+            }
+          >
+            {step.done ? (
+              <CheckCircle2 aria-hidden="true" className="h-3 w-3" />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="h-3 w-3 rounded-full border border-current"
+              />
+            )}
+            {step.label}
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SectionPersonal({
   user,
   onChange,
+  totalYears,
 }: {
   user: UserData;
   onChange: (u: UserData) => void;
+  totalYears: number | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -417,6 +547,7 @@ function SectionPersonal({
     .join("")
     .toUpperCase();
   const activeWorkModes = WORK_MODES.filter((m) => user[m.key]);
+  const experienceYears = totalYears ?? user.yearsExperience;
 
   return (
     <section className={CARD} id="personal">
@@ -438,9 +569,24 @@ function SectionPersonal({
             )}
           </div>
 
-          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400 break-words">
-            {user.location || "Sin ubicación"}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="inline-flex min-w-0 items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="break-words">
+                {user.location || "Ubicación pendiente"}
+              </span>
+            </span>
+            {user.seniority && (
+              <span className="rounded-full border border-zinc-200 px-2 py-0.5 font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                {SENIORITY_LABEL[user.seniority] ?? user.seniority}
+              </span>
+            )}
+            {typeof experienceYears === "number" && experienceYears > 0 && (
+              <span>
+                {experienceYears} {experienceYears === 1 ? "año" : "años"} de experiencia
+              </span>
+            )}
+          </div>
 
           {!editing && (
             <div className="mt-3 space-y-2">
@@ -749,15 +895,20 @@ function SectionExperience({
   }
 
   return (
-    <section className={CARD} id="experiencia">
+    <section
+      className={
+        !editing && experiences.length === 0 ? "glass-card space-y-3 p-4" : CARD
+      }
+      id="experiencia"
+    >
       <div className={SECTION_HEADER}>
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Historial de trabajo
         </h2>
         {!editing && (
           <button className={BTN_EDIT} onClick={open}>
-            <PencilIcon />
-            Editar
+            {experiences.length === 0 ? <span aria-hidden="true">+</span> : <PencilIcon />}
+            {experiences.length === 0 ? "Agregar" : "Editar"}
           </button>
         )}
       </div>
@@ -765,7 +916,17 @@ function SectionExperience({
       {!editing ? (
         <div className="space-y-3">
           {experiences.length === 0 && (
-            <p className="text-sm text-zinc-400 italic">Sin experiencia registrada</p>
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-zinc-200 px-3 py-2.5 dark:border-zinc-700">
+              <BriefcaseBusiness className="h-5 w-5 shrink-0 text-zinc-400" />
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  Agrega tu experiencia más reciente
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Ayuda a los reclutadores a entender tu trayectoria.
+                </p>
+              </div>
+            </div>
           )}
           {experiences.map((e, i) => (
             <div key={e.id ?? i} className="soft-panel px-3 py-3">
@@ -957,15 +1118,20 @@ function SectionEducation({
   }
 
   return (
-    <section className={CARD} id="educacion">
+    <section
+      className={
+        !editing && education.length === 0 ? "glass-card space-y-3 p-4" : CARD
+      }
+      id="educacion"
+    >
       <div className={SECTION_HEADER}>
         <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
           Escolaridad
         </h2>
         {!editing && (
           <button className={BTN_EDIT} onClick={open}>
-            <PencilIcon />
-            Editar
+            {education.length === 0 ? <span aria-hidden="true">+</span> : <PencilIcon />}
+            {education.length === 0 ? "Agregar" : "Editar"}
           </button>
         )}
       </div>
@@ -973,7 +1139,17 @@ function SectionEducation({
       {!editing ? (
         <div className="space-y-3">
           {education.length === 0 && (
-            <p className="text-sm text-zinc-400 italic">Sin escolaridad registrada</p>
+            <div className="flex items-center gap-3 rounded-xl border border-dashed border-zinc-200 px-3 py-2.5 dark:border-zinc-700">
+              <GraduationCap className="h-5 w-5 shrink-0 text-zinc-400" />
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+                  Agrega tu formación más relevante
+                </p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Incluye universidad, carrera técnica o estudios en curso.
+                </p>
+              </div>
+            </div>
           )}
 
           {education.map((ed, i) => (
@@ -1188,60 +1364,62 @@ function SectionSkills({
 
       {!editing ? (
         skills.length > 0 ? (
-          <ul className="space-y-3">
+          <ul className="space-y-2">
             {skills.map((s) => {
-              const pct = Math.max(0, Math.min(100, Math.round((s.level ?? 0) * 20)));
+              const verifiedLabel =
+                s.verifiedLevel === 1
+                  ? "Básico"
+                  : s.verifiedLevel === 2
+                    ? "Intermedio"
+                    : s.verifiedLevel === 3
+                      ? "Avanzado"
+                      : null;
+
               return (
-                <li key={s.termId} className="soft-panel px-3 py-2">
-                  <div className="flex items-center justify-between gap-3 text-sm">
-                    <span className="min-w-0 break-words font-medium">
+                <li key={s.termId} className="soft-panel px-3 py-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="min-w-0 break-words text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                       {s.label}
-                      {s.verifiedLevel != null && (
-                        <span
-                          className="ml-1.5 inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300"
-                          title={`Badge verificado: ${s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}`}
-                        >
-                          ✓ {s.verifiedLevel === 1 ? "Básico" : s.verifiedLevel === 2 ? "Intermedio" : "Avanzado"}
-                        </span>
-                      )}
-                      {s.verifiedSlug && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const url = `${window.location.origin}/badge/${s.verifiedSlug}`;
-                            navigator.clipboard
-                              .writeText(url)
-                              .then(() => toastSuccess("Link del badge copiado — compártelo en LinkedIn"))
-                              .catch(() => toastError("No se pudo copiar el link"));
-                          }}
-                          className="ml-1 inline-flex items-center rounded px-1 py-0.5 align-middle text-[10px] font-medium text-teal-600 underline-offset-2 hover:underline dark:text-teal-400"
-                          title="Copiar link público del badge"
-                        >
-                          Compartir
-                        </button>
-                      )}
                     </span>
                     <span
-                      className={`shrink-0 text-xs font-medium ${
-                        s.level === 5
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : s.level === 4
-                            ? "text-emerald-500 dark:text-emerald-400"
-                            : s.level === 3
-                              ? "text-yellow-600 dark:text-yellow-400"
-                              : s.level === 2
-                                ? "text-blue-500 dark:text-blue-400"
-                                : "text-zinc-400"
-                      }`}
+                      className={
+                        "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold " +
+                        (verifiedLabel
+                          ? "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-300"
+                          : "border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400")
+                      }
                     >
-                      {SKILL_LEVEL_LABEL[s.level] ?? `Nivel ${s.level}`}
+                      {verifiedLabel ? "TaskIO verificado" : "Autodeclarado"}
                     </span>
                   </div>
-                  <div className="mt-2 h-1.5 w-full rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all ${SKILL_BAR_COLOR[s.level]}`}
-                      style={{ width: `${pct}%` }}
-                    />
+
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-500 dark:text-zinc-400">
+                    {verifiedLabel ? (
+                      <>
+                        <span className="inline-flex items-center gap-1">
+                          <BadgeCheck className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                          Evaluado por TaskIO:{" "}
+                          <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
+                            {verifiedLabel}
+                          </strong>
+                        </span>
+                        {s.verifiedSlug && (
+                          <Link
+                            href={"/badge/" + s.verifiedSlug}
+                            className="font-medium text-teal-700 hover:underline dark:text-teal-300"
+                          >
+                            Ver credencial
+                          </Link>
+                        )}
+                      </>
+                    ) : (
+                      <span>
+                        Nivel declarado:{" "}
+                        <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
+                          {SKILL_LEVEL_LABEL[s.level] ?? "Nivel " + s.level}
+                        </strong>
+                      </span>
+                    )}
                   </div>
                 </li>
               );
@@ -1553,7 +1731,7 @@ function SectionCertifications({
       <div className={SECTION_HEADER}>
         <div>
           <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-            Certificaciones
+            Credenciales verificadas
           </h2>
           {verifiedBadges.length > 0 && !editing && (
             <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -1569,10 +1747,14 @@ function SectionCertifications({
           <button
             className={BTN_EDIT}
             onClick={open}
-            title="Editar certificaciones externas"
+            title={
+              certifications.length > 0
+                ? "Editar certificaciones externas"
+                : "Agregar una certificación externa"
+            }
           >
-            <PencilIcon />
-            Editar
+            {certifications.length > 0 ? <PencilIcon /> : <span aria-hidden="true">+</span>}
+            {certifications.length > 0 ? "Editar externas" : "Agregar externa"}
           </button>
         )}
       </div>
@@ -1630,19 +1812,17 @@ function SectionCertifications({
             </div>
           )}
 
-          <div
-            className={
-              verifiedBadges.length > 0
-                ? "border-t border-zinc-100 pt-3 dark:border-zinc-800"
-                : ""
-            }
-          >
-            {verifiedBadges.length > 0 && (
+          {certifications.length > 0 && (
+            <div
+              className={
+                verifiedBadges.length > 0
+                  ? "border-t border-zinc-100 pt-3 dark:border-zinc-800"
+                  : ""
+              }
+            >
               <p className="mb-2 text-[10px] font-semibold uppercase text-zinc-400">
-                Otras certificaciones
+                Certificaciones externas
               </p>
-            )}
-            {certifications.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {certifications.map((c) => (
                   <span key={c} className="badge">
@@ -1650,20 +1830,22 @@ function SectionCertifications({
                   </span>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm italic text-zinc-400">
-                {verifiedBadges.length > 0
-                  ? "Sin certificaciones externas"
-                  : "Sin certificaciones"}
-              </p>
-            )}
-          </div>
+            </div>
+          )}
+
+          {verifiedBadges.length === 0 && certifications.length === 0 && (
+            <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">
+              Presenta una evaluación gratuita y añade evidencia verificable a tu perfil.
+            </p>
+          )}
 
           <Link
             href="/certificaciones"
             className="inline-flex text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
           >
-            Explorar certificaciones TaskIO →
+            {verifiedBadges.length > 0
+              ? "Obtener otra credencial TaskIO →"
+              : "Explorar certificaciones TaskIO →"}
           </Link>
         </div>
       ) : (
@@ -1817,6 +1999,45 @@ export default function ProfileSummaryClient({
     }
   }, [experiences, initialTotalYears]);
 
+  const profileSteps: ProfileStep[] = [
+    {
+      label: "Contacto",
+      action: "Agrega tu ubicación y teléfono para que puedan contactarte.",
+      href: "#personal",
+      done: Boolean(user.firstName && user.lastName1 && user.location && user.phone),
+    },
+    {
+      label: "Experiencia",
+      action: "Agrega tu experiencia más reciente.",
+      href: "#experiencia",
+      done: experiences.length > 0,
+    },
+    {
+      label: "Educación",
+      action: "Registra tu formación académica o técnica.",
+      href: "#educacion",
+      done: education.length > 0,
+    },
+    {
+      label: "Skills",
+      action: "Añade las tecnologías que dominas.",
+      href: "#skills",
+      done: skills.length > 0,
+    },
+    {
+      label: "Idiomas",
+      action: "Indica los idiomas que utilizas y su nivel.",
+      href: "#idiomas",
+      done: languages.length > 0,
+    },
+    {
+      label: "CV",
+      action: "Crea o carga tu CV para completar tu perfil.",
+      href: "/cv/builder",
+      done: Boolean(user.resumeUrl),
+    },
+  ];
+
   return (
     <main className="w-full pb-8">
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pt-4 space-y-3">
@@ -1844,9 +2065,15 @@ export default function ProfileSummaryClient({
           </div>
         )}
 
+        <ProfileCompletion steps={profileSteps} />
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 space-y-6">
-            <SectionPersonal user={user} onChange={setUser} />
+            <SectionPersonal
+              user={user}
+              onChange={setUser}
+              totalYears={totalYears}
+            />
             <SectionExperience
               experiences={experiences}
               onChange={setExperiences}
@@ -1854,32 +2081,62 @@ export default function ProfileSummaryClient({
             <SectionEducation education={education} onChange={setEducation} />
 
             <section className={CARD} id="postulaciones">
-            <div className={SECTION_HEADER}>
+              <div className={SECTION_HEADER}>
                 <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Mis postulaciones</h2>
-                {applications.length > 5 && (
-                <Link href="/profile/applications" className={BTN_EDIT}>
+                {applications.length > 0 && (
+                  <Link href="/profile/applications" className={BTN_EDIT}>
                     Ver todas ({applications.length})
-                </Link>
+                  </Link>
                 )}
-            </div>
-            {applications.length === 0 ? (
+              </div>
+              {applications.length === 0 ? (
                 <div className="soft-panel p-4 flex items-center justify-between">
-                <p className="text-sm text-muted">Aún no has postulado.</p>
-                <Link href="/jobs" className="btn-ghost text-xs whitespace-nowrap shrink-0">Buscar vacantes</Link>
+                  <p className="text-sm text-muted">Aún no has postulado.</p>
+                  <Link href="/jobs" className="btn-ghost text-xs whitespace-nowrap shrink-0">
+                    Buscar vacantes
+                  </Link>
                 </div>
-            ) : (
+              ) : (
                 <ul className="space-y-2">
-                {applications.slice(0, 5).map(a => (
-                    <li key={a.id} className="soft-panel p-3 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <p className="text-sm font-medium truncate">{a.jobTitle} — {a.companyName}</p>
-                        <p className="text-xs text-muted">{fromNowSimple(a.createdAt)}</p>
-                    </div>
-                    <a href={`/jobs/${a.jobSlug ?? a.jobId}`} className="btn-ghost text-xs whitespace-nowrap shrink-0">Ver</a>
-                    </li>
-                ))}
+                  {applications.slice(0, 3).map((application) => {
+                    const status =
+                      APPLICATION_STATUS_CONFIG[application.status] ??
+                      APPLICATION_STATUS_CONFIG.SUBMITTED;
+
+                    return (
+                      <li
+                        key={application.id}
+                        className="soft-panel flex items-center justify-between gap-3 p-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="min-w-0 truncate text-sm font-medium">
+                              {application.jobTitle} — {application.companyName}
+                            </p>
+                            <span
+                              className={
+                                "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium " +
+                                status.className
+                              }
+                            >
+                              {status.label}
+                            </span>
+                          </div>
+                          <p className="mt-0.5 text-xs text-muted">
+                            {fromNowSimple(application.createdAt)}
+                          </p>
+                        </div>
+                        <Link
+                          href={"/jobs/" + (application.jobSlug ?? application.jobId)}
+                          className="btn-ghost shrink-0 whitespace-nowrap text-xs"
+                        >
+                          Ver
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
-            )}
+              )}
             </section>
           </div>
 
@@ -1993,7 +2250,7 @@ export default function ProfileSummaryClient({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-6 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
+                  <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-4 text-center dark:border-zinc-700 dark:bg-zinc-900/30">
                     <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800">
                       <svg
                         className="h-5 w-5 text-zinc-400"
@@ -2058,23 +2315,23 @@ export default function ProfileSummaryClient({
               )}
             </section>
 
-            <SectionSkills
-              skills={skills}
-              onChange={setSkills}
-              skillTermOptions={skillTermOptions}
-            />
             <SectionCertifications
               certifications={user.certifications}
               verifiedBadges={verifiedBadges}
               certOptions={certOptions}
               onChange={(certs) => setUser((u) => ({ ...u, certifications: certs }))}
             />
-            <PasswordSettingsCard hasPassword={user.hasPassword} compact />
+            <SectionSkills
+              skills={skills}
+              onChange={setSkills}
+              skillTermOptions={skillTermOptions}
+            />
             <SectionLanguages
               languages={languages}
               onChange={setLanguages}
               languageOptions={languageOptions}
             />
+            <PasswordSettingsCard hasPassword={user.hasPassword} compact collapsible />
           </aside>
         </div>
 
