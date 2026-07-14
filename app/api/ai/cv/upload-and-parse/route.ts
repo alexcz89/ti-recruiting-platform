@@ -1,121 +1,161 @@
-// app/api/ai/cv/upload-and-parse/route.ts
-// CAMBIOS:
-// 1. _meta excluido del response al cliente (no exponer trazabilidad interna)
-// 2. Sin otros cambios — lógica correcta
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { UTApi } from "uploadthing/server";
-import { extractCvText } from "@/lib/ai/extractCvText";
 import { analyzeCv } from "@/lib/ai/analyzeCv";
+import { extractCvText } from "@/lib/ai/extractCvText";
 import { normalizeSkillsFromAI } from "@/lib/ai/normalizeSkills";
+import { CvImportAnalysisSchema } from "@/lib/profile/cv-import";
+import { authOptions } from "@/lib/server/auth";
+import { prisma } from "@/lib/server/prisma";
+import { checkActionRateLimit } from "@/lib/server/rate-limit";
 
-const utapi = new UTApi();
+const MAX_FILE_SIZE = 8 * 1024 * 1024;
+const ACCEPTED_EXTENSIONS = [".pdf", ".doc", ".docx"];
+const ACCEPTED_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/octet-stream",
+]);
+
+function jsonNoStore(body: unknown, status = 200, extraHeaders?: HeadersInit) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "Cache-Control": "no-store",
+      ...extraHeaders,
+    },
+  });
+}
+
+function isAcceptedFile(file: File) {
+  const name = file.name.toLowerCase();
+  return (
+    ACCEPTED_EXTENSIONS.some((extension) => name.endsWith(extension)) &&
+    (!file.type || ACCEPTED_MIME_TYPES.has(file.type))
+  );
+}
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("file");
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return jsonNoStore({ error: "No autenticado" }, 401);
+    }
 
-    if (!(file instanceof File)) {
-      return NextResponse.json(
-        { error: "Archivo requerido en el campo 'file'" },
-        { status: 400 }
+    const me = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, role: true },
+    });
+    if (!me || me.role !== "CANDIDATE") {
+      return jsonNoStore({ error: "No autorizado" }, 403);
+    }
+
+    const rateLimit = checkActionRateLimit("cv-parse", me.id, {
+      maxAttempts: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (!rateLimit.allowed) {
+      return jsonNoStore(
+        { error: "Demasiados intentos. Espera antes de analizar otro CV." },
+        429,
+        { "Retry-After": String(rateLimit.retryAfter ?? 60) }
       );
     }
 
-    const fileName = file.name.toLowerCase();
-    const allowed =
-      fileName.endsWith(".pdf") ||
-      fileName.endsWith(".doc") ||
-      fileName.endsWith(".docx");
+    const formData = await req.formData();
+    const file = formData.get("file");
+    const previewOnly = formData.get("mode") === "preview";
 
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Formato no soportado. Solo PDF, DOC o DOCX." },
-        { status: 400 }
+    if (!(file instanceof File)) {
+      return jsonNoStore(
+        { error: "Archivo requerido en el campo 'file'" },
+        400
       );
+    }
+    if (!isAcceptedFile(file)) {
+      return jsonNoStore(
+        { error: "Formato no soportado. Solo PDF, DOC o DOCX." },
+        400
+      );
+    }
+    if (file.size <= 0 || file.size > MAX_FILE_SIZE) {
+      return jsonNoStore({ error: "El archivo debe pesar menos de 8 MB." }, 400);
     }
 
     const cvText = await extractCvText(file);
-
     if (!cvText || cvText.trim().length < 50) {
-      return NextResponse.json(
-        { error: "No se pudo extraer texto del CV" },
-        { status: 400 }
-      );
+      return jsonNoStore({ error: "No se pudo extraer texto del CV" }, 400);
     }
 
-    const aiResponse = await analyzeCv(cvText);
-
-    // ✅ Separar _meta del payload de datos — no exponer trazabilidad al cliente
-    const { _meta, ...analysis } = aiResponse;
-
-    // 🔍 DIAGNÓSTICO TEMPORAL — remover después de verificar
-    console.log("[CV parse] text length:", cvText.length);
-    console.log("[CV parse] location:", analysis.location);
-    console.log("[CV parse] phoneRaw:", analysis.phoneRaw);
-    console.log("[CV parse] phonePrimary:", analysis.phonePrimary);
-    console.log("[CV parse] languages:", JSON.stringify(analysis.languages));
-
+    const aiResponse = await analyzeCv(cvText, previewOnly ? undefined : me.id);
+    const { _meta: _internalMeta, ...analysis } = aiResponse;
     const rawSkills = Array.isArray(analysis.skills) ? analysis.skills : [];
     const normalizedSkills = await normalizeSkillsFromAI(rawSkills);
 
+    const safeAnalysis = CvImportAnalysisSchema.parse({
+      ...analysis,
+      skillsMatched: normalizedSkills,
+      phonePrimary: analysis.phonePrimary ?? null,
+      location: analysis.location ?? "",
+    });
+
+    // Mantener los campos consumidos por onboarding, ProfileForm y CV Builder.
     const enrichedAnalysis = {
       ...analysis,
-      skills: normalizedSkills.map((s) => s.label),
+      ...safeAnalysis,
+      skills: normalizedSkills.map((skill) => skill.label),
       skillsMatched: normalizedSkills,
       skillsRaw: rawSkills,
       skillsUnmatched: rawSkills.filter(
-        (r) =>
+        (raw) =>
           !normalizedSkills.some(
-            (n) => n.label.toLowerCase() === r.toLowerCase()
+            (skill) => skill.label.toLowerCase() === raw.toLowerCase()
           )
       ),
-      // Phone enrichment
       phoneRaw: analysis.phoneRaw ?? [],
-      phonePrimary: analysis.phonePrimary ?? null,
-      phoneWarning: (analysis.phoneRaw?.length ?? 0) > 1
-        ? "Detectamos más de un teléfono en tu CV. Verifica cuál deseas guardar."
-        : null,
-      // Location
-      location: analysis.location ?? "",
+      phoneWarning:
+        (analysis.phoneRaw?.length ?? 0) > 1
+          ? "Detectamos más de un teléfono en tu CV. Verifica cuál deseas guardar."
+          : null,
     };
 
-    const uploadResult = await utapi.uploadFiles(file);
+    if (previewOnly) {
+      return jsonNoStore({
+        success: true,
+        url: null,
+        fileName: file.name,
+        analysis: enrichedAnalysis,
+        textLength: cvText.length,
+      });
+    }
 
-    if (!uploadResult || uploadResult.error || !uploadResult.data) {
-      console.error("UploadThing upload error:", uploadResult?.error);
-      return NextResponse.json(
-        { error: "No se pudo subir el archivo" },
-        { status: 500 }
-      );
+    const uploadResult = await new UTApi().uploadFiles(file);
+    if (!uploadResult?.data || uploadResult.error) {
+      console.error("UploadThing CV upload error:", uploadResult?.error);
+      return jsonNoStore({ error: "No se pudo subir el archivo" }, 500);
     }
 
     const uploadedUrl = uploadResult.data.ufsUrl ?? uploadResult.data.url;
-
     if (!uploadedUrl) {
-      return NextResponse.json(
+      return jsonNoStore(
         { error: "No se recibió la URL del archivo subido" },
-        { status: 500 }
+        500
       );
     }
 
-    return NextResponse.json({
+    return jsonNoStore({
       success: true,
       url: uploadedUrl,
       fileName: file.name,
       analysis: enrichedAnalysis,
       textLength: cvText.length,
-      // _meta excluido intencionalmente — solo para logs internos
     });
   } catch (error) {
     console.error("CV upload-and-parse error:", error);
-    return NextResponse.json(
-      { error: "Error procesando CV" },
-      { status: 500 }
-    );
+    return jsonNoStore({ error: "Error procesando CV" }, 500);
   }
 }

@@ -23,6 +23,7 @@ type RateLimitStore = Map<string, RateLimitEntry>;
 // Stores separados por tipo de límite
 const emailLimitStore: RateLimitStore = new Map();
 const ipLimitStore: RateLimitStore = new Map();
+const actionLimitStore: RateLimitStore = new Map();
 
 /**
  * Limpia entradas expiradas cada 5 minutos
@@ -43,6 +44,7 @@ function setupCleanup(store: RateLimitStore) {
 // Inicializar cleanup
 setupCleanup(emailLimitStore);
 setupCleanup(ipLimitStore);
+setupCleanup(actionLimitStore);
 
 /**
  * Configuración de rate limits
@@ -151,6 +153,33 @@ export function checkIpRateLimit(
 }
 
 /**
+ * Rate limit para acciones autenticadas de alto costo (IA, uploads, etc.).
+ * El nombre de la accion evita que distintos endpoints compartan el contador.
+ */
+export function checkActionRateLimit(
+  action: string,
+  identifier: string,
+  config: { readonly maxAttempts: number; readonly windowMs: number }
+) {
+  const key = `${action.trim().toLowerCase()}:${identifier
+    .trim()
+    .toLowerCase()}`;
+  return checkRateLimit(
+    actionLimitStore,
+    key,
+    config.maxAttempts,
+    config.windowMs
+  );
+}
+
+export function resetActionRateLimit(action: string, identifier: string) {
+  const key = `${action.trim().toLowerCase()}:${identifier
+    .trim()
+    .toLowerCase()}`;
+  actionLimitStore.delete(key);
+}
+
+/**
  * Rate limit combinado: verifica tanto email como IP
  * Retorna el primer límite que falle
  */
@@ -213,6 +242,7 @@ export function getRateLimitStats() {
   return {
     emailLimits: emailLimitStore.size,
     ipLimits: ipLimitStore.size,
+    actionLimits: actionLimitStore.size,
   };
 }
 

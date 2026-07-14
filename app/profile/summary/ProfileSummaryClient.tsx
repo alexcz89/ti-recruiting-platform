@@ -8,6 +8,11 @@ import PhoneInputField from "@/components/PhoneInputField";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import PasswordSettingsCard from "@/components/account/PasswordSettingsCard";
 import { BadgeMedal } from "@/components/badges/BadgeMedal";
+import CvImportPreview from "./CvImportPreview";
+import type {
+  CvImportAnalysis,
+  CvImportSections,
+} from "@/lib/profile/cv-import";
 import {
   Phone,
   Mail,
@@ -26,6 +31,7 @@ import {
   AlertTriangle,
   Upload,
   Info,
+  Sparkles,
 } from "lucide-react";
 import { MonthYearPicker, FullDatePicker } from "@/components/ui/WheelPicker";
 
@@ -1942,40 +1948,154 @@ export default function ProfileSummaryClient({
   const [languages, setLanguages] = useState(initialLanguages);
   const [skills, setSkills] = useState(initialSkills);
   const [cvUploading, setCvUploading] = useState(false);
+  const [cvAnalyzing, setCvAnalyzing] = useState(false);
+  const [cvApplying, setCvApplying] = useState(false);
   const [cvError, setCvError] = useState<string | null>(null);
   const [cvSuccess, setCvSuccess] = useState(false);
+  const [pendingCvImport, setPendingCvImport] = useState<{
+    file: File;
+    analysis: CvImportAnalysis;
+  } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cvUploadModeRef = useRef<"replace" | "analyze">("analyze");
+  const cvBusy = cvUploading || cvAnalyzing || cvApplying;
 
-  async function handleCvReplace(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.type !== "application/pdf") {
-      setCvError("Solo se permiten archivos PDF");
-      return;
+  function openCvPicker(mode: "replace" | "analyze") {
+    cvUploadModeRef.current = mode;
+    fileInputRef.current?.click();
+  }
+
+  async function readApiError(response: Response, fallback: string) {
+    const payload = await response.json().catch(() => null);
+    return typeof payload?.error === "string" ? payload.error : fallback;
+  }
+
+  function validateCvFile(file: File) {
+    const extension = file.name.toLowerCase().split(".").pop();
+    if (!extension || !["pdf", "doc", "docx"].includes(extension)) {
+      return "Solo se permiten archivos PDF, DOC o DOCX";
     }
+    if (file.size > 8 * 1024 * 1024) {
+      return "El archivo debe pesar menos de 8 MB";
+    }
+    return null;
+  }
+
+  async function uploadCvFile(file: File) {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch("/api/profile/upload-resume", {
+      method: "POST",
+      body: form,
+    });
+    if (!response.ok) {
+      throw new Error(await readApiError(response, "No se pudo subir el archivo"));
+    }
+    const payload = await response.json();
+    if (typeof payload?.url !== "string") {
+      throw new Error("No se recibió la URL del CV");
+    }
+    return payload.url as string;
+  }
+
+  async function replaceCvOnly(file: File) {
     setCvError(null);
     setCvSuccess(false);
     setCvUploading(true);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const upRes = await fetch("/api/profile/upload-resume", { method: "POST", body: form });
-      if (!upRes.ok) throw new Error("No se pudo subir el archivo");
-      const { url } = await upRes.json();
+      const url = await uploadCvFile(file);
       const saveRes = await fetch("/api/profile/set-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resumeUrl: url }),
       });
-      if (!saveRes.ok) throw new Error("No se pudo guardar el CV");
+      if (!saveRes.ok) {
+        throw new Error(await readApiError(saveRes, "No se pudo guardar el CV"));
+      }
       setUser((u) => ({ ...u, resumeUrl: url }));
       setCvSuccess(true);
       setTimeout(() => setCvSuccess(false), 4000);
-    } catch (err: any) {
-      setCvError(err.message || "Error al reemplazar el CV");
+    } catch (error) {
+      setCvError(error instanceof Error ? error.message : "Error al reemplazar el CV");
     } finally {
       setCvUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function analyzeCvForImport(file: File) {
+    setCvError(null);
+    setCvSuccess(false);
+    setCvAnalyzing(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("mode", "preview");
+      const response = await fetch("/api/ai/cv/upload-and-parse", {
+        method: "POST",
+        body: form,
+      });
+      if (!response.ok) {
+        throw new Error(await readApiError(response, "No se pudo analizar el CV"));
+      }
+      const payload = await response.json();
+      if (!payload?.analysis) {
+        throw new Error("El análisis no devolvió datos válidos");
+      }
+      setPendingCvImport({ file, analysis: payload.analysis as CvImportAnalysis });
+      window.setTimeout(() => {
+        document.getElementById("cv-import-preview")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 0);
+    } catch (error) {
+      setCvError(error instanceof Error ? error.message : "Error al analizar el CV");
+    } finally {
+      setCvAnalyzing(false);
+    }
+  }
+
+  async function handleCvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const validationError = validateCvFile(file);
+    if (validationError) {
+      setCvError(validationError);
+      return;
+    }
+    if (cvUploadModeRef.current === "analyze") {
+      await analyzeCvForImport(file);
+      return;
+    }
+    await replaceCvOnly(file);
+  }
+
+  async function applyCvImport(sections: CvImportSections) {
+    if (!pendingCvImport) return;
+    setCvError(null);
+    setCvApplying(true);
+    try {
+      const resumeUrl = await uploadCvFile(pendingCvImport.file);
+      const response = await fetch("/api/profile/cv-apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeUrl,
+          sections,
+          analysis: pendingCvImport.analysis,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(
+          await readApiError(response, "No se pudo actualizar el perfil")
+        );
+      }
+      window.location.assign("/profile/summary?cvImported=1");
+    } catch (error) {
+      setCvError(error instanceof Error ? error.message : "Error al actualizar el perfil");
+    } finally {
+      setCvApplying(false);
     }
   }
 
@@ -2049,7 +2169,7 @@ export default function ProfileSummaryClient({
 
         {flashCvImported && (
           <div className="border text-sm rounded-xl px-3 py-2 border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-200">
-            Hemos importado el CV que creaste en el constructor. Ya está guardado en tu perfil.
+            CV actualizado. Agregamos la información seleccionada sin borrar tus datos anteriores.
           </div>
         )}
 
@@ -2062,6 +2182,26 @@ export default function ProfileSummaryClient({
             }`}
           >
             {appliedMsg.text}
+          </div>
+        )}
+
+        {pendingCvImport && (
+          <div id="cv-import-preview" className="scroll-mt-24">
+            <CvImportPreview
+              key={`${pendingCvImport.file.name}-${pendingCvImport.file.lastModified}`}
+              analysis={pendingCvImport.analysis}
+              fileName={pendingCvImport.file.name}
+              currentCounts={{
+                experiences: experiences.length,
+                education: education.length,
+                skills: skills.length,
+                languages: languages.length,
+              }}
+              busy={cvApplying}
+              error={cvError}
+              onCancel={() => setPendingCvImport(null)}
+              onApply={applyCvImport}
+            />
           </div>
         )}
 
@@ -2146,13 +2286,13 @@ export default function ProfileSummaryClient({
                 CV
               </h2>
 
-              {/* Hidden file input — shared between "Reemplazar CV" and "Cargar CV" */}
+              {/* El modo se define antes de abrir este selector compartido. */}
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf,application/pdf"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 className="hidden"
-                onChange={handleCvReplace}
+                onChange={handleCvFile}
               />
 
               {user.resumeUrl ? (
@@ -2205,8 +2345,30 @@ export default function ProfileSummaryClient({
 
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={cvUploading}
+                    onClick={() => openCvPicker("analyze")}
+                    disabled={cvBusy}
+                    className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {cvAnalyzing ? (
+                      <>
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Analizando CV…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        Analizar y actualizar perfil
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => openCvPicker("replace")}
+                    disabled={cvBusy}
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 transition-colors disabled:opacity-50"
                   >
                     {cvUploading ? (
@@ -2220,7 +2382,7 @@ export default function ProfileSummaryClient({
                     ) : (
                       <>
                         <Upload className="h-4 w-4" />
-                        Reemplazar CV
+                        Reemplazar sólo el archivo
                       </>
                     )}
                   </button>
@@ -2237,7 +2399,7 @@ export default function ProfileSummaryClient({
                   <div className="flex items-start gap-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 px-3 py-2">
                     <Info className="h-3.5 w-3.5 shrink-0 mt-0.5 text-zinc-400" />
                     <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                      Solo se reemplaza el archivo PDF. Tu experiencia, skills y demas datos del perfil no se modifican.
+                      Analizar muestra una vista previa para elegir qué agregar. Reemplazar sólo el archivo conserva el perfil exactamente como está.
                     </p>
                   </div>
 
@@ -2274,17 +2436,32 @@ export default function ProfileSummaryClient({
                     </p>
                   </div>
 
-                  <Link
-                    href="/cv/builder"
-                    className="inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => openCvPicker("analyze")}
+                    disabled={cvBusy}
+                    className="inline-flex min-h-[42px] w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    Crear CV en CV Builder
-                  </Link>
+                    {cvAnalyzing ? (
+                      <>
+                        <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        Analizando CV…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        Analizar y completar perfil
+                      </>
+                    )}
+                  </button>
 
                   <button
                     type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={cvUploading}
+                    onClick={() => openCvPicker("replace")}
+                    disabled={cvBusy}
                     className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60 transition-colors disabled:opacity-50"
                   >
                     {cvUploading ? (
@@ -2298,7 +2475,7 @@ export default function ProfileSummaryClient({
                     ) : (
                       <>
                         <Upload className="h-4 w-4" />
-                        Cargar CV (PDF)
+                        Cargar sólo el archivo
                       </>
                     )}
                   </button>
@@ -2311,6 +2488,20 @@ export default function ProfileSummaryClient({
                   {cvError && (
                     <p className="text-center text-xs text-red-500">{cvError}</p>
                   )}
+
+                  <div className="flex items-start gap-2 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
+                    <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" />
+                    <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">
+                      Podrás revisar lo detectado antes de modificar tu perfil.
+                    </p>
+                  </div>
+
+                  <Link
+                    href="/cv/builder"
+                    className="inline-flex w-full items-center justify-center rounded-lg px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                  >
+                    Crear CV en CV Builder
+                  </Link>
                 </div>
               )}
             </section>
