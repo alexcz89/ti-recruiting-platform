@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/server/auth";
 import { NotificationService } from "@/lib/notifications/service";
 import { Prisma } from "@prisma/client";
 import { getCurrentBillingCycle } from "@/lib/assessments/pricing";
+import { badgeLevelToSkillLevel } from "@/lib/badges";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -282,6 +283,34 @@ export async function POST(
               isPublic: true,
             },
           });
+
+          // Una certificacion verificada tambien debe existir como skill
+          // estructurado. Nunca reducimos un nivel declarado previamente.
+          const verifiedSkillLevel = badgeLevelToSkillLevel(tpl.badgeLevel);
+          const existingSkill = await tx.candidateSkill.findUnique({
+            where: {
+              userId_termId: {
+                userId: user.id,
+                termId: tpl.badgeTermId,
+              },
+            },
+            select: { id: true, level: true },
+          });
+
+          if (!existingSkill) {
+            await tx.candidateSkill.create({
+              data: {
+                userId: user.id,
+                termId: tpl.badgeTermId,
+                level: verifiedSkillLevel,
+              },
+            });
+          } else if ((existingSkill.level ?? 0) < verifiedSkillLevel) {
+            await tx.candidateSkill.update({
+              where: { id: existingSkill.id },
+              data: { level: verifiedSkillLevel },
+            });
+          }
         }
 
         let inviteIdForLedger: string | null = attempt.inviteId ?? null;

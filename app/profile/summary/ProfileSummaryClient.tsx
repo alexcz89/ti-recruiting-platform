@@ -7,6 +7,7 @@ import { toastSuccess, toastError } from "@/lib/ui/toast";
 import PhoneInputField from "@/components/PhoneInputField";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import PasswordSettingsCard from "@/components/account/PasswordSettingsCard";
+import { BadgeMedal } from "@/components/badges/BadgeMedal";
 import {
   Phone,
   Mail,
@@ -95,6 +96,19 @@ export type Skill = {
   verifiedLevel?: number | null;
   /** Slug de la página pública del badge (null si el badge es privado) */
   verifiedSlug?: string | null;
+};
+
+export type VerifiedBadge = {
+  termId: string;
+  skill: string;
+  level: number;
+  levelLabel: string;
+  slug: string;
+  isPublic: boolean;
+  isCurrent: boolean;
+  earnedAt: string;
+  expiresAt: string;
+  logoSrc: string | null;
 };
 
 export type Application = {
@@ -1272,13 +1286,23 @@ function SectionSkills({
                   <span className="min-w-0 break-words text-sm font-medium">
                     {s.label}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => removeSkill(s.termId)}
-                    className="shrink-0 text-xs text-red-400 hover:text-red-600"
-                  >
-                    ✕
-                  </button>
+                  {s.verifiedLevel != null ? (
+                    <span
+                      className="shrink-0 text-[10px] font-semibold uppercase text-teal-600 dark:text-teal-400"
+                      title="Este skill está respaldado por una credencial TaskIO vigente"
+                    >
+                      Verificado
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => removeSkill(s.termId)}
+                      className="shrink-0 text-xs text-red-400 hover:text-red-600"
+                      aria-label={"Eliminar " + s.label}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 <div className="flex gap-1 flex-wrap">
@@ -1466,10 +1490,12 @@ function SectionLanguages({
    ════════════════════════════════════════════════════════════ */
 function SectionCertifications({
   certifications,
+  verifiedBadges,
   onChange,
   certOptions,
 }: {
   certifications: string[];
+  verifiedBadges: VerifiedBadge[];
   onChange: (c: string[]) => void;
   certOptions: string[];
 }) {
@@ -1477,6 +1503,7 @@ function SectionCertifications({
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState<string[]>(certifications);
   const [query, setQuery] = useState("");
+  const activeBadgeCount = verifiedBadges.filter((badge) => badge.isCurrent).length;
 
   function open() {
     setDraft([...certifications]);
@@ -1524,11 +1551,26 @@ function SectionCertifications({
   return (
     <section className={CARD} id="certificaciones">
       <div className={SECTION_HEADER}>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
-          Certificaciones
-        </h2>
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+            Certificaciones
+          </h2>
+          {verifiedBadges.length > 0 && !editing && (
+            <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+              {activeBadgeCount}{" "}
+              {activeBadgeCount === 1
+                ? "verificada"
+                : "verificadas"}{" "}
+              por TaskIO
+            </p>
+          )}
+        </div>
         {!editing && (
-          <button className={BTN_EDIT} onClick={open}>
+          <button
+            className={BTN_EDIT}
+            onClick={open}
+            title="Editar certificaciones externas"
+          >
             <PencilIcon />
             Editar
           </button>
@@ -1536,17 +1578,94 @@ function SectionCertifications({
       </div>
 
       {!editing ? (
-        certifications.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
-            {certifications.map((c) => (
-              <span key={c} className="badge">
-                {c}
-              </span>
-            ))}
+        <div className="space-y-4">
+          {verifiedBadges.length > 0 && (
+            <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {verifiedBadges.map((badge) => (
+                <div key={badge.termId} className="flex items-center gap-3 py-3 first:pt-0">
+                  <div className="shrink-0">
+                    <BadgeMedal
+                      skill={badge.skill}
+                      level={badge.level}
+                      state="earned"
+                      size={44}
+                      logoSrc={badge.logoSrc}
+                      variant="compact"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        {badge.skill}
+                      </p>
+                      <span
+                        className={
+                          "rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase " +
+                          (badge.isCurrent
+                            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                            : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300")
+                        }
+                      >
+                        {badge.isCurrent ? "Verificada" : "Vencida"}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      {badge.levelLabel} · {badge.isCurrent ? "Vigente hasta" : "Venció"}{" "}
+                      {new Date(badge.expiresAt).toLocaleDateString("es-MX", {
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                  {badge.isPublic && (
+                    <Link
+                      href={"/badge/" + badge.slug}
+                      className="shrink-0 text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
+                    >
+                      Ver
+                    </Link>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div
+            className={
+              verifiedBadges.length > 0
+                ? "border-t border-zinc-100 pt-3 dark:border-zinc-800"
+                : ""
+            }
+          >
+            {verifiedBadges.length > 0 && (
+              <p className="mb-2 text-[10px] font-semibold uppercase text-zinc-400">
+                Otras certificaciones
+              </p>
+            )}
+            {certifications.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {certifications.map((c) => (
+                  <span key={c} className="badge">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm italic text-zinc-400">
+                {verifiedBadges.length > 0
+                  ? "Sin certificaciones externas"
+                  : "Sin certificaciones"}
+              </p>
+            )}
           </div>
-        ) : (
-          <p className="text-sm text-zinc-400 italic">Sin certificaciones</p>
-        )
+
+          <Link
+            href="/certificaciones"
+            className="inline-flex text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
+          >
+            Explorar certificaciones TaskIO →
+          </Link>
+        </div>
       ) : (
         <div className="space-y-3 border-t border-zinc-100 dark:border-zinc-800 pt-3">
           <div className="relative">
@@ -1610,6 +1729,7 @@ export default function ProfileSummaryClient({
   education: initialEducation,
   languages: initialLanguages,
   skills: initialSkills,
+  verifiedBadges,
   applications,
   totalYears: initialTotalYears,
   languageOptions,
@@ -1624,6 +1744,7 @@ export default function ProfileSummaryClient({
   education: Education[];
   languages: Language[];
   skills: Skill[];
+  verifiedBadges: VerifiedBadge[];
   applications: Application[];
   totalYears: number | null;
   languageOptions: { id: string; label: string }[];
@@ -1942,16 +2063,17 @@ export default function ProfileSummaryClient({
               onChange={setSkills}
               skillTermOptions={skillTermOptions}
             />
+            <SectionCertifications
+              certifications={user.certifications}
+              verifiedBadges={verifiedBadges}
+              certOptions={certOptions}
+              onChange={(certs) => setUser((u) => ({ ...u, certifications: certs }))}
+            />
             <PasswordSettingsCard hasPassword={user.hasPassword} compact />
             <SectionLanguages
               languages={languages}
               onChange={setLanguages}
               languageOptions={languageOptions}
-            />
-            <SectionCertifications
-              certifications={user.certifications}
-              certOptions={certOptions}
-              onChange={(certs) => setUser((u) => ({ ...u, certifications: certs }))}
             />
           </aside>
         </div>

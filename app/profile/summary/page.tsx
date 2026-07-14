@@ -6,6 +6,13 @@ import { prisma } from "@/lib/server/prisma";
 import { fromNow } from "@/lib/dates";
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/server/skills";
 import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
+import {
+  badgeExpiresAt,
+  badgeLevelLabel,
+  badgeLevelToSkillLevel,
+  badgeLogoSrc,
+  isBadgeCurrent,
+} from "@/lib/badges";
 import ProfileSummaryClient from "./ProfileSummaryClient";
 
 export const metadata = { title: "Mi perfil | Bolsa TI" };
@@ -83,15 +90,71 @@ export default async function ProfileSummaryPage({
   // Badges verificados del candidato — nivel más alto por skill (con slug público)
   const myBadges = await prisma.candidateBadge.findMany({
     where: { candidateId: me.id },
-    select: { termId: true, level: true, slug: true, isPublic: true },
+    orderBy: { earnedAt: "desc" },
+    select: {
+      termId: true,
+      level: true,
+      slug: true,
+      isPublic: true,
+      earnedAt: true,
+      term: { select: { label: true, slug: true } },
+    },
   });
-  const verifiedByTerm = new Map<string, { level: number; slug: string; isPublic: boolean }>();
+
+  // En el perfil mostramos una credencial por tecnologia: primero una vigente
+  // y, entre credenciales con el mismo estado, el nivel mas alto.
+  const verifiedByTerm = new Map<string, (typeof myBadges)[number]>();
   for (const b of myBadges) {
     const prev = verifiedByTerm.get(b.termId);
-    if (!prev || b.level > prev.level) {
-      verifiedByTerm.set(b.termId, { level: b.level, slug: b.slug, isPublic: b.isPublic });
+    const current = isBadgeCurrent(b.earnedAt);
+    const prevCurrent = prev ? isBadgeCurrent(prev.earnedAt) : false;
+    if (!prev || (current && !prevCurrent) || (current === prevCurrent && b.level > prev.level)) {
+      verifiedByTerm.set(b.termId, b);
     }
   }
+
+  const profileSkills = candidateSkills.map((s) => {
+    const badge = verifiedByTerm.get(s.termId) ?? null;
+    const currentBadge = badge && isBadgeCurrent(badge.earnedAt) ? badge : null;
+    return {
+      termId: s.termId,
+      label: s.term.label,
+      level: Math.max(
+        s.level ?? 0,
+        currentBadge ? badgeLevelToSkillLevel(currentBadge.level) : 0
+      ) as any,
+      verifiedLevel: currentBadge?.level ?? null,
+      verifiedSlug: currentBadge?.isPublic ? currentBadge.slug : null,
+    };
+  });
+
+  const profileSkillTerms = new Set(profileSkills.map((skill) => skill.termId));
+  for (const badge of verifiedByTerm.values()) {
+    if (!isBadgeCurrent(badge.earnedAt) || profileSkillTerms.has(badge.termId)) continue;
+    profileSkills.push({
+      termId: badge.termId,
+      label: badge.term.label,
+      level: badgeLevelToSkillLevel(badge.level) as any,
+      verifiedLevel: badge.level,
+      verifiedSlug: badge.isPublic ? badge.slug : null,
+    });
+  }
+  profileSkills.sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || a.label.localeCompare(b.label));
+
+  const verifiedBadges = [...verifiedByTerm.values()]
+    .map((badge) => ({
+      termId: badge.termId,
+      skill: badge.term.label,
+      level: badge.level,
+      levelLabel: badgeLevelLabel(badge.level),
+      slug: badge.slug,
+      isPublic: badge.isPublic,
+      isCurrent: isBadgeCurrent(badge.earnedAt),
+      earnedAt: badge.earnedAt.toISOString(),
+      expiresAt: badgeExpiresAt(badge.earnedAt).toISOString(),
+      logoSrc: badgeLogoSrc(badge.term.slug),
+    }))
+    .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || a.skill.localeCompare(b.skill));
 
   const myApps = await prisma.application.findMany({
     where: { candidateId: me.id },
@@ -217,16 +280,8 @@ export default async function ProfileSummaryPage({
         label: l.term.label,
         level: l.level as any,
       }))}
-      skills={candidateSkills.map((s) => {
-        const badge = verifiedByTerm.get(s.termId) ?? null;
-        return {
-          termId: s.termId,
-          label: s.term.label,
-          level: s.level as any,
-          verifiedLevel: badge?.level ?? null,
-          verifiedSlug: badge && badge.isPublic ? badge.slug : null,
-        };
-      })}
+      skills={profileSkills}
+      verifiedBadges={verifiedBadges}
       applications={myApps.map((a) => ({
         id: a.id,
         createdAt: a.createdAt.toISOString(),
