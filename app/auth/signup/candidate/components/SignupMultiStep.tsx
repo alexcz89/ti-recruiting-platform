@@ -331,6 +331,17 @@ export default function SignupMultiStep({
         </div>
 
         <div className="px-6 py-5 space-y-4">
+          <div className="flex min-h-[48px] items-center justify-between gap-3 rounded-xl border border-emerald-300/70 bg-emerald-50 px-3 py-2.5 dark:border-emerald-800 dark:bg-emerald-950/30">
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              {"\u00bfYa tienes cuenta?"}
+            </span>
+            <a
+              href={signinHref}
+              className="inline-flex min-h-[36px] shrink-0 items-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
+            >
+              {"Inicia sesi\u00f3n"}
+            </a>
+          </div>
           {/* ── Botón Google — solo en paso 1 ── */}
           {currentStep === 1 && (
             <div className="space-y-4">
@@ -425,17 +436,6 @@ export default function SignupMultiStep({
               Privacidad
             </a>
             . Sin spam.
-          </p>
-
-          {/* Link a login */}
-          <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-            ¿Ya tienes cuenta?{" "}
-            <a
-              href={signinHref}
-              className="font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
-            >
-              Inicia sesión
-            </a>
           </p>
         </div>
       </div>
