@@ -10,6 +10,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
+import { validateReadOnlySqlQuery, validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
 
 function jsonNoStore(data: unknown, status = 200) {
   return NextResponse.json(data, {
@@ -71,6 +72,18 @@ export async function POST(request: Request) {
 
     if (!judge0Service.isLanguageSupported(language)) {
       return jsonNoStore({ error: `Lenguaje no soportado: ${language}` }, 400);
+    }
+
+    if (language === "sql") {
+      const queryValidation = validateReadOnlySqlQuery(code);
+      if (!queryValidation.ok) {
+        return jsonNoStore({ error: queryValidation.error }, 400);
+      }
+
+      const datasetValidation = validateSqlDatasetSetup(customInput);
+      if (!datasetValidation.ok) {
+        return jsonNoStore({ error: datasetValidation.error }, 400);
+      }
     }
 
     // Rate limit ligero: máx 30 custom runs por minuto por candidato

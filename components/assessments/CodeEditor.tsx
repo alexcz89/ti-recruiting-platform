@@ -84,8 +84,9 @@ function isNonEmptyString(v: any): v is string {
 // ✅ NUEVO: limpiar el input del test case para mostrarlo legible
 // El input es código runner (ej: "console.log(JSON.stringify(twoSum([2,7,11,15], 9)));")
 // Extraemos solo los argumentos para mostrar algo limpio al candidato
-function formatInputDisplay(input: string): string {
+function formatInputDisplay(input: string, language?: string): string {
   if (!input) return input;
+  if (language === 'sql') return 'Dataset SQL de prueba';
   // Intentar extraer argumentos del último llamado a función
   const match = input.match(/\(([^)]+(?:\[[^\]]*\][^)]*)?)\)\s*[;)]?\s*$/);
   if (match) return match[1];
@@ -209,6 +210,7 @@ export default function CodeEditor({
     csharp: 'C#',
     go: 'Go',
     rust: 'Rust',
+    sql: 'SQL',
   };
 
   const monacoLanguages: Record<string, string> = {
@@ -221,6 +223,7 @@ export default function CodeEditor({
     csharp: 'csharp',
     go: 'go',
     rust: 'rust',
+    sql: 'sql',
   };
 
   const handleRunTests = async () => {
@@ -693,17 +696,25 @@ export default function CodeEditor({
                 <div className="flex flex-col gap-4 bg-gray-50 p-5 dark:bg-slate-900/20">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-slate-300">
-                      Input / Runner personalizado
+                      {selectedLanguage === 'sql' ? 'Dataset SQL personalizado' : 'Input / Runner personalizado'}
                     </label>
                     <p className="mb-3 text-xs text-gray-500 dark:text-slate-400">
-                      Para JS/TS: escribe el código runner que llama tu función (ej:{' '}
-                      <code className="rounded bg-gray-200 px-1 dark:bg-slate-800">console.log(solution(42))</code>).
-                      Para otros lenguajes: escribe el stdin que recibirá tu programa.
+                      {selectedLanguage === 'sql' ? (
+                        <>Opcional: define tablas y datos para probar tu consulta. Este dataset existe solo durante esta ejecución.</>
+                      ) : (
+                        <>
+                          Para JS/TS: escribe el código runner que llama tu función (ej:{' '}
+                          <code className="rounded bg-gray-200 px-1 dark:bg-slate-800">console.log(solution(42))</code>).
+                          Para otros lenguajes: escribe el stdin que recibirá tu programa.
+                        </>
+                      )}
                     </p>
                     <textarea
                       value={customInput}
                       onChange={(e) => setCustomInput(e.target.value)}
-                      placeholder="// Ej: console.log(solution([1,2,3], 5))"
+                      placeholder={selectedLanguage === 'sql'
+                        ? "CREATE TABLE usuarios (id INTEGER, nombre TEXT);\nINSERT INTO usuarios VALUES (1, 'Ana');"
+                        : "// Ej: console.log(solution([1,2,3], 5))"}
                       rows={4}
                       className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
@@ -835,7 +846,7 @@ export default function CodeEditor({
                                       <div>
                                         <span className="font-medium text-gray-600 dark:text-slate-400">Input: </span>
                                         <code className="rounded bg-gray-200 px-1.5 py-0.5 font-mono text-gray-800 dark:bg-slate-800/80 dark:text-slate-200">
-                                          {formatInputDisplay(result.input || '')}
+                                          {formatInputDisplay(result.input || '', selectedLanguage)}
                                         </code>
                                       </div>
                                       <div>
