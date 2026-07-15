@@ -9,6 +9,7 @@ import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
 import {
   badgeExpiresAt,
   badgeLevelLabel,
+  buildLinkedInCertificationUrl,
   badgeLevelToSkillLevel,
   badgeLogoSrc,
   isBadgeCurrent,
@@ -101,6 +102,25 @@ export default async function ProfileSummaryPage({
     },
   });
 
+  const activeBadgeExams = await prisma.assessmentTemplate.findMany({
+    where: {
+      isBadgeExam: true,
+      isActive: true,
+      isGlobal: true,
+      badgeTermId: { in: candidateSkills.map((skill) => skill.termId) },
+    },
+    orderBy: { badgeLevel: "asc" },
+    select: { id: true, badgeTermId: true },
+  });
+
+  const certificationExamByTerm = new Map<string, string>();
+  for (const exam of activeBadgeExams) {
+    if (!exam.badgeTermId || certificationExamByTerm.has(exam.badgeTermId)) {
+      continue;
+    }
+    certificationExamByTerm.set(exam.badgeTermId, exam.id);
+  }
+
   // En el perfil mostramos una credencial por tecnologia: primero una vigente
   // y, entre credenciales con el mismo estado, el nivel mas alto.
   const verifiedByTerm = new Map<string, (typeof myBadges)[number]>();
@@ -125,6 +145,9 @@ export default async function ProfileSummaryPage({
       ) as any,
       verifiedLevel: currentBadge?.level ?? null,
       verifiedSlug: currentBadge?.isPublic ? currentBadge.slug : null,
+      certificationTemplateId: currentBadge
+        ? null
+        : (certificationExamByTerm.get(s.termId) ?? null),
     };
   });
 
@@ -137,10 +160,12 @@ export default async function ProfileSummaryPage({
       level: badgeLevelToSkillLevel(badge.level) as any,
       verifiedLevel: badge.level,
       verifiedSlug: badge.isPublic ? badge.slug : null,
+      certificationTemplateId: null,
     });
   }
   profileSkills.sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || a.label.localeCompare(b.label));
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
   const verifiedBadges = [...verifiedByTerm.values()]
     .map((badge) => ({
       termId: badge.termId,
@@ -153,6 +178,16 @@ export default async function ProfileSummaryPage({
       earnedAt: badge.earnedAt.toISOString(),
       expiresAt: badgeExpiresAt(badge.earnedAt).toISOString(),
       logoSrc: badgeLogoSrc(badge.term.slug),
+      linkedInUrl: badge.isPublic
+        ? buildLinkedInCertificationUrl({
+            skill: badge.term.label,
+            level: badge.level,
+            slug: badge.slug,
+            earnedAt: badge.earnedAt,
+            appUrl,
+            organizationId: process.env.LINKEDIN_ORGANIZATION_ID,
+          })
+        : null,
     }))
     .sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent) || a.skill.localeCompare(b.skill));
 

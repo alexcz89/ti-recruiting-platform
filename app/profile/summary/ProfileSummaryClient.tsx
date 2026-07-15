@@ -8,6 +8,7 @@ import PhoneInputField from "@/components/PhoneInputField";
 import LocationAutocomplete from "@/components/LocationAutocomplete";
 import PasswordSettingsCard from "@/components/account/PasswordSettingsCard";
 import { BadgeMedal } from "@/components/badges/BadgeMedal";
+import { StartBadgeExamButton } from "@/components/badges/StartBadgeExamButton";
 import CvImportPreview from "./CvImportPreview";
 import type {
   CvImportAnalysis,
@@ -107,6 +108,8 @@ export type Skill = {
   verifiedLevel?: number | null;
   /** Slug de la página pública del badge (null si el badge es privado) */
   verifiedSlug?: string | null;
+  /** Examen activo que permite verificar este skill, si existe. */
+  certificationTemplateId?: string | null;
 };
 
 export type VerifiedBadge = {
@@ -120,6 +123,7 @@ export type VerifiedBadge = {
   earnedAt: string;
   expiresAt: string;
   logoSrc: string | null;
+  linkedInUrl: string | null;
 };
 
 export type Application = {
@@ -1419,12 +1423,21 @@ function SectionSkills({
                         )}
                       </>
                     ) : (
-                      <span>
-                        Nivel declarado:{" "}
-                        <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
-                          {SKILL_LEVEL_LABEL[s.level] ?? "Nivel " + s.level}
-                        </strong>
-                      </span>
+                      <>
+                        <span>
+                          Nivel declarado:{" "}
+                          <strong className="font-semibold text-zinc-700 dark:text-zinc-200">
+                            {SKILL_LEVEL_LABEL[s.level] ?? "Nivel " + s.level}
+                          </strong>
+                        </span>
+                        {s.certificationTemplateId && (
+                          <StartBadgeExamButton
+                            templateId={s.certificationTemplateId}
+                            label="Certificar este skill →"
+                            variant="link"
+                          />
+                        )}
+                      </>
                     )}
                   </div>
                 </li>
@@ -1806,12 +1819,26 @@ function SectionCertifications({
                     </p>
                   </div>
                   {badge.isPublic && (
-                    <Link
-                      href={"/badge/" + badge.slug}
-                      className="shrink-0 text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
-                    >
-                      Ver
-                    </Link>
+                    <div className="flex shrink-0 items-center gap-2">
+                      {badge.linkedInUrl && (
+                        <a
+                          href={badge.linkedInUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex min-h-[32px] items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/60"
+                          title="Añadir esta credencial a LinkedIn"
+                        >
+                          <Linkedin className="h-3.5 w-3.5" />
+                          LinkedIn
+                        </a>
+                      )}
+                      <Link
+                        href={"/badge/" + badge.slug}
+                        className="inline-flex min-h-[32px] items-center rounded-md px-1.5 text-xs font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                      >
+                        Ver
+                      </Link>
+                    </div>
                   )}
                 </div>
               ))}
