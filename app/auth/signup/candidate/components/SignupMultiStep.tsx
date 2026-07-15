@@ -337,7 +337,7 @@ export default function SignupMultiStep({
             </span>
             <a
               href={signinHref}
-              className="inline-flex min-h-[36px] shrink-0 items-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900"
+              className="inline-flex min-h-[36px] shrink-0 items-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold !text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:border dark:border-emerald-400/30 dark:bg-emerald-600 dark:!text-white dark:shadow-[0_0_0_1px_rgba(52,211,153,0.12)] dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-zinc-900"
             >
               {"Inicia sesi\u00f3n"}
             </a>
