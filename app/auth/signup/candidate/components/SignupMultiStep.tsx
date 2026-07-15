@@ -16,6 +16,7 @@ import {
 } from "@/lib/validation";
 import { createCandidateImproved } from "../actions";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 import ProgressBar from "./ProgressBar";
 import Step1Basic from "./Step1Basic";
@@ -57,6 +58,7 @@ interface Props {
   fromCvBuilder?: boolean;
   prefillData?: Partial<FormData>;
   cvDraft?: any;
+  callbackUrl?: string;
 }
 
 // ============================================
@@ -117,8 +119,14 @@ export default function SignupMultiStep({
   fromCvBuilder = false,
   prefillData = {},
   cvDraft,
+  callbackUrl,
 }: Props) {
   const router = useRouter();
+  const safeCallbackUrl = sanitizeInternalCallbackUrl(callbackUrl);
+  const postAuthUrl = safeCallbackUrl || "/onboarding/candidate";
+  const signinHref = safeCallbackUrl
+    ? `/auth/signin?role=CANDIDATE&callbackUrl=${encodeURIComponent(safeCallbackUrl)}`
+    : "/auth/signin?role=CANDIDATE";
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -183,7 +191,7 @@ export default function SignupMultiStep({
   // ── Google OAuth ──────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
-    await signIn("google", { callbackUrl: "/onboarding/candidate" });
+    await signIn("google", { callbackUrl: postAuthUrl });
   };
 
   // ── Navegación entre pasos ────────────────────────────────
@@ -253,7 +261,11 @@ export default function SignupMultiStep({
         role: "CANDIDATE" as const,
       };
 
-      const result = await createCandidateImproved(payload, cvDraft);
+      const result = await createCandidateImproved(
+        payload,
+        cvDraft,
+        safeCallbackUrl || undefined
+      );
 
       if (!result?.ok) {
         // ✅ Fix #23: Usar mensajes de error específicos
@@ -280,9 +292,14 @@ export default function SignupMultiStep({
         } catch {}
       }
 
-      router.push(
-        `/auth/verify/check-email?email=${encodeURIComponent(formData.email)}&role=CANDIDATE`
-      );
+      const checkEmailParams = new URLSearchParams({
+        email: formData.email,
+        role: "CANDIDATE",
+      });
+      if (safeCallbackUrl) {
+        checkEmailParams.set("callbackUrl", safeCallbackUrl);
+      }
+      router.push(`/auth/verify/check-email?${checkEmailParams.toString()}`);
     } catch (err) {
       if (err instanceof z.ZodError) {
         toastError(err.errors[0]?.message || "Datos inválidos");
@@ -414,7 +431,7 @@ export default function SignupMultiStep({
           <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
             ¿Ya tienes cuenta?{" "}
             <a
-              href="/auth/signin?role=CANDIDATE"
+              href={signinHref}
               className="font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
             >
               Inicia sesión

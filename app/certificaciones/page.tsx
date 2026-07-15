@@ -18,6 +18,7 @@ import {
 import { BadgeMedal } from "@/components/badges/BadgeMedal";
 import { Clock, ListChecks, Lock, CheckCircle2, Award, ChevronDown } from "lucide-react";
 import { StartBadgeExamButton } from "./StartBadgeExamButton";
+import { buildCandidateSignupHref } from "@/lib/auth/callback-url";
 
 export const metadata = {
   title: "Certificaciones gratuitas | TaskIO",
@@ -40,10 +41,19 @@ type SkillGroup = {
   examsByLevel: Map<number, ExamRow>;
 };
 
-export default async function CertificacionesPage() {
+type CertificacionesPageProps = {
+  searchParams?: { exam?: string | string[] };
+};
+
+export default async function CertificacionesPage({
+  searchParams,
+}: CertificacionesPageProps) {
   const session = await getServerSession(authOptions);
   const user = session?.user as { id?: string; role?: string } | undefined;
   const isCandidate = user?.role === "CANDIDATE";
+  const requestedExamId = Array.isArray(searchParams?.exam)
+    ? searchParams?.exam[0]
+    : searchParams?.exam;
 
   const [exams, badgeRows, mySkills] = await Promise.all([
     prisma.assessmentTemplate.findMany({
@@ -267,7 +277,9 @@ export default async function CertificacionesPage() {
                 <StartBadgeExamButton templateId={exam.id} />
               ) : (
                 <Link
-                  href="/auth/signup"
+                  href={buildCandidateSignupHref(
+                    `/certificaciones?exam=${encodeURIComponent(exam.id)}#skill-${skill.slug}`
+                  )}
                   className="inline-flex shrink-0 items-center rounded border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-700 transition-colors hover:bg-teal-100 dark:border-teal-800/50 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
                 >
                   Regístrate para presentar
@@ -310,7 +322,7 @@ export default async function CertificacionesPage() {
             </Link>
           ) : (
             <Link
-              href="/auth/signup"
+              href={buildCandidateSignupHref("/certificaciones")}
               className="inline-flex h-11 shrink-0 items-center rounded-lg bg-teal-600 px-5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-teal-700"
             >
               Crea tu cuenta gratis para certificarte
@@ -347,6 +359,7 @@ export default async function CertificacionesPage() {
                     return (
                       <div
                         key={skill.termId}
+                        id={`skill-${skill.slug}`}
                         className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900"
                       >
                         <div className="flex items-center gap-4">
@@ -496,8 +509,18 @@ export default async function CertificacionesPage() {
                   {explore.map((skill) => {
                     const highest = highestEarnedOf(skill.termId);
                     const basicExam = skill.examsByLevel.get(1);
+                    const containsRequestedExam = requestedExamId
+                      ? [...skill.examsByLevel.values()].some(
+                          (exam) => exam.id === requestedExamId
+                        )
+                      : false;
                     return (
-                      <details key={skill.termId} className="group">
+                      <details
+                        key={skill.termId}
+                        id={`skill-${skill.slug}`}
+                        className="group"
+                        open={containsRequestedExam}
+                      >
                         <summary className="flex min-h-[56px] cursor-pointer list-none items-center gap-3 px-4 py-2.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40 [&::-webkit-details-marker]:hidden">
                           <BadgeMedal
                             skill={skill.label}

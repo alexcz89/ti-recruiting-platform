@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Mail, Clock, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 function CheckEmailContent() {
   const searchParams = useSearchParams();
@@ -13,6 +14,9 @@ function CheckEmailContent() {
   // ✅ Obtener email desde query params o desde sessionStorage como fallback
   const emailParam = searchParams?.get("email") || "";
   const role = searchParams?.get("role") || "CANDIDATE";
+  const callbackUrl = sanitizeInternalCallbackUrl(
+    searchParams?.get("callbackUrl")
+  );
   
   const [email, setEmail] = useState(emailParam);
   const [timeLeft, setTimeLeft] = useState(60 * 60); // 60 minutos en segundos
@@ -57,7 +61,7 @@ function CheckEmailContent() {
       const res = await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, callbackUrl: callbackUrl || undefined }),
       });
 
       const data = await res.json();
@@ -236,10 +240,10 @@ function CheckEmailContent() {
           {/* Link volver */}
           <div className="text-center pt-2">
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push(callbackUrl || "/")}
               className="text-sm text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 underline underline-offset-2 transition-colors"
             >
-              ← Volver al inicio
+              {callbackUrl ? "← Volver a certificaciones" : "← Volver al inicio"}
             </button>
           </div>
         </div>
