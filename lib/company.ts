@@ -1,6 +1,7 @@
 // lib/company.ts
 import { prisma } from "@/lib/server/prisma";
 import type { Company, CompanySize } from "@prisma/client";
+import { getDefaultNewCompanyPlanData } from "@/lib/company-plan";
 
 /**
  * Dominios "genéricos" que NO deberían crear una Company
@@ -156,6 +157,7 @@ export async function getOrCreateCompanyFromEmail(opts: {
       country: opts.country ?? null,
       city: opts.city ?? null,
       size: normalizedSize ?? null,
+      ...getDefaultNewCompanyPlanData(),
     },
   });
 
