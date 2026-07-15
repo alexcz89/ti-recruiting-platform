@@ -10,6 +10,7 @@ import {
   LocationType,
   type Prisma,
 } from "@prisma/client";
+import { z } from "zod";
 
 type JobSkillInput = {
   name?: string;
@@ -105,6 +106,10 @@ function isEducationLevel(value: string): value is EducationLevel {
     value as (typeof EDUCATION_LEVEL_VALUES)[number]
   );
 }
+
+const updateJobStatusSchema = z.object({
+  status: z.enum(JOB_STATUS_VALUES),
+});
 
 function normalizeEducationLevel(
   value: string
@@ -559,6 +564,62 @@ export async function PUT(
   } catch (err) {
     console.error("[PUT /api/jobs/[id]]", err);
     return jsonNoStore({ error: "Error al actualizar la vacante" }, 500);
+  }
+}
+
+// -------------------------------
+// PATCH /api/jobs/[id]
+// -------------------------------
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getSessionOrThrow().catch(() => null);
+    if (!session?.user) {
+      return jsonNoStore({ error: "Unauthorized" }, 401);
+    }
+
+    const companyId = await getSessionCompanyId().catch(() => null);
+
+    if (!companyId) {
+      return jsonNoStore({ error: "Unauthorized" }, 401);
+    }
+
+    const role = session.user?.role;
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
+
+    const body = await req.json().catch(() => null);
+    const parsed = updateJobStatusSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return jsonNoStore({ error: "Estado de vacante inválido" }, 400);
+    }
+
+    const job = await prisma.job.findFirst({
+      where: { id: params.id, companyId },
+      select: { id: true },
+    });
+
+    if (!job) {
+      return jsonNoStore({ error: "Vacante no encontrada" }, 404);
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id: job.id },
+      data: { status: parsed.data.status },
+      select: { id: true, status: true, updatedAt: true },
+    });
+
+    return jsonNoStore({ ok: true, job: updatedJob });
+  } catch (err) {
+    console.error("[PATCH /api/jobs/[id]]", err);
+    return jsonNoStore(
+      { error: "Error al actualizar el estado de la vacante" },
+      500
+    );
   }
 }
 
