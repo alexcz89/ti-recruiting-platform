@@ -3,12 +3,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { isAntiCheatBypassed } from "@/lib/server/assessmentAntiCheat";
 
 export const dynamic = "force-dynamic";
 
 type SessionUser = {
   id?: string | null;
   role?: string | null;
+  email?: string | null;
 };
 
 function jsonNoStore(data: unknown, status = 200) {
@@ -116,6 +118,7 @@ export async function GET(
         canStart,
         lastAttempt: lastAttempt || null,
       },
+      antiCheatBypass: isAntiCheatBypassed(user.email),
     });
   } catch (error) {
     console.error("Error fetching template:", error);

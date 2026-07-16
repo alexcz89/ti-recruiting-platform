@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
+import { isAntiCheatBypassed } from '@/lib/server/assessmentAntiCheat';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -146,6 +147,14 @@ export async function PATCH(
     if (!session?.user) return noStoreJson({ error: "No autorizado" }, 401);
 
     const user = session.user as any;
+
+    if (isAntiCheatBypassed(user.email)) {
+      return noStoreJson({
+        success: true,
+        bypassed: true,
+        received: 0,
+      });
+    }
 
     const body = await readBody(request);
     const incoming = normalizeEvents(body);

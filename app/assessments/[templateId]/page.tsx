@@ -117,6 +117,7 @@ export default function AssessmentPage() {
   const [expirationState, setExpirationState] = useState<
     'idle' | 'finalizing' | 'finalized' | 'error'
   >('idle');
+  const [antiCheatBypass, setAntiCheatBypass] = useState(false);
 
   // Anti-cheat: modal bloqueante al regresar al tab
   const [tabWarning, setTabWarning] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
@@ -172,7 +173,7 @@ export default function AssessmentPage() {
   }
 
   useAntiCheating({
-    enabled: started && !!attemptId && !expired,
+    enabled: started && !!attemptId && !expired && !antiCheatBypass,
     attemptId,
     maxTabSwitches: 5,
     onTabReturn: (count) => {
@@ -212,6 +213,7 @@ export default function AssessmentPage() {
         if (!res.ok) throw new Error('Error al cargar template');
         const data = await res.json();
         setTemplate(data.template);
+        setAntiCheatBypass(Boolean(data.antiCheatBypass));
 
         if (!data.userStatus.canStart && !inviteToken && !attemptIdQS) {
           toastError('Ya completaste esta evaluación');
