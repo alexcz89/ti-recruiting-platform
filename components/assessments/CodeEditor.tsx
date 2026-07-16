@@ -213,6 +213,9 @@ export default function CodeEditor({
     sql: 'SQL',
   };
 
+  const customInputLabel =
+    selectedLanguage === 'sql' ? 'Probar con datos propios' : 'Probar con mi input';
+
   const monacoLanguages: Record<string, string> = {
     javascript: 'javascript',
     typescript: 'typescript',
@@ -426,20 +429,25 @@ export default function CodeEditor({
     >
       {/* Header */}
       <div className="relative z-10 border-b border-gray-200 bg-white dark:border-slate-800/80 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="relative rounded-xl bg-teal-600 p-3">
-                  <Code2 className="h-6 w-6 text-white" />
-                </div>
+        <div className="px-4 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="rounded-lg bg-teal-600 p-2">
+                <Code2 className="h-5 w-5 text-white" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                  Pregunta de Código
-                </h3>
-                <div className="mt-1 flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-sm font-medium text-teal-600 dark:text-teal-400">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="truncate text-sm font-bold text-gray-900 dark:text-white">
+                    Editor {languageNames[selectedLanguage] || selectedLanguage}
+                  </h3>
+                  {readOnly && (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                      Solo lectura
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/20 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-600 dark:text-teal-400">
                     <Zap className="h-3.5 w-3.5" />
                     {points} puntos
                   </span>
@@ -463,7 +471,7 @@ export default function CodeEditor({
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2">
               {allowedLanguages.length > 1 && !readOnly && (
                 <div className="relative">
                   <select
@@ -576,7 +584,7 @@ export default function CodeEditor({
                 : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
             }`}
           >
-            Probar con mi input
+            {customInputLabel}
             {activeTab === 'custom' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
             )}
@@ -646,8 +654,8 @@ export default function CodeEditor({
           {/* Output panel — desktop: fixed height at bottom; mobile: full height for results/custom tabs */}
           <div className={`flex flex-col border-t border-gray-200 dark:border-slate-800/50 ${
             activeTab === 'results' || activeTab === 'custom'
-              ? 'flex-1 md:h-52 md:flex-none'
-              : 'hidden md:flex md:h-52 md:flex-none'
+              ? 'flex-1 md:h-44 md:flex-none'
+              : 'hidden md:flex md:h-44 md:flex-none'
           }`}>
 
             {/* Desktop output sub-tabs */}
@@ -682,7 +690,7 @@ export default function CodeEditor({
                     : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
                 }`}
               >
-                Probar con mi input
+                {customInputLabel}
                 {activeTab === 'custom' && (
                   <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
                 )}
@@ -760,7 +768,7 @@ export default function CodeEditor({
                 /* Results Panel */
                 <div className="bg-gray-50 p-5 dark:bg-slate-900/20">
                   {!testResults && !error && (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="flex flex-col items-center justify-center py-4 text-center">
                       <Terminal className="mb-3 h-10 w-10 text-teal-500/50 dark:text-teal-400/50" />
                       <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Sin resultados aún</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
@@ -893,7 +901,7 @@ export default function CodeEditor({
 
       {/* Footer Actions */}
       {!readOnly && (
-        <div className="border-t border-gray-200 bg-white px-6 py-4 dark:border-slate-800/50 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
+        <div className="border-t border-gray-200 bg-white px-4 py-3 dark:border-slate-800/50 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
           <div className="flex items-center justify-between">
             <p className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-slate-400">
               <kbd className="rounded border border-gray-300 bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">

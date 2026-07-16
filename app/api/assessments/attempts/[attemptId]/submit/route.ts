@@ -88,7 +88,14 @@ export async function POST(
     const currentStatus = String(attempt.status ?? "").toUpperCase();
 
     if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(currentStatus)) {
-      return jsonNoStore({ error: "El intento ya fue enviado" }, 400);
+      return jsonNoStore({
+        success: true,
+        alreadySubmitted: true,
+        totalScore: attempt.totalScore ?? 0,
+        sectionScores: attempt.sectionScores ?? {},
+        passed: Boolean(attempt.passed),
+        timeSpent: attempt.timeSpent ?? 0,
+      });
     }
 
     if (currentStatus !== "IN_PROGRESS") {
@@ -97,9 +104,11 @@ export async function POST(
 
     const now = new Date();
 
-    if (attempt.expiresAt && now > attempt.expiresAt) {
-      return jsonNoStore({ error: "Tiempo expirado" }, 400);
-    }
+    // Answers and code execution are already blocked after expiresAt. Submission
+    // remains available so the server can grade only what was saved in time.
+    const expiredAtSubmission = Boolean(
+      attempt.expiresAt && now >= attempt.expiresAt
+    );
 
     if (!attempt.startedAt) {
       return jsonNoStore(
@@ -210,6 +219,10 @@ export async function POST(
       attempt.flagsJson && typeof attempt.flagsJson === "object"
         ? { ...(attempt.flagsJson as any) }
         : {};
+
+    if (expiredAtSubmission && attempt.expiresAt) {
+      flags.expiredAt = attempt.expiresAt.toISOString();
+    }
 
     if (answeredCount > 0) {
       const avgTimePerQuestion = timeSpent / answeredCount;
@@ -434,6 +447,7 @@ export async function POST(
 
     return jsonNoStore({
       success: true,
+      expired: expiredAtSubmission,
       totalScore,
       sectionScores,
       passed,

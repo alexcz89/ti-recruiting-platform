@@ -457,10 +457,25 @@ export async function POST(
         invStatus === "EVALUATED" ||
         invStatus === "COMPLETED"
       ) {
-        return jsonNoStore(
-          { error: "Esta invitación ya fue completada" },
-          400
-        );
+        const completedAttempt = await prisma.assessmentAttempt.findFirst({
+          where: {
+            inviteId: invite.id,
+            candidateId: user.id,
+            templateId: params.templateId,
+            status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] as any },
+          },
+          select: { id: true },
+          orderBy: { submittedAt: "desc" },
+        });
+
+        if (completedAttempt) {
+          return jsonNoStore({
+            attemptId: completedAttempt.id,
+            completed: true,
+          });
+        }
+
+        return jsonNoStore({ error: "Esta invitación ya fue completada" }, 400);
       }
 
       applicationId = invite.applicationId;
@@ -628,14 +643,37 @@ export async function POST(
         }
 
         if (isAttemptFinal(attemptByInvite.status)) {
-          return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+          return jsonNoStore({
+            attemptId: attemptByInvite.id,
+            completed: true,
+          });
         }
 
         if (isExpired(attemptByInvite.expiresAt, now)) {
-          return createFreshAttempt({
-            oldAttemptId: attemptByInvite.id,
-            oldInviteId: invite.id,
-            applicationIdToUse: applicationId || attemptByInvite.applicationId || null,
+          let expiredMeta = (attemptByInvite.flagsJson as FlagsMeta) || null;
+          if (!Array.isArray(expiredMeta?.questionOrder) || expiredMeta.questionOrder.length === 0) {
+            expiredMeta = (await ensureMeta(
+              params.templateId,
+              tmplShuffleQuestions,
+              tmplSampleSize
+            )) as unknown as FlagsMeta;
+          }
+
+          const questions = buildQuestionsPayload(
+            questionsRaw as unknown as QuestionRow[],
+            expiredMeta
+          );
+          const { savedAnswers, savedTimeSpent } = await buildSaved(attemptByInvite.id);
+
+          return jsonNoStore({
+            attemptId: attemptByInvite.id,
+            questions,
+            expiresAt: attemptByInvite.expiresAt,
+            timeLimit: tmplTimeLimit,
+            reused: true,
+            expired: true,
+            savedAnswers,
+            savedTimeSpent,
           });
         }
 
@@ -738,14 +776,37 @@ export async function POST(
         );
       }
       if (isAttemptFinal(attempt.status)) {
-        return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+        return jsonNoStore({
+          attemptId: attempt.id,
+          completed: true,
+        });
       }
 
       if (isExpired(attempt.expiresAt, now)) {
-        return createFreshAttempt({
-          oldAttemptId: attempt.inviteId ? attempt.id : null,
-          oldInviteId: attempt.inviteId ? String(attempt.inviteId) : null,
-          applicationIdToUse: applicationId || attempt.applicationId || null,
+        let expiredMeta = (attempt.flagsJson as FlagsMeta) || null;
+        if (!Array.isArray(expiredMeta?.questionOrder) || expiredMeta.questionOrder.length === 0) {
+          expiredMeta = (await ensureMeta(
+            params.templateId,
+            tmplShuffleQuestions,
+            tmplSampleSize
+          )) as unknown as FlagsMeta;
+        }
+
+        const questions = buildQuestionsPayload(
+          questionsRaw as unknown as QuestionRow[],
+          expiredMeta
+        );
+        const { savedAnswers, savedTimeSpent } = await buildSaved(attempt.id);
+
+        return jsonNoStore({
+          attemptId: attempt.id,
+          questions,
+          expiresAt: attempt.expiresAt,
+          timeLimit: tmplTimeLimit,
+          reused: true,
+          expired: true,
+          savedAnswers,
+          savedTimeSpent,
         });
       }
 

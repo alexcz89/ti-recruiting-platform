@@ -48,9 +48,11 @@ type StartResponse = {
   attemptId: string;
   expiresAt?: string | Date | null;
   reused?: boolean;
-  questions: Question[];
+  completed?: boolean;
+  questions?: Question[];
   savedAnswers?: Record<string, string[]>;
   savedTimeSpent?: Record<string, number>;
+  expired?: boolean;
 };
 
 const CODE_SENTINEL = '__CODE_SUBMITTED__';
@@ -112,6 +114,9 @@ export default function AssessmentPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [expirationState, setExpirationState] = useState<
+    'idle' | 'finalizing' | 'finalized' | 'error'
+  >('idle');
 
   // Anti-cheat: modal bloqueante al regresar al tab
   const [tabWarning, setTabWarning] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
@@ -121,6 +126,50 @@ export default function AssessmentPage() {
 
   const lastIndexHydratedAttemptIdRef = useRef<string | null>(null);
   const autoStartOnceRef = useRef(false);
+  const expirationAttemptRef = useRef<{
+    id: string;
+    state: 'finalizing' | 'finalized';
+  } | null>(null);
+
+  async function finalizeExpiredAttempt(targetAttemptId: string) {
+    const tracked = expirationAttemptRef.current;
+    if (tracked?.id === targetAttemptId) return;
+
+    expirationAttemptRef.current = { id: targetAttemptId, state: 'finalizing' };
+    setExpirationState('finalizing');
+
+    try {
+      const res = await fetch(`/api/assessments/attempts/${targetAttemptId}/submit`, {
+        method: 'POST',
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'No se pudo cerrar la evaluación vencida');
+      }
+
+      expirationAttemptRef.current = { id: targetAttemptId, state: 'finalized' };
+      setExpirationState('finalized');
+      localStorage.removeItem(`assessment:${targetAttemptId}:currentIndex`);
+    } catch (error) {
+      console.error('Error finalizing expired assessment:', error);
+      expirationAttemptRef.current = null;
+      setExpirationState('error');
+    }
+  }
+
+  function markExpired(targetAttemptId: string | null, notify = false) {
+    setExpired(true);
+    if (notify && expirationAttemptRef.current?.id !== targetAttemptId) {
+      toastError('El tiempo terminó. Estamos calculando tu resultado.');
+    }
+    if (targetAttemptId) void finalizeExpiredAttempt(targetAttemptId);
+  }
+
+  function handleExpire() {
+    markExpired(attemptId, true);
+  }
 
   useAntiCheating({
     enabled: started && !!attemptId && !expired,
@@ -133,13 +182,6 @@ export default function AssessmentPage() {
 
   const total = questions.length;
 
-  const handleExpire = () => {
-    setExpired((prev) => {
-      if (prev) return prev;
-      toastError('⏰ Tiempo expirado. Ya no puedes responder.');
-      return true;
-    });
-  };
 
   const isAnsweredId = (qid?: string) => {
     if (!qid) return false;
@@ -234,7 +276,16 @@ export default function AssessmentPage() {
     setTimeSpent(savedTimeSpent);
 
     if (st.expiresAt) setExpiresAt(new Date(st.expiresAt));
-    if (st.expired) handleExpire();
+    if (st.expired) {
+      const finalStatuses = ['SUBMITTED', 'EVALUATED', 'COMPLETED'];
+      if (finalStatuses.includes(String(st.status ?? '').toUpperCase())) {
+        setExpired(true);
+        setExpirationState('finalized');
+        expirationAttemptRef.current = { id: tryAttemptId, state: 'finalized' };
+      } else {
+        markExpired(tryAttemptId);
+      }
+    }
 
     // ✅ Restaurar codingSubmitted desde savedAnswers
     const submitted: Record<string, boolean> = {};
@@ -276,13 +327,24 @@ export default function AssessmentPage() {
       }
 
       const newAttemptId = data.attemptId;
-      const qs = normalizeQuestions((data as any).questions);
+      if (data.completed) {
+        router.replace(`/assessments/attempts/${newAttemptId}/results`);
+        return;
+      }
+
+      const qs = normalizeQuestions(data.questions || []);
       if (!qs.length) throw new Error('Respuesta inválida de /start (sin questions)');
+
+      const expiredAtStart = Boolean(
+        data.expired ||
+          (data.expiresAt && new Date(data.expiresAt).getTime() <= Date.now())
+      );
 
       setAttemptId(newAttemptId);
       setQuestions(qs);
       setStarted(true);
-      setExpired(false);
+      setExpired(expiredAtStart);
+      setExpirationState('idle');
       setSubmitting(false);
 
       if (data.expiresAt) setExpiresAt(new Date(data.expiresAt));
@@ -322,7 +384,12 @@ export default function AssessmentPage() {
         }
       }
 
-      toastSuccess(data.reused ? 'Reanudando evaluación…' : '¡Evaluación iniciada! Mucha suerte 🍀');
+      if (expiredAtStart) {
+        markExpired(newAttemptId);
+        toastInfo('La evaluación terminó por tiempo. Conservamos las respuestas enviadas.');
+      } else {
+        toastSuccess(data.reused ? 'Reanudando evaluación…' : '¡Evaluación iniciada! Mucha suerte 🍀');
+      }
     } catch (error: any) {
       console.error(error);
       toastError(error?.message || 'Error al iniciar evaluación');
@@ -391,6 +458,7 @@ export default function AssessmentPage() {
   };
 
   const handleCodeSubmitted = (qid: string) => {
+    if (expired) return;
     setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
     setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
     // ✅ Guardar timeSpent al hacer submit de código
@@ -402,6 +470,11 @@ export default function AssessmentPage() {
 
   const handleSubmit = async () => {
     if (!attemptId || submitting) return;
+
+    if (expired) {
+      await finalizeExpiredAttempt(attemptId);
+      return;
+    }
 
     if (!expired) {
       // ✅ Advertir si hay preguntas CODING sin enviar solución
@@ -564,7 +637,7 @@ export default function AssessmentPage() {
         </div>
       )}
 
-      <div className={`mx-auto px-6 lg:px-10 py-8 ${isCodingQuestion ? 'max-w-[1800px]' : 'max-w-[1200px]'}`}>
+      <div className={`mx-auto px-4 py-4 lg:px-8 ${isCodingQuestion ? 'max-w-[1680px]' : 'max-w-[1200px]'}`}>
 
         {/* Header — NO-CODING */}
         {!isCodingQuestion && (
@@ -589,20 +662,16 @@ export default function AssessmentPage() {
 
             <AssessmentProgress current={currentIndex + 1} total={total} answered={answeredCount} />
 
-            {expired && (
-              <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
-                ⏰ Tiempo expirado. La evaluación quedó bloqueada.
-              </div>
-            )}
+
           </div>
         )}
 
         {/* Header — CODING */}
         {isCodingQuestion && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h1 className="text-2xl font-bold text-default">{template.title}</h1>
+          <div className="mb-3">
+            <div className="mb-2 flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-bold text-default">{template.title}</h1>
                 <p className="text-sm text-muted">
                   Pregunta {currentIndex + 1} de {total}
                 </p>
@@ -620,8 +689,7 @@ export default function AssessmentPage() {
                 return (
                   <button
                     key={q.id}
-                    onClick={() => !expired && setCurrentIndex(idx)}
-                    disabled={expired}
+                    onClick={() => setCurrentIndex(idx)}
                     title={
                       isCoding
                         ? isSubmitted
@@ -636,7 +704,7 @@ export default function AssessmentPage() {
                         : isSubmitted
                         ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
                         : 'bg-white border-zinc-300 text-zinc-600 hover:border-teal-400 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400',
-                      expired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
+                      expired ? 'cursor-pointer opacity-80' : 'cursor-pointer',
                     ].join(' ')}
                   >
                     {idx + 1}
@@ -661,16 +729,44 @@ export default function AssessmentPage() {
               </div>
             </div>
 
-            {expired && (
-              <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
-                ⏰ Tiempo expirado. La evaluación quedó bloqueada.
-              </div>
+
+          </div>
+        )}
+
+        {expired && (
+          <div className="mb-3 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 md:flex-row md:items-center md:justify-between dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
+            <div>
+              <p className="text-sm font-semibold">La evaluación terminó por tiempo.</p>
+              <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200/80">
+                Respondidas: {answeredCount} de {total}. Se califican únicamente las respuestas enviadas a tiempo.
+              </p>
+            </div>
+            {expirationState === 'finalized' ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/assessments/attempts/${attemptId}/results`)}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-800 dark:bg-amber-300 dark:text-amber-950 dark:hover:bg-amber-200"
+              >
+                Ver resultados
+              </button>
+            ) : expirationState === 'error' ? (
+              <button
+                type="button"
+                onClick={() => attemptId && finalizeExpiredAttempt(attemptId)}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold transition hover:bg-amber-100 dark:border-amber-300 dark:hover:bg-amber-900/40"
+              >
+                Reintentar cierre
+              </button>
+            ) : (
+              <span className="shrink-0 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                Calculando resultado…
+              </span>
             )}
           </div>
         )}
 
         {/* ✅ Banner instrucciones CODING — solo si no ha enviado aún */}
-        {isCodingQuestion && !codingSubmitted[currentQuestion.id] && (
+        {isCodingQuestion && !expired && !codingSubmitted[currentQuestion.id] && (
           <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-200">
             <span className="text-lg leading-none mt-0.5">💡</span>
             <div>
@@ -685,7 +781,7 @@ export default function AssessmentPage() {
         )}
 
         {/* ✅ Banner de confirmación cuando ya fue enviada */}
-        {isCodingQuestion && codingSubmitted[currentQuestion.id] && (
+        {isCodingQuestion && !expired && codingSubmitted[currentQuestion.id] && (
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-200">
             <span className="text-lg leading-none">✅</span>
             <p className="font-semibold">Solución enviada correctamente. Puedes continuar con la siguiente pregunta.</p>
@@ -710,8 +806,8 @@ export default function AssessmentPage() {
         />
 
         {/* Navegación — NO-CODING */}
-        {!isCodingQuestion && (
-          <div className="mt-8 flex items-center justify-between gap-4">
+        {!isCodingQuestion && !expired && (
+          <div className="sticky bottom-3 z-20 mt-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
             <button
               onClick={handlePrevious}
               disabled={currentIndex === 0 || expired}
@@ -735,8 +831,8 @@ export default function AssessmentPage() {
         )}
 
         {/* ✅ Navegación CODING — anterior/siguiente + finalizar */}
-        {isCodingQuestion && (
-          <div className="mt-6 flex items-center justify-between gap-4">
+        {isCodingQuestion && !expired && (
+          <div className="sticky bottom-3 z-20 mt-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
             <button
               onClick={handlePrevious}
               disabled={currentIndex === 0 || expired}
@@ -786,7 +882,7 @@ export default function AssessmentPage() {
                 return (
                   <button
                     key={q.id}
-                    onClick={() => !expired && setCurrentIndex(idx)}
+                    onClick={() => setCurrentIndex(idx)}
                     className={`
                       h-10 w-10 rounded-lg text-sm font-medium transition
                       ${
@@ -796,7 +892,7 @@ export default function AssessmentPage() {
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                           : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
                       }
-                      ${expired ? 'opacity-60 cursor-not-allowed' : ''}
+                      ${expired ? 'cursor-pointer opacity-80' : ''}
                     `}
                   >
                     {idx + 1}
