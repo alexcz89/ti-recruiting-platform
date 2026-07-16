@@ -3,7 +3,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, CircleHelp, SkipForward } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  SkipForward,
+} from 'lucide-react';
 import { toastSuccess, toastError, toastInfo, toastWarning } from '@/lib/ui/toast';
 import AssessmentIntro from './AssessmentIntro';
 import AssessmentQuestion from './AssessmentQuestion';
@@ -642,7 +649,11 @@ export default function AssessmentPage() {
         </div>
       )}
 
-      <div className={`mx-auto px-4 py-4 lg:px-8 ${isCodingQuestion ? 'max-w-[1680px]' : 'max-w-[1200px]'}`}>
+      <div
+        className={`mx-auto px-4 lg:px-8 ${
+          isCodingQuestion ? 'max-w-[1680px] py-2' : 'max-w-[1200px] py-4'
+        }`}
+      >
 
         {/* Header — NO-CODING */}
         {!isCodingQuestion && (
@@ -671,70 +682,123 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        {/* Header — CODING */}
+        {/* Header - CODING: contexto, mapa, timer y navegacion en una franja */}
         {isCodingQuestion && (
-          <div className="sticky top-14 z-40 -mx-2 mb-3 border-b border-zinc-200/80 bg-zinc-50/95 px-2 py-3 backdrop-blur md:top-16 dark:border-zinc-800/80 dark:bg-zinc-950/95">
-            <div className="mb-2 flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <h1 className="truncate text-xl font-bold text-default">{template.title}</h1>
-                <p className="text-sm text-muted">
+          <div className="sticky top-12 z-40 -mx-2 mb-2 border-b border-zinc-200/80 bg-zinc-50/95 px-2 py-2 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="mr-1 min-w-0 max-w-[20rem]">
+                <h1 className="truncate text-base font-bold text-default">{template.title}</h1>
+                <p className="text-xs text-muted">
                   Pregunta {currentIndex + 1} de {total}
                 </p>
               </div>
-              {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
-            </div>
 
-            {/* ✅ NUEVO: Mapa de navegación para preguntas CODING */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {questions.map((q, idx) => {
-                const isSubmitted = codingSubmitted[q.id];
-                const isCurrent = idx === currentIndex;
-                const isCoding = q.type === 'CODING';
+              <div className="flex items-center gap-1.5" aria-label="Navegación de preguntas">
+                {questions.map((q, idx) => {
+                  const isSubmitted = codingSubmitted[q.id];
+                  const isCurrent = idx === currentIndex;
+                  const isCoding = q.type === 'CODING';
 
-                return (
-                  <button
-                    key={q.id}
-                    onClick={() => handleQuestionChange(idx)}
-                    title={
-                      isCoding
-                        ? isSubmitted
-                          ? `Pregunta ${idx + 1} — Solución enviada ✓`
-                          : `Pregunta ${idx + 1} — Sin enviar`
-                        : `Pregunta ${idx + 1}`
-                    }
-                    className={[
-                      'relative h-9 min-w-[2.25rem] px-3 rounded-lg text-sm font-medium transition-all border-2',
-                      isCurrent
-                        ? 'bg-teal-600 border-teal-600 text-white shadow-lg shadow-teal-500/30'
-                        : isSubmitted
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-                        : 'bg-white border-zinc-300 text-zinc-600 hover:border-teal-400 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400',
-                      expired ? 'cursor-pointer opacity-80' : 'cursor-pointer',
-                    ].join(' ')}
-                  >
-                    {idx + 1}
-                    {/* Dot indicator si fue enviada */}
-                    {isSubmitted && !isCurrent && (
-                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
-                    )}
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => handleQuestionChange(idx)}
+                      title={
+                        isCoding
+                          ? isSubmitted
+                            ? `Pregunta ${idx + 1} - Solución enviada`
+                            : `Pregunta ${idx + 1} - Pendiente`
+                          : `Pregunta ${idx + 1}`
+                      }
+                      aria-current={isCurrent ? 'step' : undefined}
+                      className={[
+                        'relative flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold transition-colors',
+                        isCurrent
+                          ? 'border-teal-600 bg-teal-600 text-white shadow-sm'
+                          : isSubmitted
+                            ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                            : 'border-zinc-300 bg-white text-zinc-600 hover:border-teal-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400',
+                      ].join(' ')}
+                    >
+                      {idx + 1}
+                      {isSubmitted && !isCurrent && (
+                        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
-              {/* Leyenda */}
-              <div className="ml-2 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="hidden items-center gap-3 text-[11px] text-zinc-500 2xl:flex dark:text-zinc-400">
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
                   Enviada
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600 inline-block" />
+                  <span className="h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />
                   Pendiente
                 </span>
               </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrevious}
+                  disabled={currentIndex === 0 || expired}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-600 transition hover:border-teal-400 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-35 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  title="Pregunta anterior"
+                  aria-label="Pregunta anterior"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                {expiresAt && (
+                  <AssessmentTimer compact expiresAt={expiresAt} onExpire={handleExpire} />
+                )}
+
+                {currentIndex < total - 1 && (
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={expired}
+                    title={!isCurrentQuestionComplete ? 'Podrás volver desde el mapa de preguntas' : 'Siguiente pregunta'}
+                    className={[
+                      'inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40',
+                      !isCurrentQuestionComplete
+                        ? 'border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-600/60 dark:bg-amber-950/30 dark:text-amber-200'
+                        : 'border-zinc-300 bg-white text-zinc-700 hover:border-teal-400 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300',
+                    ].join(' ')}
+                  >
+                    {!isCurrentQuestionComplete ? (
+                      <>
+                        <SkipForward className="h-4 w-4" />
+                        Omitir
+                      </>
+                    ) : (
+                      <>
+                        Siguiente
+                        <ChevronRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {(currentIndex === total - 1 ||
+                  Object.keys(codingSubmitted).length ===
+                    questions.filter((q) => q.type === 'CODING').length) && (
+                  <button
+                    type="button"
+                    onClick={handleSubmit}
+                    disabled={submitting || expired}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {submitting ? 'Enviando...' : 'Finalizar'}
+                  </button>
+                )}
+              </div>
             </div>
-
-
           </div>
         )}
 
@@ -856,52 +920,6 @@ export default function AssessmentPage() {
                   ) : (
                     <>Siguiente →</>
                   )}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ✅ Navegación CODING — anterior/siguiente + finalizar */}
-        {isCodingQuestion && !expired && (
-          <div className="sticky bottom-3 z-20 mt-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-            <button
-              onClick={handlePrevious}
-              disabled={currentIndex === 0 || expired}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-700 hover:border-teal-400 hover:text-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-            >
-              ← Anterior
-            </button>
-
-            <div className="flex items-center gap-3">
-              {currentIndex < total - 1 && (
-                <button
-                  onClick={handleNext}
-                  disabled={expired}
-                  title={!isCurrentQuestionComplete ? 'Podrás volver a esta pregunta desde el mapa superior' : undefined}
-                  className={[
-                    'inline-flex min-h-10 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40',
-                    !isCurrentQuestionComplete
-                      ? 'border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-600/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50'
-                      : 'border-zinc-300 bg-white text-zinc-700 hover:border-teal-400 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300',
-                  ].join(' ')}
-                >
-                  {!isCurrentQuestionComplete ? (
-                    <><SkipForward className="h-4 w-4" /> Omitir pregunta</>
-                  ) : (
-                    <>Siguiente →</>
-                  )}
-                </button>
-              )}
-
-              {/* Mostrar Finalizar solo si es la última pregunta O si todas las coding fueron enviadas */}
-              {(currentIndex === total - 1 || Object.keys(codingSubmitted).length === questions.filter(q => q.type === 'CODING').length) && (
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting || expired}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 hover:bg-teal-700 disabled:opacity-50 transition-colors"
-                >
-                  {submitting ? 'Enviando...' : 'Finalizar evaluación ✓'}
                 </button>
               )}
             </div>

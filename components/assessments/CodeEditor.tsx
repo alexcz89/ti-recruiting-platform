@@ -1,7 +1,15 @@
 // components/assessments/CodeEditor.tsx
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import ReactMarkdown from 'react-markdown';
@@ -183,6 +191,8 @@ export default function CodeEditor({
   const [activeTab, setActiveTab] = useState<'problem' | 'results' | 'custom'>('problem');
   const [hasRunTests, setHasRunTests] = useState(false);
   const [solutionSubmitted, setSolutionSubmitted] = useState(false);
+  const [problemWidth, setProblemWidth] = useState(30);
+  const [outputWidth, setOutputWidth] = useState(27);
   // Custom input
   const [customInput, setCustomInput] = useState('');
   const [isRunningCustom, setIsRunningCustom] = useState(false);
@@ -422,13 +432,115 @@ export default function CodeEditor({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  const startPanelResize = useCallback(
+    (
+      event: ReactPointerEvent<HTMLDivElement>,
+      panel: 'problem' | 'output'
+    ) => {
+      const bounds = containerRef.current?.getBoundingClientRect();
+      if (!bounds || bounds.width <= 0) return;
+
+      event.preventDefault();
+
+      const handleMove = (moveEvent: PointerEvent) => {
+        if (panel === 'problem') {
+          const percent = ((moveEvent.clientX - bounds.left) / bounds.width) * 100;
+          setProblemWidth(Math.min(40, Math.max(22, percent)));
+          return;
+        }
+
+        const percent = ((bounds.right - moveEvent.clientX) / bounds.width) * 100;
+        setOutputWidth(Math.min(38, Math.max(22, percent)));
+      };
+
+      const handleUp = () => {
+        window.removeEventListener('pointermove', handleMove);
+        window.removeEventListener('pointerup', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('pointermove', handleMove);
+      window.addEventListener('pointerup', handleUp);
+    },
+    []
+  );
+
+  const handlePanelResizeKeyDown = useCallback(
+    (
+      event: ReactKeyboardEvent<HTMLDivElement>,
+      panel: 'problem' | 'output'
+    ) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+
+      const direction = event.key === 'ArrowLeft' ? -2 : 2;
+      if (panel === 'problem') {
+        setProblemWidth((current) => Math.min(40, Math.max(22, current + direction)));
+        return;
+      }
+
+      setOutputWidth((current) =>
+        Math.min(38, Math.max(22, current - direction))
+      );
+    },
+    []
+  );
+
   const passedTests = testResults?.filter((r) => r.passed).length || 0;
   const totalTests = testResults?.length || 0;
+
+  const renderPrimaryActions = (compact: boolean) => (
+    <div className={`flex ${compact ? 'gap-1.5' : 'gap-3'}`}>
+      <button
+        type="button"
+        onClick={handleRunTests}
+        disabled={isRunning || isSubmitting || !code.trim() || solutionSubmitted}
+        className={`inline-flex items-center justify-center gap-2 border border-gray-300 bg-slate-800 font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}
+      >
+        {isRunning ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Ejecutando...</span>
+          </>
+        ) : (
+          <>
+            <Play className="h-4 w-4" />
+            <span>{compact ? 'Ejecutar' : 'Ejecutar Tests'}</span>
+          </>
+        )}
+      </button>
+
+      {solutionSubmitted ? (
+        <div className={`inline-flex items-center justify-center gap-2 bg-emerald-600 font-bold text-white shadow-sm ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}>
+          <CheckCircle2 className="h-4 w-4" />
+          <span>{compact ? 'Enviada' : 'Solución enviada'}</span>
+        </div>
+      ) : isSubmitting ? (
+        <div className={`inline-flex items-center justify-center gap-2 bg-teal-600 font-bold text-white shadow-sm ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Enviando...</span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isRunning || isSubmitting || !code.trim()}
+          className={`inline-flex items-center justify-center gap-2 bg-teal-600 font-bold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}
+        >
+          <Send className="h-4 w-4" />
+          <span>{compact ? 'Enviar' : 'Enviar solución'}</span>
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div
       ref={containerRef}
-      className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl dark:border-slate-800/50 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
+      className="flex h-full flex-col bg-white text-gray-900 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
     >
       {/* Header */}
       <div className="relative z-10 border-b border-gray-200 bg-white dark:border-slate-800/80 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
@@ -475,6 +587,9 @@ export default function CodeEditor({
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              {!readOnly && (
+                <div className="hidden lg:block">{renderPrimaryActions(true)}</div>
+              )}
               {allowedLanguages.length > 1 && !readOnly && (
                 <div className="relative">
                   <select
@@ -495,14 +610,14 @@ export default function CodeEditor({
               <div className="relative">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
-                  className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
+                  className="rounded-lg border border-gray-300 bg-white p-2 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                   title="Configuración"
                 >
                   <Settings className="h-4 w-4" />
                 </button>
 
                 {showSettings && (
-                  <div className="absolute right-0 z-50 mt-2 min-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-slate-700/50 dark:bg-slate-900 dark:shadow-black/60">
+                  <div className="absolute right-0 z-50 mt-2 w-52 rounded-lg border border-gray-200 bg-white p-3 shadow-2xl dark:border-slate-700/50 dark:bg-slate-900 dark:shadow-black/60">
                     <div className="space-y-4">
                       <div>
                         <label className="mb-2 block text-xs font-medium text-gray-600 dark:text-slate-400">
@@ -529,7 +644,7 @@ export default function CodeEditor({
 
               <button
                 onClick={toggleFullscreen}
-                className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
+                className="rounded-lg border border-gray-300 bg-white p-2 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                 title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
               >
                 {isFullscreen ? (
@@ -599,7 +714,10 @@ export default function CodeEditor({
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT PANEL: Problem description — always visible on desktop */}
-        <div className="hidden w-[40%] flex-col overflow-hidden border-r border-gray-200 md:flex dark:border-slate-800/50">
+        <div
+          className="hidden shrink-0 flex-col overflow-hidden md:flex md:w-[var(--problem-width)]"
+          style={{ '--problem-width': `${problemWidth}%` } as CSSProperties}
+        >
           <div className="flex-none border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-slate-800/50 dark:bg-slate-900/30">
             <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400">
               Descripción del problema
@@ -610,8 +728,23 @@ export default function CodeEditor({
           </div>
         </div>
 
+        <div
+          role="separator"
+          aria-label="Ajustar ancho de la descripción"
+          aria-orientation="vertical"
+          aria-valuemin={22}
+          aria-valuemax={40}
+          aria-valuenow={Math.round(problemWidth)}
+          tabIndex={0}
+          onKeyDown={(event) => handlePanelResizeKeyDown(event, 'problem')}
+          onPointerDown={(event) => startPanelResize(event, 'problem')}
+          className="group hidden w-1 shrink-0 touch-none cursor-col-resize items-center justify-center bg-zinc-100 transition-colors hover:bg-teal-100 md:flex dark:bg-slate-800 dark:hover:bg-teal-950"
+        >
+          <span className="h-10 w-px bg-zinc-300 transition-colors group-hover:bg-teal-500 dark:bg-slate-600" />
+        </div>
+
         {/* RIGHT PANEL: Editor + output (full width on mobile, 60% on desktop) */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
 
           {/* Mobile 'problem' tab: compact description strip above editor */}
           {activeTab === 'problem' && (
@@ -624,7 +757,7 @@ export default function CodeEditor({
           )}
 
           {/* Monaco editor — always on desktop; only on 'problem' tab on mobile */}
-          <div className={`relative ${activeTab !== 'problem' ? 'hidden md:block md:flex-1' : 'flex-1'}`}>
+          <div className={`relative min-h-0 min-w-0 ${activeTab !== 'problem' ? 'hidden md:block md:flex-1' : 'flex-1'}`}>
             <MonacoEditor
               height="100%"
               language={monacoLanguages[selectedLanguage] || 'javascript'}
@@ -654,14 +787,30 @@ export default function CodeEditor({
             />
           </div>
 
+          <div
+            role="separator"
+            aria-label="Ajustar ancho de resultados"
+            aria-orientation="vertical"
+            aria-valuemin={22}
+            aria-valuemax={38}
+            aria-valuenow={Math.round(outputWidth)}
+            tabIndex={0}
+            onKeyDown={(event) => handlePanelResizeKeyDown(event, 'output')}
+            onPointerDown={(event) => startPanelResize(event, 'output')}
+            className="group hidden w-1 shrink-0 touch-none cursor-col-resize items-center justify-center bg-zinc-100 transition-colors hover:bg-teal-100 md:flex dark:bg-slate-800 dark:hover:bg-teal-950"
+          >
+            <span className="h-10 w-px bg-zinc-300 transition-colors group-hover:bg-teal-500 dark:bg-slate-600" />
+          </div>
+
           {/* Output panel — desktop: fixed height at bottom; mobile: full height for results/custom tabs */}
-          <div className={`flex min-h-0 flex-col border-t border-gray-200 dark:border-slate-800/50 ${
-            activeTab === 'custom'
-              ? 'flex-1 md:h-80 md:flex-none'
-              : activeTab === 'results'
-                ? 'flex-1 md:h-44 md:flex-none'
-                : 'hidden md:flex md:h-44 md:flex-none'
-          }`}>
+          <div
+            style={{ '--output-width': `${outputWidth}%` } as CSSProperties}
+            className={`min-h-0 w-full flex-col border-t border-gray-200 md:flex md:h-auto md:w-[var(--output-width)] md:flex-none md:border-t-0 dark:border-slate-800/50 ${
+              activeTab === 'custom' || activeTab === 'results'
+                ? 'flex flex-1'
+                : 'hidden'
+            }`}
+          >
 
             {/* Desktop output sub-tabs */}
             <div className="hidden flex-none border-b border-gray-200 bg-gray-50 md:flex dark:border-slate-800/50 dark:bg-slate-900/30">
@@ -905,11 +1054,11 @@ export default function CodeEditor({
         </div>
       </div>
 
-      {/* Footer Actions */}
+      {/* Footer Actions - mobile y tablet */}
       {!readOnly && (
-        <div className="border-t border-gray-200 bg-white px-4 py-3 dark:border-slate-800/50 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <p className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-slate-400">
+        <div className="border-t border-gray-200 bg-white px-4 py-3 lg:hidden dark:border-slate-800/50 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="hidden items-center gap-2 text-xs font-medium text-gray-600 sm:flex dark:text-slate-400">
               <kbd className="rounded border border-gray-300 bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 Ctrl/Cmd
               </kbd>
@@ -920,49 +1069,7 @@ export default function CodeEditor({
               <span>para ejecutar tests</span>
             </p>
 
-            <div className="flex gap-3">
-              <button
-                onClick={handleRunTests}
-                disabled={isRunning || isSubmitting || !code.trim() || solutionSubmitted}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50 dark:bg-slate-800 dark:hover:shadow-teal-500/20"
-              >
-                {isRunning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Ejecutando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4" />
-                    <span>Ejecutar Tests</span>
-                  </>
-                )}
-              </button>
-
-              {solutionSubmitted ? (
-                // ✅ Estado: solución ya enviada automáticamente
-                <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-emerald-500/30">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Solución enviada ✓</span>
-                </div>
-              ) : isSubmitting ? (
-                // ✅ Estado: enviando
-                <div className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-600/20">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Enviando...</span>
-                </div>
-              ) : (
-                // ✅ Estado: botón manual de envío (fallback si no todos los tests pasaron)
-                <button
-                  onClick={handleSubmit}
-                  disabled={isRunning || isSubmitting || !code.trim()}
-                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700 disabled:opacity-50"
-                >
-                  <Send className="h-4 w-4" />
-                  <span>Enviar Solución</span>
-                </button>
-              )}
-            </div>
+            {renderPrimaryActions(false)}
           </div>
         </div>
       )}
