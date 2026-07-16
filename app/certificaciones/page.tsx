@@ -19,6 +19,7 @@ import { BadgeMedal } from "@/components/badges/BadgeMedal";
 import { Clock, ListChecks, Lock, CheckCircle2, Award, ChevronDown } from "lucide-react";
 import { StartBadgeExamButton } from "./StartBadgeExamButton";
 import { buildCandidateSignupHref } from "@/lib/auth/callback-url";
+import { isBadgeRetryCooldownBypassed } from "@/lib/server/badgeCooldown";
 
 export const metadata = {
   title: "Certificaciones gratuitas | TaskIO",
@@ -49,8 +50,11 @@ export default async function CertificacionesPage({
   searchParams,
 }: CertificacionesPageProps) {
   const session = await getServerSession(authOptions);
-  const user = session?.user as { id?: string; role?: string } | undefined;
+  const user = session?.user as
+    | { id?: string; role?: string; email?: string | null }
+    | undefined;
   const isCandidate = user?.role === "CANDIDATE";
+  const bypassRetryCooldown = isBadgeRetryCooldownBypassed(user?.email);
   const requestedExamId = Array.isArray(searchParams?.exam)
     ? searchParams?.exam[0]
     : searchParams?.exam;
@@ -98,7 +102,12 @@ export default async function CertificacionesPage({
   // Cooldown: exámenes reprobados en los últimos 30 días → fecha de reintento
   const cooldownMs = BADGE_RETRY_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
   const retryAtByTemplate = new Map<string, Date>();
-  if (isCandidate && user?.id && exams.length > 0) {
+  if (
+    isCandidate &&
+    user?.id &&
+    exams.length > 0 &&
+    !bypassRetryCooldown
+  ) {
     const failed = await prisma.assessmentAttempt.findMany({
       where: {
         candidateId: user.id,
@@ -580,8 +589,10 @@ export default async function CertificacionesPage({
           </p>
           <p className="mt-1">
             Cada intento usa una selección aleatoria del banco y mezcla las
-            opciones. Si no apruebas, podrás reintentar después de{" "}
-            {BADGE_RETRY_COOLDOWN_DAYS} días.
+            opciones.{" "}
+            {bypassRetryCooldown
+              ? "Esta cuenta de prueba puede reintentar sin periodo de espera."
+              : `Si no apruebas, podrás reintentar después de ${BADGE_RETRY_COOLDOWN_DAYS} días.`}
           </p>
         </div>
       </div>

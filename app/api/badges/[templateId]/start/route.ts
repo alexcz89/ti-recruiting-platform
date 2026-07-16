@@ -10,6 +10,7 @@ import {
   BADGE_RETRY_COOLDOWN_DAYS,
   isBadgeCurrent,
 } from "@/lib/badges";
+import { isBadgeRetryCooldownBypassed } from "@/lib/server/badgeCooldown";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,7 +30,11 @@ export async function POST(
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    const user = session.user as { id?: string; role?: string };
+    const user = session.user as {
+      id?: string;
+      role?: string;
+      email?: string | null;
+    };
     if (String(user.role ?? "").toUpperCase() !== "CANDIDATE") {
       return jsonNoStore({ error: "Solo candidatos" }, 403);
     }
@@ -113,30 +118,32 @@ export async function POST(
       return jsonNoStore({ attemptId: active.id, reused: true });
     }
 
-    // Cooldown: último attempt final reprobado dentro de la ventana
-    const cooldownMs = BADGE_RETRY_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
-    const lastFailed = await prisma.assessmentAttempt.findFirst({
-      where: {
-        candidateId,
-        templateId: template.id,
-        inviteId: null,
-        applicationId: null,
-        status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
-        passed: false,
-        submittedAt: { gt: new Date(now.getTime() - cooldownMs) },
-      },
-      orderBy: { submittedAt: "desc" },
-      select: { submittedAt: true },
-    });
-    if (lastFailed?.submittedAt) {
-      const retryAt = new Date(lastFailed.submittedAt.getTime() + cooldownMs);
-      return jsonNoStore(
-        {
-          error: `Podrás reintentar este examen el ${retryAt.toLocaleDateString("es-MX", { day: "numeric", month: "long" })}`,
-          retryAt: retryAt.toISOString(),
+    if (!isBadgeRetryCooldownBypassed(user.email)) {
+      // Cooldown: último attempt final reprobado dentro de la ventana
+      const cooldownMs = BADGE_RETRY_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+      const lastFailed = await prisma.assessmentAttempt.findFirst({
+        where: {
+          candidateId,
+          templateId: template.id,
+          inviteId: null,
+          applicationId: null,
+          status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
+          passed: false,
+          submittedAt: { gt: new Date(now.getTime() - cooldownMs) },
         },
-        429
-      );
+        orderBy: { submittedAt: "desc" },
+        select: { submittedAt: true },
+      });
+      if (lastFailed?.submittedAt) {
+        const retryAt = new Date(lastFailed.submittedAt.getTime() + cooldownMs);
+        return jsonNoStore(
+          {
+            error: `Podrás reintentar este examen el ${retryAt.toLocaleDateString("es-MX", { day: "numeric", month: "long" })}`,
+            retryAt: retryAt.toISOString(),
+          },
+          429
+        );
+      }
     }
 
     const attemptsUsed = await prisma.assessmentAttempt.count({
