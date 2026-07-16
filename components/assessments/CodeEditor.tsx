@@ -1,7 +1,7 @@
 // components/assessments/CodeEditor.tsx
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import ReactMarkdown from 'react-markdown';
@@ -379,15 +379,18 @@ export default function CodeEditor({
 
   // resolvedTheme puede ser undefined en el primer render (next-themes hidrata tarde).
   // Usamos el atributo class del <html> como fuente de verdad inmediata.
-  const getIsDark = () =>
-    resolvedTheme === 'dark' ||
-    (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  const getIsDark = useCallback(
+    () =>
+      resolvedTheme === 'dark' ||
+      (typeof document !== 'undefined' && document.documentElement.classList.contains('dark')),
+    [resolvedTheme]
+  );
 
   useEffect(() => {
     if (monacoRef.current) {
       monacoRef.current.editor.setTheme(getIsDark() ? 'vs-dark' : 'vs');
     }
-  }, [isDark]);
+  }, [getIsDark]);
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
@@ -652,10 +655,12 @@ export default function CodeEditor({
           </div>
 
           {/* Output panel — desktop: fixed height at bottom; mobile: full height for results/custom tabs */}
-          <div className={`flex flex-col border-t border-gray-200 dark:border-slate-800/50 ${
-            activeTab === 'results' || activeTab === 'custom'
-              ? 'flex-1 md:h-44 md:flex-none'
-              : 'hidden md:flex md:h-44 md:flex-none'
+          <div className={`flex min-h-0 flex-col border-t border-gray-200 dark:border-slate-800/50 ${
+            activeTab === 'custom'
+              ? 'flex-1 md:h-80 md:flex-none'
+              : activeTab === 'results'
+                ? 'flex-1 md:h-44 md:flex-none'
+                : 'hidden md:flex md:h-44 md:flex-none'
           }`}>
 
             {/* Desktop output sub-tabs */}
@@ -684,6 +689,7 @@ export default function CodeEditor({
               </button>
               <button
                 onClick={() => setActiveTab('custom')}
+                title="Prueba escenarios propios sin afectar tu calificación"
                 className={`relative flex-1 px-5 py-2 text-xs font-semibold transition-all ${
                   activeTab === 'custom'
                     ? 'bg-white text-gray-900 dark:bg-slate-800/50 dark:text-white'
@@ -698,22 +704,22 @@ export default function CodeEditor({
             </div>
 
             {/* Output content (shared between mobile tabs and desktop output panel) */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {activeTab === 'custom' ? (
                 /* Custom Input Panel */
-                <div className="flex flex-col gap-4 bg-gray-50 p-5 dark:bg-slate-900/20">
+                <div className="flex min-h-full flex-col gap-4 bg-gray-50 p-4 dark:bg-slate-900/20 sm:p-5">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-slate-300">
                       {selectedLanguage === 'sql' ? 'Dataset SQL personalizado' : 'Input / Runner personalizado'}
                     </label>
                     <p className="mb-3 text-xs text-gray-500 dark:text-slate-400">
                       {selectedLanguage === 'sql' ? (
-                        <>Opcional: define tablas y datos para probar tu consulta. Este dataset existe solo durante esta ejecución.</>
+                        <>Define tablas y datos para probar tu consulta. No modifica los tests oficiales ni tu calificación.</>
                       ) : (
                         <>
                           Para JS/TS: escribe el código runner que llama tu función (ej:{' '}
                           <code className="rounded bg-gray-200 px-1 dark:bg-slate-800">console.log(solution(42))</code>).
-                          Para otros lenguajes: escribe el stdin que recibirá tu programa.
+                          Para otros lenguajes: escribe el stdin que recibirá tu programa. Esta prueba no envía tu solución ni afecta el puntaje.
                         </>
                       )}
                     </p>
@@ -723,19 +729,19 @@ export default function CodeEditor({
                       placeholder={selectedLanguage === 'sql'
                         ? "CREATE TABLE usuarios (id INTEGER, nombre TEXT);\nINSERT INTO usuarios VALUES (1, 'Ana');"
                         : "// Ej: console.log(solution([1,2,3], 5))"}
-                      rows={4}
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      rows={6}
+                      className="min-h-32 w-full resize-y rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
                     />
                   </div>
                   <button
                     onClick={handleRunCustom}
                     disabled={isRunningCustom || !code.trim() || readOnly}
-                    className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50"
+                    className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700/50"
                   >
                     {isRunningCustom ? (
                       <><Loader2 className="h-4 w-4 animate-spin" /><span>Ejecutando...</span></>
                     ) : (
-                      <><Play className="h-4 w-4" /><span>Ejecutar con este input</span></>
+                      <><Play className="h-4 w-4" /><span>{selectedLanguage === 'sql' ? 'Ejecutar con estos datos' : 'Ejecutar con este input'}</span></>
                     )}
                   </button>
                   {customOutput && (

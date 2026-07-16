@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ChevronDown, CircleHelp, SkipForward } from 'lucide-react';
 import { toastSuccess, toastError, toastInfo, toastWarning } from '@/lib/ui/toast';
 import AssessmentIntro from './AssessmentIntro';
 import AssessmentQuestion from './AssessmentQuestion';
@@ -441,17 +442,19 @@ export default function AssessmentPage() {
     }
   };
 
+  const isCurrentQuestionComplete =
+    currentQuestion?.type === 'CODING'
+      ? Boolean(codingSubmitted[currentQuestion.id])
+      : currentAnswer.length > 0;
+
+  const handleQuestionChange = (targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex >= total || targetIndex === currentIndex) return;
+    setCurrentIndex(targetIndex);
+  };
+
   const handleNext = () => {
     if (expired) return;
-    // ⚠️ Warning si la pregunta actual es CODING y no ha sido enviada
-    const q = questions[currentIndex];
-    if (q?.type === 'CODING' && !codingSubmitted[q.id]) {
-      const proceed = confirm(
-        `⚠️ No has enviado tu solución en la Pregunta ${currentIndex + 1}.\n\nPara que cuente, debes:\n1. Escribir tu código\n2. Hacer clic en "Ejecutar Tests"\n3. Esperar que pasen los tests (se envía automáticamente)\n\n¿Avanzar sin enviar? Tu respuesta quedará en 0 puntos.`
-      );
-      if (!proceed) return;
-    }
-    if (currentIndex < total - 1) setCurrentIndex((i) => i + 1);
+    handleQuestionChange(currentIndex + 1);
   };
 
   const handlePrevious = () => {
@@ -643,7 +646,7 @@ export default function AssessmentPage() {
 
         {/* Header — NO-CODING */}
         {!isCodingQuestion && (
-          <div className="sticky top-0 z-30 mb-6 pb-4 bg-white dark:bg-zinc-950">
+          <div className="sticky top-14 z-40 -mx-2 mb-6 border-b border-zinc-200/80 bg-zinc-50/95 px-2 py-3 backdrop-blur md:top-16 dark:border-zinc-800/80 dark:bg-zinc-950/95">
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-default">{template.title}</h1>
@@ -670,7 +673,7 @@ export default function AssessmentPage() {
 
         {/* Header — CODING */}
         {isCodingQuestion && (
-          <div className="mb-3">
+          <div className="sticky top-14 z-40 -mx-2 mb-3 border-b border-zinc-200/80 bg-zinc-50/95 px-2 py-3 backdrop-blur md:top-16 dark:border-zinc-800/80 dark:bg-zinc-950/95">
             <div className="mb-2 flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-bold text-default">{template.title}</h1>
@@ -691,7 +694,7 @@ export default function AssessmentPage() {
                 return (
                   <button
                     key={q.id}
-                    onClick={() => setCurrentIndex(idx)}
+                    onClick={() => handleQuestionChange(idx)}
                     title={
                       isCoding
                         ? isSubmitted
@@ -769,19 +772,33 @@ export default function AssessmentPage() {
 
         {/* ✅ Banner instrucciones CODING — solo si no ha enviado aún */}
         {isCodingQuestion && !expired && !codingSubmitted[currentQuestion.id] && (
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-200">
-            <span className="text-lg leading-none mt-0.5">💡</span>
-            <div>
-              <p className="font-semibold mb-1">¿Cómo resolver esta pregunta?</p>
-              <ol className="list-decimal list-inside space-y-0.5 text-blue-700 dark:text-blue-300">
-                <li>Escribe tu solución en el editor de código</li>
-                <li>Presiona <strong>&quot;Ejecutar Tests&quot;</strong> (o Ctrl+Enter)</li>
-                <li>Si los tests pasan ✅, tu solución se envía automáticamente</li>
-              </ol>
-            </div>
-          </div>
+          <details className="group mb-3 overflow-hidden rounded-lg border border-blue-200 bg-blue-50/70 text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/30 dark:text-blue-100">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+              <span className="flex min-w-0 items-center gap-2">
+                <CircleHelp className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300" />
+                <span className="truncate text-sm font-semibold">¿Necesitas ayuda?</span>
+                <span className="hidden text-xs font-normal text-blue-700 sm:inline dark:text-blue-300">
+                  Ver pasos y atajos
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <ol className="grid gap-2 border-t border-blue-200 px-3 py-3 text-xs text-blue-800 md:grid-cols-3 dark:border-blue-800/60 dark:text-blue-200">
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">1</span>
+                <span>Escribe tu solución en el editor.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">2</span>
+                <span>Ejecuta los tests con el botón o con Ctrl/Cmd + Enter.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">3</span>
+                <span>Si los tests pasan, se envía automáticamente; también puedes enviarla manualmente.</span>
+              </li>
+            </ol>
+          </details>
         )}
-
         {/* ✅ Banner de confirmación cuando ya fue enviada */}
         {isCodingQuestion && !expired && codingSubmitted[currentQuestion.id] && (
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-200">
@@ -824,8 +841,21 @@ export default function AssessmentPage() {
                   {submitting ? 'Enviando...' : 'Enviar evaluación ✓'}
                 </button>
               ) : (
-                <button onClick={handleNext} disabled={expired} className="btn btn-primary">
-                  Siguiente →
+                <button
+                  onClick={handleNext}
+                  disabled={expired}
+                  title={!isCurrentQuestionComplete ? 'Podrás volver a esta pregunta desde el mapa' : undefined}
+                  className={
+                    !isCurrentQuestionComplete
+                      ? 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-400 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-600/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50'
+                      : 'btn btn-primary'
+                  }
+                >
+                  {!isCurrentQuestionComplete ? (
+                    <><SkipForward className="h-4 w-4" /> Omitir pregunta</>
+                  ) : (
+                    <>Siguiente →</>
+                  )}
                 </button>
               )}
             </div>
@@ -848,15 +878,19 @@ export default function AssessmentPage() {
                 <button
                   onClick={handleNext}
                   disabled={expired}
+                  title={!isCurrentQuestionComplete ? 'Podrás volver a esta pregunta desde el mapa superior' : undefined}
                   className={[
-                    "inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-40",
-                    // Si CODING sin enviar → color ámbar para indicar que hay algo pendiente
-                    isCodingQuestion && !codingSubmitted[currentQuestion.id]
-                      ? "border-amber-400 bg-amber-50 text-amber-700 hover:border-amber-500 dark:border-amber-600/50 dark:bg-amber-900/20 dark:text-amber-300"
-                      : "border-zinc-300 bg-white text-zinc-700 hover:border-teal-400 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                    'inline-flex min-h-10 items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40',
+                    !isCurrentQuestionComplete
+                      ? 'border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-600/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50'
+                      : 'border-zinc-300 bg-white text-zinc-700 hover:border-teal-400 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300',
                   ].join(' ')}
                 >
-                  {isCodingQuestion && !codingSubmitted[currentQuestion.id] ? '⚠️ Siguiente →' : 'Siguiente →'}
+                  {!isCurrentQuestionComplete ? (
+                    <><SkipForward className="h-4 w-4" /> Omitir pregunta</>
+                  ) : (
+                    <>Siguiente →</>
+                  )}
                 </button>
               )}
 
@@ -884,7 +918,7 @@ export default function AssessmentPage() {
                 return (
                   <button
                     key={q.id}
-                    onClick={() => setCurrentIndex(idx)}
+                    onClick={() => handleQuestionChange(idx)}
                     className={`
                       h-10 w-10 rounded-lg text-sm font-medium transition
                       ${
