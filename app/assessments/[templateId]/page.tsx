@@ -181,7 +181,7 @@ export default function AssessmentPage() {
   }
 
   useAntiCheating({
-    enabled: started && !!attemptId && !expired && !antiCheatBypass,
+    enabled: started && !!attemptId && !expired && !submitting && !antiCheatBypass,
     attemptId,
     maxTabSwitches: 5,
     onTabReturn: (count) => {
@@ -435,8 +435,11 @@ export default function AssessmentPage() {
   const currentQuestion = questions[currentIndex];
   const currentAnswer = answers[currentQuestion?.id || ''] || [];
 
-  const handleAnswer = async (questionId: string, selectedOptions: string[]) => {
-    if (!attemptId || expired) return;
+  const handleAnswer = async (
+    questionId: string,
+    selectedOptions: string[]
+  ): Promise<boolean> => {
+    if (!attemptId || expired) return false;
 
     const unique = Array.from(new Set(selectedOptions.map((x) => String(x).trim()))).filter(Boolean);
     setAnswers((prev) => ({ ...prev, [questionId]: unique }));
@@ -453,9 +456,14 @@ export default function AssessmentPage() {
       if (!res.ok && res.status === 400) {
         const data = await res.json().catch(() => null);
         if (data?.error?.toLowerCase?.().includes('expir')) handleExpire();
+        return false;
       }
+
+      if (!res.ok) return false;
+      return true;
     } catch (error) {
       console.error('Error saving answer:', error);
+      return false;
     }
   };
 
@@ -479,18 +487,12 @@ export default function AssessmentPage() {
     if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   };
 
-  const handleCodeSubmitted = (qid: string) => {
-    if (expired) return;
-    setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
-    setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
-    // ✅ Guardar timeSpent al hacer submit de código
-    handleAnswer(qid, [CODE_SENTINEL]);
-    if (currentIndex < total - 1) {
-      toastSuccess('✓ Solución enviada. Puedes continuar con la siguiente pregunta.');
-    }
+  type SubmitOptions = {
+    answeredQuestionId?: string;
+    skipConfirmation?: boolean;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (options: SubmitOptions = {}) => {
     if (!attemptId || submitting) return;
 
     if (expired) {
@@ -499,9 +501,12 @@ export default function AssessmentPage() {
     }
 
     if (!expired) {
-      const unansweredQuestions = questions.filter((question) => !isAnsweredId(question.id));
+      const unansweredQuestions = questions.filter(
+        (question) =>
+          question.id !== options.answeredQuestionId && !isAnsweredId(question.id)
+      );
 
-      if (unansweredQuestions.length > 0) {
+      if (!options.skipConfirmation && unansweredQuestions.length > 0) {
         const unsubmittedCoding = unansweredQuestions.filter(
           (question) => question.type === 'CODING'
         );
@@ -547,9 +552,41 @@ export default function AssessmentPage() {
     }
   };
 
+  const handleCodeSubmitted = async (qid: string) => {
+    if (expired || submitting) return;
+
+    setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
+    setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
+
+    const answerSaved = await handleAnswer(qid, [CODE_SENTINEL]);
+    if (!answerSaved) {
+      toastError('La solución se ejecutó, pero no pudimos cerrar la respuesta. Intenta de nuevo.');
+      return;
+    }
+
+    const isLastQuestion = currentIndex === total - 1;
+    const allAnsweredAfterThis = questions.every(
+      (question) => question.id === qid || isAnsweredId(question.id)
+    );
+
+    if (isLastQuestion && allAnsweredAfterThis) {
+      await handleSubmit({
+        answeredQuestionId: qid,
+        skipConfirmation: true,
+      });
+      return;
+    }
+
+    toastSuccess(
+      isLastQuestion
+        ? 'Solución enviada. Revisa las preguntas pendientes antes de finalizar.'
+        : 'Solución enviada. Puedes continuar con la siguiente pregunta.'
+    );
+  };
+
   // Timer para tiempo en pregunta actual
   useEffect(() => {
-    if (!started || expired) return;
+    if (!started || expired || submitting) return;
     if (!currentQuestion?.id) return;
 
     const questionId = currentQuestion.id;
@@ -561,7 +598,7 @@ export default function AssessmentPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [started, expired, currentQuestion?.id]);
+  }, [started, expired, submitting, currentQuestion?.id]);
 
   if (loading) {
     return (
@@ -678,7 +715,9 @@ export default function AssessmentPage() {
                     🚨 {tabWarning.count} {tabWarning.count === 1 ? 'salida' : 'salidas'} registradas
                   </span>
                 )}
-                {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
+                {expiresAt && !submitting && (
+                  <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />
+                )}
               </div>
             </div>
 
@@ -761,7 +800,7 @@ export default function AssessmentPage() {
                   <ChevronLeft className="h-4 w-4" />
                 </button>
 
-                {expiresAt && (
+                {expiresAt && !submitting && (
                   <AssessmentTimer compact expiresAt={expiresAt} onExpire={handleExpire} />
                 )}
 
@@ -795,7 +834,7 @@ export default function AssessmentPage() {
                 {(currentIndex === total - 1 || allQuestionsAnswered) && (
                   <button
                     type="button"
-                    onClick={handleSubmit}
+                    onClick={() => void handleSubmit()}
                     disabled={submitting || expired}
                     className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-50"
                   >
@@ -873,7 +912,13 @@ export default function AssessmentPage() {
         {isCodingQuestion && !expired && codingSubmitted[currentQuestion.id] && (
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-200">
             <span className="text-lg leading-none">✅</span>
-            <p className="font-semibold">Solución enviada correctamente. Puedes continuar con la siguiente pregunta.</p>
+            <p className="font-semibold">
+              {currentIndex === total - 1
+                ? submitting
+                  ? 'Solución correcta. Finalizando evaluación...'
+                  : 'Solución enviada correctamente. Finaliza la evaluación.'
+                : 'Solución enviada correctamente. Puedes continuar con la siguiente pregunta.'}
+            </p>
           </div>
         )}
 
@@ -907,7 +952,11 @@ export default function AssessmentPage() {
 
             <div className="flex items-center gap-2">
               {currentIndex === total - 1 || allQuestionsAnswered ? (
-                <button onClick={handleSubmit} disabled={submitting || expired} className="btn btn-primary">
+                <button
+                  onClick={() => void handleSubmit()}
+                  disabled={submitting || expired}
+                  className="btn btn-primary"
+                >
                   {submitting ? 'Enviando...' : 'Enviar evaluación ✓'}
                 </button>
               ) : (
