@@ -591,6 +591,9 @@ async function main() {
         });
       }
     }
+  }, {
+    maxWait: 15_000,
+    timeout: 120_000,
   });
 
   const [activeTotal, activePractical, activeConceptual] = await Promise.all([
