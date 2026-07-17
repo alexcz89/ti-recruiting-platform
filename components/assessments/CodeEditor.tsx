@@ -204,6 +204,7 @@ export default function CodeEditor({
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const runTestsRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     setCode(initialCode || '');
@@ -401,6 +402,12 @@ export default function CodeEditor({
     }
   };
 
+  // Monaco registers commands once when the editor mounts. Keep the latest
+  // handler in a ref so Ctrl/Cmd + Enter never submits first-render code.
+  useEffect(() => {
+    runTestsRef.current = handleRunTests;
+  });
+
   // resolvedTheme puede ser undefined en el primer render (next-themes hidrata tarde).
   // Usamos el atributo class del <html> como fuente de verdad inmediata.
   const getIsDark = useCallback(
@@ -423,7 +430,7 @@ export default function CodeEditor({
     monaco.editor.setTheme(getIsDark() ? 'vs-dark' : 'vs');
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      handleRunTests();
+      runTestsRef.current();
     });
   };
 
