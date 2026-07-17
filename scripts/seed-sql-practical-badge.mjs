@@ -1,10 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
-const VERSION_TAG = "sql-practical-v1";
+const PRACTICAL_VERSION_TAG = "sql-practical-v1";
+const CONCEPT_VERSION_TAG = "sql-concept-v1";
+const EXAM_VERSION_TAG = "sql-basic-mixed-v2";
 const dryRun = process.argv.includes("--dry-run");
 
-const questions = [
+const practicalQuestions = [
   {
     marker: "sql-practical-v1:q1",
     title: "Filtra y ordena empleados activos",
@@ -252,13 +254,156 @@ INSERT INTO detalle_pedido VALUES (1, 1, 2), (2, 2, 4), (3, 3, 5), (4, 4, 3);`,
   },
 ];
 
+const conceptualQuestions = [
+  {
+    marker: "sql-concept-v1:q1",
+    title: "Filtrado antes y después de agrupar",
+    text: "¿Qué cláusula filtra grupos después de aplicar funciones como SUM o COUNT?",
+    options: ["HAVING", "WHERE", "ORDER BY", "DISTINCT"],
+    correctIndex: 0,
+    explanation: "HAVING filtra los grupos después de la agregación; WHERE filtra filas antes de agrupar.",
+  },
+  {
+    marker: "sql-concept-v1:q2",
+    title: "Comportamiento de LEFT JOIN",
+    text: "¿Qué devuelve un LEFT JOIN entre clientes y pedidos?",
+    options: [
+      "Todos los clientes y los pedidos coincidentes; usa NULL cuando no hay pedido",
+      "Solo clientes que tienen al menos un pedido",
+      "Todos los pedidos aunque no tengan cliente",
+      "El producto cartesiano de ambas tablas",
+    ],
+    correctIndex: 0,
+    explanation: "LEFT JOIN conserva todas las filas de la tabla izquierda y completa con NULL cuando no existe coincidencia.",
+  },
+  {
+    marker: "sql-concept-v1:q3",
+    title: "Conteo de valores no nulos",
+    text: "¿Qué cuenta COUNT(columna) en SQL?",
+    options: [
+      "Los valores no nulos de la columna",
+      "Todas las filas, incluidas las que contienen NULL",
+      "Solo los valores distintos",
+      "La suma de los valores numéricos",
+    ],
+    correctIndex: 0,
+    explanation: "COUNT(columna) ignora NULL; COUNT(*) cuenta todas las filas.",
+  },
+  {
+    marker: "sql-concept-v1:q4",
+    title: "Comparación con NULL",
+    text: "¿Cuál es la forma correcta de encontrar filas donde fecha_baja no tiene valor?",
+    options: [
+      "WHERE fecha_baja IS NULL",
+      "WHERE fecha_baja = NULL",
+      "WHERE fecha_baja == NULL",
+      "WHERE fecha_baja = 'NULL'",
+    ],
+    correctIndex: 0,
+    explanation: "NULL representa un valor desconocido y se comprueba con IS NULL o IS NOT NULL.",
+  },
+  {
+    marker: "sql-concept-v1:q5",
+    title: "Columnas en GROUP BY",
+    text: "En una consulta agregada, ¿qué debe hacerse con una columna seleccionada que no usa una función de agregación?",
+    options: [
+      "Incluirla en GROUP BY",
+      "Incluirla en HAVING",
+      "Convertirla siempre a texto",
+      "Moverla a ORDER BY",
+    ],
+    correctIndex: 0,
+    explanation: "Las columnas no agregadas del SELECT deben formar parte de GROUP BY en SQL estándar.",
+  },
+  {
+    marker: "sql-concept-v1:q6",
+    title: "Propósito de una llave primaria",
+    text: "¿Qué garantiza una PRIMARY KEY?",
+    options: [
+      "Identifica cada fila con un valor único y no nulo",
+      "Ordena físicamente todas las filas",
+      "Evita cualquier valor duplicado en toda la tabla",
+      "Crea automáticamente una relación con otra tabla",
+    ],
+    correctIndex: 0,
+    explanation: "Una llave primaria identifica de manera única cada fila y no admite valores NULL.",
+  },
+  {
+    marker: "sql-concept-v1:q7",
+    title: "Prevención de SQL injection",
+    text: "¿Cuál es la práctica más efectiva para evitar SQL injection al recibir datos del usuario?",
+    options: [
+      "Usar consultas parametrizadas",
+      "Escapar espacios manualmente",
+      "Ocultar los errores de la base de datos",
+      "Convertir la consulta a mayúsculas",
+    ],
+    correctIndex: 0,
+    explanation: "Las consultas parametrizadas separan los datos de la estructura SQL y evitan que la entrada se interprete como código.",
+  },
+  {
+    marker: "sql-concept-v1:q8",
+    title: "Atomicidad de una transacción",
+    text: "Si una operación falla dentro de una transacción y se ejecuta ROLLBACK, ¿qué sucede?",
+    options: [
+      "Se deshacen los cambios de la transacción no confirmada",
+      "Se conservan solo los INSERT",
+      "Se elimina la tabla afectada",
+      "Se confirma automáticamente el resto de operaciones",
+    ],
+    correctIndex: 0,
+    explanation: "ROLLBACK revierte los cambios pendientes desde el inicio de la transacción o desde el punto de guardado aplicable.",
+  },
+  {
+    marker: "sql-concept-v1:q9",
+    title: "Costo de los índices",
+    text: "¿Cuál es un efecto secundario común de agregar demasiados índices?",
+    options: [
+      "Aumenta el costo de escrituras y el uso de almacenamiento",
+      "Impide usar WHERE",
+      "Convierte todas las columnas en únicas",
+      "Elimina la necesidad de optimizar consultas",
+    ],
+    correctIndex: 0,
+    explanation: "Los índices pueden acelerar lecturas, pero deben mantenerse en INSERT, UPDATE y DELETE y consumen espacio.",
+  },
+  {
+    marker: "sql-concept-v1:q10",
+    title: "Eliminación de duplicados",
+    text: "¿Qué palabra clave elimina filas duplicadas del resultado de una consulta?",
+    options: ["DISTINCT", "UNIQUE", "DEDUP", "GROUP"],
+    correctIndex: 0,
+    explanation: "SELECT DISTINCT devuelve combinaciones únicas de las columnas seleccionadas.",
+  },
+];
+
+const optionIds = ["a", "b", "c", "d"];
+
+function buildOptions(question) {
+  return question.options.map((text, index) => ({
+    id: optionIds[index],
+    text,
+    isCorrect: index === question.correctIndex,
+  }));
+}
+
 async function main() {
+  if (practicalQuestions.length !== 5 || conceptualQuestions.length !== 10) {
+    throw new Error("La certificación SQL debe tener 5 ejercicios prácticos y 10 preguntas conceptuales.");
+  }
+
+  for (const question of conceptualQuestions) {
+    if (question.options.length !== 4 || question.correctIndex < 0 || question.correctIndex > 3) {
+      throw new Error(`Configuración inválida en ${question.marker}.`);
+    }
+  }
+
   const term = await prisma.taxonomyTerm.findFirst({
     where: { kind: "SKILL", slug: "sql" },
     select: { id: true, label: true },
   });
 
-  if (!term) throw new Error("No se encontro el skill SQL en TaxonomyTerm.");
+  if (!term) throw new Error("No se encontró el skill SQL en TaxonomyTerm.");
 
   const template = await prisma.assessmentTemplate.findFirst({
     where: {
@@ -271,14 +416,17 @@ async function main() {
   });
 
   if (!template) {
-    throw new Error("No se encontro el template badge-sql-basico. Ejecuta primero el seed base de badges.");
+    throw new Error("No se encontró el template badge-sql-basico. Ejecuta primero el seed base de badges.");
   }
 
   if (dryRun) {
-    const [totalQuestions, practicalQuestions] = await Promise.all([
+    const [totalQuestions, practicalQuestionsInDb, conceptualQuestionsInDb] = await Promise.all([
       prisma.assessmentQuestion.count({ where: { templateId: template.id } }),
       prisma.assessmentQuestion.count({
-        where: { templateId: template.id, tags: { has: VERSION_TAG } },
+        where: { templateId: template.id, tags: { has: PRACTICAL_VERSION_TAG } },
+      }),
+      prisma.assessmentQuestion.count({
+        where: { templateId: template.id, tags: { has: CONCEPT_VERSION_TAG } },
       }),
     ]);
 
@@ -286,9 +434,16 @@ async function main() {
       mode: "dry-run",
       term,
       template,
-      totalQuestions,
-      practicalQuestions,
-      questionsToCreate: questions.length,
+      current: {
+        totalQuestions,
+        practicalQuestions: practicalQuestionsInDb,
+        conceptualQuestions: conceptualQuestionsInDb,
+      },
+      target: {
+        totalQuestions: practicalQuestions.length + conceptualQuestions.length,
+        practicalQuestions: practicalQuestions.length,
+        conceptualQuestions: conceptualQuestions.length,
+      },
     }, null, 2));
     return;
   }
@@ -297,15 +452,28 @@ async function main() {
     await tx.assessmentTemplate.update({
       where: { id: template.id },
       data: {
-        title: "Certificacion SQL - Practica basica",
-        description: "Cinco consultas SQL escritas desde cero sobre datasets aislados. Evalua filtros, joins, agregaciones y analisis basico.",
-        type: "CODING",
+        title: "Certificación SQL - Práctica básica",
+        description: "Evaluación mixta con 10 preguntas conceptuales y 5 consultas SQL prácticas sobre filtros, joins, agregaciones, seguridad y transacciones.",
+        type: "MIXED",
         difficulty: "JUNIOR",
-        totalQuestions: questions.length,
+        totalQuestions: practicalQuestions.length + conceptualQuestions.length,
         passingScore: 80,
-        timeLimit: 35,
-        sections: [{ name: "SQL practico", title: "SQL practico" }],
-        shuffleQuestions: false,
+        timeLimit: 50,
+        sections: [
+          {
+            name: "Fundamentos SQL",
+            title: "Fundamentos SQL",
+            questions: conceptualQuestions.length,
+            timeLimit: 20,
+          },
+          {
+            name: "SQL práctico",
+            title: "SQL práctico",
+            questions: practicalQuestions.length,
+            timeLimit: 30,
+          },
+        ],
+        shuffleQuestions: true,
         allowRetry: true,
         maxAttempts: 99,
         isActive: true,
@@ -322,12 +490,39 @@ async function main() {
     await tx.assessmentQuestion.updateMany({
       where: {
         templateId: template.id,
-        NOT: { tags: { has: VERSION_TAG } },
+        NOT: { tags: { has: EXAM_VERSION_TAG } },
       },
       data: { isActive: false },
     });
 
-    for (const [index, question] of questions.entries()) {
+    for (const question of practicalQuestions) {
+      const testCases = question.tests.map((test, testIndex) => ({
+        input: test.setup,
+        expectedOutput: test.expected,
+        isHidden: test.hidden,
+        points: 1,
+        timeoutMs: 5000,
+        memoryLimitMb: 128,
+        orderIndex: testIndex,
+      }));
+      const practicalData = {
+        section: "SQL práctico",
+        difficulty: "JUNIOR",
+        tags: ["sql", "práctico", EXAM_VERSION_TAG, PRACTICAL_VERSION_TAG, question.marker],
+        questionText: `${question.title}\n\n${question.text}`,
+        codeSnippet: null,
+        options: [],
+        allowMultiple: false,
+        explanation: "La solución debe producir exactamente las columnas y el orden solicitados.",
+        type: "CODING",
+        language: "sql",
+        allowedLanguages: JSON.stringify(["sql"]),
+        starterCode: question.starter,
+        solutionCode: question.solution,
+        codingConfig: { dialect: "sqlite", readOnly: true },
+        isActive: true,
+      };
+
       const existing = await tx.assessmentQuestion.findFirst({
         where: { templateId: template.id, tags: { has: question.marker } },
         select: { id: true },
@@ -336,57 +531,93 @@ async function main() {
       if (existing) {
         await tx.assessmentQuestion.update({
           where: { id: existing.id },
-          data: { isActive: true },
-        });
-        continue;
-      }
-
-      await tx.assessmentQuestion.create({
-        data: {
-          templateId: template.id,
-          section: "SQL practico",
-          difficulty: "JUNIOR",
-          tags: ["sql", "practico", VERSION_TAG, question.marker],
-          questionText: `${index + 1}. ${question.title}\n\n${question.text}`,
-          options: [],
-          allowMultiple: false,
-          explanation: "La solucion debe producir exactamente las columnas y el orden solicitados.",
-          type: "CODING",
-          language: "sql",
-          allowedLanguages: JSON.stringify(["sql"]),
-          starterCode: question.starter,
-          solutionCode: question.solution,
-          codingConfig: { dialect: "sqlite", readOnly: true },
-          isActive: true,
-          testCases: {
-            create: question.tests.map((test, testIndex) => ({
-              input: test.setup,
-              expectedOutput: test.expected,
-              isHidden: test.hidden,
-              points: 1,
-              timeoutMs: 5000,
-              memoryLimitMb: 128,
-              orderIndex: testIndex,
-            })),
+          data: {
+            ...practicalData,
+            testCases: {
+              deleteMany: {},
+              create: testCases,
+            },
           },
-        },
+        });
+      } else {
+        await tx.assessmentQuestion.create({
+          data: {
+            templateId: template.id,
+            ...practicalData,
+            testCases: { create: testCases },
+          },
+        });
+      }
+    }
+
+    for (const question of conceptualQuestions) {
+      const conceptualData = {
+        section: "Fundamentos SQL",
+        difficulty: "JUNIOR",
+        tags: ["sql", "conceptual", EXAM_VERSION_TAG, CONCEPT_VERSION_TAG, question.marker],
+        questionText: `${question.title}\n\n${question.text}`,
+        codeSnippet: null,
+        options: buildOptions(question),
+        allowMultiple: false,
+        explanation: question.explanation,
+        type: "MULTIPLE_CHOICE",
+        language: null,
+        allowedLanguages: null,
+        starterCode: null,
+        solutionCode: null,
+        codingConfig: null,
+        isActive: true,
+      };
+
+      const existing = await tx.assessmentQuestion.findFirst({
+        where: { templateId: template.id, tags: { has: question.marker } },
+        select: { id: true },
       });
+
+      if (existing) {
+        await tx.assessmentQuestion.update({
+          where: { id: existing.id },
+          data: {
+            ...conceptualData,
+            testCases: { deleteMany: {} },
+          },
+        });
+      } else {
+        await tx.assessmentQuestion.create({
+          data: {
+            templateId: template.id,
+            ...conceptualData,
+          },
+        });
+      }
     }
   });
 
-  const activePractical = await prisma.assessmentQuestion.count({
-    where: {
-      templateId: template.id,
-      isActive: true,
-      tags: { has: VERSION_TAG },
-    },
-  });
+  const [activeTotal, activePractical, activeConceptual] = await Promise.all([
+    prisma.assessmentQuestion.count({
+      where: { templateId: template.id, isActive: true, tags: { has: EXAM_VERSION_TAG } },
+    }),
+    prisma.assessmentQuestion.count({
+      where: { templateId: template.id, isActive: true, tags: { has: PRACTICAL_VERSION_TAG } },
+    }),
+    prisma.assessmentQuestion.count({
+      where: { templateId: template.id, isActive: true, tags: { has: CONCEPT_VERSION_TAG } },
+    }),
+  ]);
 
-  if (activePractical !== questions.length) {
-    throw new Error(`Se esperaban ${questions.length} preguntas practicas activas y hay ${activePractical}.`);
+  if (
+    activeTotal !== 15 ||
+    activePractical !== practicalQuestions.length ||
+    activeConceptual !== conceptualQuestions.length
+  ) {
+    throw new Error(
+      `Configuración incompleta: total=${activeTotal}, prácticas=${activePractical}, conceptuales=${activeConceptual}.`
+    );
   }
 
-  console.log(`SQL practico listo: ${template.slug} con ${activePractical} preguntas CODING en Judge0/SQLite.`);
+  console.log(
+    `Certificación SQL lista: ${template.slug} con ${activeConceptual} preguntas conceptuales y ${activePractical} ejercicios prácticos.`
+  );
 }
 
 main()

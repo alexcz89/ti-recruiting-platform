@@ -205,6 +205,16 @@ export default function AssessmentPage() {
     );
   }, [answers]);
 
+  const allQuestionsAnswered = useMemo(
+    () =>
+      questions.length > 0 &&
+      questions.every((question) => {
+        const answer = answers[question.id];
+        return Array.isArray(answer) && answer.length > 0;
+      }),
+    [answers, questions]
+  );
+
   useEffect(() => {
     async function loadTemplate() {
       try {
@@ -489,24 +499,20 @@ export default function AssessmentPage() {
     }
 
     if (!expired) {
-      // ✅ Advertir si hay preguntas CODING sin enviar solución
-      const codingQuestions = questions.filter((q) => q.type === 'CODING');
-      const unsubmittedCoding = codingQuestions.filter((q) => !codingSubmitted[q.id]);
+      const unansweredQuestions = questions.filter((question) => !isAnsweredId(question.id));
 
-      if (unsubmittedCoding.length > 0) {
-        const names = unsubmittedCoding.map((q, i) => `Pregunta ${questions.indexOf(q) + 1}`).join(', ');
+      if (unansweredQuestions.length > 0) {
+        const unsubmittedCoding = unansweredQuestions.filter(
+          (question) => question.type === 'CODING'
+        );
+        const codingNotice =
+          unsubmittedCoding.length > 0
+            ? `\n${unsubmittedCoding.length} son ejercicios de código sin una solución enviada.`
+            : '';
         const confirmed = confirm(
-          `⚠️ Tienes ${unsubmittedCoding.length} pregunta(s) de código sin enviar solución:\n${names}\n\n¿Deseas finalizar de todos modos? Las preguntas sin solución quedarán en 0 puntos.`
+          `Tienes ${unansweredQuestions.length} pregunta(s) sin responder.${codingNotice}\n\n¿Deseas finalizar de todos modos? Se calificarán con 0 puntos.`
         );
         if (!confirmed) return;
-      } else {
-        const unansweredCount = questions.filter((q) => !isAnsweredId(q.id)).length;
-        if (unansweredCount > 0) {
-          const confirmed = confirm(
-            `Tienes ${unansweredCount} pregunta(s) sin responder. ¿Deseas enviar de todos modos?`
-          );
-          if (!confirmed) return;
-        }
       }
     }
 
@@ -693,37 +699,39 @@ export default function AssessmentPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-1.5" aria-label="Navegación de preguntas">
+              <div
+                className="order-3 flex w-full min-w-0 items-center gap-1.5 overflow-x-auto pb-1 md:order-none md:w-auto md:max-w-[36rem]"
+                aria-label="Navegación de preguntas"
+              >
                 {questions.map((q, idx) => {
-                  const isSubmitted = codingSubmitted[q.id];
+                  const isAnswered = isAnsweredId(q.id);
                   const isCurrent = idx === currentIndex;
-                  const isCoding = q.type === 'CODING';
+                  const questionStatus = isAnswered ? 'Respondida' : 'Pendiente';
 
                   return (
                     <button
                       key={q.id}
                       type="button"
                       onClick={() => handleQuestionChange(idx)}
-                      title={
-                        isCoding
-                          ? isSubmitted
-                            ? `Pregunta ${idx + 1} - Solución enviada`
-                            : `Pregunta ${idx + 1} - Pendiente`
-                          : `Pregunta ${idx + 1}`
-                      }
+                      title={`Pregunta ${idx + 1} - ${questionStatus}`}
+                      aria-label={`Pregunta ${idx + 1}: ${questionStatus}`}
                       aria-current={isCurrent ? 'step' : undefined}
                       className={[
                         'relative flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold transition-colors',
                         isCurrent
                           ? 'border-teal-600 bg-teal-600 text-white shadow-sm'
-                          : isSubmitted
+                          : isAnswered
                             ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
                             : 'border-zinc-300 bg-white text-zinc-600 hover:border-teal-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400',
                       ].join(' ')}
                     >
                       {idx + 1}
-                      {isSubmitted && !isCurrent && (
-                        <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900" />
+                      {isAnswered && !isCurrent && (
+                        <span
+                          title="Respondida"
+                          aria-hidden="true"
+                          className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900"
+                        />
                       )}
                     </button>
                   );
@@ -733,7 +741,7 @@ export default function AssessmentPage() {
               <div className="hidden items-center gap-3 text-[11px] text-zinc-500 2xl:flex dark:text-zinc-400">
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Enviada
+                  Respondida
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />
@@ -784,9 +792,7 @@ export default function AssessmentPage() {
                   </button>
                 )}
 
-                {(currentIndex === total - 1 ||
-                  Object.keys(codingSubmitted).length ===
-                    questions.filter((q) => q.type === 'CODING').length) && (
+                {(currentIndex === total - 1 || allQuestionsAnswered) && (
                   <button
                     type="button"
                     onClick={handleSubmit}
@@ -900,7 +906,7 @@ export default function AssessmentPage() {
             </button>
 
             <div className="flex items-center gap-2">
-              {currentIndex === total - 1 ? (
+              {currentIndex === total - 1 || allQuestionsAnswered ? (
                 <button onClick={handleSubmit} disabled={submitting || expired} className="btn btn-primary">
                   {submitting ? 'Enviando...' : 'Enviar evaluación ✓'}
                 </button>
@@ -936,7 +942,10 @@ export default function AssessmentPage() {
                 return (
                   <button
                     key={q.id}
+                    type="button"
                     onClick={() => handleQuestionChange(idx)}
+                    title={`Pregunta ${idx + 1} - ${isAnswered ? 'Respondida' : 'Pendiente'}`}
+                    aria-label={`Pregunta ${idx + 1}: ${isAnswered ? 'Respondida' : 'Pendiente'}`}
                     className={`
                       h-10 w-10 rounded-lg text-sm font-medium transition
                       ${

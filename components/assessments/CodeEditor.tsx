@@ -29,6 +29,7 @@ import {
   Zap,
   Terminal,
   Database,
+  GripVertical,
   X,
 } from 'lucide-react';
 
@@ -529,7 +530,7 @@ export default function CodeEditor({
         ) : (
           <>
             <Play className="h-4 w-4" />
-            <span>{compact ? 'Ejecutar' : 'Ejecutar Tests'}</span>
+            <span>Ejecutar pruebas</span>
           </>
         )}
       </button>
@@ -537,7 +538,7 @@ export default function CodeEditor({
       {solutionSubmitted ? (
         <div className={`inline-flex items-center justify-center gap-2 bg-emerald-600 font-bold text-white shadow-sm ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}>
           <CheckCircle2 className="h-4 w-4" />
-          <span>{compact ? 'Enviada' : 'Solución enviada'}</span>
+          <span>{compact ? 'Respondida' : 'Solución enviada'}</span>
         </div>
       ) : isSubmitting ? (
         <div className={`inline-flex items-center justify-center gap-2 bg-teal-600 font-bold text-white shadow-sm ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}>
@@ -552,7 +553,7 @@ export default function CodeEditor({
           className={`inline-flex items-center justify-center gap-2 bg-teal-600 font-bold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}
         >
           <Send className="h-4 w-4" />
-          <span>{compact ? 'Enviar' : 'Enviar solución'}</span>
+          <span>Enviar solución</span>
         </button>
       )}
     </div>
@@ -739,6 +740,7 @@ export default function CodeEditor({
         <div
           role="separator"
           aria-label="Ajustar ancho de la descripción"
+          title="Arrastra o usa las flechas para ajustar la descripción"
           aria-orientation="vertical"
           aria-valuemin={22}
           aria-valuemax={40}
@@ -746,9 +748,9 @@ export default function CodeEditor({
           tabIndex={0}
           onKeyDown={(event) => handlePanelResizeKeyDown(event, 'problem')}
           onPointerDown={(event) => startPanelResize(event, 'problem')}
-          className="group hidden w-1 shrink-0 touch-none cursor-col-resize items-center justify-center bg-zinc-100 transition-colors hover:bg-teal-100 md:flex dark:bg-slate-800 dark:hover:bg-teal-950"
+          className="group hidden w-3 shrink-0 touch-none cursor-col-resize items-center justify-center border-x border-zinc-200 bg-zinc-50 text-zinc-400 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500 md:flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-teal-700 dark:hover:bg-teal-950 dark:hover:text-teal-300"
         >
-          <span className="h-10 w-px bg-zinc-300 transition-colors group-hover:bg-teal-500 dark:bg-slate-600" />
+          <GripVertical className="h-5 w-5" aria-hidden="true" />
         </div>
 
         {/* RIGHT PANEL: Editor + output (full width on mobile, 60% on desktop) */}
@@ -798,6 +800,7 @@ export default function CodeEditor({
           <div
             role="separator"
             aria-label="Ajustar ancho de resultados"
+            title="Arrastra o usa las flechas para ajustar los resultados"
             aria-orientation="vertical"
             aria-valuemin={22}
             aria-valuemax={38}
@@ -805,9 +808,9 @@ export default function CodeEditor({
             tabIndex={0}
             onKeyDown={(event) => handlePanelResizeKeyDown(event, 'output')}
             onPointerDown={(event) => startPanelResize(event, 'output')}
-            className="group hidden w-1 shrink-0 touch-none cursor-col-resize items-center justify-center bg-zinc-100 transition-colors hover:bg-teal-100 md:flex dark:bg-slate-800 dark:hover:bg-teal-950"
+            className="group hidden w-3 shrink-0 touch-none cursor-col-resize items-center justify-center border-x border-zinc-200 bg-zinc-50 text-zinc-400 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500 md:flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-teal-700 dark:hover:bg-teal-950 dark:hover:text-teal-300"
           >
-            <span className="h-10 w-px bg-zinc-300 transition-colors group-hover:bg-teal-500 dark:bg-slate-600" />
+            <GripVertical className="h-5 w-5" aria-hidden="true" />
           </div>
 
           {/* Output panel — desktop: fixed height at bottom; mobile: full height for results/custom tabs */}
