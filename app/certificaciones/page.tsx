@@ -115,7 +115,7 @@ export default async function CertificacionesPage({
         inviteId: null,
         applicationId: null,
         status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
-        passed: false,
+        OR: [{ passed: false }, { severity: "CRITICAL" }],
         submittedAt: { gt: new Date(Date.now() - cooldownMs) },
       },
       select: { templateId: true, submittedAt: true },
@@ -217,7 +217,7 @@ export default async function CertificacionesPage({
           const exam = skill.examsByLevel.get(level);
           const isEarned = earned.has(skill.termId + ":" + level);
           const isLocked =
-            level >= 3 && !earned.has(skill.termId + ":" + (level - 1));
+            level >= 2 && !earned.has(skill.termId + ":" + (level - 1));
           const retryAt = exam
             ? (retryAtByTemplate.get(exam.id) ?? null)
             : null;

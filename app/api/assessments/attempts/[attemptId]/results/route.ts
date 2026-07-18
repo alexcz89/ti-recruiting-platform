@@ -4,6 +4,11 @@ import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
+import {
+  BADGE_RETRY_COOLDOWN_DAYS,
+  buildLinkedInCertificationUrl,
+} from "@/lib/badges";
+import { isBadgeRetryCooldownBypassed } from "@/lib/server/badgeCooldown";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,6 +16,7 @@ export const runtime = "nodejs";
 type SessionUser = {
   id?: string | null;
   role?: string | null;
+  email?: string | null;
 };
 
 type AttemptStatusLike =
@@ -109,6 +115,13 @@ export async function GET(
             difficulty: true,
             passingScore: true,
             sections: true,
+            isBadgeExam: true,
+            badgeLevel: true,
+            badgeTerm: {
+              select: {
+                label: true,
+              },
+            },
           },
         },
         application: {
@@ -136,6 +149,19 @@ export async function GET(
                     recruiterId: true,
                   },
                 },
+              },
+            },
+          },
+        },
+        badge: {
+          select: {
+            slug: true,
+            isPublic: true,
+            earnedAt: true,
+            level: true,
+            term: {
+              select: {
+                label: true,
               },
             },
           },
@@ -196,6 +222,63 @@ export async function GET(
     ]);
 
     const flags = (attemptBase.flagsJson ?? {}) as FlagsJsonShape;
+    const severity = String(attemptBase.severity ?? "NORMAL").toUpperCase();
+    const integrityInvalidated = severity === "CRITICAL";
+    const passed = Boolean(attemptBase.passed) && !integrityInvalidated;
+    const isBadgeExam = Boolean(attemptBase.template.isBadgeExam);
+    const cooldownBypassed = isBadgeRetryCooldownBypassed(user.email);
+    const retryEligible = isOwner && isBadgeExam && !passed;
+    const retryBase = attemptBase.submittedAt ?? new Date();
+    const retryAt = retryEligible
+      ? cooldownBypassed
+        ? new Date()
+        : new Date(
+            retryBase.getTime() +
+              BADGE_RETRY_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+          )
+      : null;
+    const retryDaysRemaining = retryAt
+      ? Math.max(
+          0,
+          Math.ceil((retryAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+        )
+      : null;
+    const retry = retryEligible
+      ? {
+          reason: integrityInvalidated ? "INTEGRITY" : "NOT_PASSED",
+          availableAt: retryAt?.toISOString() ?? null,
+          daysRemaining: retryDaysRemaining,
+          cooldownDays: BADGE_RETRY_COOLDOWN_DAYS,
+          availableNow: retryDaysRemaining === 0,
+        }
+      : null;
+
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://www.taskio.com.mx";
+    const credential =
+      isOwner &&
+      passed &&
+      attemptBase.badge?.isPublic &&
+      attemptBase.badge.slug
+        ? {
+            slug: attemptBase.badge.slug,
+            skill: attemptBase.badge.term.label,
+            level: attemptBase.badge.level,
+            earnedAt: attemptBase.badge.earnedAt,
+            publicUrl: new URL(
+              "/badge/" + encodeURIComponent(attemptBase.badge.slug),
+              appUrl
+            ).toString(),
+            linkedInUrl: buildLinkedInCertificationUrl({
+              skill: attemptBase.badge.term.label,
+              level: attemptBase.badge.level,
+              slug: attemptBase.badge.slug,
+              earnedAt: attemptBase.badge.earnedAt,
+              appUrl,
+              organizationId: process.env.LINKEDIN_ORGANIZATION_ID,
+            }),
+          }
+        : null;
 
     const anticheat = canSeeFlags
       ? {
@@ -224,7 +307,8 @@ export async function GET(
           timeSpent: attemptBase.timeSpent,
           totalScore: attemptBase.totalScore,
           sectionScores: attemptBase.sectionScores,
-          passed: attemptBase.passed,
+          passed,
+          integrityInvalidated,
           flagsJson: undefined,
           anticheat: undefined,
         },
@@ -237,6 +321,8 @@ export async function GET(
           totalQuestions,
           accuracy: undefined,
         },
+        credential,
+        retry,
         summaryOnly: true,
       });
     }
@@ -290,7 +376,8 @@ export async function GET(
         timeSpent: attemptBase.timeSpent,
         totalScore: attemptBase.totalScore,
         sectionScores: attemptBase.sectionScores,
-        passed: attemptBase.passed,
+        passed,
+        integrityInvalidated,
         flagsJson: canSeeFlags ? attemptBase.flagsJson : undefined,
         anticheat,
       },
@@ -323,6 +410,8 @@ export async function GET(
         totalQuestions,
         accuracy,
       },
+      credential,
+      retry,
       summaryOnly: false,
     });
   } catch (error) {

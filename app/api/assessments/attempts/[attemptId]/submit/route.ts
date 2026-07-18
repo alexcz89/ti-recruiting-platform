@@ -117,13 +117,6 @@ export async function POST(
       );
     }
 
-    const answeredCount = attempt.answers.length;
-    // Cap each answer at 1 point to avoid over-scoring (e.g. multiple test cases passing)
-    const totalPoints = attempt.answers.reduce(
-      (sum, answer) => sum + Math.min(1, answer.pointsEarned || 0),
-      0
-    );
-
     let activeQuestions = await prisma.assessmentQuestion.findMany({
       where: {
         templateId: attempt.templateId,
@@ -157,6 +150,18 @@ export async function POST(
       return jsonNoStore({ error: "El template no tiene preguntas activas" }, 400);
     }
 
+    const activeQuestionIds = new Set(activeQuestions.map((question) => question.id));
+    const scoringAnswers = attempt.answers.filter((answer) =>
+      activeQuestionIds.has(answer.questionId)
+    );
+    const answeredCount = scoringAnswers.length;
+    // Every selected question is worth one point, regardless of its number of
+    // test cases. Ignore answers outside the persisted sampled subset.
+    const totalPoints = scoringAnswers.reduce(
+      (sum, answer) => sum + Math.min(1, answer.pointsEarned || 0),
+      0
+    );
+
     // Opción A: todas las preguntas valen 1 punto independientemente del tipo.
     // Esto garantiza scores en múltiplos limpios (0%, 20%, 40%... con 5 preguntas)
     // y evita que las preguntas CODING pesen más que las MCQ por tener más test cases.
@@ -183,17 +188,22 @@ export async function POST(
 
     const sections = (attempt.template.sections as any[]) || [];
     const sectionScores: Record<string, number> = {};
+    const sectionRequirementResults: Record<
+      string,
+      { minimumCorrect: number; correct: number; met: boolean }
+    > = {};
+    let sectionRequirementsMet = true;
 
     for (const section of sections) {
       const sectionName = String(section?.name || "");
       if (!sectionName) continue;
 
-      const sectionAnswers = attempt.answers.filter(
+      const sectionAnswers = scoringAnswers.filter(
         (answer) => answer.question.section === sectionName
       );
 
       const sectionPoints = sectionAnswers.reduce(
-        (sum, answer) => sum + (answer.pointsEarned || 0),
+        (sum, answer) => sum + Math.min(1, answer.pointsEarned || 0),
         0
       );
 
@@ -208,6 +218,18 @@ export async function POST(
               Math.min(100, Math.round((sectionPoints / sectionMaxPts) * 100))
             )
           : 0;
+
+      const minimumCorrect = Number(section?.minimumCorrect ?? 0);
+      if (Number.isInteger(minimumCorrect) && minimumCorrect > 0) {
+        const correct = Math.round(sectionPoints);
+        const met = correct >= minimumCorrect;
+        sectionRequirementResults[sectionName] = {
+          minimumCorrect,
+          correct,
+          met,
+        };
+        if (!met) sectionRequirementsMet = false;
+      }
     }
 
     const timeSpent = attempt.answers.reduce(
@@ -223,6 +245,9 @@ export async function POST(
     if (expiredAtSubmission && attempt.expiresAt) {
       flags.expiredAt = attempt.expiresAt.toISOString();
     }
+    if (Object.keys(sectionRequirementResults).length > 0) {
+      flags.sectionRequirements = sectionRequirementResults;
+    }
 
     if (answeredCount > 0) {
       const avgTimePerQuestion = timeSpent / answeredCount;
@@ -232,7 +257,14 @@ export async function POST(
     }
 
     const passingScore = Number((attempt.template as any)?.passingScore ?? 0);
-    const passed = totalScore >= passingScore;
+    // Solo una severidad CRITICAL invalida el resultado. SUSPICIOUS sigue
+    // visible para revisión, pero no castiga automáticamente al candidato.
+    const integrityInvalidated =
+      String(attempt.severity ?? "NORMAL").toUpperCase() === "CRITICAL";
+    const passed =
+      !integrityInvalidated &&
+      totalScore >= passingScore &&
+      sectionRequirementsMet;
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -265,6 +297,14 @@ export async function POST(
           badgeTermId?: string | null;
           badgeLevel?: number | null;
         };
+        if (integrityInvalidated) {
+          // Protección idempotente ante reintentos o estados heredados: este
+          // intento nunca puede respaldar una credencial verificada.
+          await tx.candidateBadge.deleteMany({
+            where: { attemptId: params.attemptId },
+          });
+        }
+
         if (
           passed &&
           tpl?.isBadgeExam &&

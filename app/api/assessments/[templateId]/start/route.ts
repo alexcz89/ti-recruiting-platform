@@ -21,6 +21,11 @@ type FlagsMeta = {
   sampled?: boolean;
 } | null;
 
+type BadgeSectionRule = {
+  name: string;
+  sampleSize: number;
+};
+
 type StartBody = {
   applicationId?: unknown;
   token?: unknown;
@@ -208,32 +213,71 @@ function buildQuestionsPayload(questionsRaw: QuestionRow[], meta: FlagsMeta) {
 async function ensureMeta(
   templateId: string,
   shuffleQuestions: boolean,
-  sampleSize?: number | null
+  sampleSize?: number | null,
+  rawSections?: unknown
 ): Promise<Prisma.InputJsonObject> {
   const base = await prisma.assessmentQuestion.findMany({
     where: { templateId, isActive: true },
-    select: { id: true, options: true },
+    select: { id: true, section: true, options: true },
   });
 
   let q = base.map((qq) => ({
     id: qq.id,
+    section: qq.section,
     options: sanitizeOptions(qq.options),
   }));
 
-  if (shuffleQuestions) shuffleInPlace(q);
+  const sectionRules: BadgeSectionRule[] = Array.isArray(rawSections)
+    ? rawSections
+        .map((section) => {
+          if (!section || typeof section !== "object") return null;
+          const value = section as Record<string, unknown>;
+          const name = String(value.name ?? "").trim();
+          const quota = Number(value.sampleSize ?? value.questions ?? 0);
+          if (!name || !Number.isInteger(quota) || quota <= 0) return null;
+          return { name, sampleSize: quota };
+        })
+        .filter((rule): rule is BadgeSectionRule => rule !== null)
+    : [];
 
-  // Exámenes de badge: muestra aleatoria de N preguntas del pool completo.
-  // El shuffle previo garantiza aleatoriedad; sampled marca el meta para que
-  // payload y scoring se limiten al subset.
+  // Badge exams always persist the exact selected subset. Each configured
+  // section is sampled independently so conceptual and practical quotas hold.
   let sampled = false;
-  if (
-    typeof sampleSize === "number" &&
-    sampleSize > 0 &&
-    q.length > sampleSize
-  ) {
-    if (!shuffleQuestions) shuffleInPlace(q);
-    q = q.slice(0, sampleSize);
+  if (typeof sampleSize === "number" && sampleSize > 0) {
+    if (sectionRules.length > 0) {
+      const configuredTotal = sectionRules.reduce(
+        (sum, rule) => sum + rule.sampleSize,
+        0
+      );
+      if (configuredTotal !== sampleSize) {
+        throw new Error(
+          `BADGE_SECTION_QUOTAS_MISMATCH:${configuredTotal}:${sampleSize}`
+        );
+      }
+
+      const selected: typeof q = [];
+      for (const rule of sectionRules) {
+        const sectionPool = q.filter((question) => question.section === rule.name);
+        if (sectionPool.length < rule.sampleSize) {
+          throw new Error(
+            `BADGE_SECTION_POOL_INCOMPLETE:${rule.name}:${sectionPool.length}:${rule.sampleSize}`
+          );
+        }
+        shuffleInPlace(sectionPool);
+        selected.push(...sectionPool.slice(0, rule.sampleSize));
+      }
+      q = selected;
+      if (shuffleQuestions) shuffleInPlace(q);
+    } else {
+      shuffleInPlace(q);
+      if (q.length < sampleSize) {
+        throw new Error(`BADGE_POOL_INCOMPLETE:${q.length}:${sampleSize}`);
+      }
+      q = q.slice(0, sampleSize);
+    }
     sampled = true;
+  } else if (shuffleQuestions) {
+    shuffleInPlace(q);
   }
 
   const optionOrderByQuestion: Record<string, string[]> = {};
@@ -360,6 +404,7 @@ export async function POST(
         shuffleQuestions: true,
         isBadgeExam: true,
         totalQuestions: true,
+        sections: true,
       },
     });
 
@@ -374,6 +419,7 @@ export async function POST(
       template.isBadgeExam && (template.totalQuestions ?? 0) > 0
         ? template.totalQuestions
         : null;
+    const tmplSampleSections = template.isBadgeExam ? template.sections : null;
     const tmplAllowRetry = Boolean(template.allowRetry);
     const tmplMaxAttempts = template.maxAttempts ?? 1;
 
@@ -549,7 +595,7 @@ export async function POST(
       oldInviteId?: string | null;
       applicationIdToUse: string | null;
     }) {
-      const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize);
+      const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
       const newExpiresAt = computeExpiresAt(now, tmplTimeLimit);
 
       const created = await prisma.$transaction(async (tx) => {
@@ -655,7 +701,7 @@ export async function POST(
             expiredMeta = (await ensureMeta(
               params.templateId,
               tmplShuffleQuestions,
-              tmplSampleSize
+              tmplSampleSize, tmplSampleSections
             )) as unknown as FlagsMeta;
           }
 
@@ -687,7 +733,7 @@ export async function POST(
           meta = (await ensureMeta(
             params.templateId,
             tmplShuffleQuestions,
-            tmplSampleSize
+            tmplSampleSize, tmplSampleSections
           )) as unknown as FlagsMeta;
         }
 
@@ -788,7 +834,7 @@ export async function POST(
           expiredMeta = (await ensureMeta(
             params.templateId,
             tmplShuffleQuestions,
-            tmplSampleSize
+            tmplSampleSize, tmplSampleSections
           )) as unknown as FlagsMeta;
         }
 
@@ -819,7 +865,7 @@ export async function POST(
         meta = (await ensureMeta(
           params.templateId,
           tmplShuffleQuestions,
-          tmplSampleSize
+          tmplSampleSize, tmplSampleSections
         )) as unknown as FlagsMeta;
       }
 
@@ -876,7 +922,7 @@ export async function POST(
     }
 
     const expiresAt = computeExpiresAt(now, tmplTimeLimit);
-    const meta = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize);
+    const meta = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
     const questions = buildQuestionsPayload(
       questionsRaw as unknown as QuestionRow[],
       meta as unknown as FlagsMeta

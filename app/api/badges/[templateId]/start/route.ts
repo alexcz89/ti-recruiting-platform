@@ -79,8 +79,8 @@ export async function POST(
       return jsonNoStore({ error: "Ya obtuviste este badge" }, 409);
     }
 
-    // Gating: nivel 3+ requiere el nivel anterior del mismo skill
-    if (template.badgeLevel >= 3) {
+    // Gating: cada nivel superior requiere el badge anterior vigente.
+    if (template.badgeLevel >= 2) {
       const previous = await prisma.candidateBadge.findUnique({
         where: {
           candidateId_termId_level: {
@@ -89,9 +89,9 @@ export async function POST(
             level: template.badgeLevel - 1,
           },
         },
-        select: { id: true },
+        select: { id: true, earnedAt: true },
       });
-      if (!previous) {
+      if (!previous || !isBadgeCurrent(previous.earnedAt)) {
         return jsonNoStore(
           { error: "Este nivel requiere aprobar el nivel anterior" },
           403
@@ -128,7 +128,7 @@ export async function POST(
           inviteId: null,
           applicationId: null,
           status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
-          passed: false,
+          OR: [{ passed: false }, { severity: "CRITICAL" }],
           submittedAt: { gt: new Date(now.getTime() - cooldownMs) },
         },
         orderBy: { submittedAt: "desc" },
