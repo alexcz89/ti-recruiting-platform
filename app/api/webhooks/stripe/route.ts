@@ -1,6 +1,6 @@
 // app/api/webhooks/stripe/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { prisma } from "@/lib/server/prisma";
 import Stripe from "stripe";
 
@@ -24,12 +24,32 @@ export async function POST(req: NextRequest) {
   const body      = await req.text();
   const signature = req.headers.get("stripe-signature") ?? "";
 
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.error("[Stripe Webhook] STRIPE_WEBHOOK_SECRET no esta definida");
+    return NextResponse.json(
+      { error: "Servicio de pagos no configurado" },
+      { status: 503 }
+    );
+  }
+
+  let stripe: Stripe;
+  try {
+    stripe = getStripe();
+  } catch (err) {
+    console.error("[Stripe Webhook] STRIPE_SECRET_KEY no esta definida", err);
+    return NextResponse.json(
+      { error: "Servicio de pagos no configurado" },
+      { status: 503 }
+    );
+  }
+
   let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
   } catch (err: any) {
     console.error("[Stripe Webhook] Firma inválida:", err.message);

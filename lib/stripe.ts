@@ -1,14 +1,24 @@
 // lib/stripe.ts
+import "server-only";
 import Stripe from "stripe";
 
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error("STRIPE_SECRET_KEY no está definida");
-}
+let stripeClient: Stripe | null = null;
 
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2026-02-25.clover",
-  typescript: true,
-});
+export function getStripe(): Stripe {
+  if (stripeClient) return stripeClient;
+
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    throw new Error("STRIPE_SECRET_KEY no esta definida");
+  }
+
+  stripeClient = new Stripe(secretKey, {
+    apiVersion: "2026-02-25.clover",
+    typescript: true,
+  });
+
+  return stripeClient;
+}
 
 // ── Price IDs ──────────────────────────────────────────────
 export const STRIPE_PRICES = {

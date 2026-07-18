@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
-import { openai } from "@/lib/ai/openai";
+import { getOpenAI } from "@/lib/ai/openai";
 import { AI_MODEL_SMART } from "@/lib/ai/config";
 
 export const dynamic = "force-dynamic";
@@ -113,6 +113,7 @@ REQUISITOS OBLIGATORIOS:
 Schema con ${clampedCount} pregunta(s):
 ${schema}`;
 
+    const openai = getOpenAI();
     const completion = await openai.chat.completions.create({
       model: AI_MODEL_SMART,
       temperature: 0.7,
@@ -145,6 +146,9 @@ ${schema}`;
 
     return json({ ok: true, questions: parsed.questions });
   } catch (err: any) {
+    if (err instanceof Error && err.message === "OPENAI_API_KEY no esta definida") {
+      return json({ error: "Servicio de IA no configurado" }, 503);
+    }
     console.error("[AI Builder] Error:", err);
     return json({ error: "Error al generar preguntas con AI" }, 500);
   }

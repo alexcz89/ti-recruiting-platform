@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 
 function json(status: number, body: any) {
   return NextResponse.json(body, { status });
@@ -27,6 +27,8 @@ export async function POST(req: NextRequest) {
     }
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.NEXTAUTH_URL || "http://localhost:3000";
+
+    const stripe = getStripe();
 
     const portalSession = await stripe.billingPortal.sessions.create({
       customer: company.stripeCustomerId,

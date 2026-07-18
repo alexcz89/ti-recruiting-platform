@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
-import { stripe, STRIPE_PRICES, CREDIT_PACKAGES } from "@/lib/stripe";
+import { getStripe, STRIPE_PRICES, CREDIT_PACKAGES } from "@/lib/stripe";
 
 function json(status: number, body: any) {
   return NextResponse.json(body, { status });
@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
     // type: "subscription" | "credits"
 
     if (!type || !priceId) return json(400, { error: "Faltan parámetros" });
+
+    const stripe = getStripe();
 
     // Obtener o crear Stripe Customer
     const company = await prisma.company.findUnique({
