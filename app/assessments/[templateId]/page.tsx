@@ -96,6 +96,7 @@ export default function AssessmentPage() {
   const inviteToken = searchParams.get('token');
   const applicationIdQS = searchParams.get('applicationId');
   const attemptIdQS = searchParams.get('attemptId');
+  const preferredLanguageQS = searchParams.get('language');
 
   const [loading, setLoading] = useState(true);
   const [template, setTemplate] = useState<any>(null);
@@ -706,7 +707,7 @@ export default function AssessmentPage() {
           disabled={expired}
           attemptId={attemptId || undefined}
           onCodeSubmit={() => handleCodeSubmitted(currentQuestion.id)}
-          templateLanguage={template?.language || 'javascript'}
+          templateLanguage={preferredLanguageQS || template?.language || 'javascript'}
         />
 
         {/* Navegación — NO-CODING */}

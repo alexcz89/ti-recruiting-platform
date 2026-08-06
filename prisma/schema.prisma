@@ -183,6 +183,7 @@ model User {
   notifications             Notification[]
   candidateLiveInterviews   LiveInterview[]          @relation("CandidateLiveInterviews")
   interviewerSessions       LiveInterview[]          @relation("InterviewerSessions")
+  contestRegistrations      ContestRegistration[]
 
   @@index([email])
   @@index([role])
@@ -663,6 +664,7 @@ model AssessmentTemplate {
   badgeTerm        TaxonomyTerm?        @relation("BadgeExamTerm", fields: [badgeTermId], references: [id])
   codingChallenges CodingChallenge[]
   jobAssessments   JobAssessment[]
+  contestTracks    ContestTrack[]
 
   @@unique([badgeTermId, badgeLevel])
   @@index([slug])
@@ -804,46 +806,47 @@ model JobAssessment {
 }
 
 model AssessmentAttempt {
-  id                String                   @id @default(cuid())
-  candidateId       String
-  templateId        String
-  applicationId     String?
-  status            AttemptStatus            @default(NOT_STARTED)
-  attemptNumber     Int                      @default(1)
-  startedAt         DateTime?
-  submittedAt       DateTime?
-  expiresAt         DateTime?
-  timeSpent         Int?
-  totalScore        Int?
-  sectionScores     Json?
-  passed            Boolean?
-  flagsJson         Json?
-  ipAddress         String?
-  userAgent         String?
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @default(now()) @updatedAt
-  copyAttempts      Int                      @default(0)
-  firstClientSig    String?
-  focusLoss         Int                      @default(0)
-  inviteId          String?                  @unique
-  lastClientSig     String?
-  multiSession      Boolean                  @default(false)
-  pageHides         Int                      @default(0)
-  pasteAttempts     Int                      @default(0)
-  rightClicks       Int                      @default(0)
-  severity          String                   @default("NORMAL")
-  severityScore     Int                      @default(0)
-  tabSwitches       Int                      @default(0)
-  visibilityHidden  Int                      @default(0)
-  application       Application?             @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  candidate         User                     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  invite            AssessmentInvite?        @relation("InviteAttempt", fields: [inviteId], references: [id])
-  template          AssessmentTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  events            AssessmentAttemptEvent[]
-  answers           AttemptAnswer[]
-  codeExecutions    CodeExecution[]
-  codingSubmissions CodingSubmission[]
-  badge             CandidateBadge?
+  id                  String                   @id @default(cuid())
+  candidateId         String
+  templateId          String
+  applicationId       String?
+  status              AttemptStatus            @default(NOT_STARTED)
+  attemptNumber       Int                      @default(1)
+  startedAt           DateTime?
+  submittedAt         DateTime?
+  expiresAt           DateTime?
+  timeSpent           Int?
+  totalScore          Int?
+  sectionScores       Json?
+  passed              Boolean?
+  flagsJson           Json?
+  ipAddress           String?
+  userAgent           String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @default(now()) @updatedAt
+  copyAttempts        Int                      @default(0)
+  firstClientSig      String?
+  focusLoss           Int                      @default(0)
+  inviteId            String?                  @unique
+  lastClientSig       String?
+  multiSession        Boolean                  @default(false)
+  pageHides           Int                      @default(0)
+  pasteAttempts       Int                      @default(0)
+  rightClicks         Int                      @default(0)
+  severity            String                   @default("NORMAL")
+  severityScore       Int                      @default(0)
+  tabSwitches         Int                      @default(0)
+  visibilityHidden    Int                      @default(0)
+  application         Application?             @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  candidate           User                     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  invite              AssessmentInvite?        @relation("InviteAttempt", fields: [inviteId], references: [id])
+  template            AssessmentTemplate       @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  events              AssessmentAttemptEvent[]
+  answers             AttemptAnswer[]
+  codeExecutions      CodeExecution[]
+  codingSubmissions   CodingSubmission[]
+  badge               CandidateBadge?
+  contestRegistration ContestRegistration?
 
   @@index([candidateId, status])
   @@index([applicationId])
@@ -852,6 +855,80 @@ model AssessmentAttempt {
   @@index([applicationId, templateId, status])
   @@index([severity, severityScore])
   @@index([multiSession])
+}
+
+model Contest {
+  id                 String                @id @default(cuid())
+  slug               String                @unique
+  title              String
+  subtitle           String?
+  description        String
+  status             ContestStatus         @default(DRAFT)
+  registrationOpens  DateTime?
+  registrationCloses DateTime?
+  challengeOpens     DateTime?
+  challengeCloses    DateTime?
+  finalStartsAt      DateTime?
+  maxParticipants    Int?
+  rulesJson          Json?
+  prizesJson         Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @default(now()) @updatedAt
+  tracks             ContestTrack[]
+  registrations      ContestRegistration[]
+
+  @@index([status, registrationOpens, registrationCloses])
+}
+
+model ContestTrack {
+  id            String                @id @default(cuid())
+  contestId     String
+  templateId    String
+  language      ContestLanguage
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  contest       Contest               @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  template      AssessmentTemplate    @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  registrations ContestRegistration[]
+
+  @@unique([contestId, language])
+  @@index([templateId])
+}
+
+model ContestRegistration {
+  id                 String                    @id @default(cuid())
+  contestId          String
+  trackId            String
+  candidateId        String
+  attemptId          String?                   @unique
+  city               String
+  experienceLevel    Seniority
+  linkedinUrl        String
+  githubUrl          String?
+  rankingConsent     Boolean                   @default(false)
+  jobInterest        Boolean                   @default(false)
+  aiToolDisclosure   String?
+  aiFreeCategory     Boolean                   @default(false)
+  automatedScore     Int                       @default(0)
+  qualityScore       Int                       @default(0)
+  efficiencyScore    Int                       @default(0)
+  explanationScore   Int                       @default(0)
+  finalScore         Int                       @default(0)
+  reviewedAt         DateTime?
+  reviewedById       String?
+  status             ContestRegistrationStatus @default(REGISTERED)
+  disqualifiedReason String?
+  registeredAt       DateTime                  @default(now())
+  updatedAt          DateTime                  @default(now()) @updatedAt
+  contest            Contest                   @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  track              ContestTrack              @relation(fields: [trackId], references: [id], onDelete: Restrict)
+  candidate          User                      @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  attempt            AssessmentAttempt?        @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+
+  @@unique([contestId, candidateId])
+  @@index([contestId, status])
+  @@index([trackId])
+  @@index([candidateId])
 }
 
 model AssessmentInvite {
@@ -1267,6 +1344,30 @@ enum QuestionType {
   MULTIPLE_CHOICE
   OPEN_ENDED
   CODING
+}
+
+enum ContestStatus {
+  DRAFT
+  REGISTRATION_OPEN
+  CHALLENGE_OPEN
+  FINALIST_REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum ContestLanguage {
+  PYTHON
+  JAVASCRIPT
+  TYPESCRIPT
+  JAVA
+}
+
+enum ContestRegistrationStatus {
+  REGISTERED
+  QUALIFIER_SUBMITTED
+  FINALIST
+  WINNER
+  DISQUALIFIED
 }
 
 enum CompanySize {
