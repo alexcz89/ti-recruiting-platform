@@ -4,6 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import type { Prisma } from "@prisma/client";
+import { challengeAvailability } from "@/lib/contests/domain";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -808,6 +809,17 @@ export async function POST(
           expiresAt: true,
           startedAt: true,
           flagsJson: true,
+          contestRegistration: {
+            select: {
+              contest: {
+                select: {
+                  status: true,
+                  challengeOpens: true,
+                  challengeCloses: true,
+                },
+              },
+            },
+          },
         },
       });
 
@@ -826,6 +838,19 @@ export async function POST(
           attemptId: attempt.id,
           completed: true,
         });
+      }
+
+      if (attempt.contestRegistration) {
+        const availability = challengeAvailability(attempt.contestRegistration.contest, now);
+        if (!availability.open) {
+          const status = availability.reason.includes("cerrado") ? 410 : 409;
+          return jsonNoStore({ error: availability.reason }, status);
+        }
+        // Un concurso permite exactamente una participación. Un intento vencido
+        // queda cerrado; nunca se reemplaza por otro intento sin registro.
+        if (isExpired(attempt.expiresAt, now)) {
+          return jsonNoStore({ error: "El tiempo del reto ha expirado" }, 410);
+        }
       }
 
       if (isExpired(attempt.expiresAt, now)) {

@@ -7,6 +7,7 @@ import { NotificationService } from "@/lib/notifications/service";
 import { Prisma } from "@prisma/client";
 import { getCurrentBillingCycle } from "@/lib/assessments/pricing";
 import { badgeLevelToSkillLevel } from "@/lib/badges";
+import { calculateAssessmentScore } from "@/lib/assessments/scoring";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -74,6 +75,14 @@ export async function POST(
             email: true,
           },
         },
+        contestRegistration: {
+          select: {
+            id: true,
+            qualityScore: true,
+            efficiencyScore: true,
+            explanationScore: true,
+          },
+        },
       },
     });
 
@@ -126,6 +135,7 @@ export async function POST(
         id: true,
         section: true,
         type: true,
+        testCases: { select: { points: true } },
       },
     });
 
@@ -155,35 +165,13 @@ export async function POST(
       activeQuestionIds.has(answer.questionId)
     );
     const answeredCount = scoringAnswers.length;
-    // Every selected question is worth one point, regardless of its number of
-    // test cases. Ignore answers outside the persisted sampled subset.
-    const totalPoints = scoringAnswers.reduce(
-      (sum, answer) => sum + Math.min(1, answer.pointsEarned || 0),
-      0
+    const { questionMaxPoints, totalPoints, totalScore } = calculateAssessmentScore(
+      activeQuestions,
+      scoringAnswers,
+      { codingByTestCases: Boolean(attempt.contestRegistration) }
     );
-
-    // Opción A: todas las preguntas valen 1 punto independientemente del tipo.
-    // Esto garantiza scores en múltiplos limpios (0%, 20%, 40%... con 5 preguntas)
-    // y evita que las preguntas CODING pesen más que las MCQ por tener más test cases.
-    const questionMaxPoints = activeQuestions.map((question) => ({
-      id: question.id,
-      section: question.section,
-      maxPts: 1,
-    }));
-
-    const totalMaxPoints = questionMaxPoints.reduce(
-      (sum, question) => sum + question.maxPts,
-      0
-    );
-
-    // ALWAYS use totalMaxPoints as denominator — never answeredCount
-    // Using answeredCount would give 100% if the candidate answers 1/1 correct
-    // even if the template has 5 questions total.
-    const maxPoints = totalMaxPoints;
-
-    const totalScore = Math.max(
-      0,
-      Math.min(100, Math.round((totalPoints / maxPoints) * 100))
+    const maxPointsByQuestion = new Map(
+      questionMaxPoints.map((question) => [question.id, question.maxPts])
     );
 
     const sections = (attempt.template.sections as any[]) || [];
@@ -203,7 +191,12 @@ export async function POST(
       );
 
       const sectionPoints = sectionAnswers.reduce(
-        (sum, answer) => sum + Math.min(1, answer.pointsEarned || 0),
+        (sum, answer) =>
+          sum +
+          Math.min(
+            maxPointsByQuestion.get(answer.questionId) ?? 0,
+            answer.pointsEarned || 0
+          ),
         0
       );
 
@@ -232,10 +225,15 @@ export async function POST(
       }
     }
 
-    const timeSpent = attempt.answers.reduce(
+    const recordedAnswerTime = attempt.answers.reduce(
       (sum, answer) => sum + (answer.timeSpent || 0),
       0
     );
+    const elapsedAttemptTime = Math.max(
+      0,
+      Math.round((now.getTime() - attempt.startedAt.getTime()) / 1000)
+    );
+    const timeSpent = recordedAnswerTime > 0 ? recordedAnswerTime : elapsedAttemptTime;
 
     const flags: any =
       attempt.flagsJson && typeof attempt.flagsJson === "object"
@@ -256,14 +254,18 @@ export async function POST(
       }
     }
 
+    const scoreToPersist = attempt.contestRegistration
+      ? Math.max(0, Math.min(75, Math.round(totalPoints)))
+      : totalScore;
     const passingScore = Number((attempt.template as any)?.passingScore ?? 0);
     // Solo una severidad CRITICAL invalida el resultado. SUSPICIOUS sigue
     // visible para revisión, pero no castiga automáticamente al candidato.
     const integrityInvalidated =
       String(attempt.severity ?? "NORMAL").toUpperCase() === "CRITICAL";
+    const scoreForPassing = attempt.contestRegistration ? scoreToPersist : totalScore;
     const passed =
       !integrityInvalidated &&
-      totalScore >= passingScore &&
+      scoreForPassing >= passingScore &&
       sectionRequirementsMet;
 
     try {
@@ -277,7 +279,7 @@ export async function POST(
           data: {
             status: "SUBMITTED" as any,
             submittedAt: now,
-            totalScore,
+            totalScore: scoreToPersist,
             sectionScores,
             passed,
             timeSpent,
@@ -287,6 +289,24 @@ export async function POST(
 
         if (updatedAttempt.count === 0) {
           throw new Error("STATE_INVALID_OR_ALREADY_SUBMITTED");
+        }
+
+        // El concurso usa 75 puntos automáticos (60 funcionales + 15 de
+        // casos límite); los 25 restantes se agregan durante la revisión.
+        if (attempt.contestRegistration) {
+          const automatedScore = scoreToPersist;
+          const manualScore =
+            attempt.contestRegistration.qualityScore +
+            attempt.contestRegistration.efficiencyScore +
+            attempt.contestRegistration.explanationScore;
+          await tx.contestRegistration.update({
+            where: { id: attempt.contestRegistration.id },
+            data: {
+              status: "QUALIFIER_SUBMITTED",
+              automatedScore,
+              finalScore: automatedScore + manualScore,
+            },
+          });
         }
 
         // Badge de skill verificado: attempts candidato-iniciados (sin invite
@@ -473,7 +493,7 @@ export async function POST(
             jobId: attempt.invite?.job?.id || "",
             assessmentId: attempt.inviteId || "",
             attemptId: attempt.id,
-            score: totalScore,
+            score: scoreToPersist,
             passed,
           },
         });
@@ -488,8 +508,9 @@ export async function POST(
     return jsonNoStore({
       success: true,
       expired: expiredAtSubmission,
-      totalScore,
+      totalScore: scoreToPersist,
       sectionScores,
+
       passed,
       timeSpent,
     });

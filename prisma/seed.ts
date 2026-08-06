@@ -17,6 +17,7 @@ import {
 
 import { seedAssessmentTemplates } from "./seeds/assessments";
 import { seedDataAnalyst } from "./seeds/data-analyst";
+import { seedTaskioCodingChallenge } from "./seeds/taskio-coding-challenge";
 import {
   upsertTaxonomyTerms,
   cleanUnlistedTerms,
@@ -189,6 +190,8 @@ async function main() {
   console.log("📊 DATA ANALYST TEMPLATE");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   await seedDataAnalyst();
+
+  await seedTaskioCodingChallenge(prisma);
 
   console.log("\n✅ Seed completo. 5 templates activos.");
 }

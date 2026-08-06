@@ -94,6 +94,7 @@ function DesktopNav() {
     <nav className="flex items-center gap-1.5">
       <NavLink href="/jobs">Vacantes</NavLink>
       <NavLink href="/certificaciones">Certificaciones</NavLink>
+      <NavLink href="/concursos/taskio-coding-challenge-2026">Coding Challenge</NavLink>
     </nav>
   );
 }
@@ -219,6 +220,9 @@ function MobileMenu({ onClose }: { onClose: () => void }) {
         </MobileNavLink>
         <MobileNavLink href="/certificaciones" onClick={onClose}>
           Certificaciones
+        </MobileNavLink>
+        <MobileNavLink href="/concursos/taskio-coding-challenge-2026" onClick={onClose}>
+          Coding Challenge
         </MobileNavLink>
 
         {isAuthenticated ? (
