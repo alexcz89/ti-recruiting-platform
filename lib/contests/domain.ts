@@ -9,19 +9,49 @@ export const CONTEST_LANGUAGES = [
 
 export type ContestLanguageValue = (typeof CONTEST_LANGUAGES)[number]["value"];
 
+export const CONTEST_REGISTRATION_LANGUAGES = ["PYTHON", "JAVASCRIPT", "JAVA"] as const;
+export type ContestRegistrationLanguage = (typeof CONTEST_REGISTRATION_LANGUAGES)[number];
+
+export function isContestRegistrationLanguage(value: string): value is ContestRegistrationLanguage {
+  return (CONTEST_REGISTRATION_LANGUAGES as readonly string[]).includes(value);
+}
+
+export const MEXICO_TIMEZONES = [
+  { value: "America/Mexico_City", label: "Centro de México" },
+  { value: "America/Monterrey", label: "Noreste" },
+  { value: "America/Chihuahua", label: "Chihuahua" },
+  { value: "America/Hermosillo", label: "Sonora" },
+  { value: "America/Tijuana", label: "Baja California" },
+  { value: "America/Cancun", label: "Quintana Roo" },
+] as const;
+
+const mexicoTimezoneValues = MEXICO_TIMEZONES.map((timezone) => timezone.value) as [
+  (typeof MEXICO_TIMEZONES)[number]["value"],
+  ...(typeof MEXICO_TIMEZONES)[number]["value"][],
+];
+
 const optionalUrl = z.union([z.literal(""), z.string().trim().url("Ingresa una URL válida")]);
+const requiredConsent = (message: string) =>
+  z.boolean().refine((accepted) => accepted, { message });
 
 export const contestRegistrationSchema = z.object({
-  language: z.enum(["PYTHON", "JAVASCRIPT", "TYPESCRIPT", "JAVA"]),
+  language: z.enum(CONTEST_REGISTRATION_LANGUAGES),
   city: z.string().trim().min(2, "Indica tu ciudad").max(120),
-  experienceLevel: z.enum(["JUNIOR", "MID", "SENIOR", "LEAD"]),
+  countryCode: z.literal("MX"),
+  timezone: z.enum(mexicoTimezoneValues, {
+    errorMap: () => ({ message: "Selecciona una zona horaria de México" }),
+  }),
+  yearsExperience: z.number().int().min(0).max(2, "Esta edición admite hasta dos años de experiencia profesional"),
+  experienceLevel: z.literal("JUNIOR"),
   linkedinUrl: z.string().trim().url("Ingresa una URL válida de LinkedIn").max(300),
   githubUrl: optionalUrl.optional().default(""),
   rankingConsent: z.boolean().default(false),
-
   jobInterest: z.boolean().default(false),
   aiToolDisclosure: z.string().trim().max(200).optional().default(""),
   aiFreeCategory: z.boolean().default(false),
+  eligibilityConfirmed: requiredConsent("Confirma que cumples los requisitos de la edición Junior"),
+  termsAccepted: requiredConsent("Acepta las bases del challenge"),
+  privacyAccepted: requiredConsent("Acepta el aviso de privacidad"),
 });
 
 export type ContestRegistrationInput = z.infer<typeof contestRegistrationSchema>;
@@ -70,6 +100,7 @@ export function challengeAvailability(contest: ChallengeWindow, now = new Date()
   }
   return { open: true, reason: null } as const;
 }
+
 export type ContestRankingEntry = {
   registrationId: string;
   candidateName: string | null;
@@ -124,6 +155,7 @@ export function rankContestRegistrations(registrations: ContestRegistrationForRa
     }))
   );
 }
+
 export function contestLanguageLabel(language: string) {
   return CONTEST_LANGUAGES.find((item) => item.value === language)?.label ?? language;
 }

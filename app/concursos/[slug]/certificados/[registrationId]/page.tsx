@@ -33,8 +33,14 @@ export default async function ContestCertificatePage({ params }: { params: { slu
 
   const ranking = rankContestRegistrations(contest.registrations);
 
+  const sourceRegistration = contest.registrations.find((registration) => registration.id === params.registrationId);
   const recipient = ranking.find((entry) => entry.registrationId === params.registrationId);
-  if (!recipient || recipient.rank > 10) notFound();
+  if (
+    !sourceRegistration ||
+    !["FINALIST", "WINNER"].includes(String(sourceRegistration.status)) ||
+    !recipient ||
+    recipient.rank > 10
+  ) notFound();
 
   return (
     <main className="min-h-[calc(100vh-4rem)] bg-zinc-100 px-4 py-12 dark:bg-zinc-950 sm:py-20">
@@ -42,7 +48,7 @@ export default async function ContestCertificatePage({ params }: { params: { slu
         <div className="absolute left-0 top-0 h-2 w-full bg-emerald-500" />
         <Award className="mx-auto h-14 w-14 text-emerald-600" />
         <p className="mt-6 text-xs font-black uppercase tracking-[0.32em] text-emerald-700 dark:text-emerald-400">Certificado verificable</p>
-        <h1 className="mt-5 text-3xl font-black sm:text-5xl">TaskIO Coding Challenge 2026</h1>
+        <h1 className="mt-5 text-3xl font-black sm:text-5xl">TaskIO Coding Challenge 2026 · Edición Junior</h1>
         <p className="mx-auto mt-8 max-w-2xl text-lg leading-8 text-zinc-600 dark:text-zinc-300">TaskIO reconoce a</p>
         <p className="mt-3 text-3xl font-black sm:text-4xl">{recipient.candidateName || recipient.publicName}</p>
         <p className="mx-auto mt-6 max-w-2xl leading-7 text-zinc-600 dark:text-zinc-300">por obtener el <strong>lugar #{recipient.rank}</strong> en la etapa clasificatoria, resolviendo el reto en <strong>{contestLanguageLabel(recipient.language)}</strong> con una calificación de <strong>{recipient.totalScore}/100</strong>.</p>

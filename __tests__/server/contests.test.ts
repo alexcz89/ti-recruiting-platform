@@ -26,6 +26,57 @@ describe("contest registration", () => {
     expect(registrationAvailability({ ...openContest, registrationCount: 150 }, new Date("2026-08-15T00:00:00Z"))).toEqual({ open: false, reason: "Se alcanzó el cupo del concurso" });
   });
 
+  const validJuniorRegistration = {
+    language: "PYTHON",
+    city: "Monterrey",
+    countryCode: "MX",
+    timezone: "America/Monterrey",
+    yearsExperience: 2,
+    experienceLevel: "JUNIOR",
+    linkedinUrl: "https://linkedin.com/in/candidate",
+    githubUrl: "",
+    rankingConsent: false,
+    jobInterest: true,
+    aiToolDisclosure: "",
+    aiFreeCategory: false,
+    eligibilityConfirmed: true,
+    termsAccepted: true,
+    privacyAccepted: true,
+  } as const;
+
+  it("accepts eligible junior candidates in Mexico", () => {
+    expect(contestRegistrationSchema.safeParse(validJuniorRegistration).success).toBe(true);
+  });
+
+  it("rejects candidates with more than two years of experience", () => {
+    const result = contestRegistrationSchema.safeParse({
+      ...validJuniorRegistration,
+      yearsExperience: 3,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("requires eligibility, rules, and privacy acceptance", () => {
+    for (const field of ["eligibilityConfirmed", "termsAccepted", "privacyAccepted"] as const) {
+      const result = contestRegistrationSchema.safeParse({
+        ...validJuniorRegistration,
+        [field]: false,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
+  it("limits the first edition to Mexico and its supported time zones", () => {
+    expect(contestRegistrationSchema.safeParse({
+      ...validJuniorRegistration,
+      countryCode: "US",
+    }).success).toBe(false);
+    expect(contestRegistrationSchema.safeParse({
+      ...validJuniorRegistration,
+      timezone: "America/New_York",
+    }).success).toBe(false);
+  });
+
   it("requires valid registration profile URLs", () => {
     const result = contestRegistrationSchema.safeParse({
       language: "PYTHON",
