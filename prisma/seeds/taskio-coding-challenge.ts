@@ -153,7 +153,7 @@ export async function seedTaskioCodingChallenge(prisma: PrismaClient) {
       finalStartsAt: new Date("2026-10-15T23:00:00.000Z"),
       maxParticipants: 150,
       rulesJson: { durationMinutes: 60, attempts: 1, finalists: 10, aiPolicy: "DECLARE_AND_DEFEND" },
-      prizesJson: { currency: "MXN", first: 5000, second: 2500, third: 1500, top10Certificate: true },
+      prizesJson: { status: "TO_BE_ANNOUNCED", top10Certificate: true },
     },
     create: {
       slug: "taskio-coding-challenge-2026",
@@ -168,7 +168,7 @@ export async function seedTaskioCodingChallenge(prisma: PrismaClient) {
       finalStartsAt: new Date("2026-10-15T23:00:00.000Z"),
       maxParticipants: 150,
       rulesJson: { durationMinutes: 60, attempts: 1, finalists: 10, aiPolicy: "DECLARE_AND_DEFEND" },
-      prizesJson: { currency: "MXN", first: 5000, second: 2500, third: 1500, top10Certificate: true },
+      prizesJson: { status: "TO_BE_ANNOUNCED", top10Certificate: true },
     },
   });
 

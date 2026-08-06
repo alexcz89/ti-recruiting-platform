@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarClock, Code2, Trophy } from "lucide-react";
+import { ArrowRight, BadgeCheck, CalendarClock, Code2 } from "lucide-react";
 
 const languages = ["Python", "JavaScript", "TypeScript", "Java"];
 
@@ -33,8 +33,8 @@ export default function ContestPromo() {
             Tu código puede llevarte al Top 10.
           </h2>
           <p className="mt-3 max-w-2xl text-base leading-7 text-teal-100/80 [text-wrap:pretty]">
-            Resuelve un reto real de recruiting en 60 minutos, compite por
-            <strong className="font-bold text-white"> $9,000 MXN en premios</strong> y demuestra tu talento ante empresas de tecnología.
+            Resuelve un reto real de recruiting en 60 minutos, llega al Top 10
+            <strong className="font-bold text-white"> y demuestra tu talento</strong> ante empresas de tecnología.
           </p>
 
           <ul aria-label="Lenguajes disponibles" className="mt-5 flex flex-wrap gap-2">
@@ -48,10 +48,10 @@ export default function ContestPromo() {
 
         <div className="flex shrink-0 flex-col items-stretch gap-3 sm:flex-row sm:items-center lg:flex-col lg:items-stretch">
           <div className="flex items-center gap-3 px-1 sm:min-w-44">
-            <Trophy className="h-9 w-9 text-amber-300" aria-hidden="true" />
+            <BadgeCheck className="h-9 w-9 text-emerald-300" aria-hidden="true" />
             <div>
-              <p className="text-xs font-medium text-teal-100/70">Bolsa de premios</p>
-              <p className="text-xl font-black text-white">$9,000 MXN</p>
+              <p className="text-xs font-medium text-teal-100/70">Ronda final</p>
+              <p className="text-xl font-black text-white">Top 10</p>
             </div>
           </div>
           <Link
