@@ -89,6 +89,18 @@ describe("coding assessment scoring", () => {
     expect(result.maxPoints).toBe(1);
     expect(result.totalScore).toBe(100);
   });
+  it("ignores answers outside the selected question set", () => {
+    const result = calculateAssessmentScore(
+      [{ id: "selected", section: "Base", type: "MULTIPLE_CHOICE", testCases: [] }],
+      [
+        { questionId: "selected", pointsEarned: 1 },
+        { questionId: "outside", pointsEarned: 1 },
+      ]
+    );
+    expect(result.totalPoints).toBe(1);
+    expect(result.totalScore).toBe(100);
+  });
+
   it("keeps conventional assessment questions at one point each", () => {
     const result = calculateAssessmentScore(
       [
