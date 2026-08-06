@@ -104,12 +104,12 @@ export default async function ContestPage({ params }: { params: { slug: string }
             </div>
           </div>
           <div className="self-end rounded-3xl border border-white/10 bg-white/[0.06] p-6 backdrop-blur sm:p-8">
-            <p className="text-sm font-semibold text-emerald-300">Bolsa de premios</p>
-            <p className="mt-2 text-5xl font-black">$9,000 <span className="text-lg font-semibold text-zinc-400">MXN</span></p>
+            <p className="text-sm font-semibold text-emerald-300">La meta</p>
+            <p className="mt-2 text-5xl font-black">Top 10</p>
             <div className="mt-6 space-y-3 text-sm text-zinc-300">
-              <p className="flex justify-between border-b border-white/10 pb-3"><span>1er lugar</span><strong className="text-white">$5,000</strong></p>
-              <p className="flex justify-between border-b border-white/10 pb-3"><span>2º lugar</span><strong className="text-white">$2,500</strong></p>
-              <p className="flex justify-between"><span>3er lugar</span><strong className="text-white">$1,500</strong></p>
+              <p className="flex items-center justify-between border-b border-white/10 pb-3"><span>Reto clasificatorio</span><strong className="text-white">60 min</strong></p>
+              <p className="flex items-center justify-between border-b border-white/10 pb-3"><span>Ronda final</span><strong className="text-white">En vivo</strong></p>
+              <p className="flex items-center justify-between"><span>Reconocimiento</span><strong className="text-white">Certificado</strong></p>
             </div>
           </div>
         </div>
