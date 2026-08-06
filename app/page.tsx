@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/server/auth";
 import { PLANS, CREDIT_PACKS, CODING_CREDIT_COST } from "@/config/plans";
 import Footer from "@/components/Footer";
 import TechMarquee from "@/components/landing/TechMarquee";
+import ContestPromo from "@/components/landing/ContestPromo";
 import {
   Users,
   Briefcase,
@@ -126,6 +127,8 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      <ContestPromo />
 
       {/* ══════════════════════════════════════════════
           TECH MARQUEE
