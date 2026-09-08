@@ -101,6 +101,18 @@ export default async function ProfileSummaryPage({
     },
   });
 
+  // Skills con examen de badge publicado — para el CTA "Certificar este skill"
+  const certifiableTerms = new Set(
+    (
+      await prisma.assessmentTemplate.findMany({
+        where: { isBadgeExam: true, isActive: true, isGlobal: true },
+        select: { badgeTermId: true },
+      })
+    )
+      .map((t) => t.badgeTermId)
+      .filter((id): id is string => Boolean(id))
+  );
+
   // En el perfil mostramos una credencial por tecnologia: primero una vigente
   // y, entre credenciales con el mismo estado, el nivel mas alto.
   const verifiedByTerm = new Map<string, (typeof myBadges)[number]>();
@@ -125,6 +137,7 @@ export default async function ProfileSummaryPage({
       ) as any,
       verifiedLevel: currentBadge?.level ?? null,
       verifiedSlug: currentBadge?.isPublic ? currentBadge.slug : null,
+      certifiable: !currentBadge && certifiableTerms.has(s.termId),
     };
   });
 
@@ -137,6 +150,7 @@ export default async function ProfileSummaryPage({
       level: badgeLevelToSkillLevel(badge.level) as any,
       verifiedLevel: badge.level,
       verifiedSlug: badge.isPublic ? badge.slug : null,
+      certifiable: false,
     });
   }
   profileSkills.sort((a, b) => (b.level ?? 0) - (a.level ?? 0) || a.label.localeCompare(b.label));
