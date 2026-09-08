@@ -21,9 +21,13 @@ import ProgressBar from "./ProgressBar";
 import Step1Basic from "./Step1Basic";
 import Step2Security from "./Step2Security";
 import Step3Professional from "./Step3Professional";
+import {
+  CANDIDATE_SIGNUP_STORAGE_KEY,
+  readCandidateSignupDraft,
+  writeCandidateSignupDraft,
+} from "@/lib/client/candidate-signup-draft";
 
 // ✅ Storage keys para resume capability
-const SIGNUP_STORAGE_KEY = "signup_multi_step_data_v1";
 const SIGNUP_STEP_KEY = "signup_current_step_v1";
 
 // ============================================
@@ -151,17 +155,9 @@ export default function SignupMultiStep({
   // ✅ Cargar datos guardados al montar (resume capability)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const savedData = localStorage.getItem(SIGNUP_STORAGE_KEY);
       const savedStep = localStorage.getItem(SIGNUP_STEP_KEY);
-
-      if (savedData) {
-        try {
-          const parsed = JSON.parse(savedData) as FormData;
-          setFormData((prev) => ({ ...prev, ...parsed }));
-        } catch {
-          // Invalid JSON, ignore
-        }
-      }
+      const savedData = readCandidateSignupDraft(localStorage);
+      setFormData((prev) => ({ ...prev, ...savedData }));
 
       if (savedStep) {
         const step = parseInt(savedStep, 10);
@@ -175,7 +171,7 @@ export default function SignupMultiStep({
   // ✅ Guardar datos en localStorage cuando cambien (resume capability)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      localStorage.setItem(SIGNUP_STORAGE_KEY, JSON.stringify(formData));
+      writeCandidateSignupDraft(localStorage, formData);
       localStorage.setItem(SIGNUP_STEP_KEY, String(currentStep));
     }
   }, [formData, currentStep]);
@@ -274,7 +270,7 @@ export default function SignupMultiStep({
       // ✅ Limpiar datos de signup guardados (resume data)
       if (typeof window !== "undefined") {
         try {
-          window.localStorage.removeItem(SIGNUP_STORAGE_KEY);
+          window.localStorage.removeItem(CANDIDATE_SIGNUP_STORAGE_KEY);
           window.localStorage.removeItem(SIGNUP_STEP_KEY);
           window.sessionStorage.setItem("verification_email", formData.email);
         } catch {}

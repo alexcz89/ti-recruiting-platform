@@ -118,7 +118,6 @@ export async function GET(
               select: {
                 id: true,
                 companyId: true,
-                recruiterId: true,
               },
             },
           },
@@ -133,7 +132,6 @@ export async function GET(
                   select: {
                     id: true,
                     companyId: true,
-                    recruiterId: true,
                   },
                 },
               },
@@ -165,9 +163,9 @@ export async function GET(
     let recruiterCanView = false;
     if (isRecruiter && job) {
       const recruiterCompanyId = await getSessionCompanyId().catch(() => null);
-      recruiterCanView =
-        (recruiterCompanyId ? job.companyId === recruiterCompanyId : false) ||
-        (job.recruiterId ? String(job.recruiterId) === userId : false);
+      recruiterCanView = recruiterCompanyId
+        ? job.companyId === recruiterCompanyId
+        : false;
     }
 
     if (!isOwner && !isAdmin && !recruiterCanView) {

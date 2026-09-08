@@ -26,10 +26,12 @@ export async function getSessionCompanyId() {
 
   const recruiterProfile = await prisma.recruiterProfile.findUnique({
     where: { userId },
-    select: { companyId: true },
+    select: { companyId: true, status: true },
   });
 
-  return recruiterProfile?.companyId ?? null;
+  return recruiterProfile?.status === "APPROVED"
+    ? recruiterProfile.companyId
+    : null;
 }
 
 export async function getSessionCompanyIdOrThrow() {

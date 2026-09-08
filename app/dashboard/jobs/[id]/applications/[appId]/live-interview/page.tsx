@@ -2,6 +2,7 @@
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
 import { notFound, redirect } from "next/navigation";
 import InterviewerView from "./InterviewerView";
 
@@ -38,7 +39,11 @@ export default async function LiveInterviewPage({
   });
 
   if (!application) notFound();
-  if (user.companyId && application.job.companyId !== user.companyId) notFound();
+  if (application.job.id !== params.id) notFound();
+  if (user.role === "RECRUITER") {
+    const companyId = await getSessionCompanyId().catch(() => null);
+    if (!companyId || application.job.companyId !== companyId) notFound();
+  }
 
   // Available question bank for this session
   const questions = await prisma.liveInterviewQuestion.findMany({

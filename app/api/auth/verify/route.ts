@@ -35,13 +35,6 @@ export async function GET(req: Request) {
           data: { emailVerified: new Date() },
         });
 
-        // Auto-aprobar perfil de reclutador al verificar email
-        if (user.role === "RECRUITER") {
-          await tx.recruiterProfile.updateMany({
-            where: { userId: user.id, status: "PENDING" },
-            data: { status: "APPROVED" },
-          });
-        }
       }
 
       // ✅ Generar token de auto-login de un solo uso (válido 5 minutos)

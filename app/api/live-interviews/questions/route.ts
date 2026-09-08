@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -28,9 +29,19 @@ export async function GET(req: Request) {
   const seniority = url.searchParams.get("seniority") ?? undefined;
   const category = url.searchParams.get("category") ?? undefined;
 
+  const companyId = user.role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  if (user.role === "RECRUITER" && !companyId) {
+    return json({ error: "Forbidden" }, 403);
+  }
+
   const questions = await prisma.liveInterviewQuestion.findMany({
     where: {
       isActive: true,
+      ...(user.role === "RECRUITER"
+        ? { OR: [{ companyId: null }, { companyId: companyId! }] }
+        : {}),
       ...(techStack ? { techStack } : {}),
       ...(seniority ? { seniority: seniority as any } : {}),
       ...(category ? { category } : {}),
@@ -55,7 +66,7 @@ export async function POST(req: Request) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return json({ error: "No autorizado" }, 401);
 
-  const user = session.user as { role: string; companyId?: string };
+  const user = session.user as { role: string };
   if (!["RECRUITER", "ADMIN"].includes(user.role)) {
     return json({ error: "Forbidden" }, 403);
   }
@@ -64,10 +75,17 @@ export async function POST(req: Request) {
   const parsed = CreateQuestionSchema.safeParse(body);
   if (!parsed.success) return json({ error: "Datos inválidos", issues: parsed.error.flatten() }, 400);
 
+  const companyId = user.role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  if (user.role === "RECRUITER" && !companyId) {
+    return json({ error: "Forbidden" }, 403);
+  }
+
   const question = await prisma.liveInterviewQuestion.create({
     data: {
       ...parsed.data,
-      companyId: user.companyId ?? null,
+      companyId,
     },
   });
 

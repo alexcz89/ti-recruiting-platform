@@ -3,6 +3,7 @@ import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { z } from "zod";
+import { getSessionCompanyId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // Recruiters can also set URLs on behalf (for testing or corrections)
   if (!["CANDIDATE", "RECRUITER", "ADMIN"].includes(user.role)) {
     return json({ error: "Forbidden" }, 403);
+  }
+  if (user.role === "RECRUITER") {
+    const companyId = await getSessionCompanyId().catch(() => null);
+    if (!companyId || interview.companyId !== companyId) {
+      return json({ error: "Forbidden" }, 403);
+    }
   }
 
   if (interview.submittedAt) {

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { z } from "zod";
+import { getSessionCompanyId } from "@/lib/server/session";
+import { applicationWhereForActor } from "@/lib/server/candidate-access";
 
 export const dynamic = "force-dynamic";
 
@@ -43,22 +45,31 @@ export async function POST(req: Request) {
   if (!parsed.success) return json({ error: "Datos inválidos", issues: parsed.error.flatten() }, 400);
 
   const data = parsed.data;
-
-  // Verify the application belongs to this company
-  const application = await prisma.application.findUnique({
-    where: { id: data.applicationId },
-    include: { job: { select: { companyId: true } } },
-  });
-  if (!application) return json({ error: "Aplicación no encontrada" }, 404);
-  if (user.companyId && application.job.companyId !== user.companyId) {
-    return json({ error: "Forbidden" }, 403);
-  }
-
-  const interview = await prisma.liveInterview.create({
-    data: {
+  const companyId = user.role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  const applicationWhere = applicationWhereForActor(
+    { role: user.role, companyId },
+    {
       applicationId: data.applicationId,
       jobId: data.jobId,
       candidateId: data.candidateId,
+    }
+  );
+  if (!applicationWhere) return json({ error: "Forbidden" }, 403);
+
+  // Verify the application belongs to this company
+  const application = await prisma.application.findFirst({
+    where: applicationWhere,
+    select: { id: true, jobId: true, candidateId: true, job: { select: { companyId: true } } },
+  });
+  if (!application) return json({ error: "Aplicación no encontrada" }, 404);
+
+  const interview = await prisma.liveInterview.create({
+    data: {
+      applicationId: application.id,
+      jobId: application.jobId,
+      candidateId: application.candidateId,
       interviewerId: user.id,
       companyId: application.job.companyId,
       challengeTitle: data.challengeTitle,
@@ -87,10 +98,16 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const applicationId = url.searchParams.get("applicationId");
+  const companyId = user.role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  if (user.role === "RECRUITER" && !companyId) {
+    return json({ error: "Forbidden" }, 403);
+  }
 
   const interviews = await prisma.liveInterview.findMany({
     where: {
-      companyId: user.companyId,
+      ...(user.role === "RECRUITER" ? { companyId: companyId! } : {}),
       ...(applicationId ? { applicationId } : {}),
     },
     orderBy: { createdAt: "desc" },

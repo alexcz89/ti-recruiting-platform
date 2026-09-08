@@ -6,6 +6,10 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
 import {
+  applicationWhereForActor,
+  type CandidateAccessActor,
+} from "@/lib/server/candidate-access";
+import {
   buildCandidateSkillInputs,
   buildJobSkillInputs,
   computeMatchScore,
@@ -79,16 +83,13 @@ function formatMonthYear(date: Date | string | null | undefined): string {
 async function buildMatchExplanationInput(
   candidateId: string,
   jobId: string,
-  companyId: string | null
+  actor: CandidateAccessActor
 ): Promise<MatchExplanationInput | null> {
-  if (!companyId) return null;
+  const applicationWhere = applicationWhereForActor(actor, { candidateId, jobId });
+  if (!applicationWhere) return null;
 
   const application = await prisma.application.findFirst({
-    where: {
-      candidateId,
-      jobId,
-      job: { companyId },
-    },
+    where: applicationWhere,
     select: { id: true },
   });
 
@@ -145,7 +146,7 @@ async function buildMatchExplanationInput(
     prisma.job.findFirst({
       where: {
         id: jobId,
-        companyId,
+        ...(actor.role === "RECRUITER" ? { companyId: actor.companyId! } : {}),
       },
       select: {
         id: true,
@@ -301,8 +302,14 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return noStoreJson({ error: "Unauthorized" }, 401);
 
-  const companyId = await getSessionCompanyId().catch(() => null);
-  if (!companyId) return noStoreJson({ error: "Forbidden" }, 403);
+  const role = String(session.user.role ?? "").toUpperCase();
+  if (role !== "RECRUITER" && role !== "ADMIN") {
+    return noStoreJson({ error: "Forbidden" }, 403);
+  }
+  const companyId = role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  const actor = { role, companyId };
 
   const { searchParams } = new URL(req.url);
   const candidateId = searchParams.get("candidateId");
@@ -321,7 +328,7 @@ export async function GET(req: NextRequest) {
     });
 
     if (cached) {
-      const input = await buildMatchExplanationInput(candidateId, jobId, companyId);
+      const input = await buildMatchExplanationInput(candidateId, jobId, actor);
 
       if (input) {
         const currentFingerprint = buildMatchExplanationFingerprint(input);
@@ -355,7 +362,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const input = await buildMatchExplanationInput(candidateId, jobId, companyId);
+  const input = await buildMatchExplanationInput(candidateId, jobId, actor);
   if (!input) {
     return noStoreJson({ error: "Candidato o vacante no encontrado" }, 404);
   }
@@ -376,8 +383,14 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return noStoreJson({ error: "Unauthorized" }, 401);
 
-  const companyId = await getSessionCompanyId().catch(() => null);
-  if (!companyId) return noStoreJson({ error: "Forbidden" }, 403);
+  const role = String(session.user.role ?? "").toUpperCase();
+  if (role !== "RECRUITER" && role !== "ADMIN") {
+    return noStoreJson({ error: "Forbidden" }, 403);
+  }
+  const companyId = role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  const actor = { role, companyId };
 
   const body = await req.json().catch(() => null);
   const candidateId = body?.candidateId as string | undefined;
@@ -387,7 +400,7 @@ export async function POST(req: NextRequest) {
     return noStoreJson({ error: "candidateId y jobId son requeridos" }, 400);
   }
 
-  const input = await buildMatchExplanationInput(candidateId, jobId, companyId);
+  const input = await buildMatchExplanationInput(candidateId, jobId, actor);
   if (!input) {
     return noStoreJson({ error: "Candidato o vacante no encontrado" }, 404);
   }

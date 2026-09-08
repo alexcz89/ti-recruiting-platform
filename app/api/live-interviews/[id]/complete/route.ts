@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const interview = await prisma.liveInterview.findUnique({ where: { id: params.id } });
   if (!interview) return json({ error: "No encontrado" }, 404);
-  if (user.companyId && interview.companyId !== user.companyId) return json({ error: "Forbidden" }, 403);
+  if (user.role === "RECRUITER") {
+    const companyId = await getSessionCompanyId().catch(() => null);
+    if (!companyId || interview.companyId !== companyId) return json({ error: "Forbidden" }, 403);
+  }
 
   const { codingScore, qaScore, interviewerNotes, recommendation } = parsed.data;
   // Weighted: coding 60%, Q&A 40%

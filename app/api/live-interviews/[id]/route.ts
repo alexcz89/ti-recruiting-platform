@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +51,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const isCandidate = user.role === "CANDIDATE" && interview.candidateId === user.id;
 
   if (!isRecruiter && !isCandidate) return json({ error: "Forbidden" }, 403);
-  if (isRecruiter && user.companyId && interview.companyId !== user.companyId) {
-    return json({ error: "Forbidden" }, 403);
+  if (user.role === "RECRUITER") {
+    const companyId = await getSessionCompanyId().catch(() => null);
+    if (!companyId || interview.companyId !== companyId) {
+      return json({ error: "Forbidden" }, 403);
+    }
   }
 
   // Candidates don't see internal notes or recommendation until COMPLETED
