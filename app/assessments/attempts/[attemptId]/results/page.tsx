@@ -163,6 +163,12 @@ export default function AssessmentResultsPage() {
                 : `Obtuviste ${attempt.totalScore}% (necesitas ${template.passingScore}% para aprobar)`}
           </p>
 
+          {attempt.expiredAtSubmission && (
+            <p className="mb-3 text-sm font-medium text-amber-700 dark:text-amber-300">
+              La evaluación se finalizó al vencer el tiempo y sólo se calificaron las respuestas guardadas antes del límite.
+            </p>
+          )}
+
           <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 dark:bg-zinc-900">
             <span
               className={`text-4xl font-bold ${

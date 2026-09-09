@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import {
+  ASSESSMENT_EXPIRED_CODE,
+  isAssessmentExpired,
+} from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 
@@ -131,7 +135,7 @@ export async function POST(
         });
       }
 
-      if (attempt.expiresAt && now > attempt.expiresAt) {
+      if (isAssessmentExpired(attempt.expiresAt, now)) {
         throw Object.assign(new Error("EXPIRED"), { code: "EXPIRED" });
       }
 
@@ -333,7 +337,10 @@ export async function POST(
       return badRequest("El intento ya fue completado");
     }
     if (code === "EXPIRED") {
-      return badRequest("El tiempo ha expirado");
+      return jsonNoStore(
+        { error: "El tiempo ha expirado", code: ASSESSMENT_EXPIRED_CODE },
+        410
+      );
     }
     if (code === "QUESTION_NOT_IN_ATTEMPT") {
       return badRequest("Pregunta inválida para este intento");

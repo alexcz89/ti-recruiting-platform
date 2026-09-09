@@ -5,49 +5,9 @@ import type { ReactNode } from "react";
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
+import { assessmentState, type AssessmentState } from '@/lib/assessments/expiration';
 
-type UiState = "COMPLETED" | "IN_PROGRESS" | "EXPIRED" | "CANCELLED" | "PENDING";
-
-function pickUiState(inv: any, attempt: any, now: Date): UiState {
-  const invStatus = String(inv?.status ?? "").toUpperCase();
-
-  // Detectar attempt obsoleto: fue creado ANTES de que el invite fuera reenviado.
-  // Cuando se reenvía un assessment, el invite conserva el mismo ID pero se actualiza
-  // (updatedAt cambia y status vuelve a "SENT"). Un attempt cuyo createdAt < inv.updatedAt
-  // es de una ronda anterior y no debe bloquear el estado Pendiente.
-  const rawAtStatus = String(attempt?.status ?? "").toUpperCase();
-  const isStaleAttempt =
-    attempt != null &&
-    invStatus === "SENT" &&
-    ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(rawAtStatus) &&
-    attempt.createdAt != null &&
-    inv.updatedAt != null &&
-    new Date(attempt.createdAt) < new Date(inv.updatedAt);
-
-  const effectiveAttempt = isStaleAttempt ? null : attempt;
-  const atStatus = String(effectiveAttempt?.status ?? "").toUpperCase();
-
-  // Attempt final siempre manda (SUBMITTED, EVALUATED, COMPLETED) — no importa expiresAt
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
-
-  // Attempt activo pero su tiempo expiró (ya no puede continuar)
-  if (effectiveAttempt?.expiresAt && new Date(effectiveAttempt.expiresAt) <= now) return "EXPIRED";
-
-  if (atStatus === "IN_PROGRESS") return "IN_PROGRESS";
-
-  if (atStatus === "NOT_STARTED") {
-    if (invStatus === "STARTED") return "IN_PROGRESS";
-    return "PENDING";
-  }
-
-  // Sin attempt válido: el invite manda
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
-  if (invStatus === "CANCELLED") return "CANCELLED";
-  if (inv?.expiresAt && new Date(inv.expiresAt) <= now) return "EXPIRED";
-  if (invStatus === "STARTED") return "IN_PROGRESS";
-
-  return "PENDING";
-}
+type UiState = AssessmentState;
 
 function statusLabel(state: UiState) {
   if (state === "COMPLETED") return "Completada";
@@ -223,7 +183,7 @@ export default async function CandidateAssessmentsPage() {
 
     const attempt = isStaleHere ? null : rawAttempt;
 
-    const state = pickUiState(inv, attempt, now);
+    const state = assessmentState(inv, attempt, now);
 
     const jobTitle = inv?.application?.job?.title ?? "Vacante";
     const companyName = inv?.application?.job?.company?.name ?? "—";

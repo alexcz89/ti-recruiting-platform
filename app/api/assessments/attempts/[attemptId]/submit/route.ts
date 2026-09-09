@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { getCurrentBillingCycle } from "@/lib/assessments/pricing";
 import { badgeLevelToSkillLevel } from "@/lib/badges";
 import { calculateAssessmentScore } from "@/lib/assessments/scoring";
+import { isAssessmentExpired } from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -115,9 +116,7 @@ export async function POST(
 
     // Answers and code execution are already blocked after expiresAt. Submission
     // remains available so the server can grade only what was saved in time.
-    const expiredAtSubmission = Boolean(
-      attempt.expiresAt && now >= attempt.expiresAt
-    );
+    const expiredAtSubmission = isAssessmentExpired(attempt.expiresAt, now);
 
     if (!attempt.startedAt) {
       return jsonNoStore(

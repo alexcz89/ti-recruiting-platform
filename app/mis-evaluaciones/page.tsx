@@ -5,6 +5,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getSessionOrThrow } from '@/lib/server/session';
 import { fromNow } from "@/lib/dates";
 import { Award, CheckCircle2, Play, AlertTriangle, ClipboardList } from "lucide-react";
+import { isAssessmentExpired } from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -188,7 +189,7 @@ export default async function MyAssessmentsPage() {
       const jobId = String(iv.application?.jobId ?? iv.application?.job?.id ?? iv.jobId ?? "");
       const meta = jobId ? jaMap.get(keyJT(jobId, String(iv.templateId))) : undefined;
 
-      const expired = iv.expiresAt ? iv.expiresAt <= now : false;
+      const expired = isAssessmentExpired(iv.expiresAt, now);
 
       return {
         invite: iv,
@@ -207,6 +208,9 @@ export default async function MyAssessmentsPage() {
   // 6) Secciones por attempts (como ya lo tenías)
   const completedAttempts = attempts.filter((a) => isFinalAttemptStatus(a.status));
   const inProgressAttempts = attempts.filter((a) => isInProgressAttemptStatus(a.status));
+  const liveInProgressCount = inProgressAttempts.filter(
+    (attempt) => !isAssessmentExpired(attempt.expiresAt, now)
+  ).length;
 
   // Stats útiles para el candidato
   const requiredPendingCount = pendingInvites.filter((x) => x.isRequired && !x.expired).length;
@@ -249,7 +253,7 @@ export default async function MyAssessmentsPage() {
           />
           <StatCard
             label="En progreso"
-            value={inProgressAttempts.length}
+            value={liveInProgressCount}
             icon={<Play className="h-5 w-5 text-blue-600" />}
             accent="blue"
           />
@@ -334,9 +338,10 @@ export default async function MyAssessmentsPage() {
         {/* En progreso (attempts) */}
         {inProgressAttempts.length > 0 && (
           <section>
-            <h2 className="text-xl font-semibold text-default mb-4">⏳ En progreso</h2>
+            <h2 className="text-xl font-semibold text-default mb-4">⏳ En progreso y expiradas</h2>
             <div className="space-y-3">
               {inProgressAttempts.map((attempt) => {
+                const expired = isAssessmentExpired(attempt.expiresAt, now);
                 const jobTitle = attempt.application?.job?.title;
                 const companyName = attempt.application?.job?.company?.name;
 
@@ -348,7 +353,11 @@ export default async function MyAssessmentsPage() {
                 return (
                   <div
                     key={attempt.id}
-                    className="p-6 rounded-2xl border border-blue-300 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-900/20"
+                    className={`p-6 rounded-2xl border ${
+                      expired
+                        ? "border-amber-300 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-900/20"
+                        : "border-blue-300 bg-blue-50 dark:border-blue-500/30 dark:bg-blue-900/20"
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
@@ -369,16 +378,22 @@ export default async function MyAssessmentsPage() {
                         )}
 
                         <p className="text-sm text-muted mt-2">
-                          Iniciada {attempt.startedAt ? fromNow(attempt.startedAt) : "—"}
+                          {expired ? "El tiempo de esta evaluación expiró" : `Iniciada ${attempt.startedAt ? fromNow(attempt.startedAt) : "—"}`}
                         </p>
                       </div>
 
-                      <Link
-                        href={`/assessments/${attempt.templateId}?attemptId=${attempt.id}`}
-                        className="btn btn-primary"
-                      >
-                        Continuar →
-                      </Link>
+                      {expired ? (
+                        <span className="btn btn-secondary cursor-not-allowed" aria-disabled="true">
+                          Expirada
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/assessments/${attempt.templateId}?attemptId=${attempt.id}`}
+                          className="btn btn-primary"
+                        >
+                          Continuar →
+                        </Link>
+                      )}
                     </div>
                   </div>
                 );

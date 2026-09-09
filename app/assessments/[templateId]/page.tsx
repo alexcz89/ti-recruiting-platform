@@ -454,9 +454,14 @@ export default function AssessmentPage() {
         body: JSON.stringify({ questionId, selectedOptions: unique, timeSpent: questionTime }),
       });
 
-      if (!res.ok && res.status === 400) {
+      if (!res.ok && (res.status === 400 || res.status === 410)) {
         const data = await res.json().catch(() => null);
-        if (data?.error?.toLowerCase?.().includes('expir')) handleExpire();
+        if (
+          data?.code === 'ASSESSMENT_EXPIRED' ||
+          data?.error?.toLowerCase?.().includes('expir')
+        ) {
+          handleExpire();
+        }
         return false;
       }
 

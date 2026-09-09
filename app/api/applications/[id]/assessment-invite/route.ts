@@ -10,6 +10,10 @@ import { getSessionCompanyId } from "@/lib/server/session";
 import { sendAssessmentInviteEmail } from "@/lib/server/mailer";
 import { NotificationService } from "@/lib/notifications/service";
 import { getCurrentBillingCycle } from "@/lib/assessments/pricing";
+import {
+  computeInviteExpiresAt,
+  inviteResendAction,
+} from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -50,20 +54,6 @@ function buildBaseUrl(req: Request) {
   if (host) return `${proto}://${host}`.replace(/\/$/, "");
 
   return "http://localhost:3000";
-}
-
-function isInviteReusable(
-  inv: { status: string | null; expiresAt: Date | null },
-  now: Date
-) {
-  const s = String(inv.status || "").toUpperCase();
-  if (s !== "SENT" && s !== "STARTED") return false;
-  if (inv.expiresAt && inv.expiresAt <= now) return false;
-  return true;
-}
-
-function computeExpiresAt(days: number) {
-  return new Date(Date.now() + 1000 * 60 * 60 * 24 * days);
 }
 
 function isCreditsEnforced() {
@@ -131,7 +121,7 @@ export async function POST(
         : 7;
 
     const now = new Date();
-    const newExpiresAt = computeExpiresAt(expiresInDays);
+    const newExpiresAt = computeInviteExpiresAt(now, expiresInDays);
 
     const application = await prisma.application.findFirst({
       where: {
@@ -347,7 +337,31 @@ export async function POST(
         throw new Error("INVITE_CREATE_FAILED");
       }
 
-      if (!isInviteReusable(localInvite, now)) {
+      const activeAttempt = await tx.assessmentAttempt.findFirst({
+        where: {
+          applicationId: application.id,
+          candidateId: application.candidateId,
+          templateId: template.id,
+          status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        select: { id: true },
+        orderBy: { createdAt: "desc" },
+      });
+      const linkedAttempt = await tx.assessmentAttempt.findFirst({
+        where: { inviteId: localInvite.id },
+        select: { id: true },
+      });
+      const resendAction = inviteResendAction(
+        localInvite,
+        {
+          hasActiveAttempt: Boolean(activeAttempt),
+          hasLinkedAttempt: Boolean(linkedAttempt),
+        },
+        now
+      );
+
+      if (resendAction === "ROTATE") {
         const rotatedToken = crypto.randomBytes(32).toString("hex");
         rotated = true;
 
@@ -371,18 +385,15 @@ export async function POST(
           },
           select: selectInvite,
         });
-      } else {
-        const s = String(localInvite.status || "").toUpperCase();
-        if (s === "SENT" || s === "STARTED") {
-          localInvite = await tx.assessmentInvite.update({
-            where: { id: localInvite.id },
-            data: {
-              expiresAt: newExpiresAt,
-              invitedBy: user.id ? { connect: { id: user.id } } : undefined,
-            },
-            select: selectInvite,
-          });
-        }
+      } else if (resendAction === "RENEW") {
+        localInvite = await tx.assessmentInvite.update({
+          where: { id: localInvite.id },
+          data: {
+            expiresAt: newExpiresAt,
+            invitedBy: user.id ? { connect: { id: user.id } } : undefined,
+          },
+          select: selectInvite,
+        });
       }
 
       return localInvite;

@@ -7,6 +7,10 @@ import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
 import { checkPlagiarism } from "@/lib/code-execution/plagiarism";
 import { validateReadOnlySqlQuery } from "@/lib/code-execution/sql-service";
+import {
+  ASSESSMENT_EXPIRED_CODE,
+  isAssessmentExpired,
+} from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -203,8 +207,11 @@ export async function POST(request: Request) {
       return jsonNoStore({ error: "El intento no está en progreso" }, 400);
     }
 
-    if (attempt.expiresAt && new Date() > attempt.expiresAt) {
-      return jsonNoStore({ error: "Tiempo expirado" }, 400);
+    if (isAssessmentExpired(attempt.expiresAt)) {
+      return jsonNoStore(
+        { error: "Tiempo expirado", code: ASSESSMENT_EXPIRED_CODE },
+        410
+      );
     }
 
     if (!judge0Service.isLanguageSupported(language)) {
@@ -339,42 +346,85 @@ export async function POST(request: Request) {
     let savedAnswerId: string | null = null;
 
     if (isSubmission) {
-      const savedAnswer = await prisma.attemptAnswer.upsert({
-        where: {
-          attemptId_questionId: { attemptId, questionId },
-        },
-        create: {
-          attemptId,
-          questionId,
-          selectedOptions: ["__CODE_SUBMITTED__"],
-          codeSubmission: code,
-          language,
-          executionResults: executionResultsJson,
-          passedTests,
-          totalTests,
-          pointsEarned,
-          isCorrect: Boolean(executionResult.success),
-          executionTime: executionResult.executionTimeMs ?? null,
-          memoryUsed: executionResult.memoryUsedMb ?? null,
-        },
-        update: {
-          selectedOptions: ["__CODE_SUBMITTED__"],
-          codeSubmission: code,
-          language,
-          executionResults: executionResultsJson,
-          passedTests,
-          totalTests,
-          pointsEarned,
-          isCorrect: Boolean(executionResult.success),
-          executionTime: executionResult.executionTimeMs ?? null,
-          memoryUsed: executionResult.memoryUsedMb ?? null,
-        },
+      const persistence = await prisma.$transaction(async (tx) => {
+        // Judge0 has already returned. Serialize only this short persistence
+        // window with assessment submission, then re-read the authoritative
+        // status/deadline while holding the transaction-scoped lock.
+        await tx.$queryRaw`
+          SELECT id
+          FROM "AssessmentAttempt"
+          WHERE id = ${attemptId}
+          FOR UPDATE
+        `;
+
+        const currentAttempt = await tx.assessmentAttempt.findUnique({
+          where: { id: attemptId },
+          select: { candidateId: true, status: true, expiresAt: true },
+        });
+
+        if (!currentAttempt || currentAttempt.candidateId !== user.id) {
+          return { status: "INVALID" } as const;
+        }
+        if (String(currentAttempt.status).toUpperCase() !== "IN_PROGRESS") {
+          return { status: "CLOSED" } as const;
+        }
+        if (isAssessmentExpired(currentAttempt.expiresAt)) {
+          return { status: "EXPIRED" } as const;
+        }
+
+        const savedAnswer = await tx.attemptAnswer.upsert({
+          where: {
+            attemptId_questionId: { attemptId, questionId },
+          },
+          create: {
+            attemptId,
+            questionId,
+            selectedOptions: ["__CODE_SUBMITTED__"],
+            codeSubmission: code,
+            language,
+            executionResults: executionResultsJson,
+            passedTests,
+            totalTests,
+            pointsEarned,
+            isCorrect: Boolean(executionResult.success),
+            executionTime: executionResult.executionTimeMs ?? null,
+            memoryUsed: executionResult.memoryUsedMb ?? null,
+          },
+          update: {
+            selectedOptions: ["__CODE_SUBMITTED__"],
+            codeSubmission: code,
+            language,
+            executionResults: executionResultsJson,
+            passedTests,
+            totalTests,
+            pointsEarned,
+            isCorrect: Boolean(executionResult.success),
+            executionTime: executionResult.executionTimeMs ?? null,
+            memoryUsed: executionResult.memoryUsedMb ?? null,
+          },
+          select: { id: true },
+        });
+
+        return { status: "SAVED", answerId: savedAnswer.id } as const;
       });
-      savedAnswerId = savedAnswer.id;
+
+      if (persistence.status === "EXPIRED") {
+        return jsonNoStore(
+          { error: "Tiempo expirado", code: ASSESSMENT_EXPIRED_CODE },
+          410
+        );
+      }
+      if (persistence.status !== "SAVED") {
+        return jsonNoStore(
+          { error: "El intento ya no está en progreso" },
+          409
+        );
+      }
+      savedAnswerId = persistence.answerId;
 
       // Disparar detección de plagio de forma async (no bloquea la respuesta)
       checkPlagiarism({
-        answerId: savedAnswer.id,
+        answerId: savedAnswerId,
         questionId,
         code,
         candidateId: user.id,

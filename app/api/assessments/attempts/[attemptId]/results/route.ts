@@ -29,6 +29,7 @@ type AttemptStatusLike =
 
 type FlagsJsonShape = {
   tooFast?: boolean;
+  expiredAt?: string;
 };
 
 type OptionLike = {
@@ -195,7 +196,9 @@ export async function GET(
     }
 
     if (!isOwner && !isAdmin && !recruiterCanView) {
-      return jsonNoStore({ error: "No autorizado" }, 403);
+      return isRecruiter
+        ? jsonNoStore({ error: "Intento no encontrado" }, 404)
+        : jsonNoStore({ error: "No autorizado" }, 403);
     }
 
     const canSeeSolutions = isAdmin || recruiterCanView;
@@ -220,6 +223,7 @@ export async function GET(
     ]);
 
     const flags = (attemptBase.flagsJson ?? {}) as FlagsJsonShape;
+    const expiredAtSubmission = Boolean(flags.expiredAt);
     const severity = String(attemptBase.severity ?? "NORMAL").toUpperCase();
     const integrityInvalidated = severity === "CRITICAL";
     const passed = Boolean(attemptBase.passed) && !integrityInvalidated;
@@ -302,6 +306,8 @@ export async function GET(
           attemptNumber: attemptBase.attemptNumber,
           startedAt: attemptBase.startedAt,
           submittedAt: attemptBase.submittedAt,
+          expiresAt: attemptBase.expiresAt,
+          expiredAtSubmission,
           timeSpent: attemptBase.timeSpent,
           totalScore: attemptBase.totalScore,
           sectionScores: attemptBase.sectionScores,
@@ -371,6 +377,8 @@ export async function GET(
         attemptNumber: attemptBase.attemptNumber,
         startedAt: attemptBase.startedAt,
         submittedAt: attemptBase.submittedAt,
+        expiresAt: attemptBase.expiresAt,
+        expiredAtSubmission,
         timeSpent: attemptBase.timeSpent,
         totalScore: attemptBase.totalScore,
         sectionScores: attemptBase.sectionScores,

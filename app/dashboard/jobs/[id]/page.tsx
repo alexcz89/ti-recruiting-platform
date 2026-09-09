@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
+import { isAssessmentExpired } from '@/lib/assessments/expiration';
 import Kanbanboard from "./KanbanBoard";
 import { ApplicationInterest, ApplicationStatus } from "@prisma/client";
 import {
@@ -198,8 +199,8 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
         const atStatus = String(at?.status ?? "").toUpperCase();
         const invStatus = String(inv?.status ?? "").toUpperCase();
-        const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
-        const inviteExpired = !!inv?.expiresAt && new Date(inv.expiresAt) <= now;
+        const attemptExpired = isAssessmentExpired(at?.expiresAt, now);
+        const inviteExpired = isAssessmentExpired(inv?.expiresAt, now);
 
         // Un invite "activo" es uno que fue (re)enviado hoy o recientemente y no expiró.
         // Tiene prioridad sobre un attempt viejo expirado (que pudo haber quedado huérfano

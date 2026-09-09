@@ -2,6 +2,10 @@
 import { prisma } from '@/lib/server/prisma';
 import { sendAssessmentInviteEmail } from '@/lib/server/mailer';
 import crypto from "crypto";
+import {
+  computeInviteExpiresAt,
+  inviteResendAction,
+} from "@/lib/assessments/expiration";
 
 type EnsureInviteParams = {
   applicationId: string;
@@ -27,17 +31,6 @@ type EnsureInviteParams = {
   };
 };
 
-function computeExpiresAt(days: number) {
-  return new Date(Date.now() + 1000 * 60 * 60 * 24 * days);
-}
-
-function isInviteReusable(inv: { status: any; expiresAt: Date | null }, now: Date) {
-  // Reusable si está en flujo activo (SENT/STARTED) y no expiró
-  if (inv.status !== "SENT" && inv.status !== "STARTED") return false;
-  if (inv.expiresAt && inv.expiresAt <= now) return false;
-  return true;
-}
-
 export async function ensureAssessmentInviteForApplication(params: EnsureInviteParams) {
   const {
     applicationId,
@@ -51,7 +44,7 @@ export async function ensureAssessmentInviteForApplication(params: EnsureInviteP
   } = params;
 
   const now = new Date();
-  const newExpiresAt = computeExpiresAt(expiresInDays);
+  const newExpiresAt = computeInviteExpiresAt(now, expiresInDays);
 
   let didRotate = false;
 
@@ -112,11 +105,38 @@ export async function ensureAssessmentInviteForApplication(params: EnsureInviteP
 
   if (!invite) throw new Error("No se pudo crear/releer la invitación");
 
-  // 3) Si NO es reusable, rota token y reinicia a SENT
-  if (!isInviteReusable(invite, now)) {
+  const activeAttempt = await prisma.assessmentAttempt.findFirst({
+    where: {
+      applicationId,
+      candidateId,
+      templateId,
+      status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+    },
+    select: { id: true },
+  });
+  const linkedAttempt = await prisma.assessmentAttempt.findFirst({
+    where: { inviteId: invite.id },
+    select: { id: true },
+  });
+  const resendAction = inviteResendAction(
+    invite,
+    {
+      hasActiveAttempt: Boolean(activeAttempt),
+      hasLinkedAttempt: Boolean(linkedAttempt),
+    },
+    now
+  );
+
+  // 3) Sin attempt activo, rota ciclos terminados/expirados o renueva el pendiente.
+  if (resendAction === "ROTATE") {
     didRotate = true;
 
     const rotatedToken = crypto.randomBytes(32).toString("hex");
+    await prisma.assessmentAttempt.updateMany({
+      where: { inviteId: invite.id },
+      data: { inviteId: null },
+    });
     invite = await prisma.assessmentInvite.update({
       where: { id: invite.id },
       data: {
@@ -133,21 +153,18 @@ export async function ensureAssessmentInviteForApplication(params: EnsureInviteP
         sentAt: true,
       },
     });
-  } else {
-    // Reusable: si está SENT, puedes extender expiración (opcional)
-    if (invite.status === "SENT") {
-      invite = await prisma.assessmentInvite.update({
-        where: { id: invite.id },
-        data: { expiresAt: newExpiresAt } as any,
-        select: {
-          id: true,
-          token: true,
-          status: true,
-          expiresAt: true,
-          sentAt: true,
-        },
-      });
-    }
+  } else if (resendAction === "RENEW") {
+    invite = await prisma.assessmentInvite.update({
+      where: { id: invite.id },
+      data: { expiresAt: newExpiresAt } as any,
+      select: {
+        id: true,
+        token: true,
+        status: true,
+        expiresAt: true,
+        sentAt: true,
+      },
+    });
   }
 
   // 4) Email opcional (✅ evita spam: solo si no se había enviado antes o si rotó token)
