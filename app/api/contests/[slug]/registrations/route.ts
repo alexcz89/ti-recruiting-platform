@@ -86,6 +86,15 @@ export async function POST(
   const track = contest.tracks.find((item) => item.language === parsed.data.language);
   if (!track) return json({ error: "Ese lenguaje no está disponible" }, 400);
 
+  const candidate = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { isActive: true, yearsExperience: true },
+  });
+  if (!candidate?.isActive) return json({ error: "La cuenta de candidato no está activa" }, 403);
+  if (candidate.yearsExperience != null && candidate.yearsExperience > 2) {
+    return json({ error: "Esta edición está dirigida a perfiles con máximo dos años de experiencia" }, 403);
+  }
+
   try {
     const registration = await prisma.$transaction(async (tx) => {
       const attempt = await tx.assessmentAttempt.create({
@@ -97,6 +106,15 @@ export async function POST(
         },
       });
 
+      await tx.user.update({
+        where: { id: user.id! },
+        data: {
+          country: parsed.data.countryCode,
+          timezone: parsed.data.timezone,
+          yearsExperience: parsed.data.yearsExperience,
+        },
+      });
+
       return tx.contestRegistration.create({
         data: {
           contestId: contest.id,
@@ -104,6 +122,7 @@ export async function POST(
           candidateId: user.id!,
           attemptId: attempt.id,
           city: parsed.data.city,
+
           experienceLevel: parsed.data.experienceLevel,
           linkedinUrl: parsed.data.linkedinUrl,
           githubUrl: parsed.data.githubUrl || null,

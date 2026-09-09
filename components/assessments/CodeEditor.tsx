@@ -1,7 +1,15 @@
 // components/assessments/CodeEditor.tsx
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import dynamic from 'next/dynamic';
 import { useTheme } from 'next-themes';
 import ReactMarkdown from 'react-markdown';
@@ -20,6 +28,9 @@ import {
   Settings,
   Zap,
   Terminal,
+  Database,
+  GripVertical,
+  X,
 } from 'lucide-react';
 
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
@@ -84,8 +95,9 @@ function isNonEmptyString(v: any): v is string {
 // ✅ NUEVO: limpiar el input del test case para mostrarlo legible
 // El input es código runner (ej: "console.log(JSON.stringify(twoSum([2,7,11,15], 9)));")
 // Extraemos solo los argumentos para mostrar algo limpio al candidato
-function formatInputDisplay(input: string): string {
+function formatInputDisplay(input: string, language?: string): string {
   if (!input) return input;
+  if (language === 'sql') return 'Dataset SQL de prueba';
   // Intentar extraer argumentos del último llamado a función
   const match = input.match(/\(([^)]+(?:\[[^\]]*\][^)]*)?)\)\s*[;)]?\s*$/);
   if (match) return match[1];
@@ -179,17 +191,21 @@ export default function CodeEditor({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fontSize, setFontSize] = useState(14);
   const [showSettings, setShowSettings] = useState(false);
-  const [activeTab, setActiveTab] = useState<'problem' | 'results' | 'custom'>('problem');
+  const [activeTab, setActiveTab] = useState<'problem' | 'results'>('problem');
   const [hasRunTests, setHasRunTests] = useState(false);
   const [solutionSubmitted, setSolutionSubmitted] = useState(false);
+  const [problemWidth, setProblemWidth] = useState(30);
+  const [outputWidth, setOutputWidth] = useState(27);
   // Custom input
   const [customInput, setCustomInput] = useState('');
   const [isRunningCustom, setIsRunningCustom] = useState(false);
   const [customOutput, setCustomOutput] = useState<{ output: string; error: string; executionTimeMs?: number } | null>(null);
+  const [isCustomToolOpen, setIsCustomToolOpen] = useState(false);
 
   const editorRef = useRef<any>(null);
   const monacoRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const runTestsRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     setCode(initialCode || '');
@@ -198,6 +214,17 @@ export default function CodeEditor({
   useEffect(() => {
     setSelectedLanguage(initialLanguage);
   }, [initialLanguage]);
+
+  useEffect(() => {
+    if (!isCustomToolOpen) return;
+
+    const closeOnEscape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setIsCustomToolOpen(false);
+    };
+
+    document.addEventListener('keydown', closeOnEscape);
+    return () => document.removeEventListener('keydown', closeOnEscape);
+  }, [isCustomToolOpen]);
 
   const languageNames: Record<string, string> = {
     javascript: 'JavaScript',
@@ -209,7 +236,11 @@ export default function CodeEditor({
     csharp: 'C#',
     go: 'Go',
     rust: 'Rust',
+    sql: 'SQL',
   };
+
+  const customInputLabel =
+    selectedLanguage === 'sql' ? 'Probar con datos propios' : 'Probar con mi input';
 
   const monacoLanguages: Record<string, string> = {
     javascript: 'javascript',
@@ -221,6 +252,7 @@ export default function CodeEditor({
     csharp: 'csharp',
     go: 'go',
     rust: 'rust',
+    sql: 'sql',
   };
 
   const handleRunTests = async () => {
@@ -371,17 +403,26 @@ export default function CodeEditor({
     }
   };
 
+  // Monaco registers commands once when the editor mounts. Keep the latest
+  // handler in a ref so Ctrl/Cmd + Enter never submits first-render code.
+  useEffect(() => {
+    runTestsRef.current = handleRunTests;
+  });
+
   // resolvedTheme puede ser undefined en el primer render (next-themes hidrata tarde).
   // Usamos el atributo class del <html> como fuente de verdad inmediata.
-  const getIsDark = () =>
-    resolvedTheme === 'dark' ||
-    (typeof document !== 'undefined' && document.documentElement.classList.contains('dark'));
+  const getIsDark = useCallback(
+    () =>
+      resolvedTheme === 'dark' ||
+      (typeof document !== 'undefined' && document.documentElement.classList.contains('dark')),
+    [resolvedTheme]
+  );
 
   useEffect(() => {
     if (monacoRef.current) {
       monacoRef.current.editor.setTheme(getIsDark() ? 'vs-dark' : 'vs');
     }
-  }, [isDark]);
+  }, [getIsDark]);
 
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editorRef.current = editor;
@@ -390,7 +431,7 @@ export default function CodeEditor({
     monaco.editor.setTheme(getIsDark() ? 'vs-dark' : 'vs');
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      handleRunTests();
+      runTestsRef.current();
     });
   };
 
@@ -413,30 +454,137 @@ export default function CodeEditor({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  const startPanelResize = useCallback(
+    (
+      event: ReactPointerEvent<HTMLDivElement>,
+      panel: 'problem' | 'output'
+    ) => {
+      const bounds = containerRef.current?.getBoundingClientRect();
+      if (!bounds || bounds.width <= 0) return;
+
+      event.preventDefault();
+
+      const handleMove = (moveEvent: PointerEvent) => {
+        if (panel === 'problem') {
+          const percent = ((moveEvent.clientX - bounds.left) / bounds.width) * 100;
+          setProblemWidth(Math.min(40, Math.max(22, percent)));
+          return;
+        }
+
+        const percent = ((bounds.right - moveEvent.clientX) / bounds.width) * 100;
+        setOutputWidth(Math.min(38, Math.max(22, percent)));
+      };
+
+      const handleUp = () => {
+        window.removeEventListener('pointermove', handleMove);
+        window.removeEventListener('pointerup', handleUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('pointermove', handleMove);
+      window.addEventListener('pointerup', handleUp);
+    },
+    []
+  );
+
+  const handlePanelResizeKeyDown = useCallback(
+    (
+      event: ReactKeyboardEvent<HTMLDivElement>,
+      panel: 'problem' | 'output'
+    ) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+      event.preventDefault();
+
+      const direction = event.key === 'ArrowLeft' ? -2 : 2;
+      if (panel === 'problem') {
+        setProblemWidth((current) => Math.min(40, Math.max(22, current + direction)));
+        return;
+      }
+
+      setOutputWidth((current) =>
+        Math.min(38, Math.max(22, current - direction))
+      );
+    },
+    []
+  );
+
   const passedTests = testResults?.filter((r) => r.passed).length || 0;
   const totalTests = testResults?.length || 0;
+
+  const renderPrimaryActions = (compact: boolean) => (
+    <div className={`flex ${compact ? 'gap-1.5' : 'gap-3'}`}>
+      <button
+        type="button"
+        onClick={handleRunTests}
+        disabled={isRunning || isSubmitting || !code.trim() || solutionSubmitted}
+        className={`inline-flex items-center justify-center gap-2 border border-gray-300 bg-slate-800 font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}
+      >
+        {isRunning ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Ejecutando...</span>
+          </>
+        ) : (
+          <>
+            <Play className="h-4 w-4" />
+            <span>Ejecutar pruebas</span>
+          </>
+        )}
+      </button>
+
+      {solutionSubmitted ? (
+        <div className={`inline-flex items-center justify-center gap-2 bg-emerald-600 font-bold text-white shadow-sm ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}>
+          <CheckCircle2 className="h-4 w-4" />
+          <span>{compact ? 'Respondida' : 'Solución enviada'}</span>
+        </div>
+      ) : isSubmitting ? (
+        <div className={`inline-flex items-center justify-center gap-2 bg-teal-600 font-bold text-white shadow-sm ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}>
+          <Loader2 className="h-4 w-4 animate-spin" />
+          <span>Enviando...</span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={isRunning || isSubmitting || !code.trim()}
+          className={`inline-flex items-center justify-center gap-2 bg-teal-600 font-bold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50 ${compact ? 'min-h-9 rounded-lg px-3 py-1.5 text-xs' : 'rounded-xl px-5 py-2.5 text-sm'}`}
+        >
+          <Send className="h-4 w-4" />
+          <span>Enviar solución</span>
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <div
       ref={containerRef}
-      className="flex h-full flex-col rounded-2xl border border-gray-200 bg-white text-gray-900 shadow-2xl dark:border-slate-800/50 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
+      className="relative flex h-full flex-col bg-white text-gray-900 dark:bg-gradient-to-br dark:from-slate-950 dark:via-slate-900 dark:to-zinc-950 dark:text-white"
     >
       {/* Header */}
       <div className="relative z-10 border-b border-gray-200 bg-white dark:border-slate-800/80 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="relative rounded-xl bg-teal-600 p-3">
-                  <Code2 className="h-6 w-6 text-white" />
-                </div>
+        <div className="px-4 py-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="rounded-lg bg-teal-600 p-2">
+                <Code2 className="h-5 w-5 text-white" />
               </div>
-              <div>
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                  Pregunta de Código
-                </h3>
-                <div className="mt-1 flex items-center gap-3">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-teal-500/20 bg-teal-500/10 px-3 py-1 text-sm font-medium text-teal-600 dark:text-teal-400">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="truncate text-sm font-bold text-gray-900 dark:text-white">
+                    Editor {languageNames[selectedLanguage] || selectedLanguage}
+                  </h3>
+                  {readOnly && (
+                    <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-semibold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                      Solo lectura
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-teal-500/20 bg-teal-500/10 px-2 py-0.5 text-xs font-medium text-teal-600 dark:text-teal-400">
                     <Zap className="h-3.5 w-3.5" />
                     {points} puntos
                   </span>
@@ -460,7 +608,10 @@ export default function CodeEditor({
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2">
+              {!readOnly && (
+                <div className="hidden lg:block">{renderPrimaryActions(true)}</div>
+              )}
               {allowedLanguages.length > 1 && !readOnly && (
                 <div className="relative">
                   <select
@@ -481,14 +632,14 @@ export default function CodeEditor({
               <div className="relative">
                 <button
                   onClick={() => setShowSettings(!showSettings)}
-                  className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
+                  className="rounded-lg border border-gray-300 bg-white p-2 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                   title="Configuración"
                 >
                   <Settings className="h-4 w-4" />
                 </button>
 
                 {showSettings && (
-                  <div className="absolute right-0 z-50 mt-2 min-w-[240px] rounded-xl border border-gray-200 bg-white p-4 shadow-2xl dark:border-slate-700/50 dark:bg-slate-900 dark:shadow-black/60">
+                  <div className="absolute right-0 z-50 mt-2 w-52 rounded-lg border border-gray-200 bg-white p-3 shadow-2xl dark:border-slate-700/50 dark:bg-slate-900 dark:shadow-black/60">
                     <div className="space-y-4">
                       <div>
                         <label className="mb-2 block text-xs font-medium text-gray-600 dark:text-slate-400">
@@ -515,7 +666,7 @@ export default function CodeEditor({
 
               <button
                 onClick={toggleFullscreen}
-                className="rounded-lg border border-gray-300 bg-white p-2.5 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
+                className="rounded-lg border border-gray-300 bg-white p-2 text-gray-600 transition-all hover:border-teal-500/50 hover:text-gray-900 dark:border-slate-700/50 dark:bg-slate-800/50 dark:text-slate-400 dark:hover:text-white"
                 title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}
               >
                 {isFullscreen ? (
@@ -565,19 +716,6 @@ export default function CodeEditor({
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
             )}
           </button>
-          <button
-            onClick={() => setActiveTab('custom')}
-            className={`relative flex-1 px-4 py-3 text-sm font-medium transition-all ${
-              activeTab === 'custom'
-                ? 'bg-white text-gray-900 dark:bg-slate-800/50 dark:text-white'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
-            }`}
-          >
-            Probar con mi input
-            {activeTab === 'custom' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
-            )}
-          </button>
         </div>
       </div>
 
@@ -585,7 +723,10 @@ export default function CodeEditor({
       <div className="flex flex-1 overflow-hidden">
 
         {/* LEFT PANEL: Problem description — always visible on desktop */}
-        <div className="hidden w-[40%] flex-col overflow-hidden border-r border-gray-200 md:flex dark:border-slate-800/50">
+        <div
+          className="hidden shrink-0 flex-col overflow-hidden md:flex md:w-[var(--problem-width)]"
+          style={{ '--problem-width': `${problemWidth}%` } as CSSProperties}
+        >
           <div className="flex-none border-b border-gray-200 bg-gray-50 px-4 py-2 dark:border-slate-800/50 dark:bg-slate-900/30">
             <span className="text-[11px] font-semibold uppercase tracking-widest text-gray-500 dark:text-slate-400">
               Descripción del problema
@@ -596,8 +737,24 @@ export default function CodeEditor({
           </div>
         </div>
 
+        <div
+          role="separator"
+          aria-label="Ajustar ancho de la descripción"
+          title="Arrastra o usa las flechas para ajustar la descripción"
+          aria-orientation="vertical"
+          aria-valuemin={22}
+          aria-valuemax={40}
+          aria-valuenow={Math.round(problemWidth)}
+          tabIndex={0}
+          onKeyDown={(event) => handlePanelResizeKeyDown(event, 'problem')}
+          onPointerDown={(event) => startPanelResize(event, 'problem')}
+          className="group hidden w-3 shrink-0 touch-none cursor-col-resize items-center justify-center border-x border-zinc-200 bg-zinc-50 text-zinc-400 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500 md:flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-teal-700 dark:hover:bg-teal-950 dark:hover:text-teal-300"
+        >
+          <GripVertical className="h-5 w-5" aria-hidden="true" />
+        </div>
+
         {/* RIGHT PANEL: Editor + output (full width on mobile, 60% on desktop) */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden md:flex-row">
 
           {/* Mobile 'problem' tab: compact description strip above editor */}
           {activeTab === 'problem' && (
@@ -610,7 +767,7 @@ export default function CodeEditor({
           )}
 
           {/* Monaco editor — always on desktop; only on 'problem' tab on mobile */}
-          <div className={`relative ${activeTab !== 'problem' ? 'hidden md:block md:flex-1' : 'flex-1'}`}>
+          <div className={`relative min-h-0 min-w-0 ${activeTab !== 'problem' ? 'hidden md:block md:flex-1' : 'flex-1'}`}>
             <MonacoEditor
               height="100%"
               language={monacoLanguages[selectedLanguage] || 'javascript'}
@@ -640,116 +797,47 @@ export default function CodeEditor({
             />
           </div>
 
-          {/* Output panel — desktop: fixed height at bottom; mobile: full height for results/custom tabs */}
-          <div className={`flex flex-col border-t border-gray-200 dark:border-slate-800/50 ${
-            activeTab === 'results' || activeTab === 'custom'
-              ? 'flex-1 md:h-52 md:flex-none'
-              : 'hidden md:flex md:h-52 md:flex-none'
-          }`}>
+          <div
+            role="separator"
+            aria-label="Ajustar ancho de resultados"
+            title="Arrastra o usa las flechas para ajustar los resultados"
+            aria-orientation="vertical"
+            aria-valuemin={22}
+            aria-valuemax={38}
+            aria-valuenow={Math.round(outputWidth)}
+            tabIndex={0}
+            onKeyDown={(event) => handlePanelResizeKeyDown(event, 'output')}
+            onPointerDown={(event) => startPanelResize(event, 'output')}
+            className="group hidden w-3 shrink-0 touch-none cursor-col-resize items-center justify-center border-x border-zinc-200 bg-zinc-50 text-zinc-400 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500 md:flex dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500 dark:hover:border-teal-700 dark:hover:bg-teal-950 dark:hover:text-teal-300"
+          >
+            <GripVertical className="h-5 w-5" aria-hidden="true" />
+          </div>
 
-            {/* Desktop output sub-tabs */}
-            <div className="hidden flex-none border-b border-gray-200 bg-gray-50 md:flex dark:border-slate-800/50 dark:bg-slate-900/30">
-              <button
-                onClick={() => setActiveTab('results')}
-                className={`relative flex-1 px-5 py-2 text-xs font-semibold transition-all ${
-                  activeTab !== 'custom'
-                    ? 'bg-white text-gray-900 dark:bg-slate-800/50 dark:text-white'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
-                }`}
-              >
-                Resultados
-                {testResults && (
-                  <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    passedTests === totalTests
-                      ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
-                      : 'bg-red-500/20 text-red-600 dark:text-red-400'
-                  }`}>
-                    {passedTests}/{totalTests}
-                  </span>
-                )}
-                {activeTab !== 'custom' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('custom')}
-                className={`relative flex-1 px-5 py-2 text-xs font-semibold transition-all ${
-                  activeTab === 'custom'
-                    ? 'bg-white text-gray-900 dark:bg-slate-800/50 dark:text-white'
-                    : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800/30 dark:hover:text-white'
-                }`}
-              >
-                Probar con mi input
-                {activeTab === 'custom' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-teal-500" />
-                )}
-              </button>
+          {/* Output panel — desktop: fixed height at bottom; mobile: full height for results/custom tabs */}
+          <div
+            style={{ '--output-width': `${outputWidth}%` } as CSSProperties}
+            className={`min-h-0 w-full flex-col border-t border-gray-200 md:flex md:h-auto md:w-[var(--output-width)] md:flex-none md:border-t-0 dark:border-slate-800/50 ${
+              activeTab === 'results' ? 'flex flex-1' : 'hidden'
+            }`}
+          >
+
+            <div className="hidden flex-none items-center border-b border-gray-200 bg-gray-50 px-4 py-2.5 md:flex dark:border-slate-800/50 dark:bg-slate-900/30">
+              <span className="text-xs font-semibold text-gray-700 dark:text-slate-300">Resultados</span>
+              {testResults && (
+                <span className={passedTests === totalTests
+                  ? 'ml-2 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400'
+                  : 'ml-2 rounded-full bg-red-500/20 px-2 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400'}>
+                  {passedTests}/{totalTests}
+                </span>
+              )}
             </div>
 
             {/* Output content (shared between mobile tabs and desktop output panel) */}
-            <div className="flex-1 overflow-y-auto">
-              {activeTab === 'custom' ? (
-                /* Custom Input Panel */
-                <div className="flex flex-col gap-4 bg-gray-50 p-5 dark:bg-slate-900/20">
-                  <div>
-                    <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-slate-300">
-                      Input / Runner personalizado
-                    </label>
-                    <p className="mb-3 text-xs text-gray-500 dark:text-slate-400">
-                      Para JS/TS: escribe el código runner que llama tu función (ej:{' '}
-                      <code className="rounded bg-gray-200 px-1 dark:bg-slate-800">console.log(solution(42))</code>).
-                      Para otros lenguajes: escribe el stdin que recibirá tu programa.
-                    </p>
-                    <textarea
-                      value={customInput}
-                      onChange={(e) => setCustomInput(e.target.value)}
-                      placeholder="// Ej: console.log(solution([1,2,3], 5))"
-                      rows={4}
-                      className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
-                    />
-                  </div>
-                  <button
-                    onClick={handleRunCustom}
-                    disabled={isRunningCustom || !code.trim() || readOnly}
-                    className="inline-flex items-center gap-2 self-start rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50"
-                  >
-                    {isRunningCustom ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /><span>Ejecutando...</span></>
-                    ) : (
-                      <><Play className="h-4 w-4" /><span>Ejecutar con este input</span></>
-                    )}
-                  </button>
-                  {customOutput && (
-                    <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900/50">
-                      {customOutput.executionTimeMs && (
-                        <div className="mb-3 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
-                          <Clock className="h-3.5 w-3.5" />
-                          <span>{customOutput.executionTimeMs}ms</span>
-                        </div>
-                      )}
-                      {customOutput.output && (
-                        <div className="mb-3">
-                          <p className="mb-1 text-xs font-semibold text-gray-600 dark:text-slate-400">Output:</p>
-                          <pre className="overflow-x-auto rounded-lg bg-gray-100 p-3 text-xs font-mono text-gray-800 dark:bg-slate-800 dark:text-slate-200">{customOutput.output}</pre>
-                        </div>
-                      )}
-                      {customOutput.error && (
-                        <div>
-                          <p className="mb-1 text-xs font-semibold text-red-600 dark:text-red-400">Error:</p>
-                          <pre className="overflow-x-auto rounded-lg bg-red-50 p-3 text-xs font-mono text-red-700 dark:bg-red-900/20 dark:text-red-300">{customOutput.error}</pre>
-                        </div>
-                      )}
-                      {!customOutput.output && !customOutput.error && (
-                        <p className="text-sm text-gray-500 dark:text-slate-400">Sin output</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Results Panel */
+            <div className="min-h-0 flex-1 overflow-y-auto">
+                {/* Results Panel */}
                 <div className="bg-gray-50 p-5 dark:bg-slate-900/20">
                   {!testResults && !error && (
-                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="flex flex-col items-center justify-center py-4 text-center">
                       <Terminal className="mb-3 h-10 w-10 text-teal-500/50 dark:text-teal-400/50" />
                       <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Sin resultados aún</p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
@@ -835,7 +923,7 @@ export default function CodeEditor({
                                       <div>
                                         <span className="font-medium text-gray-600 dark:text-slate-400">Input: </span>
                                         <code className="rounded bg-gray-200 px-1.5 py-0.5 font-mono text-gray-800 dark:bg-slate-800/80 dark:text-slate-200">
-                                          {formatInputDisplay(result.input || '')}
+                                          {formatInputDisplay(result.input || '', selectedLanguage)}
                                         </code>
                                       </div>
                                       <div>
@@ -873,18 +961,132 @@ export default function CodeEditor({
                       })}
                     </div>
                   )}
+                  {!readOnly && (
+                    <div className="mt-4 border-t border-gray-200 pt-3 dark:border-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomToolOpen(true)}
+                        className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-teal-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-teal-300"
+                      >
+                        <Database className="h-3.5 w-3.5" />
+                        Probar con datos propios
+                        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-zinc-500 dark:bg-slate-800 dark:text-slate-400">
+                          Opcional
+                        </span>
+                      </button>
+                    </div>
+                  )}
+
                 </div>
-              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Footer Actions */}
+      {isCustomToolOpen && (
+        <div
+          className="absolute inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm"
+          onMouseDown={() => setIsCustomToolOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="custom-data-title"
+            className="flex max-h-[calc(100%-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4 dark:border-slate-700">
+              <div>
+                <div className="mb-1 inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase text-zinc-600 dark:bg-slate-800 dark:text-slate-300">
+                  Opcional
+                </div>
+                <h3 id="custom-data-title" className="text-base font-bold text-gray-900 dark:text-white">
+                  {customInputLabel}
+                </h3>
+                <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                  Esta ejecución es privada, no envía tu solución y no afecta tu calificación.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsCustomToolOpen(false)}
+                aria-label="Cerrar prueba con datos propios"
+                className="rounded-lg border border-gray-200 p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-5">
+              <label className="mb-2 block text-sm font-semibold text-gray-700 dark:text-slate-300">
+                {selectedLanguage === 'sql' ? 'Dataset SQL personalizado' : 'Input / Runner personalizado'}
+              </label>
+              <p className="mb-3 text-xs leading-relaxed text-gray-500 dark:text-slate-400">
+                {selectedLanguage === 'sql'
+                  ? 'Define las tablas y los registros que quieres usar para comprobar tu consulta.'
+                  : 'Escribe el input o runner que quieres usar para comprobar tu solución.'}
+              </p>
+              <textarea
+                value={customInput}
+                onChange={(event) => setCustomInput(event.target.value)}
+                placeholder={selectedLanguage === 'sql'
+                  ? "CREATE TABLE usuarios (id INTEGER, nombre TEXT); INSERT INTO usuarios VALUES (1, 'Ana');"
+                  : "// Ej: console.log(solution([1,2,3], 5))"}
+                rows={10}
+                autoFocus
+                className="min-h-64 w-full resize-y rounded-lg border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:border-teal-500 focus:outline-none focus:ring-2 focus:ring-teal-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              />
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleRunCustom}
+                  disabled={isRunningCustom || !code.trim() || readOnly}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-teal-600 dark:hover:bg-teal-700"
+                >
+                  {isRunningCustom ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /><span>Ejecutando...</span></>
+                  ) : (
+                    <><Play className="h-4 w-4" /><span>{selectedLanguage === 'sql' ? 'Ejecutar con estos datos' : 'Ejecutar con este input'}</span></>
+                  )}
+                </button>
+              </div>
+
+              {customOutput && (
+                <div className="mt-5 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-slate-700 dark:bg-slate-950/60">
+                  {customOutput.executionTimeMs !== undefined && (
+                    <div className="mb-3 flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>{customOutput.executionTimeMs}ms</span>
+                    </div>
+                  )}
+                  {customOutput.output && (
+                    <div className="mb-3">
+                      <p className="mb-1 text-xs font-semibold text-gray-600 dark:text-slate-400">Output</p>
+                      <pre className="max-h-56 overflow-auto rounded-lg bg-white p-3 text-xs font-mono text-gray-800 dark:bg-slate-800 dark:text-slate-200">{customOutput.output}</pre>
+                    </div>
+                  )}
+                  {customOutput.error && (
+                    <div>
+                      <p className="mb-1 text-xs font-semibold text-red-600 dark:text-red-400">Error</p>
+                      <pre className="max-h-56 overflow-auto rounded-lg bg-red-50 p-3 text-xs font-mono text-red-700 dark:bg-red-900/20 dark:text-red-300">{customOutput.error}</pre>
+                    </div>
+                  )}
+                  {!customOutput.output && !customOutput.error && (
+                    <p className="text-sm text-gray-500 dark:text-slate-400">La ejecución terminó sin output.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer Actions - mobile y tablet */}
       {!readOnly && (
-        <div className="border-t border-gray-200 bg-white px-6 py-4 dark:border-slate-800/50 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50 dark:backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <p className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-slate-400">
+        <div className="border-t border-gray-200 bg-white px-4 py-3 lg:hidden dark:border-slate-800/50 dark:bg-gradient-to-r dark:from-slate-900 dark:to-slate-800/50">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="hidden items-center gap-2 text-xs font-medium text-gray-600 sm:flex dark:text-slate-400">
               <kbd className="rounded border border-gray-300 bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
                 Ctrl/Cmd
               </kbd>
@@ -895,49 +1097,7 @@ export default function CodeEditor({
               <span>para ejecutar tests</span>
             </p>
 
-            <div className="flex gap-3">
-              <button
-                onClick={handleRunTests}
-                disabled={isRunning || isSubmitting || !code.trim() || solutionSubmitted}
-                className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-gray-800 px-5 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:scale-105 hover:bg-gray-700 disabled:opacity-50 disabled:hover:scale-100 dark:border-slate-700/50 dark:bg-slate-800 dark:hover:shadow-teal-500/20"
-              >
-                {isRunning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Ejecutando...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4" />
-                    <span>Ejecutar Tests</span>
-                  </>
-                )}
-              </button>
-
-              {solutionSubmitted ? (
-                // ✅ Estado: solución ya enviada automáticamente
-                <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-xl shadow-emerald-500/30">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <span>Solución enviada ✓</span>
-                </div>
-              ) : isSubmitting ? (
-                // ✅ Estado: enviando
-                <div className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-600/20">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Enviando...</span>
-                </div>
-              ) : (
-                // ✅ Estado: botón manual de envío (fallback si no todos los tests pasaron)
-                <button
-                  onClick={handleSubmit}
-                  disabled={isRunning || isSubmitting || !code.trim()}
-                  className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-teal-600/20 transition-colors hover:bg-teal-700 disabled:opacity-50"
-                >
-                  <Send className="h-4 w-4" />
-                  <span>Enviar Solución</span>
-                </button>
-              )}
-            </div>
+            {renderPrimaryActions(false)}
           </div>
         </div>
       )}

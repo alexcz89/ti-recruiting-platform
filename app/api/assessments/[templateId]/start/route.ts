@@ -22,6 +22,11 @@ type FlagsMeta = {
   sampled?: boolean;
 } | null;
 
+type BadgeSectionRule = {
+  name: string;
+  sampleSize: number;
+};
+
 type StartBody = {
   applicationId?: unknown;
   token?: unknown;
@@ -209,32 +214,71 @@ function buildQuestionsPayload(questionsRaw: QuestionRow[], meta: FlagsMeta) {
 async function ensureMeta(
   templateId: string,
   shuffleQuestions: boolean,
-  sampleSize?: number | null
+  sampleSize?: number | null,
+  rawSections?: unknown
 ): Promise<Prisma.InputJsonObject> {
   const base = await prisma.assessmentQuestion.findMany({
     where: { templateId, isActive: true },
-    select: { id: true, options: true },
+    select: { id: true, section: true, options: true },
   });
 
   let q = base.map((qq) => ({
     id: qq.id,
+    section: qq.section,
     options: sanitizeOptions(qq.options),
   }));
 
-  if (shuffleQuestions) shuffleInPlace(q);
+  const sectionRules: BadgeSectionRule[] = Array.isArray(rawSections)
+    ? rawSections
+        .map((section) => {
+          if (!section || typeof section !== "object") return null;
+          const value = section as Record<string, unknown>;
+          const name = String(value.name ?? "").trim();
+          const quota = Number(value.sampleSize ?? value.questions ?? 0);
+          if (!name || !Number.isInteger(quota) || quota <= 0) return null;
+          return { name, sampleSize: quota };
+        })
+        .filter((rule): rule is BadgeSectionRule => rule !== null)
+    : [];
 
-  // Exámenes de badge: muestra aleatoria de N preguntas del pool completo.
-  // El shuffle previo garantiza aleatoriedad; sampled marca el meta para que
-  // payload y scoring se limiten al subset.
+  // Badge exams always persist the exact selected subset. Each configured
+  // section is sampled independently so conceptual and practical quotas hold.
   let sampled = false;
-  if (
-    typeof sampleSize === "number" &&
-    sampleSize > 0 &&
-    q.length > sampleSize
-  ) {
-    if (!shuffleQuestions) shuffleInPlace(q);
-    q = q.slice(0, sampleSize);
+  if (typeof sampleSize === "number" && sampleSize > 0) {
+    if (sectionRules.length > 0) {
+      const configuredTotal = sectionRules.reduce(
+        (sum, rule) => sum + rule.sampleSize,
+        0
+      );
+      if (configuredTotal !== sampleSize) {
+        throw new Error(
+          `BADGE_SECTION_QUOTAS_MISMATCH:${configuredTotal}:${sampleSize}`
+        );
+      }
+
+      const selected: typeof q = [];
+      for (const rule of sectionRules) {
+        const sectionPool = q.filter((question) => question.section === rule.name);
+        if (sectionPool.length < rule.sampleSize) {
+          throw new Error(
+            `BADGE_SECTION_POOL_INCOMPLETE:${rule.name}:${sectionPool.length}:${rule.sampleSize}`
+          );
+        }
+        shuffleInPlace(sectionPool);
+        selected.push(...sectionPool.slice(0, rule.sampleSize));
+      }
+      q = selected;
+      if (shuffleQuestions) shuffleInPlace(q);
+    } else {
+      shuffleInPlace(q);
+      if (q.length < sampleSize) {
+        throw new Error(`BADGE_POOL_INCOMPLETE:${q.length}:${sampleSize}`);
+      }
+      q = q.slice(0, sampleSize);
+    }
     sampled = true;
+  } else if (shuffleQuestions) {
+    shuffleInPlace(q);
   }
 
   const optionOrderByQuestion: Record<string, string[]> = {};
@@ -361,6 +405,7 @@ export async function POST(
         shuffleQuestions: true,
         isBadgeExam: true,
         totalQuestions: true,
+        sections: true,
       },
     });
 
@@ -375,6 +420,7 @@ export async function POST(
       template.isBadgeExam && (template.totalQuestions ?? 0) > 0
         ? template.totalQuestions
         : null;
+    const tmplSampleSections = template.isBadgeExam ? template.sections : null;
     const tmplAllowRetry = Boolean(template.allowRetry);
     const tmplMaxAttempts = template.maxAttempts ?? 1;
 
@@ -458,10 +504,25 @@ export async function POST(
         invStatus === "EVALUATED" ||
         invStatus === "COMPLETED"
       ) {
-        return jsonNoStore(
-          { error: "Esta invitación ya fue completada" },
-          400
-        );
+        const completedAttempt = await prisma.assessmentAttempt.findFirst({
+          where: {
+            inviteId: invite.id,
+            candidateId: user.id,
+            templateId: params.templateId,
+            status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] as any },
+          },
+          select: { id: true },
+          orderBy: { submittedAt: "desc" },
+        });
+
+        if (completedAttempt) {
+          return jsonNoStore({
+            attemptId: completedAttempt.id,
+            completed: true,
+          });
+        }
+
+        return jsonNoStore({ error: "Esta invitación ya fue completada" }, 400);
       }
 
       applicationId = invite.applicationId;
@@ -535,7 +596,7 @@ export async function POST(
       oldInviteId?: string | null;
       applicationIdToUse: string | null;
     }) {
-      const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize);
+      const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
       const newExpiresAt = computeExpiresAt(now, tmplTimeLimit);
 
       const created = await prisma.$transaction(async (tx) => {
@@ -629,14 +690,37 @@ export async function POST(
         }
 
         if (isAttemptFinal(attemptByInvite.status)) {
-          return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+          return jsonNoStore({
+            attemptId: attemptByInvite.id,
+            completed: true,
+          });
         }
 
         if (isExpired(attemptByInvite.expiresAt, now)) {
-          return createFreshAttempt({
-            oldAttemptId: attemptByInvite.id,
-            oldInviteId: invite.id,
-            applicationIdToUse: applicationId || attemptByInvite.applicationId || null,
+          let expiredMeta = (attemptByInvite.flagsJson as FlagsMeta) || null;
+          if (!Array.isArray(expiredMeta?.questionOrder) || expiredMeta.questionOrder.length === 0) {
+            expiredMeta = (await ensureMeta(
+              params.templateId,
+              tmplShuffleQuestions,
+              tmplSampleSize, tmplSampleSections
+            )) as unknown as FlagsMeta;
+          }
+
+          const questions = buildQuestionsPayload(
+            questionsRaw as unknown as QuestionRow[],
+            expiredMeta
+          );
+          const { savedAnswers, savedTimeSpent } = await buildSaved(attemptByInvite.id);
+
+          return jsonNoStore({
+            attemptId: attemptByInvite.id,
+            questions,
+            expiresAt: attemptByInvite.expiresAt,
+            timeLimit: tmplTimeLimit,
+            reused: true,
+            expired: true,
+            savedAnswers,
+            savedTimeSpent,
           });
         }
 
@@ -650,7 +734,7 @@ export async function POST(
           meta = (await ensureMeta(
             params.templateId,
             tmplShuffleQuestions,
-            tmplSampleSize
+            tmplSampleSize, tmplSampleSections
           )) as unknown as FlagsMeta;
         }
 
@@ -750,7 +834,23 @@ export async function POST(
         );
       }
       if (isAttemptFinal(attempt.status)) {
-        return jsonNoStore({ error: "El intento ya fue completado" }, 400);
+        return jsonNoStore({
+          attemptId: attempt.id,
+          completed: true,
+        });
+      }
+
+      if (attempt.contestRegistration) {
+        const availability = challengeAvailability(attempt.contestRegistration.contest, now);
+        if (!availability.open) {
+          const status = availability.reason.includes("cerrado") ? 410 : 409;
+          return jsonNoStore({ error: availability.reason }, status);
+        }
+        // Un concurso permite exactamente una participación. Un intento vencido
+        // queda cerrado; nunca se reemplaza por otro intento sin registro.
+        if (isExpired(attempt.expiresAt, now)) {
+          return jsonNoStore({ error: "El tiempo del reto ha expirado" }, 410);
+        }
       }
 
       if (attempt.contestRegistration) {
@@ -767,10 +867,30 @@ export async function POST(
       }
 
       if (isExpired(attempt.expiresAt, now)) {
-        return createFreshAttempt({
-          oldAttemptId: attempt.inviteId ? attempt.id : null,
-          oldInviteId: attempt.inviteId ? String(attempt.inviteId) : null,
-          applicationIdToUse: applicationId || attempt.applicationId || null,
+        let expiredMeta = (attempt.flagsJson as FlagsMeta) || null;
+        if (!Array.isArray(expiredMeta?.questionOrder) || expiredMeta.questionOrder.length === 0) {
+          expiredMeta = (await ensureMeta(
+            params.templateId,
+            tmplShuffleQuestions,
+            tmplSampleSize, tmplSampleSections
+          )) as unknown as FlagsMeta;
+        }
+
+        const questions = buildQuestionsPayload(
+          questionsRaw as unknown as QuestionRow[],
+          expiredMeta
+        );
+        const { savedAnswers, savedTimeSpent } = await buildSaved(attempt.id);
+
+        return jsonNoStore({
+          attemptId: attempt.id,
+          questions,
+          expiresAt: attempt.expiresAt,
+          timeLimit: tmplTimeLimit,
+          reused: true,
+          expired: true,
+          savedAnswers,
+          savedTimeSpent,
         });
       }
 
@@ -783,7 +903,7 @@ export async function POST(
         meta = (await ensureMeta(
           params.templateId,
           tmplShuffleQuestions,
-          tmplSampleSize
+          tmplSampleSize, tmplSampleSections
         )) as unknown as FlagsMeta;
       }
 
@@ -840,7 +960,7 @@ export async function POST(
     }
 
     const expiresAt = computeExpiresAt(now, tmplTimeLimit);
-    const meta = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize);
+    const meta = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
     const questions = buildQuestionsPayload(
       questionsRaw as unknown as QuestionRow[],
       meta as unknown as FlagsMeta

@@ -1,7 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
+import type { ContestRegistrationLanguage } from "../../lib/contests/domain";
 
 type LanguageSeed = {
-  enumValue: "PYTHON" | "JAVASCRIPT" | "TYPESCRIPT" | "JAVA";
+  enumValue: ContestRegistrationLanguage;
   runner: string;
   title: string;
   starterCode: string;
@@ -11,19 +12,37 @@ type LanguageSeed = {
 type CandidateFixture = { name?: unknown; score?: unknown; experience?: unknown; english?: unknown };
 type Fixture = { records: CandidateFixture[]; topN: number; expected: string };
 
-const description = `Crea una solución que procese solicitudes de candidatos. Debe validar registros, eliminar duplicados por nombre (sin distinguir mayúsculas), descartar calificaciones menores a 70 y ordenar a los mejores perfiles.
+const description = `## Objetivo
+Implementa una solución que valide solicitudes de candidatos, elimine duplicados y devuelva los perfiles mejor clasificados.
 
-Puntaje final:
+## Entrada
+Una lista de registros con name, score, experience e english, además de un entero topN.
+
+## Reglas
+Descarta nombres vacíos, valores no numéricos, experiencia negativa, niveles de inglés desconocidos y scores menores a 70. Compara nombres sin distinguir mayúsculas.
+
+## Fórmula
 - evaluación técnica: score × 0.70
 - experiencia: 4 puntos por año, máximo 5 años
 - inglés: A1=0, A2=2, B1=4, B2=6, C1=8, C2=10
 
-Si hay duplicados, conserva el registro con mayor puntaje final. Ordena por puntaje final descendente, luego score descendente y finalmente nombre ascendente. Devuelve como máximo topN nombres.
+## Ordenamiento
+Conserva el duplicado con mayor puntaje final. Ordena por puntaje final descendente, luego score descendente y finalmente nombre ascendente.
 
-Se evaluarán datos inválidos, listas vacías, empates, duplicados y límites. No uses servicios externos.`;
+## Salida
+Devuelve como máximo topN nombres. Si topN es 0 o no hay registros válidos, devuelve una lista vacía.
+
+## Ejemplo
+Para topN=2 y dos registros válidos, devuelve los nombres en el orden calculado. El ejemplo público de práctica no forma parte de los casos puntuables.
+
+## Casos inválidos
+Devuelve una lista vacía cuando topN es 0. Ignora registros con nombre vacío, datos no numéricos, experiencia negativa, nivel de inglés desconocido o score menor a 70.
+
+## Restricciones
+No uses servicios externos. La solución se evaluará con listas vacías, empates, duplicados, campos inválidos, topN fuera de rango y límites.`;
 
 const fixtures: Fixture[] = [
-  { records: [{ name: "Ana", score: 85, experience: 3, english: "B2" }, { name: "Luis", score: 92, experience: 1, english: "C1" }], topN: 2, expected: "Ana,Luis" },
+  { records: [{ name: "Ada", score: 80, experience: 2, english: "B1" }, { name: "Bruno", score: 90, experience: 0, english: "A1" }], topN: 2, expected: "Ada,Bruno" },
   { records: [{ name: "Mara", score: 69, experience: 5, english: "C2" }, { name: "Joel", score: 70, experience: 0, english: "A1" }], topN: 5, expected: "Joel" },
   { records: [{ name: "", score: 95, experience: 5, english: "C2" }, { name: "Rui", score: "oops", experience: 2, english: "B2" }, { name: "Sara", score: 82, experience: 2, english: "B2" }], topN: 3, expected: "Sara" },
   { records: [{ name: "Eva", score: 80, experience: 2, english: "B1" }, { name: "eva", score: 90, experience: 1, english: "B2" }], topN: 5, expected: "eva" },
@@ -92,18 +111,6 @@ if __name__ == "__main__":
     buildInput: jsInput,
   },
   {
-    enumValue: "TYPESCRIPT",
-    runner: "typescript",
-    title: "TypeScript",
-    starterCode: `type Candidate = { name?: unknown; score?: unknown; experience?: unknown; english?: unknown };
-
-function rankCandidates(records: Candidate[], topN: number): string[] {
-  // Implementa tu solución
-  return [];
-}`,
-    buildInput: jsInput,
-  },
-  {
     enumValue: "JAVA",
     runner: "java",
     title: "Java",
@@ -142,33 +149,33 @@ export async function seedTaskioCodingChallenge(prisma: PrismaClient) {
   const contest = await prisma.contest.upsert({
     where: { slug: "taskio-coding-challenge-2026" },
     update: {
-      title: "TaskIO Coding Challenge 2026",
-      subtitle: "Resuelve un problema real de recruiting, demuestra cómo piensas y conecta con empresas de tecnología.",
+      title: "TaskIO Coding Challenge 2026 — Edición Junior",
+      subtitle: "Resuelve un reto práctico de programación, demuestra cómo estructuras una solución y obtén una credencial verificable de TaskIO.",
       description,
       status: "REGISTRATION_OPEN",
       registrationOpens: new Date("2026-08-01T06:00:00.000Z"),
-      registrationCloses: new Date("2026-09-30T05:59:59.000Z"),
-      challengeOpens: new Date("2026-08-06T06:00:00.000Z"),
-      challengeCloses: new Date("2026-10-01T05:59:59.000Z"),
+      registrationCloses: new Date("2026-09-26T05:59:59.000Z"),
+      challengeOpens: new Date("2026-09-28T06:00:00.000Z"),
+      challengeCloses: new Date("2026-10-01T06:00:00.000Z"),
       finalStartsAt: new Date("2026-10-15T23:00:00.000Z"),
       maxParticipants: 150,
-      rulesJson: { durationMinutes: 60, attempts: 1, finalists: 10, aiPolicy: "DECLARE_AND_DEFEND" },
-      prizesJson: { status: "TO_BE_ANNOUNCED", top10Certificate: true },
+      rulesJson: { durationMinutes: 60, attempts: 1, finalists: 10, windowHours: 72, audience: "JUNIOR_MAX_2_YEARS", country: "MX", mode: "REMOTE", timezone: "America/Mexico_City", aiPolicy: "DECLARE_AND_DEFEND" },
+      prizesJson: { status: "TO_BE_ANNOUNCED", top3Prize: true, top10Certificate: true },
     },
     create: {
       slug: "taskio-coding-challenge-2026",
-      title: "TaskIO Coding Challenge 2026",
-      subtitle: "Resuelve un problema real de recruiting, demuestra cómo piensas y conecta con empresas de tecnología.",
+      title: "TaskIO Coding Challenge 2026 — Edición Junior",
+      subtitle: "Resuelve un reto práctico de programación, demuestra cómo estructuras una solución y obtén una credencial verificable de TaskIO.",
       description,
       status: "REGISTRATION_OPEN",
       registrationOpens: new Date("2026-08-01T06:00:00.000Z"),
-      registrationCloses: new Date("2026-09-30T05:59:59.000Z"),
-      challengeOpens: new Date("2026-08-06T06:00:00.000Z"),
-      challengeCloses: new Date("2026-10-01T05:59:59.000Z"),
+      registrationCloses: new Date("2026-09-26T05:59:59.000Z"),
+      challengeOpens: new Date("2026-09-28T06:00:00.000Z"),
+      challengeCloses: new Date("2026-10-01T06:00:00.000Z"),
       finalStartsAt: new Date("2026-10-15T23:00:00.000Z"),
       maxParticipants: 150,
-      rulesJson: { durationMinutes: 60, attempts: 1, finalists: 10, aiPolicy: "DECLARE_AND_DEFEND" },
-      prizesJson: { status: "TO_BE_ANNOUNCED", top10Certificate: true },
+      rulesJson: { durationMinutes: 60, attempts: 1, finalists: 10, windowHours: 72, audience: "JUNIOR_MAX_2_YEARS", country: "MX", mode: "REMOTE", timezone: "America/Mexico_City", aiPolicy: "DECLARE_AND_DEFEND" },
+      prizesJson: { status: "TO_BE_ANNOUNCED", top3Prize: true, top10Certificate: true },
     },
   });
 
@@ -180,7 +187,7 @@ export async function seedTaskioCodingChallenge(prisma: PrismaClient) {
         title: `TaskIO Coding Challenge 2026 · ${language.title}`,
         description,
         type: "CODING",
-        difficulty: "MID",
+        difficulty: "JUNIOR",
         totalQuestions: 1,
         passingScore: 70,
         timeLimit: 60,
@@ -196,7 +203,7 @@ export async function seedTaskioCodingChallenge(prisma: PrismaClient) {
         slug,
         description,
         type: "CODING",
-        difficulty: "MID",
+        difficulty: "JUNIOR",
         totalQuestions: 1,
         passingScore: 70,
         timeLimit: 60,
@@ -214,7 +221,7 @@ export async function seedTaskioCodingChallenge(prisma: PrismaClient) {
     const existingQuestion = await prisma.assessmentQuestion.findFirst({ where: { templateId: template.id } });
     const questionData = {
       section: "Procesamiento de solicitudes",
-      difficulty: "MID" as const,
+      difficulty: "JUNIOR" as const,
       tags: ["arreglos", "validacion", "ordenamiento", "casos-limite"],
       questionText: `# Procesamiento de solicitudes\n\n${description}`,
       type: "CODING" as const,
@@ -251,5 +258,10 @@ export async function seedTaskioCodingChallenge(prisma: PrismaClient) {
     });
   }
 
-  console.log("✅ TaskIO Coding Challenge 2026 listo (4 lenguajes, 15 casos por pista)");
+  await prisma.contestTrack.updateMany({
+    where: { contestId: contest.id, language: "TYPESCRIPT" },
+    data: { isActive: false },
+  });
+
+  console.log("✅ TaskIO Coding Challenge 2026 Junior listo (3 lenguajes, 15 casos por pista)");
 }

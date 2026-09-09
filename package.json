@@ -13,7 +13,6 @@
     "db:seed": "prisma db seed",
     "seed": "tsx prisma/seed.ts",
     "seed:contest": "tsx scripts/seed-taskio-coding-challenge.ts",
-    "seed:live-questions": "tsx prisma/seed-live-interview-questions.ts",
     "backfill:company": "tsx scripts/backfill-companyId.ts",
     "pilot:recruiter": "tsx scripts/provision-pilot-recruiter.ts",
     "refresh:skills": "tsx scripts/refresh-skills.ts",

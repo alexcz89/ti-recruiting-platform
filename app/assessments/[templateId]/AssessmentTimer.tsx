@@ -7,6 +7,7 @@ import { Clock } from "lucide-react";
 type Props = {
   expiresAt: Date | string | number;
   onExpire: () => void;
+  compact?: boolean;
 };
 
 function toMs(d: Date | string | number) {
@@ -14,7 +15,11 @@ function toMs(d: Date | string | number) {
   return Number.isFinite(ms) ? ms : NaN;
 }
 
-export default function AssessmentTimer({ expiresAt, onExpire }: Props) {
+export default function AssessmentTimer({
+  expiresAt,
+  onExpire,
+  compact = false,
+}: Props) {
   const onExpireRef = useRef(onExpire);
   const firedRef = useRef(false);
 
@@ -63,7 +68,8 @@ export default function AssessmentTimer({ expiresAt, onExpire }: Props) {
   return (
     <div
       className={`
-        flex items-center gap-2 px-4 py-2 rounded-full font-mono text-lg font-bold
+        flex items-center rounded-full font-mono font-bold
+        ${compact ? "gap-1.5 px-3 py-1.5 text-sm" : "gap-2 px-4 py-2 text-lg"}
         ${
           timeLeft === 0
             ? "bg-zinc-100 text-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-200"
@@ -76,7 +82,7 @@ export default function AssessmentTimer({ expiresAt, onExpire }: Props) {
       `}
       aria-live="polite"
     >
-      <Clock className="h-5 w-5" />
+      <Clock className={compact ? "h-4 w-4" : "h-5 w-5"} />
       <span>
         {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
       </span>

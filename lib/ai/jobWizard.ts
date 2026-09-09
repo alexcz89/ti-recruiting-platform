@@ -1,6 +1,6 @@
 // lib/ai/jobWizard.ts
 import { z } from "zod";
-import { openai } from "./openai";
+import { getOpenAI } from "./openai";
 import { AI_MODEL_SMART } from "./config";
 
 const DegreeSchema = z.enum([
@@ -506,7 +506,7 @@ export async function generateJobWizardDraft(
   input: JobWizardAIInput
 ): Promise<JobWizardAIOutput & { descriptionHtml: string }> {
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: AI_MODEL_SMART,
       messages: [{ role: "user", content: buildPrompt(input) }],
       response_format: { type: "json_object" },

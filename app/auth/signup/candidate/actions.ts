@@ -7,6 +7,7 @@ import type { Role } from "@prisma/client";
 import { z } from "zod";
 import { createEmailVerifyToken } from "@/lib/server/tokens";
 import { sendVerificationEmail as sendVerificationEmailBase } from "@/lib/server/mailer";
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 const ImprovedSignupSchema = z.object({
   firstName: z.string().min(2).max(50),
@@ -158,6 +159,7 @@ function parseLocationString(locationStr: string): {
 async function sendCandidateVerificationEmail(
   email: string,
   _firstName?: string,
+  callbackUrl?: string,
   retryCount = 0,
   maxRetries = 3
 ) {
@@ -169,9 +171,12 @@ async function sendCandidateVerificationEmail(
     ).replace(/\/$/, "");
 
     const token = await createEmailVerifyToken({ email }, 60);
-    const verifyUrl = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(
-      token
-    )}`;
+    const verifyParams = new URLSearchParams({ token });
+    const safeCallbackUrl = sanitizeInternalCallbackUrl(callbackUrl);
+    if (safeCallbackUrl) {
+      verifyParams.set("callbackUrl", safeCallbackUrl);
+    }
+    const verifyUrl = `${baseUrl}/api/auth/verify?${verifyParams.toString()}`;
 
     await sendVerificationEmailBase(email, verifyUrl);
   } catch (err) {
@@ -183,7 +188,13 @@ async function sendCandidateVerificationEmail(
         err
       );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
-      return sendCandidateVerificationEmail(email, _firstName, retryCount + 1, maxRetries);
+      return sendCandidateVerificationEmail(
+        email,
+        _firstName,
+        callbackUrl,
+        retryCount + 1,
+        maxRetries
+      );
     }
 
     // ✅ Si se agotaron los reintentos, loguear pero no fallar el signup
@@ -322,7 +333,8 @@ async function importDraftToUser(userId: string, draft: CvDraft, txClient?: any)
 
 export async function createCandidateImproved(
   input: Partial<ImprovedSignupInput>,
-  rawDraft?: unknown
+  rawDraft?: unknown,
+  callbackUrl?: string
 ) {
   try {
     const data = ImprovedSignupSchema.parse(input);
@@ -401,7 +413,11 @@ export async function createCandidateImproved(
       return newUser;
     });
 
-    await sendCandidateVerificationEmail(user.email, data.firstName);
+    await sendCandidateVerificationEmail(
+      user.email,
+      data.firstName,
+      callbackUrl
+    );
 
     return { ok: true, emailVerificationSent: true };
   } catch (err) {

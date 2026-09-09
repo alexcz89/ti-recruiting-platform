@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
 import { checkPlagiarism } from "@/lib/code-execution/plagiarism";
+import { validateReadOnlySqlQuery } from "@/lib/code-execution/sql-service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -256,6 +257,13 @@ export async function POST(request: Request) {
       );
     }
 
+    if (language === "sql") {
+      const validation = validateReadOnlySqlQuery(code);
+      if (!validation.ok) {
+        return jsonNoStore({ error: validation.error }, 400);
+      }
+    }
+
     const dbTestCases = await loadTestCases({
       questionId,
       includeHidden: isSubmission,
@@ -297,14 +305,7 @@ export async function POST(request: Request) {
     ) as Prisma.InputJsonValue;
 
     const testCaseById = new Map(dbTestCases.map((testCase) => [testCase.id, testCase]));
-
-    let pointsEarned = 0;
-    for (const testResult of testResults) {
-      if (testResult?.passed) {
-        const matchedTestCase = testCaseById.get(testResult.testCaseId);
-        pointsEarned += matchedTestCase?.points ? Number(matchedTestCase.points) : 0;
-      }
-    }
+    const pointsEarned = executionResult.success ? 1 : 0;
 
     let executionId: string | null = null;
 

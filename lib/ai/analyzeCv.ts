@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/server/prisma";
 import { AI_MODEL_FAST } from "./config";
-import { openai } from "./openai";
+import { getOpenAI } from "./openai";
 import { AiCvSchema, type AiCvResponse, type AiCvResult } from "./schemas";
 
 const MAX_CHARS = 12000;
@@ -479,7 +479,7 @@ export async function analyzeCv(
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      const response = await openai.chat.completions.create({
+      const response = await getOpenAI().chat.completions.create({
         model: AI_MODEL_FAST,
         temperature: 0.2,
         max_tokens: MAX_TOKENS,

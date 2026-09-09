@@ -3,6 +3,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  SkipForward,
+} from 'lucide-react';
 import { toastSuccess, toastError, toastInfo, toastWarning } from '@/lib/ui/toast';
 import AssessmentIntro from './AssessmentIntro';
 import AssessmentQuestion from './AssessmentQuestion';
@@ -48,9 +56,11 @@ type StartResponse = {
   attemptId: string;
   expiresAt?: string | Date | null;
   reused?: boolean;
-  questions: Question[];
+  completed?: boolean;
+  questions?: Question[];
   savedAnswers?: Record<string, string[]>;
   savedTimeSpent?: Record<string, number>;
+  expired?: boolean;
 };
 
 const CODE_SENTINEL = '__CODE_SUBMITTED__';
@@ -113,6 +123,10 @@ export default function AssessmentPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [expirationState, setExpirationState] = useState<
+    'idle' | 'finalizing' | 'finalized' | 'error'
+  >('idle');
+  const [antiCheatBypass, setAntiCheatBypass] = useState(false);
 
   // Anti-cheat: modal bloqueante al regresar al tab
   const [tabWarning, setTabWarning] = useState<{ show: boolean; count: number }>({ show: false, count: 0 });
@@ -122,9 +136,53 @@ export default function AssessmentPage() {
 
   const lastIndexHydratedAttemptIdRef = useRef<string | null>(null);
   const autoStartOnceRef = useRef(false);
+  const expirationAttemptRef = useRef<{
+    id: string;
+    state: 'finalizing' | 'finalized';
+  } | null>(null);
+
+  async function finalizeExpiredAttempt(targetAttemptId: string) {
+    const tracked = expirationAttemptRef.current;
+    if (tracked?.id === targetAttemptId) return;
+
+    expirationAttemptRef.current = { id: targetAttemptId, state: 'finalizing' };
+    setExpirationState('finalizing');
+
+    try {
+      const res = await fetch(`/api/assessments/attempts/${targetAttemptId}/submit`, {
+        method: 'POST',
+        cache: 'no-store',
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data?.error || 'No se pudo cerrar la evaluación vencida');
+      }
+
+      expirationAttemptRef.current = { id: targetAttemptId, state: 'finalized' };
+      setExpirationState('finalized');
+      localStorage.removeItem(`assessment:${targetAttemptId}:currentIndex`);
+    } catch (error) {
+      console.error('Error finalizing expired assessment:', error);
+      expirationAttemptRef.current = null;
+      setExpirationState('error');
+    }
+  }
+
+  function markExpired(targetAttemptId: string | null, notify = false) {
+    setExpired(true);
+    if (notify && expirationAttemptRef.current?.id !== targetAttemptId) {
+      toastError('El tiempo terminó. Estamos calculando tu resultado.');
+    }
+    if (targetAttemptId) void finalizeExpiredAttempt(targetAttemptId);
+  }
+
+  function handleExpire() {
+    markExpired(attemptId, true);
+  }
 
   useAntiCheating({
-    enabled: started && !!attemptId && !expired,
+    enabled: started && !!attemptId && !expired && !submitting && !antiCheatBypass,
     attemptId,
     maxTabSwitches: 5,
     onTabReturn: (count) => {
@@ -134,13 +192,6 @@ export default function AssessmentPage() {
 
   const total = questions.length;
 
-  const handleExpire = () => {
-    setExpired((prev) => {
-      if (prev) return prev;
-      toastError('⏰ Tiempo expirado. Ya no puedes responder.');
-      return true;
-    });
-  };
 
   const isAnsweredId = (qid?: string) => {
     if (!qid) return false;
@@ -154,6 +205,16 @@ export default function AssessmentPage() {
       0
     );
   }, [answers]);
+
+  const allQuestionsAnswered = useMemo(
+    () =>
+      questions.length > 0 &&
+      questions.every((question) => {
+        const answer = answers[question.id];
+        return Array.isArray(answer) && answer.length > 0;
+      }),
+    [answers, questions]
+  );
 
   useEffect(() => {
     async function loadTemplate() {
@@ -171,6 +232,7 @@ export default function AssessmentPage() {
         if (!res.ok) throw new Error('Error al cargar template');
         const data = await res.json();
         setTemplate(data.template);
+        setAntiCheatBypass(Boolean(data.antiCheatBypass));
 
         if (!data.userStatus.canStart && !inviteToken && !attemptIdQS) {
           toastError('Ya completaste esta evaluación');
@@ -235,7 +297,16 @@ export default function AssessmentPage() {
     setTimeSpent(savedTimeSpent);
 
     if (st.expiresAt) setExpiresAt(new Date(st.expiresAt));
-    if (st.expired) handleExpire();
+    if (st.expired) {
+      const finalStatuses = ['SUBMITTED', 'EVALUATED', 'COMPLETED'];
+      if (finalStatuses.includes(String(st.status ?? '').toUpperCase())) {
+        setExpired(true);
+        setExpirationState('finalized');
+        expirationAttemptRef.current = { id: tryAttemptId, state: 'finalized' };
+      } else {
+        markExpired(tryAttemptId);
+      }
+    }
 
     // ✅ Restaurar codingSubmitted desde savedAnswers
     const submitted: Record<string, boolean> = {};
@@ -277,13 +348,24 @@ export default function AssessmentPage() {
       }
 
       const newAttemptId = data.attemptId;
-      const qs = normalizeQuestions((data as any).questions);
+      if (data.completed) {
+        router.replace(`/assessments/attempts/${newAttemptId}/results`);
+        return;
+      }
+
+      const qs = normalizeQuestions(data.questions || []);
       if (!qs.length) throw new Error('Respuesta inválida de /start (sin questions)');
+
+      const expiredAtStart = Boolean(
+        data.expired ||
+          (data.expiresAt && new Date(data.expiresAt).getTime() <= Date.now())
+      );
 
       setAttemptId(newAttemptId);
       setQuestions(qs);
       setStarted(true);
-      setExpired(false);
+      setExpired(expiredAtStart);
+      setExpirationState('idle');
       setSubmitting(false);
 
       if (data.expiresAt) setExpiresAt(new Date(data.expiresAt));
@@ -323,7 +405,12 @@ export default function AssessmentPage() {
         }
       }
 
-      toastSuccess(data.reused ? 'Reanudando evaluación…' : '¡Evaluación iniciada! Mucha suerte 🍀');
+      if (expiredAtStart) {
+        markExpired(newAttemptId);
+        toastInfo('La evaluación terminó por tiempo. Conservamos las respuestas enviadas.');
+      } else {
+        toastSuccess(data.reused ? 'Reanudando evaluación…' : '¡Evaluación iniciada! Mucha suerte 🍀');
+      }
     } catch (error: any) {
       console.error(error);
       toastError(error?.message || 'Error al iniciar evaluación');
@@ -349,8 +436,11 @@ export default function AssessmentPage() {
   const currentQuestion = questions[currentIndex];
   const currentAnswer = answers[currentQuestion?.id || ''] || [];
 
-  const handleAnswer = async (questionId: string, selectedOptions: string[]) => {
-    if (!attemptId || expired) return;
+  const handleAnswer = async (
+    questionId: string,
+    selectedOptions: string[]
+  ): Promise<boolean> => {
+    if (!attemptId || expired) return false;
 
     const unique = Array.from(new Set(selectedOptions.map((x) => String(x).trim()))).filter(Boolean);
     setAnswers((prev) => ({ ...prev, [questionId]: unique }));
@@ -367,23 +457,30 @@ export default function AssessmentPage() {
       if (!res.ok && res.status === 400) {
         const data = await res.json().catch(() => null);
         if (data?.error?.toLowerCase?.().includes('expir')) handleExpire();
+        return false;
       }
+
+      if (!res.ok) return false;
+      return true;
     } catch (error) {
       console.error('Error saving answer:', error);
+      return false;
     }
+  };
+
+  const isCurrentQuestionComplete =
+    currentQuestion?.type === 'CODING'
+      ? Boolean(codingSubmitted[currentQuestion.id])
+      : currentAnswer.length > 0;
+
+  const handleQuestionChange = (targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex >= total || targetIndex === currentIndex) return;
+    setCurrentIndex(targetIndex);
   };
 
   const handleNext = () => {
     if (expired) return;
-    // ⚠️ Warning si la pregunta actual es CODING y no ha sido enviada
-    const q = questions[currentIndex];
-    if (q?.type === 'CODING' && !codingSubmitted[q.id]) {
-      const proceed = confirm(
-        `⚠️ No has enviado tu solución en la Pregunta ${currentIndex + 1}.\n\nPara que cuente, debes:\n1. Escribir tu código\n2. Hacer clic en "Ejecutar Tests"\n3. Esperar que pasen los tests (se envía automáticamente)\n\n¿Avanzar sin enviar? Tu respuesta quedará en 0 puntos.`
-      );
-      if (!proceed) return;
-    }
-    if (currentIndex < total - 1) setCurrentIndex((i) => i + 1);
+    handleQuestionChange(currentIndex + 1);
   };
 
   const handlePrevious = () => {
@@ -391,38 +488,37 @@ export default function AssessmentPage() {
     if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   };
 
-  const handleCodeSubmitted = (qid: string) => {
-    setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
-    setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
-    // ✅ Guardar timeSpent al hacer submit de código
-    handleAnswer(qid, [CODE_SENTINEL]);
-    if (currentIndex < total - 1) {
-      toastSuccess('✓ Solución enviada. Puedes continuar con la siguiente pregunta.');
-    }
+  type SubmitOptions = {
+    answeredQuestionId?: string;
+    skipConfirmation?: boolean;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (options: SubmitOptions = {}) => {
     if (!attemptId || submitting) return;
 
-    if (!expired) {
-      // ✅ Advertir si hay preguntas CODING sin enviar solución
-      const codingQuestions = questions.filter((q) => q.type === 'CODING');
-      const unsubmittedCoding = codingQuestions.filter((q) => !codingSubmitted[q.id]);
+    if (expired) {
+      await finalizeExpiredAttempt(attemptId);
+      return;
+    }
 
-      if (unsubmittedCoding.length > 0) {
-        const names = unsubmittedCoding.map((q, i) => `Pregunta ${questions.indexOf(q) + 1}`).join(', ');
+    if (!expired) {
+      const unansweredQuestions = questions.filter(
+        (question) =>
+          question.id !== options.answeredQuestionId && !isAnsweredId(question.id)
+      );
+
+      if (!options.skipConfirmation && unansweredQuestions.length > 0) {
+        const unsubmittedCoding = unansweredQuestions.filter(
+          (question) => question.type === 'CODING'
+        );
+        const codingNotice =
+          unsubmittedCoding.length > 0
+            ? `\n${unsubmittedCoding.length} son ejercicios de código sin una solución enviada.`
+            : '';
         const confirmed = confirm(
-          `⚠️ Tienes ${unsubmittedCoding.length} pregunta(s) de código sin enviar solución:\n${names}\n\n¿Deseas finalizar de todos modos? Las preguntas sin solución quedarán en 0 puntos.`
+          `Tienes ${unansweredQuestions.length} pregunta(s) sin responder.${codingNotice}\n\n¿Deseas finalizar de todos modos? Se calificarán con 0 puntos.`
         );
         if (!confirmed) return;
-      } else {
-        const unansweredCount = questions.filter((q) => !isAnsweredId(q.id)).length;
-        if (unansweredCount > 0) {
-          const confirmed = confirm(
-            `Tienes ${unansweredCount} pregunta(s) sin responder. ¿Deseas enviar de todos modos?`
-          );
-          if (!confirmed) return;
-        }
       }
     }
 
@@ -457,9 +553,41 @@ export default function AssessmentPage() {
     }
   };
 
+  const handleCodeSubmitted = async (qid: string) => {
+    if (expired || submitting) return;
+
+    setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
+    setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
+
+    const answerSaved = await handleAnswer(qid, [CODE_SENTINEL]);
+    if (!answerSaved) {
+      toastError('La solución se ejecutó, pero no pudimos cerrar la respuesta. Intenta de nuevo.');
+      return;
+    }
+
+    const isLastQuestion = currentIndex === total - 1;
+    const allAnsweredAfterThis = questions.every(
+      (question) => question.id === qid || isAnsweredId(question.id)
+    );
+
+    if (isLastQuestion && allAnsweredAfterThis) {
+      await handleSubmit({
+        answeredQuestionId: qid,
+        skipConfirmation: true,
+      });
+      return;
+    }
+
+    toastSuccess(
+      isLastQuestion
+        ? 'Solución enviada. Revisa las preguntas pendientes antes de finalizar.'
+        : 'Solución enviada. Puedes continuar con la siguiente pregunta.'
+    );
+  };
+
   // Timer para tiempo en pregunta actual
   useEffect(() => {
-    if (!started || expired) return;
+    if (!started || expired || submitting) return;
     if (!currentQuestion?.id) return;
 
     const questionId = currentQuestion.id;
@@ -471,7 +599,7 @@ export default function AssessmentPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [started, expired, currentQuestion?.id]);
+  }, [started, expired, submitting, currentQuestion?.id]);
 
   if (loading) {
     return (
@@ -565,11 +693,15 @@ export default function AssessmentPage() {
         </div>
       )}
 
-      <div className={`mx-auto px-6 lg:px-10 py-8 ${isCodingQuestion ? 'max-w-[1800px]' : 'max-w-[1200px]'}`}>
+      <div
+        className={`mx-auto px-4 lg:px-8 ${
+          isCodingQuestion ? 'max-w-[1680px] py-2' : 'max-w-[1200px] py-4'
+        }`}
+      >
 
         {/* Header — NO-CODING */}
         {!isCodingQuestion && (
-          <div className="sticky top-0 z-30 mb-6 pb-4 bg-white dark:bg-zinc-950">
+          <div className="sticky top-14 z-40 -mx-2 mb-6 border-b border-zinc-200/80 bg-zinc-50/95 px-2 py-3 backdrop-blur md:top-16 dark:border-zinc-800/80 dark:bg-zinc-950/95">
             <div className="flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-bold text-default">{template.title}</h1>
@@ -584,112 +716,210 @@ export default function AssessmentPage() {
                     🚨 {tabWarning.count} {tabWarning.count === 1 ? 'salida' : 'salidas'} registradas
                   </span>
                 )}
-                {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
+                {expiresAt && !submitting && (
+                  <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />
+                )}
               </div>
             </div>
 
             <AssessmentProgress current={currentIndex + 1} total={total} answered={answeredCount} />
 
-            {expired && (
-              <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
-                ⏰ Tiempo expirado. La evaluación quedó bloqueada.
-              </div>
-            )}
+
           </div>
         )}
 
-        {/* Header — CODING */}
+        {/* Header - CODING: contexto, mapa, timer y navegacion en una franja */}
         {isCodingQuestion && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h1 className="text-2xl font-bold text-default">{template.title}</h1>
-                <p className="text-sm text-muted">
+          <div className="sticky top-12 z-40 -mx-2 mb-2 border-b border-zinc-200/80 bg-zinc-50/95 px-2 py-2 backdrop-blur dark:border-zinc-800/80 dark:bg-zinc-950/95">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="mr-1 min-w-0 max-w-[20rem]">
+                <h1 className="truncate text-base font-bold text-default">{template.title}</h1>
+                <p className="text-xs text-muted">
                   Pregunta {currentIndex + 1} de {total}
                 </p>
               </div>
-              {expiresAt && <AssessmentTimer expiresAt={expiresAt} onExpire={handleExpire} />}
-            </div>
 
-            {/* ✅ NUEVO: Mapa de navegación para preguntas CODING */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {questions.map((q, idx) => {
-                const isSubmitted = codingSubmitted[q.id];
-                const isCurrent = idx === currentIndex;
-                const isCoding = q.type === 'CODING';
+              <div
+                className="order-3 flex w-full min-w-0 items-center gap-1.5 overflow-x-auto pb-1 md:order-none md:w-auto md:max-w-[36rem]"
+                aria-label="Navegación de preguntas"
+              >
+                {questions.map((q, idx) => {
+                  const isAnswered = isAnsweredId(q.id);
+                  const isCurrent = idx === currentIndex;
+                  const questionStatus = isAnswered ? 'Respondida' : 'Pendiente';
 
-                return (
-                  <button
-                    key={q.id}
-                    onClick={() => !expired && setCurrentIndex(idx)}
-                    disabled={expired}
-                    title={
-                      isCoding
-                        ? isSubmitted
-                          ? `Pregunta ${idx + 1} — Solución enviada ✓`
-                          : `Pregunta ${idx + 1} — Sin enviar`
-                        : `Pregunta ${idx + 1}`
-                    }
-                    className={[
-                      'relative h-9 min-w-[2.25rem] px-3 rounded-lg text-sm font-medium transition-all border-2',
-                      isCurrent
-                        ? 'bg-teal-600 border-teal-600 text-white shadow-lg shadow-teal-500/30'
-                        : isSubmitted
-                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400'
-                        : 'bg-white border-zinc-300 text-zinc-600 hover:border-teal-400 dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-400',
-                      expired ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-                    ].join(' ')}
-                  >
-                    {idx + 1}
-                    {/* Dot indicator si fue enviada */}
-                    {isSubmitted && !isCurrent && (
-                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
-                    )}
-                  </button>
-                );
-              })}
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => handleQuestionChange(idx)}
+                      title={`Pregunta ${idx + 1} - ${questionStatus}`}
+                      aria-label={`Pregunta ${idx + 1}: ${questionStatus}`}
+                      aria-current={isCurrent ? 'step' : undefined}
+                      className={[
+                        'relative flex h-8 min-w-8 items-center justify-center rounded-md border px-2 text-xs font-semibold transition-colors',
+                        isCurrent
+                          ? 'border-teal-600 bg-teal-600 text-white shadow-sm'
+                          : isAnswered
+                            ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300'
+                            : 'border-zinc-300 bg-white text-zinc-600 hover:border-teal-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400',
+                      ].join(' ')}
+                    >
+                      {idx + 1}
+                      {isAnswered && !isCurrent && (
+                        <span
+                          title="Respondida"
+                          aria-hidden="true"
+                          className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500 dark:border-zinc-900"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
-              {/* Leyenda */}
-              <div className="ml-2 flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="hidden items-center gap-3 text-[11px] text-zinc-500 2xl:flex dark:text-zinc-400">
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" />
-                  Enviada
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Respondida
                 </span>
                 <span className="flex items-center gap-1">
-                  <span className="h-2.5 w-2.5 rounded-full bg-zinc-300 dark:bg-zinc-600 inline-block" />
+                  <span className="h-2 w-2 rounded-full bg-zinc-300 dark:bg-zinc-600" />
                   Pendiente
                 </span>
               </div>
-            </div>
 
-            {expired && (
-              <div className="mt-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-400/30 dark:bg-amber-900/10 dark:text-amber-200">
-                ⏰ Tiempo expirado. La evaluación quedó bloqueada.
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handlePrevious}
+                  disabled={currentIndex === 0 || expired}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-300 bg-white text-zinc-600 transition hover:border-teal-400 hover:text-teal-700 disabled:cursor-not-allowed disabled:opacity-35 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  title="Pregunta anterior"
+                  aria-label="Pregunta anterior"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+
+                {expiresAt && !submitting && (
+                  <AssessmentTimer compact expiresAt={expiresAt} onExpire={handleExpire} />
+                )}
+
+                {currentIndex < total - 1 && (
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    disabled={expired}
+                    title={!isCurrentQuestionComplete ? 'Podrás volver desde el mapa de preguntas' : 'Siguiente pregunta'}
+                    className={[
+                      'inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-40',
+                      !isCurrentQuestionComplete
+                        ? 'border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:border-amber-600/60 dark:bg-amber-950/30 dark:text-amber-200'
+                        : 'border-zinc-300 bg-white text-zinc-700 hover:border-teal-400 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300',
+                    ].join(' ')}
+                  >
+                    {!isCurrentQuestionComplete ? (
+                      <>
+                        <SkipForward className="h-4 w-4" />
+                        Omitir
+                      </>
+                    ) : (
+                      <>
+                        Siguiente
+                        <ChevronRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {(currentIndex === total - 1 || allQuestionsAnswered) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSubmit()}
+                    disabled={submitting || expired}
+                    className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-teal-700 disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {submitting ? 'Enviando...' : 'Finalizar'}
+                  </button>
+                )}
               </div>
+            </div>
+          </div>
+        )}
+
+        {expired && (
+          <div className="mb-3 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 md:flex-row md:items-center md:justify-between dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
+            <div>
+              <p className="text-sm font-semibold">La evaluación terminó por tiempo.</p>
+              <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200/80">
+                Respondidas: {answeredCount} de {total}. Se califican únicamente las respuestas enviadas a tiempo.
+              </p>
+            </div>
+            {expirationState === 'finalized' ? (
+              <button
+                type="button"
+                onClick={() => router.push(`/assessments/attempts/${attemptId}/results`)}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg bg-amber-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-800 dark:bg-amber-300 dark:text-amber-950 dark:hover:bg-amber-200"
+              >
+                Ver resultados
+              </button>
+            ) : expirationState === 'error' ? (
+              <button
+                type="button"
+                onClick={() => attemptId && finalizeExpiredAttempt(attemptId)}
+                className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-lg border border-amber-700 px-4 py-2 text-sm font-semibold transition hover:bg-amber-100 dark:border-amber-300 dark:hover:bg-amber-900/40"
+              >
+                Reintentar cierre
+              </button>
+            ) : (
+              <span className="shrink-0 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                Calculando resultado…
+              </span>
             )}
           </div>
         )}
 
         {/* ✅ Banner instrucciones CODING — solo si no ha enviado aún */}
-        {isCodingQuestion && !codingSubmitted[currentQuestion.id] && (
-          <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-800/50 dark:bg-blue-900/20 dark:text-blue-200">
-            <span className="text-lg leading-none mt-0.5">💡</span>
-            <div>
-              <p className="font-semibold mb-1">¿Cómo resolver esta pregunta?</p>
-              <ol className="list-decimal list-inside space-y-0.5 text-blue-700 dark:text-blue-300">
-                <li>Escribe tu solución en el editor de código</li>
-                <li>Presiona <strong>&quot;Ejecutar Tests&quot;</strong> (o Ctrl+Enter)</li>
-                <li>Si los tests pasan ✅, tu solución se envía automáticamente</li>
-              </ol>
-            </div>
-          </div>
+        {isCodingQuestion && !expired && !codingSubmitted[currentQuestion.id] && (
+          <details className="group mb-3 overflow-hidden rounded-lg border border-blue-200 bg-blue-50/70 text-blue-900 dark:border-blue-800/60 dark:bg-blue-950/30 dark:text-blue-100">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 px-3 py-2 [&::-webkit-details-marker]:hidden">
+              <span className="flex min-w-0 items-center gap-2">
+                <CircleHelp className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-300" />
+                <span className="truncate text-sm font-semibold">¿Necesitas ayuda?</span>
+                <span className="hidden text-xs font-normal text-blue-700 sm:inline dark:text-blue-300">
+                  Ver pasos y atajos
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+            </summary>
+            <ol className="grid gap-2 border-t border-blue-200 px-3 py-3 text-xs text-blue-800 md:grid-cols-3 dark:border-blue-800/60 dark:text-blue-200">
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">1</span>
+                <span>Escribe tu solución en el editor.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">2</span>
+                <span>Ejecuta los tests con el botón o con Ctrl/Cmd + Enter.</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">3</span>
+                <span>Si los tests pasan, se envía automáticamente; también puedes enviarla manualmente.</span>
+              </li>
+            </ol>
+          </details>
         )}
-
         {/* ✅ Banner de confirmación cuando ya fue enviada */}
-        {isCodingQuestion && codingSubmitted[currentQuestion.id] && (
+        {isCodingQuestion && !expired && codingSubmitted[currentQuestion.id] && (
           <div className="mb-4 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-200">
             <span className="text-lg leading-none">✅</span>
-            <p className="font-semibold">Solución enviada correctamente. Puedes continuar con la siguiente pregunta.</p>
+            <p className="font-semibold">
+              {currentIndex === total - 1
+                ? submitting
+                  ? 'Solución correcta. Finalizando evaluación...'
+                  : 'Solución enviada correctamente. Finaliza la evaluación.'
+                : 'Solución enviada correctamente. Puedes continuar con la siguiente pregunta.'}
+            </p>
           </div>
         )}
 
@@ -711,8 +941,8 @@ export default function AssessmentPage() {
         />
 
         {/* Navegación — NO-CODING */}
-        {!isCodingQuestion && (
-          <div className="mt-8 flex items-center justify-between gap-4">
+        {!isCodingQuestion && !expired && (
+          <div className="sticky bottom-3 z-20 mt-4 flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
             <button
               onClick={handlePrevious}
               disabled={currentIndex === 0 || expired}
@@ -722,55 +952,30 @@ export default function AssessmentPage() {
             </button>
 
             <div className="flex items-center gap-2">
-              {currentIndex === total - 1 ? (
-                <button onClick={handleSubmit} disabled={submitting || expired} className="btn btn-primary">
+              {currentIndex === total - 1 || allQuestionsAnswered ? (
+                <button
+                  onClick={() => void handleSubmit()}
+                  disabled={submitting || expired}
+                  className="btn btn-primary"
+                >
                   {submitting ? 'Enviando...' : 'Enviar evaluación ✓'}
                 </button>
               ) : (
-                <button onClick={handleNext} disabled={expired} className="btn btn-primary">
-                  Siguiente →
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ✅ Navegación CODING — anterior/siguiente + finalizar */}
-        {isCodingQuestion && (
-          <div className="mt-6 flex items-center justify-between gap-4">
-            <button
-              onClick={handlePrevious}
-              disabled={currentIndex === 0 || expired}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-zinc-300 bg-white text-sm font-medium text-zinc-700 hover:border-teal-400 hover:text-teal-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-            >
-              ← Anterior
-            </button>
-
-            <div className="flex items-center gap-3">
-              {currentIndex < total - 1 && (
                 <button
                   onClick={handleNext}
                   disabled={expired}
-                  className={[
-                    "inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-all disabled:opacity-40",
-                    // Si CODING sin enviar → color ámbar para indicar que hay algo pendiente
-                    isCodingQuestion && !codingSubmitted[currentQuestion.id]
-                      ? "border-amber-400 bg-amber-50 text-amber-700 hover:border-amber-500 dark:border-amber-600/50 dark:bg-amber-900/20 dark:text-amber-300"
-                      : "border-zinc-300 bg-white text-zinc-700 hover:border-teal-400 hover:text-teal-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
-                  ].join(' ')}
+                  title={!isCurrentQuestionComplete ? 'Podrás volver a esta pregunta desde el mapa' : undefined}
+                  className={
+                    !isCurrentQuestionComplete
+                      ? 'inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-400 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-600/60 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-950/50'
+                      : 'btn btn-primary'
+                  }
                 >
-                  {isCodingQuestion && !codingSubmitted[currentQuestion.id] ? '⚠️ Siguiente →' : 'Siguiente →'}
-                </button>
-              )}
-
-              {/* Mostrar Finalizar solo si es la última pregunta O si todas las coding fueron enviadas */}
-              {(currentIndex === total - 1 || Object.keys(codingSubmitted).length === questions.filter(q => q.type === 'CODING').length) && (
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting || expired}
-                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-teal-600 text-sm font-bold text-white shadow-lg shadow-teal-600/20 hover:bg-teal-700 disabled:opacity-50 transition-colors"
-                >
-                  {submitting ? 'Enviando...' : 'Finalizar evaluación ✓'}
+                  {!isCurrentQuestionComplete ? (
+                    <><SkipForward className="h-4 w-4" /> Omitir pregunta</>
+                  ) : (
+                    <>Siguiente →</>
+                  )}
                 </button>
               )}
             </div>
@@ -787,7 +992,10 @@ export default function AssessmentPage() {
                 return (
                   <button
                     key={q.id}
-                    onClick={() => !expired && setCurrentIndex(idx)}
+                    type="button"
+                    onClick={() => handleQuestionChange(idx)}
+                    title={`Pregunta ${idx + 1} - ${isAnswered ? 'Respondida' : 'Pendiente'}`}
+                    aria-label={`Pregunta ${idx + 1}: ${isAnswered ? 'Respondida' : 'Pendiente'}`}
                     className={`
                       h-10 w-10 rounded-lg text-sm font-medium transition
                       ${
@@ -797,7 +1005,7 @@ export default function AssessmentPage() {
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                           : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
                       }
-                      ${expired ? 'opacity-60 cursor-not-allowed' : ''}
+                      ${expired ? 'cursor-pointer opacity-80' : ''}
                     `}
                   >
                     {idx + 1}

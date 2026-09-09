@@ -9,6 +9,7 @@ import {
   type OnboardingCompanyStep1Input,
   type OnboardingCompanyStep2Input,
 } from "@/lib/shared/validation/recruiter/onboarding";
+import { getDefaultNewCompanyPlanData } from "@/lib/company-plan";
 
 /**
  * Asegura que el usuario sea recruiter/admin
@@ -56,6 +57,7 @@ export async function saveCompanyStep1(input: OnboardingCompanyStep1Input) {
       data: {
         name: data.companyName,
         size: data.size as any,
+        ...getDefaultNewCompanyPlanData(),
       },
       select: { id: true, name: true },
     });

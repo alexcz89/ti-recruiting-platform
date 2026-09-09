@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoTaskio from "@/components/LogoTaskio";
@@ -17,6 +18,8 @@ import {
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+  const isAssessmentMode = /^\/assessments\/[^/]+$/.test(pathname ?? "");
 
   return (
     <header
@@ -27,10 +30,14 @@ export default function Header() {
       "
     >
       <div className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-14 md:h-16 items-center justify-between gap-3">
+        <div
+          className={`flex items-center justify-between gap-3 ${
+            isAssessmentMode ? "h-12" : "h-14 md:h-16"
+          }`}
+        >
           {/* Logo */}
           <Link
-            href="/"
+            href={isAssessmentMode ? pathname : "/"}
             className="flex items-center gap-2 shrink-0"
             onClick={() => setMobileMenuOpen(false)}
           >
@@ -38,33 +45,44 @@ export default function Header() {
             <span className="sr-only">TaskIO</span>
           </Link>
 
-          {/* Desktop Nav + Actions */}
-          <div className="hidden md:flex flex-1 items-center justify-end gap-2 sm:gap-3">
-            <DesktopNav />
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <AuthArea />
+          {isAssessmentMode ? (
+            <div className="flex flex-1 items-center justify-end gap-3">
+              <span className="hidden items-center gap-2 text-xs font-semibold text-zinc-500 sm:inline-flex dark:text-zinc-400">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Modo evaluación
+              </span>
               <ThemeToggle />
             </div>
-          </div>
+          ) : (
+            <>
+              {/* Desktop Nav + Actions */}
+              <div className="hidden flex-1 items-center justify-end gap-2 sm:gap-3 md:flex">
+                <DesktopNav />
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <AuthArea />
+                  <ThemeToggle />
+                </div>
+              </div>
 
-          {/* Mobile Menu Button */}
-          <div className="flex md:hidden items-center gap-2">
-            <ThemeToggle />
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="
-                btn btn-ghost h-9 w-9 p-0
-                text-zinc-700 dark:text-zinc-300
-              "
-              aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-          </div>
+              {/* Mobile Menu Button */}
+              <div className="flex items-center gap-2 md:hidden">
+                <ThemeToggle />
+                <button
+                  onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                  className="btn btn-ghost h-9 w-9 p-0 text-zinc-700 dark:text-zinc-300"
+                  aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+                >
+                  {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Mobile Menu */}
-        {mobileMenuOpen && <MobileMenu onClose={() => setMobileMenuOpen(false)} />}
+        {!isAssessmentMode && mobileMenuOpen && (
+          <MobileMenu onClose={() => setMobileMenuOpen(false)} />
+        )}
       </div>
     </header>
   );

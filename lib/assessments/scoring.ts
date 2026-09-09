@@ -25,7 +25,7 @@ export function calculateAssessmentScore(
   }));
   const maxPointsByQuestion = new Map(questionMaxPoints.map((question) => [question.id, question.maxPts]));
   const totalPoints = answers.reduce(
-    (sum, answer) => sum + Math.min(maxPointsByQuestion.get(answer.questionId) ?? 1, answer.pointsEarned || 0),
+    (sum, answer) => sum + Math.min(maxPointsByQuestion.get(answer.questionId) ?? 0, answer.pointsEarned || 0),
     0
   );
   const maxPoints = questionMaxPoints.reduce((sum, question) => sum + question.maxPts, 0);

@@ -16,6 +16,7 @@ import {
 } from "@/lib/validation";
 import { createCandidateImproved } from "../actions";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 import ProgressBar from "./ProgressBar";
 import Step1Basic from "./Step1Basic";
@@ -61,6 +62,7 @@ interface Props {
   fromCvBuilder?: boolean;
   prefillData?: Partial<FormData>;
   cvDraft?: any;
+  callbackUrl?: string;
 }
 
 // ============================================
@@ -121,8 +123,14 @@ export default function SignupMultiStep({
   fromCvBuilder = false,
   prefillData = {},
   cvDraft,
+  callbackUrl,
 }: Props) {
   const router = useRouter();
+  const safeCallbackUrl = sanitizeInternalCallbackUrl(callbackUrl);
+  const postAuthUrl = safeCallbackUrl || "/onboarding/candidate";
+  const signinHref = safeCallbackUrl
+    ? `/auth/signin?role=CANDIDATE&callbackUrl=${encodeURIComponent(safeCallbackUrl)}`
+    : "/auth/signin?role=CANDIDATE";
   const [currentStep, setCurrentStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -179,7 +187,7 @@ export default function SignupMultiStep({
   // ── Google OAuth ──────────────────────────────────────────
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
-    await signIn("google", { callbackUrl: "/onboarding/candidate" });
+    await signIn("google", { callbackUrl: postAuthUrl });
   };
 
   // ── Navegación entre pasos ────────────────────────────────
@@ -249,7 +257,11 @@ export default function SignupMultiStep({
         role: "CANDIDATE" as const,
       };
 
-      const result = await createCandidateImproved(payload, cvDraft);
+      const result = await createCandidateImproved(
+        payload,
+        cvDraft,
+        safeCallbackUrl || undefined
+      );
 
       if (!result?.ok) {
         // ✅ Fix #23: Usar mensajes de error específicos
@@ -276,9 +288,14 @@ export default function SignupMultiStep({
         } catch {}
       }
 
-      router.push(
-        `/auth/verify/check-email?email=${encodeURIComponent(formData.email)}&role=CANDIDATE`
-      );
+      const checkEmailParams = new URLSearchParams({
+        email: formData.email,
+        role: "CANDIDATE",
+      });
+      if (safeCallbackUrl) {
+        checkEmailParams.set("callbackUrl", safeCallbackUrl);
+      }
+      router.push(`/auth/verify/check-email?${checkEmailParams.toString()}`);
     } catch (err) {
       if (err instanceof z.ZodError) {
         toastError(err.errors[0]?.message || "Datos inválidos");
@@ -310,6 +327,17 @@ export default function SignupMultiStep({
         </div>
 
         <div className="px-6 py-5 space-y-4">
+          <div className="flex min-h-[48px] items-center justify-between gap-3 rounded-xl border border-emerald-300/70 bg-emerald-50 px-3 py-2.5 dark:border-emerald-800 dark:bg-emerald-950/30">
+            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-200">
+              {"\u00bfYa tienes cuenta?"}
+            </span>
+            <a
+              href={signinHref}
+              className="inline-flex min-h-[36px] shrink-0 items-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold !text-white shadow-sm transition-colors hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 dark:border dark:border-emerald-400/30 dark:bg-emerald-600 dark:!text-white dark:shadow-[0_0_0_1px_rgba(52,211,153,0.12)] dark:hover:bg-emerald-500 dark:focus-visible:ring-offset-zinc-900"
+            >
+              {"Inicia sesi\u00f3n"}
+            </a>
+          </div>
           {/* ── Botón Google — solo en paso 1 ── */}
           {currentStep === 1 && (
             <div className="space-y-4">
@@ -404,17 +432,6 @@ export default function SignupMultiStep({
               Privacidad
             </a>
             . Sin spam.
-          </p>
-
-          {/* Link a login */}
-          <p className="text-center text-sm text-zinc-500 dark:text-zinc-400">
-            ¿Ya tienes cuenta?{" "}
-            <a
-              href="/auth/signin?role=CANDIDATE"
-              className="font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors"
-            >
-              Inicia sesión
-            </a>
           </p>
         </div>
       </div>

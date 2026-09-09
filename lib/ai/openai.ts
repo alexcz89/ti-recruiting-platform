@@ -1,11 +1,17 @@
 // lib/ai/openai.ts
-
+import "server-only";
 import OpenAI from "openai";
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY no está definida en las variables de entorno");
-}
+let openAIClient: OpenAI | null = null;
 
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export function getOpenAI(): OpenAI {
+  if (openAIClient) return openAIClient;
+
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY no esta definida");
+  }
+
+  openAIClient = new OpenAI({ apiKey });
+  return openAIClient;
+}

@@ -9,11 +9,12 @@ import {
   formatRetryAfter,
   RATE_LIMITS,
 } from "@/lib/server/rate-limit";
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { email } = body;
+    const { email, callbackUrl } = body;
 
     if (!email) {
       return NextResponse.json({ error: "Email es requerido" }, { status: 400 });
@@ -60,7 +61,12 @@ export async function POST(request: NextRequest) {
     const token = await createEmailVerifyToken({ email: user.email }, 60);
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const verifyUrl = `${baseUrl}/api/auth/verify?token=${encodeURIComponent(token)}`;
+    const verifyParams = new URLSearchParams({ token });
+    const safeCallbackUrl = sanitizeInternalCallbackUrl(callbackUrl);
+    if (safeCallbackUrl) {
+      verifyParams.set("callbackUrl", safeCallbackUrl);
+    }
+    const verifyUrl = `${baseUrl}/api/auth/verify?${verifyParams.toString()}`;
 
     // ✅ Enviar email con retry logic incorporado
     await sendVerificationEmail(user.email, verifyUrl);

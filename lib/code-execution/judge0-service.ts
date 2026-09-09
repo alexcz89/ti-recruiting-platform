@@ -8,6 +8,8 @@
  * https://github.com/judge0/judge0
  */
 
+import { buildSqliteSubmission } from './sql-service';
+
 interface ExecutionResult {
   success: boolean;
   output?: string;
@@ -55,6 +57,7 @@ const LANGUAGE_IDS: Record<string, number> = {
   php: 68,          // PHP
   swift: 83,        // Swift
   kotlin: 78,       // Kotlin
+  sql: 82,          // SQL (SQLite)
 };
 
 export class Judge0Service {
@@ -180,15 +183,21 @@ export class Judge0Service {
       // Para otros lenguajes (Java, Python, etc.): usar stdin
       const JS_LANGUAGES = [63, 74]; // JavaScript, TypeScript
       const isJsLike = JS_LANGUAGES.includes(languageId);
-      const fullCode = isJsLike ? `${code}\n\n${input}` : code;
-      const stdin = isJsLike ? '' : input;
+      const isSql = languageId === 82;
+      const fullCode = isSql
+        ? buildSqliteSubmission(input, code)
+        : isJsLike
+          ? `${code}\n\n${input}`
+          : code;
+      const stdin = isJsLike || isSql ? '' : input;
+      const shouldCompareOutput = expectedOutput !== '__NO_CHECK__';
 
       // Create submission
       const submissionResponse = await this.createSubmission({
         source_code: fullCode,
         language_id: languageId,
         stdin,
-        expected_output: expectedOutput,
+        expected_output: shouldCompareOutput ? expectedOutput : undefined,
         cpu_time_limit: timeoutMs / 1000,   // Convert to seconds
         memory_limit: memoryLimitMb * 1024, // Convert to KB
       });
@@ -240,10 +249,11 @@ export class Judge0Service {
       headers['X-RapidAPI-Host'] = this.rapidApiHost;
     }
 
-    // 🔍 DEBUG - agregar estos logs
-    console.log('[Judge0] Creating submission with data:', JSON.stringify(data, null, 2));
-    console.log('[Judge0] API URL:', `${this.apiUrl}/submissions?wait=false`);
-    console.log('[Judge0] Headers:', headers);
+    console.log('[Judge0] Creating submission', {
+      languageId: data.language_id,
+      sourceLength: String(data.source_code ?? '').length,
+      hasStdin: Boolean(data.stdin),
+    });
 
     return fetch(`${this.apiUrl}/submissions?wait=false`, {
       method: 'POST',
@@ -322,6 +332,7 @@ export class Judge0Service {
       php: 'PHP',
       swift: 'Swift',
       kotlin: 'Kotlin',
+      sql: 'SQL (SQLite)',
     };
 
     return names[language] || language;
@@ -424,6 +435,10 @@ class Program {
         Console.WriteLine(${functionName}(input));
     }
 }`,
+      sql: `-- Escribe una sola consulta SELECT.
+-- El esquema y los datos de prueba se cargan automaticamente.
+
+SELECT ...;`,
     };
 
     return templates[language] || `// Implementa tu solución en ${language}\n// El runner se añade automáticamente por los test cases`;

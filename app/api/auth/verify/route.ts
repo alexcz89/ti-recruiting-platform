@@ -3,22 +3,14 @@ import { NextResponse } from "next/server";
 import { verifyEmailVerifyToken } from '@/lib/server/tokens';
 import { prisma } from '@/lib/server/prisma';
 import crypto from "crypto";
-
-/** Solo aceptamos rutas relativas para evitar open redirects */
-function sanitizeCallbackUrl(cb?: string | null): string | undefined {
-  if (!cb) return undefined;
-  try {
-    if (cb.startsWith("/")) return cb;
-    return undefined;
-  } catch {
-    return undefined;
-  }
-}
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 export async function GET(req: Request) {
   const urlObj = new URL(req.url);
   const token = urlObj.searchParams.get("token") || "";
-  const callbackUrl = sanitizeCallbackUrl(urlObj.searchParams.get("callbackUrl"));
+  const callbackUrl = sanitizeInternalCallbackUrl(
+    urlObj.searchParams.get("callbackUrl")
+  );
 
   try {
     const { email } = await verifyEmailVerifyToken(token);

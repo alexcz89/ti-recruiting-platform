@@ -74,7 +74,8 @@ export async function POST(
             name: true,
             email: true,
           },
-        },        contestRegistration: {
+        },
+        contestRegistration: {
           select: {
             id: true,
             qualityScore: true,
@@ -96,7 +97,14 @@ export async function POST(
     const currentStatus = String(attempt.status ?? "").toUpperCase();
 
     if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(currentStatus)) {
-      return jsonNoStore({ error: "El intento ya fue enviado" }, 400);
+      return jsonNoStore({
+        success: true,
+        alreadySubmitted: true,
+        totalScore: attempt.totalScore ?? 0,
+        sectionScores: attempt.sectionScores ?? {},
+        passed: Boolean(attempt.passed),
+        timeSpent: attempt.timeSpent ?? 0,
+      });
     }
 
     if (currentStatus !== "IN_PROGRESS") {
@@ -105,9 +113,11 @@ export async function POST(
 
     const now = new Date();
 
-    if (attempt.expiresAt && now > attempt.expiresAt) {
-      return jsonNoStore({ error: "Tiempo expirado" }, 400);
-    }
+    // Answers and code execution are already blocked after expiresAt. Submission
+    // remains available so the server can grade only what was saved in time.
+    const expiredAtSubmission = Boolean(
+      attempt.expiresAt && now >= attempt.expiresAt
+    );
 
     if (!attempt.startedAt) {
       return jsonNoStore(
@@ -115,8 +125,6 @@ export async function POST(
         400
       );
     }
-
-    const answeredCount = attempt.answers.length;
 
     let activeQuestions = await prisma.assessmentQuestion.findMany({
       where: {
@@ -152,25 +160,43 @@ export async function POST(
       return jsonNoStore({ error: "El template no tiene preguntas activas" }, 400);
     }
 
+    const activeQuestionIds = new Set(activeQuestions.map((question) => question.id));
+    const scoringAnswers = attempt.answers.filter((answer) =>
+      activeQuestionIds.has(answer.questionId)
+    );
+    const answeredCount = scoringAnswers.length;
     const { questionMaxPoints, totalPoints, totalScore } = calculateAssessmentScore(
       activeQuestions,
-      attempt.answers,
+      scoringAnswers,
       { codingByTestCases: Boolean(attempt.contestRegistration) }
+    );
+    const maxPointsByQuestion = new Map(
+      questionMaxPoints.map((question) => [question.id, question.maxPts])
     );
 
     const sections = (attempt.template.sections as any[]) || [];
     const sectionScores: Record<string, number> = {};
+    const sectionRequirementResults: Record<
+      string,
+      { minimumCorrect: number; correct: number; met: boolean }
+    > = {};
+    let sectionRequirementsMet = true;
 
     for (const section of sections) {
       const sectionName = String(section?.name || "");
       if (!sectionName) continue;
 
-      const sectionAnswers = attempt.answers.filter(
+      const sectionAnswers = scoringAnswers.filter(
         (answer) => answer.question.section === sectionName
       );
 
       const sectionPoints = sectionAnswers.reduce(
-        (sum, answer) => sum + (answer.pointsEarned || 0),
+        (sum, answer) =>
+          sum +
+          Math.min(
+            maxPointsByQuestion.get(answer.questionId) ?? 0,
+            answer.pointsEarned || 0
+          ),
         0
       );
 
@@ -185,6 +211,18 @@ export async function POST(
               Math.min(100, Math.round((sectionPoints / sectionMaxPts) * 100))
             )
           : 0;
+
+      const minimumCorrect = Number(section?.minimumCorrect ?? 0);
+      if (Number.isInteger(minimumCorrect) && minimumCorrect > 0) {
+        const correct = Math.round(sectionPoints);
+        const met = correct >= minimumCorrect;
+        sectionRequirementResults[sectionName] = {
+          minimumCorrect,
+          correct,
+          met,
+        };
+        if (!met) sectionRequirementsMet = false;
+      }
     }
 
     const recordedAnswerTime = attempt.answers.reduce(
@@ -202,6 +240,13 @@ export async function POST(
         ? { ...(attempt.flagsJson as any) }
         : {};
 
+    if (expiredAtSubmission && attempt.expiresAt) {
+      flags.expiredAt = attempt.expiresAt.toISOString();
+    }
+    if (Object.keys(sectionRequirementResults).length > 0) {
+      flags.sectionRequirements = sectionRequirementResults;
+    }
+
     if (answeredCount > 0) {
       const avgTimePerQuestion = timeSpent / answeredCount;
       if (avgTimePerQuestion < 5) {
@@ -213,7 +258,15 @@ export async function POST(
       ? Math.max(0, Math.min(75, Math.round(totalPoints)))
       : totalScore;
     const passingScore = Number((attempt.template as any)?.passingScore ?? 0);
-    const passed = scoreToPersist >= passingScore;
+    // Solo una severidad CRITICAL invalida el resultado. SUSPICIOUS sigue
+    // visible para revisión, pero no castiga automáticamente al candidato.
+    const integrityInvalidated =
+      String(attempt.severity ?? "NORMAL").toUpperCase() === "CRITICAL";
+    const scoreForPassing = attempt.contestRegistration ? scoreToPersist : totalScore;
+    const passed =
+      !integrityInvalidated &&
+      scoreForPassing >= passingScore &&
+      sectionRequirementsMet;
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -264,6 +317,14 @@ export async function POST(
           badgeTermId?: string | null;
           badgeLevel?: number | null;
         };
+        if (integrityInvalidated) {
+          // Protección idempotente ante reintentos o estados heredados: este
+          // intento nunca puede respaldar una credencial verificada.
+          await tx.candidateBadge.deleteMany({
+            where: { attemptId: params.attemptId },
+          });
+        }
+
         if (
           passed &&
           tpl?.isBadgeExam &&
@@ -446,6 +507,7 @@ export async function POST(
 
     return jsonNoStore({
       success: true,
+      expired: expiredAtSubmission,
       totalScore: scoreToPersist,
       sectionScores,
 

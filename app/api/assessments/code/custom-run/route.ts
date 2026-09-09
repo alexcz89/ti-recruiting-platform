@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
+import { validateReadOnlySqlQuery, validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
 
 const CUSTOM_RUN_LIMIT = 30;
 const CUSTOM_STATUS_PREFIX = "CUSTOM_";
@@ -57,6 +58,19 @@ export async function POST(request: Request) {
       return jsonNoStore({ error: `Lenguaje no soportado: ${language}` }, 400);
     }
 
+    if (language === "sql") {
+      const queryValidation = validateReadOnlySqlQuery(code);
+      if (!queryValidation.ok) {
+        return jsonNoStore({ error: queryValidation.error }, 400);
+      }
+
+      const datasetValidation = validateSqlDatasetSetup(customInput);
+      if (!datasetValidation.ok) {
+        return jsonNoStore({ error: datasetValidation.error }, 400);
+      }
+    }
+
+    // Rate limit ligero: máx 30 custom runs por minuto por candidato
     const since = new Date(Date.now() - 60_000);
     const reservation = await prisma.$transaction(async (tx) => {
       // PostgreSQL transaction-scoped lock serializes the count+reservation for

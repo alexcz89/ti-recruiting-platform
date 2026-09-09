@@ -70,8 +70,8 @@ npm run backfill:company      # Backfill companyId for existing users
   - `/jobs/*` - Public, but recruiters redirected to `/dashboard/jobs`
 
 **Multi-tenancy:**
-- Each `Company` is identified by email domain (e.g., `@task.com.mx`)
-- Recruiters are auto-linked to companies by email domain via `ensureUserCompanyByEmail()`
+- Recruiters are explicitly assigned to a `Company`; email-domain matching must not auto-link users to an existing company.
+- Recruiter access requires an approved recruiter profile with a valid `companyId`.
 - Company isolation enforced in API routes (e.g., recruiters only see jobs from their company)
 
 ### Database Schema Structure
@@ -360,3 +360,4 @@ Canonical label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `re
 ### Domain docs
 
 Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+

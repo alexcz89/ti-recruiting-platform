@@ -104,7 +104,8 @@ export default function JobActionsMenu({ jobId, currentStatus }: Props) {
       });
 
       if (!res.ok) {
-        throw new Error("Error actualizando estado");
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || "Error actualizando estado");
       }
 
       const statusLabels = {
@@ -117,7 +118,11 @@ export default function JobActionsMenu({ jobId, currentStatus }: Props) {
       router.refresh();
       setOpen(false);
     } catch (error) {
-      toastError("Error al actualizar el estado de la vacante");
+      toastError(
+        error instanceof Error
+          ? error.message
+          : "Error al actualizar el estado de la vacante"
+      );
     } finally {
       setBusy(false);
     }

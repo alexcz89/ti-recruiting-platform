@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { CheckCircle2, AlertTriangle, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 type State = "loading" | "success" | "failed";
 
@@ -41,7 +42,9 @@ function VerifyContent() {
   const status = searchParams.get("status") || "";
   const role = searchParams.get("role") || "CANDIDATE";
   const alt = searchParams.get("alt") || "";
-  const callbackUrl = searchParams.get("callbackUrl") || "";
+  const callbackUrl = sanitizeInternalCallbackUrl(
+    searchParams.get("callbackUrl")
+  );
 
   const isOk = status === "ok";
 

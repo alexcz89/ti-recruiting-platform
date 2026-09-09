@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import SignupMultiStep from "./components/SignupMultiStep";
+import { sanitizeInternalCallbackUrl } from "@/lib/auth/callback-url";
 
 // ⚠️ Debe coincidir con el de CvBuilder.tsx
 const LS_KEY = "cv_builder_draft_v1";
@@ -33,7 +34,9 @@ export default function CandidateSignupClient() {
   const fromCvBuilder = searchParams?.get("from") === "cv-builder";
 
   // ✅ Soportar flujos desde vacante/login
-  const callbackUrl = searchParams?.get("callbackUrl") || "";
+  const callbackUrl = sanitizeInternalCallbackUrl(
+    searchParams?.get("callbackUrl")
+  );
   const applyJobId =
     searchParams?.get("applyJobId") ||
     searchParams?.get("jobId") ||
@@ -111,6 +114,7 @@ export default function CandidateSignupClient() {
       fromCvBuilder={fromCvBuilder}
       prefillData={prefillData}
       cvDraft={cvDraft}
+      callbackUrl={callbackUrl}
     />
   );
 }

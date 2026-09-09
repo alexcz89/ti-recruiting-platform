@@ -1,11 +1,10 @@
 // lib/ai/candidateSummary.ts
 
-import OpenAI from "openai";
+import { getOpenAI } from "./openai";
 import { z } from "zod";
 import { createHash } from "crypto";
 import { AI_MODEL_SMART } from "./config";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export const SUMMARY_VERSION = "v2";
 
@@ -368,7 +367,7 @@ export async function generateCandidateSummary(
   input: CandidateSummaryInput
 ): Promise<CandidateSummary> {
   try {
-    const response = await openai.chat.completions.create({
+    const response = await getOpenAI().chat.completions.create({
       model: AI_MODEL_SMART,
       messages: [{ role: "user", content: buildPrompt(input) }],
       response_format: { type: "json_object" },
