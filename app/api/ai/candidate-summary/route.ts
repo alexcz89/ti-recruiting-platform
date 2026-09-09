@@ -6,6 +6,10 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
 import {
+  applicationWhereForActor,
+  candidateWhereForActor,
+} from "@/lib/server/candidate-access";
+import {
   generateCandidateSummary,
   buildFingerprint,
   SUMMARY_VERSION,
@@ -114,8 +118,13 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session) return noStoreJson({ error: "Unauthorized" }, 401);
 
-  const companyId = await getSessionCompanyId().catch(() => null);
-  if (!companyId) return noStoreJson({ error: "Forbidden" }, 403);
+  const role = String(session.user.role ?? "").toUpperCase();
+  if (role !== "RECRUITER" && role !== "ADMIN") {
+    return noStoreJson({ error: "Forbidden" }, 403);
+  }
+  const companyId = role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
 
   const { searchParams } = new URL(req.url);
   const candidateId = searchParams.get("candidateId");
@@ -126,14 +135,16 @@ export async function GET(req: NextRequest) {
     return noStoreJson({ error: "candidateId requerido" }, 400);
   }
 
-  // ✅ Verificar que el candidato tiene al menos una aplicación en una vacante de la empresa
-  const hasAccess = await prisma.application.findFirst({
-    where: {
-      candidateId,
-      job: { companyId },
-    },
-    select: { id: true },
-  });
+  const actor = { role, companyId };
+  const candidateScope = candidateWhereForActor(actor, candidateId);
+  if (!candidateScope) return noStoreJson({ error: "Forbidden" }, 403);
+
+  const hasAccess = role === "ADMIN"
+    ? await prisma.user.findFirst({ where: candidateScope, select: { id: true } })
+    : await prisma.application.findFirst({
+        where: applicationWhereForActor(actor, { candidateId, jobId: jobId ?? undefined })!,
+        select: { id: true },
+      });
   if (!hasAccess) {
     return noStoreJson({ error: "Forbidden" }, 403);
   }
@@ -189,7 +200,7 @@ export async function GET(req: NextRequest) {
   }
 
   // 🧠 FALLBACK: GENERACIÓN TRADICIONAL
-  const input = await generateFallbackInput(candidateId, jobId, companyId);
+  const input = await generateFallbackInput(candidateId);
 
   if (!input) {
     return noStoreJson({ error: "Candidato no encontrado" }, 404);
@@ -222,9 +233,7 @@ export async function GET(req: NextRequest) {
 }
 
 async function generateFallbackInput(
-  candidateId: string,
-  jobId: string | null,
-  companyId: string | null
+  candidateId: string
 ): Promise<CandidateSummaryInput | null> {
   const candidate = await prisma.user.findUnique({
     where: { id: candidateId },

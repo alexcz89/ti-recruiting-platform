@@ -70,8 +70,8 @@ npm run backfill:company      # Backfill companyId for existing users
   - `/jobs/*` - Public, but recruiters redirected to `/dashboard/jobs`
 
 **Multi-tenancy:**
-- Each `Company` is identified by email domain (e.g., `@task.com.mx`)
-- Recruiters are auto-linked to companies by email domain via `ensureUserCompanyByEmail()`
+- Recruiters are explicitly assigned to a `Company`; email-domain matching must not auto-link users to an existing company.
+- Recruiter access requires an approved recruiter profile with a valid `companyId`.
 - Company isolation enforced in API routes (e.g., recruiters only see jobs from their company)
 
 ### Database Schema Structure
@@ -345,3 +345,4 @@ Optional (for production features):
 - Tax regime codes (e.g., "601", "612") in `Company.taxRegime`
 - Phone validation uses `libphonenumber-js` for Mexican format
 - Location data includes Mexican states (`admin1`) and cities
+

@@ -3,6 +3,11 @@ import Link from "next/link";
 import { prisma } from '@/lib/server/prisma';
 import { badgeLevelLabel, badgeValidityCutoff } from "@/lib/badges";
 import { Award } from "lucide-react";
+import { getServerSession } from "next-auth";
+import { redirect } from "next/navigation";
+import { authOptions } from "@/lib/server/auth";
+import { getSessionCompanyId } from "@/lib/server/session";
+import { candidateWhereForActor } from "@/lib/server/candidate-access";
 
 export const metadata = { title: "Candidatos | Panel" };
 export const dynamic = "force-dynamic";
@@ -19,8 +24,20 @@ export default async function CandidatesPage({
   const skip = (currentPage - 1) * PAGE_SIZE;
   const currentBadgeCutoff = badgeValidityCutoff();
 
+  const session = await getServerSession(authOptions);
+  if (!session?.user) redirect("/auth/signin?role=RECRUITER");
+
+  const role = String(session.user.role ?? "").toUpperCase();
+  if (role !== "RECRUITER" && role !== "ADMIN") redirect("/");
+
+  const companyId = role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  const candidateScope = candidateWhereForActor({ role, companyId });
+  if (!candidateScope) redirect("/dashboard");
+
   const where = {
-    role: "CANDIDATE" as const,
+    ...candidateScope,
     ...(onlyVerified
       ? {
           candidateBadges: {

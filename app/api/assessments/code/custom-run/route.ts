@@ -1,16 +1,16 @@
-// app/api/assessments/code/custom-run/route.ts
-// Ejecuta el código del candidato con un input personalizado (sin comparar con test cases).
-// Solo para candidatos con un intento IN_PROGRESS.
-
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
 import { validateReadOnlySqlQuery, validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
+
+const CUSTOM_RUN_LIMIT = 30;
+const CUSTOM_STATUS_PREFIX = "CUSTOM_";
 
 function jsonNoStore(data: unknown, status = 200) {
   return NextResponse.json(data, {
@@ -26,12 +26,14 @@ function truncate(value: unknown, max = 4000): string {
 }
 
 export async function POST(request: Request) {
+  let reservationId: string | null = null;
+
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
     const user = session.user as { id?: string; role?: string };
-    if (String(user?.role ?? "").toUpperCase() !== "CANDIDATE") {
+    if (String(user.role ?? "").toUpperCase() !== "CANDIDATE") {
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
     if (!user.id) return jsonNoStore({ error: "Usuario inválido" }, 401);
@@ -46,30 +48,12 @@ export async function POST(request: Request) {
     if (!attemptId || !questionId || !code || !language) {
       return jsonNoStore({ error: "Faltan campos requeridos" }, 400);
     }
-
     if (code.length > 200_000) {
       return jsonNoStore({ error: "Código demasiado largo" }, 400);
     }
-
     if (customInput.length > 10_000) {
       return jsonNoStore({ error: "Input personalizado demasiado largo" }, 400);
     }
-
-    // Verificar que el intento pertenece al candidato y está en progreso
-    const attempt = await prisma.assessmentAttempt.findUnique({
-      where: { id: attemptId },
-      select: { id: true, candidateId: true, status: true, expiresAt: true },
-    });
-
-    if (!attempt) return jsonNoStore({ error: "Intento no encontrado" }, 404);
-    if (attempt.candidateId !== user.id) return jsonNoStore({ error: "No autorizado" }, 403);
-    if (String(attempt.status).toUpperCase() !== "IN_PROGRESS") {
-      return jsonNoStore({ error: "El intento no está en progreso" }, 400);
-    }
-    if (attempt.expiresAt && new Date() > attempt.expiresAt) {
-      return jsonNoStore({ error: "Tiempo expirado" }, 400);
-    }
-
     if (!judge0Service.isLanguageSupported(language)) {
       return jsonNoStore({ error: `Lenguaje no soportado: ${language}` }, 400);
     }
@@ -88,46 +72,140 @@ export async function POST(request: Request) {
 
     // Rate limit ligero: máx 30 custom runs por minuto por candidato
     const since = new Date(Date.now() - 60_000);
-    const recentCount = await prisma.codeExecution.count({
-      where: {
-        candidateId: user.id,
-        attemptId,
-        questionId,
-        createdAt: { gte: since },
-      },
-    });
-    if (recentCount >= 30) {
-      return jsonNoStore({ error: "Demasiadas ejecuciones. Espera un momento." }, 429);
-    }
+    const reservation = await prisma.$transaction(async (tx) => {
+      // PostgreSQL transaction-scoped lock serializes the count+reservation for
+      // this candidate/attempt/question without holding a lock during Judge0.
+      const lockKey = `custom-run:${user.id}:${attemptId}:${questionId}`;
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
-    // Ejecutar con input personalizado como test case único (sin expected output)
-    const result = await judge0Service.executeCode({
-      code,
-      language,
-      testCases: [
-        {
+      const attempt = await tx.assessmentAttempt.findUnique({
+        where: { id: attemptId },
+        select: {
+          id: true,
+          candidateId: true,
+          templateId: true,
+          status: true,
+          expiresAt: true,
+        },
+      });
+      if (!attempt) return { error: "Intento no encontrado", status: 404 } as const;
+      if (attempt.candidateId !== user.id) {
+        return { error: "No autorizado", status: 403 } as const;
+      }
+      if (String(attempt.status).toUpperCase() !== "IN_PROGRESS") {
+        return { error: "El intento no está en progreso", status: 400 } as const;
+      }
+      if (attempt.expiresAt && new Date() > attempt.expiresAt) {
+        return { error: "Tiempo expirado", status: 400 } as const;
+      }
+
+      const question = await tx.assessmentQuestion.findFirst({
+        where: {
+          id: questionId,
+          templateId: attempt.templateId,
+          type: "CODING",
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (!question) return { error: "Pregunta no válida", status: 404 } as const;
+
+      const recentCount = await tx.codeExecution.count({
+        where: {
+          candidateId: user.id,
+          attemptId,
+          questionId,
+          status: { startsWith: CUSTOM_STATUS_PREFIX },
+          createdAt: { gte: since },
+        },
+      });
+      if (recentCount >= CUSTOM_RUN_LIMIT) {
+        return {
+          error: "Demasiadas ejecuciones. Espera un momento.",
+          status: 429,
+        } as const;
+      }
+
+      const execution = await tx.codeExecution.create({
+        data: {
+          attemptId,
+          questionId,
+          candidateId: user.id,
+          code,
+          language,
+          status: "CUSTOM_PENDING",
+          isSubmission: false,
+        },
+        select: { id: true },
+      });
+      return { executionId: execution.id } as const;
+    });
+
+    if ("error" in reservation) {
+      return jsonNoStore({ error: reservation.error }, reservation.status);
+    }
+    reservationId = reservation.executionId;
+
+    try {
+      const result = await judge0Service.executeCode({
+        code,
+        language,
+        testCases: [{
           id: "custom",
           input: customInput,
-          expectedOutput: "__NO_CHECK__", // no comparamos output
+          expectedOutput: "__NO_CHECK__",
           timeoutMs: 5000,
           memoryLimitMb: 256,
+        }],
+      });
+
+      const testResult = result.testResults?.[0];
+      const output = testResult?.actualOutput ?? result.output ?? "";
+      const error = testResult?.error ?? result.error ?? "";
+      await prisma.codeExecution.update({
+        where: { id: reservationId },
+        data: {
+          status: "CUSTOM_COMPLETED",
+          output: truncate(output),
+          error: truncate(error) || null,
+          executionTimeMs: result.executionTimeMs ?? null,
+          testResults: {
+            providerStatus: result.status,
+            customInput: truncate(customInput, 10_000),
+            results: result.testResults ?? [],
+          } as unknown as Prisma.InputJsonValue,
         },
-      ],
-    });
+      });
 
-    const testResult = result.testResults?.[0];
-    const output = testResult?.actualOutput ?? result.output ?? "";
-    const error = testResult?.error ?? result.error ?? "";
-
-    return jsonNoStore({
-      success: true,
-      output: truncate(output),
-      error: truncate(error),
-      executionTimeMs: result.executionTimeMs,
-      status: result.status,
-    });
-  } catch (err: any) {
+      return jsonNoStore({
+        success: true,
+        output: truncate(output),
+        error: truncate(error),
+        executionTimeMs: result.executionTimeMs,
+        status: result.status,
+      });
+    } catch (providerError) {
+      const details = truncate(
+        providerError instanceof Error ? providerError.message : providerError
+      );
+      await prisma.codeExecution.update({
+        where: { id: reservationId },
+        data: { status: "CUSTOM_ERROR", error: details || "Judge0 error" },
+      });
+      reservationId = null;
+      return jsonNoStore({ error: "Error al ejecutar el código" }, 502);
+    }
+  } catch (err) {
+    if (reservationId) {
+      await prisma.codeExecution.update({
+        where: { id: reservationId },
+        data: {
+          status: "CUSTOM_ERROR",
+          error: truncate(err instanceof Error ? err.message : err),
+        },
+      }).catch(() => {});
+    }
     console.error("[POST /api/assessments/code/custom-run] Error:", err);
-    return jsonNoStore({ error: "Error al ejecutar el código", details: String(err?.message ?? "") }, 500);
+    return jsonNoStore({ error: "Error al ejecutar el código" }, 500);
   }
 }

@@ -24,34 +24,13 @@ const nextConfig = {
   // ✅ HTTP response headers for caching and security
   async headers() {
     return [
-      // ─── API Endpoints: Jobs, Applications, etc
-      {
-        source: "/api/jobs",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=30, s-maxage=300, stale-while-revalidate=3600",
-          },
-          { key: "Vary", value: "Accept-Encoding" },
-          { key: "X-Content-Type-Options", value: "nosniff" },
-        ],
-      },
-      {
-        source: "/api/applications",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=0, s-maxage=60, must-revalidate",
-          },
-          { key: "Vary", value: "Accept-Encoding" },
-        ],
-      },
+      // Pilot default: API responses are not shared or persisted by caches.
       {
         source: "/api/:path*",
         headers: [
           {
             key: "Cache-Control",
-            value: "public, max-age=60, s-maxage=3600, stale-while-revalidate=86400",
+            value: "private, no-store, max-age=0, must-revalidate",
           },
           { key: "Vary", value: "Accept-Encoding" },
           { key: "X-Content-Type-Options", value: "nosniff" },

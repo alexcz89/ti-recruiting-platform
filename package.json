@@ -14,6 +14,7 @@
     "seed": "tsx prisma/seed.ts",
     "seed:contest": "tsx scripts/seed-taskio-coding-challenge.ts",
     "backfill:company": "tsx scripts/backfill-companyId.ts",
+    "pilot:recruiter": "tsx scripts/provision-pilot-recruiter.ts",
     "refresh:skills": "tsx scripts/refresh-skills.ts",
     "refresh:languages": "tsx scripts/refresh-languages.ts",
     "refresh:certs": "tsx scripts/refresh-certs.ts",

@@ -22,6 +22,11 @@ import CandidateSummaryCard from "@/components/dashboard/CandidateSummaryCard";
 import SendAssessmentButton from "@/components/dashboard/SendAssessmentButton";
 import CandidateReviewShell from "@/components/dashboard/CandidateReviewShell";
 import type { AppState as CandidateAppState } from "@/components/dashboard/CandidateReviewShell";
+import { getSessionCompanyId } from "@/lib/server/session";
+import {
+  applicationWhereForActor,
+  candidateWhereForActor,
+} from "@/lib/server/candidate-access";
 
 export const metadata = { title: "Candidato | Panel" };
 
@@ -79,6 +84,7 @@ export default async function CandidateDetailPage({
       recruiterProfile: {
         select: {
           companyId: true,
+          status: true,
         },
       },
     },
@@ -86,7 +92,28 @@ export default async function CandidateDetailPage({
 
   if (!me || (me.role !== "RECRUITER" && me.role !== "ADMIN")) redirect("/");
 
-  const companyId = me.recruiterProfile?.companyId ?? null;
+  const companyId = me.role === "RECRUITER"
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
+  const actor = { role: me.role, companyId };
+  const candidateWhere = candidateWhereForActor(actor, params.id);
+  if (!candidateWhere) notFound();
+
+  const fromJobId = searchParams?.jobId;
+  const activeAppId = searchParams?.applicationId || "";
+  if (fromJobId || activeAppId) {
+    const applicationWhere = applicationWhereForActor(actor, {
+      applicationId: activeAppId || undefined,
+      jobId: fromJobId,
+      candidateId: params.id,
+    });
+    if (!applicationWhere) notFound();
+    const applicationContext = await prisma.application.findFirst({
+      where: applicationWhere,
+      select: { id: true },
+    });
+    if (!applicationContext) notFound();
+  }
 
   const company = companyId
     ? await prisma.company.findUnique({
@@ -98,8 +125,8 @@ export default async function CandidateDetailPage({
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
   const currentBadgeCutoff = badgeValidityCutoff();
 
-  const candidate = await prisma.user.findUnique({
-    where: { id: params.id },
+  const candidate = await prisma.user.findFirst({
+    where: candidateWhere,
     select: {
       id: true,
       name: true,
@@ -177,9 +204,6 @@ export default async function CandidateDetailPage({
   if (!candidate) notFound();
   if (candidate.role !== "CANDIDATE") redirect("/dashboard");
 
-  const fromJobId = searchParams?.jobId;
-  const activeAppId = searchParams?.applicationId || "";
-
   let jobForMatch: {
     id: string;
     title: string;
@@ -189,9 +213,12 @@ export default async function CandidateDetailPage({
     assessmentTemplates: { templateId: string; title: string }[];
   } | null = null;
 
-  if (fromJobId && companyId) {
+  if (fromJobId) {
     const jobRaw = await prisma.job.findFirst({
-      where: { id: fromJobId, companyId },
+      where: {
+        id: fromJobId,
+        ...(me.role === "RECRUITER" ? { companyId: companyId ?? "" } : {}),
+      },
       select: {
         id: true,
         title: true,
@@ -351,9 +378,14 @@ export default async function CandidateDetailPage({
   let navList: NavEntry[] = [];
   let navIndex = -1;
 
-  if (fromJobId && companyId) {
+  if (fromJobId) {
     const jobApps = await prisma.application.findMany({
-      where: { jobId: fromJobId, job: { companyId } },
+      where: {
+        jobId: fromJobId,
+        ...(me.role === "RECRUITER"
+          ? { job: { companyId: companyId ?? "" } }
+          : {}),
+      },
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
@@ -379,7 +411,11 @@ export default async function CandidateDetailPage({
   // Current application state (for right sidebar)
   const currentApplication = activeAppId
     ? await prisma.application.findFirst({
-        where: { id: activeAppId, job: { companyId: companyId ?? "" } },
+        where: applicationWhereForActor(actor, {
+          applicationId: activeAppId,
+          candidateId: params.id,
+          jobId: fromJobId,
+        }) ?? { id: "__unauthorized__" },
         select: {
           id: true,
           status: true,

@@ -68,10 +68,14 @@ export async function GET(request: Request) {
     const sort = (url.searchParams.get("sort") ?? "recent").trim();
 
     const now = new Date();
+    const applicationJobWhere = {
+      ...(role === "ADMIN" ? {} : { companyId: companyId as string }),
+      ...(jobId ? { id: jobId } : {}),
+    };
 
     const invites = await prisma.assessmentInvite.findMany({
       where: {
-        application: { job: { companyId: companyId as any, ...(jobId ? { id: jobId } : {}) } },
+        application: { job: applicationJobWhere },
         ...(q
           ? {
               OR: [

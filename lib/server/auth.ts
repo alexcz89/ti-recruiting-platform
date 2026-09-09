@@ -6,7 +6,6 @@ import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
-import { ensureUserCompanyByEmail } from "@/lib/company";
 
 const prisma = (globalThis as any).prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") {
@@ -83,6 +82,7 @@ export const authOptions: AuthOptions = {
               recruiterProfile: {
                 select: {
                   companyId: true,
+                  status: true,
                 },
               },
             },
@@ -135,30 +135,21 @@ export const authOptions: AuthOptions = {
             throw new Error("EMAIL_NOT_VERIFIED:" + email);
           }
 
-          let companyId = dbUser.recruiterProfile?.companyId ?? null;
+          const recruiterApproved =
+            dbUser.recruiterProfile?.status === "APPROVED" &&
+            Boolean(dbUser.recruiterProfile.companyId);
+          if (dbUser.role === "RECRUITER" && !recruiterApproved) {
+            console.log("[AUTH] recruiter pending manual approval", { email });
+            return null;
+          }
+
+          const companyId = dbUser.recruiterProfile?.companyId ?? null;
 
           console.log("[AUTH] company before ensure", {
             email,
             intendedRole,
             companyId,
           });
-
-          if (intendedRole === "RECRUITER" && !companyId) {
-            console.log("[AUTH] recruiter without companyId, ensuring company");
-            const company = await ensureUserCompanyByEmail({
-              userId: dbUser.id,
-              email,
-              suggestedName: null,
-              country: null,
-              city: null,
-            });
-            companyId = company?.id ?? null;
-
-            console.log("[AUTH] ensureUserCompanyByEmail result", {
-              email,
-              companyId,
-            });
-          }
 
           const authUser: AuthUser = {
             id: dbUser.id,
@@ -215,6 +206,7 @@ export const authOptions: AuthOptions = {
                   recruiterProfile: {
                     select: {
                       companyId: true,
+                      status: true,
                     },
                   },
                 },
@@ -235,26 +227,19 @@ export const authOptions: AuthOptions = {
           if (record.usedAt) return null;
           if (record.expiresAt < new Date()) return null;
 
+          const user = record.user;
+
+          const recruiterApproved =
+            user.recruiterProfile?.status === "APPROVED" &&
+            Boolean(user.recruiterProfile.companyId);
+          if (user.role === "RECRUITER" && !recruiterApproved) return null;
+
+          const companyId = user.recruiterProfile?.companyId ?? null;
+
           await prisma.autoLoginToken.update({
             where: { token: credentials.token },
             data: { usedAt: new Date() },
           });
-
-          const user = record.user;
-
-          let companyId = user.recruiterProfile?.companyId ?? null;
-
-          if (user.role === "RECRUITER" && !companyId) {
-            console.log("[AUTH] auto-login recruiter without companyId");
-            const company = await ensureUserCompanyByEmail({
-              userId: user.id,
-              email: user.email,
-              suggestedName: null,
-              country: null,
-              city: null,
-            });
-            companyId = company?.id ?? null;
-          }
 
           const authUser: AuthUser = {
             id: user.id,
@@ -398,6 +383,7 @@ export const authOptions: AuthOptions = {
             recruiterProfile: {
               select: {
                 companyId: true,
+                status: true,
               },
             },
           },
@@ -405,9 +391,16 @@ export const authOptions: AuthOptions = {
 
         if (dbUser) {
           (token as any).id = dbUser.id;
-          (token as any).role = dbUser.role;
-          (token as any).companyId =
-            dbUser.recruiterProfile?.companyId ?? null;
+          const recruiterApproved =
+            dbUser.recruiterProfile?.status === "APPROVED" &&
+            Boolean(dbUser.recruiterProfile.companyId);
+          (token as any).role =
+            dbUser.role === "RECRUITER" && !recruiterApproved
+              ? "RECRUITER_PENDING"
+              : dbUser.role;
+          (token as any).companyId = recruiterApproved || dbUser.role === "ADMIN"
+            ? dbUser.recruiterProfile?.companyId ?? null
+            : null;
           (token as any).emailVerified = dbUser.emailVerified ?? null;
 
           console.log("[AUTH] jwt refresh", {

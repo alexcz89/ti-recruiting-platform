@@ -73,17 +73,22 @@ export async function GET(request: Request) {
     const take = 50;
     const skip = (page - 1) * take;
     const now = new Date();
+    const jobWhere = role === "ADMIN" ? {} : { companyId: companyId as string };
+    const applicationJobWhere = {
+      ...jobWhere,
+      ...(jobId ? { id: jobId } : {}),
+    };
 
     const [jobs, total] = await Promise.all([
       prisma.job.findMany({
-        where: { companyId: companyId as any },
+        where: jobWhere,
         select: { id: true, title: true },
         orderBy: { createdAt: "desc" },
         take: 200,
       }),
       prisma.assessmentInvite.count({
         where: {
-          application: { job: { companyId: companyId as any, ...(jobId ? { id: jobId } : {}) } },
+          application: { job: applicationJobWhere },
           ...(q
             ? {
                 OR: [
@@ -99,7 +104,7 @@ export async function GET(request: Request) {
 
     const invites = await prisma.assessmentInvite.findMany({
       where: {
-        application: { job: { companyId: companyId as any, ...(jobId ? { id: jobId } : {}) } },
+        application: { job: applicationJobWhere },
         ...(q
           ? {
               OR: [

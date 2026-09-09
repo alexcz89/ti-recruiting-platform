@@ -154,7 +154,6 @@ export async function POST(
             id: true,
             title: true,
             companyId: true,
-            recruiterId: true,
             company: {
               select: {
                 id: true,
@@ -181,15 +180,8 @@ export async function POST(
       return json(404, { error: "Postulación no encontrada" });
     }
 
-    if (isRecruiter) {
-      const recruiterCompanyOk =
-        !!sessionCompanyId && application.job.companyId === sessionCompanyId;
-      const recruiterOwnerOk =
-        !!application.job.recruiterId && application.job.recruiterId === user.id;
-
-      if (!recruiterCompanyOk && !recruiterOwnerOk) {
-        return json(403, { error: "No autorizado (job fuera de tu scope)" });
-      }
+    if (isRecruiter && application.job.companyId !== sessionCompanyId) {
+      return json(403, { error: "No autorizado (job fuera de tu scope)" });
     }
 
     const jobAssessments = application.job.assessments ?? [];

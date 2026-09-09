@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import { ApplicationStatus } from "@prisma/client";
+import { applicationWhereForActor } from "@/lib/server/candidate-access";
 
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -24,21 +25,17 @@ export async function GET(
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
-    let companyId: string | null = null;
-    try {
-      companyId = await getSessionCompanyId();
-      if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
-    } catch {
-      return jsonNoStore({ error: "Unauthorized" }, 401);
-    }
+    const companyId = role === "RECRUITER"
+      ? await getSessionCompanyId().catch(() => null)
+      : null;
+    const scopedWhere = applicationWhereForActor(
+      { role, companyId },
+      { applicationId: params.id }
+    );
+    if (!scopedWhere) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     const app = await prisma.application.findFirst({
-      where: {
-        id: params.id,
-        job: {
-          companyId,
-        },
-      },
+      where: scopedWhere,
       include: {
         job: {
           select: {
@@ -89,8 +86,14 @@ export async function PATCH(
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
-    const companyId = await getSessionCompanyId();
-    if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
+    const companyId = role === "RECRUITER"
+      ? await getSessionCompanyId().catch(() => null)
+      : null;
+    const scopedWhere = applicationWhereForActor(
+      { role, companyId },
+      { applicationId: params.id }
+    );
+    if (!scopedWhere) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     let bodyRaw: unknown;
     try {
@@ -106,12 +109,7 @@ export async function PATCH(
     }>;
 
     const found = await prisma.application.findFirst({
-      where: {
-        id: params.id,
-        job: {
-          companyId,
-        },
-      },
+      where: scopedWhere,
       select: {
         id: true,
       },
@@ -161,16 +159,17 @@ export async function DELETE(
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
-    const companyId = await getSessionCompanyId();
-    if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
+    const companyId = role === "RECRUITER"
+      ? await getSessionCompanyId().catch(() => null)
+      : null;
+    const scopedWhere = applicationWhereForActor(
+      { role, companyId },
+      { applicationId: params.id }
+    );
+    if (!scopedWhere) return jsonNoStore({ error: "Unauthorized" }, 401);
 
     const app = await prisma.application.findFirst({
-      where: {
-        id: params.id,
-        job: {
-          companyId,
-        },
-      },
+      where: scopedWhere,
       select: { id: true },
     });
 

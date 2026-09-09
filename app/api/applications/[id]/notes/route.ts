@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/server/auth";
+import { applicationWhereForActor } from "@/lib/server/candidate-access";
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -12,14 +15,26 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const companyId = await getSessionCompanyId().catch(() => null);
-    if (!companyId) return json({ error: "Unauthorized" }, 401);
+    const session = await getServerSession(authOptions);
+    if (!session?.user) return json({ error: "Unauthorized" }, 401);
+    const role = String(session.user.role ?? "").toUpperCase();
+    if (role !== "RECRUITER" && role !== "ADMIN") {
+      return json({ error: "Forbidden" }, 403);
+    }
+    const companyId = role === "RECRUITER"
+      ? await getSessionCompanyId().catch(() => null)
+      : null;
+    const scopedWhere = applicationWhereForActor(
+      { role, companyId },
+      { applicationId: params.id }
+    );
+    if (!scopedWhere) return json({ error: "Forbidden" }, 403);
 
     const body = await req.json().catch(() => null);
     const notes = typeof body?.notes === "string" ? body.notes.trim() : "";
 
     const app = await prisma.application.findFirst({
-      where: { id: params.id, job: { companyId } },
+      where: scopedWhere,
       select: { id: true },
     });
     if (!app) return json({ error: "Not found" }, 404);

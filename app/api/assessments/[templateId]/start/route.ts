@@ -853,6 +853,19 @@ export async function POST(
         }
       }
 
+      if (attempt.contestRegistration) {
+        const availability = challengeAvailability(attempt.contestRegistration.contest, now);
+        if (!availability.open) {
+          const status = availability.reason.includes("cerrado") ? 410 : 409;
+          return jsonNoStore({ error: availability.reason }, status);
+        }
+        // Un concurso permite exactamente una participación. Un intento vencido
+        // queda cerrado; nunca se reemplaza por otro intento sin registro.
+        if (isExpired(attempt.expiresAt, now)) {
+          return jsonNoStore({ error: "El tiempo del reto ha expirado" }, 410);
+        }
+      }
+
       if (isExpired(attempt.expiresAt, now)) {
         let expiredMeta = (attempt.flagsJson as FlagsMeta) || null;
         if (!Array.isArray(expiredMeta?.questionOrder) || expiredMeta.questionOrder.length === 0) {
