@@ -1,5 +1,7 @@
 import { hash } from "bcryptjs";
-import { prisma } from "../lib/server/prisma";
+import { PrismaClient } from "@prisma/client";
+
+const prisma = new PrismaClient();
 
 function flag(name: string) {
   return process.argv.includes(`--${name}`);
