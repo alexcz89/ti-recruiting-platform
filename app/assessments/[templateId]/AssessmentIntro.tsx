@@ -1,11 +1,14 @@
 // app/assessments/[templateId]/AssessmentIntro.tsx
 "use client";
 
+import React from "react";
 import { Clock, FileText, Award, AlertCircle } from "lucide-react";
+import type { AssessmentState } from "@/lib/assessments/expiration";
 
 type Props = {
   template: any;
   onStart: () => void;
+  accessState?: AssessmentState | null;
 };
 
 function formatMinutes(v: any) {
@@ -20,7 +23,7 @@ function formatPercent(v: any) {
   return `${n}%`;
 }
 
-export default function AssessmentIntro({ template, onStart }: Props) {
+export default function AssessmentIntro({ template, onStart, accessState }: Props) {
   const title = String(template?.title ?? "Evaluación");
   const description =
     typeof template?.description === "string" && template.description.trim()
@@ -41,6 +44,10 @@ export default function AssessmentIntro({ template, onStart }: Props) {
       : 1;
 
   const penalizeWrong = Boolean(template?.penalizeWrong);
+  const isExpired = accessState === "EXPIRED";
+  const actionLabel = accessState === "IN_PROGRESS"
+    ? "Continuar evaluación →"
+    : "Comenzar evaluación →";
 
   return (
     <main className="max-w-none p-0">
@@ -53,10 +60,23 @@ export default function AssessmentIntro({ template, onStart }: Props) {
             <p className="mt-1 text-sm text-muted md:text-base">{description}</p>
           </div>
           <div className="flex flex-col items-center gap-1 md:items-end">
-            <button onClick={onStart} className="btn btn-primary px-7 py-3 text-base md:text-lg whitespace-nowrap">
-              Comenzar evaluación →
-            </button>
-            <p className="text-xs text-muted">El cronómetro inicia al hacer clic</p>
+            {isExpired ? (
+              <div className="max-w-xs rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-left dark:border-zinc-700 dark:bg-zinc-900">
+                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
+                  Invitación expirada
+                </p>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                  Si aún deseas completarla, pide al reclutador que te envíe un nuevo link.
+                </p>
+              </div>
+            ) : (
+              <>
+                <button onClick={onStart} className="btn btn-primary px-7 py-3 text-base md:text-lg whitespace-nowrap">
+                  {actionLabel}
+                </button>
+                <p className="text-xs text-muted">El cronómetro inicia al hacer clic</p>
+              </>
+            )}
           </div>
         </div>
 
@@ -154,12 +174,14 @@ export default function AssessmentIntro({ template, onStart }: Props) {
         </div>
 
         {/* Mobile CTA (visible only on mobile since top one is hidden there) */}
-        <div className="mt-5 text-center md:hidden">
-          <button onClick={onStart} className="btn btn-primary w-full py-3 text-base">
-            Comenzar evaluación →
-          </button>
-          <p className="mt-2 text-xs text-muted">El cronómetro inicia al hacer clic</p>
-        </div>
+        {!isExpired && (
+          <div className="mt-5 text-center md:hidden">
+            <button onClick={onStart} className="btn btn-primary w-full py-3 text-base">
+              {actionLabel}
+            </button>
+            <p className="mt-2 text-xs text-muted">El cronómetro inicia al hacer clic</p>
+          </div>
+        )}
       </div>
     </main>
   );

@@ -1,8 +1,16 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+type NotificationInput = {
+  type: string;
+  metadata?: Record<string, unknown>;
+};
+
 const mocks = vi.hoisted(() => ({
   getServerSession: vi.fn(),
   sendAssessmentInviteEmail: vi.fn(),
+  createNotification: vi.fn<(input: NotificationInput) => Promise<void>>(
+    async () => undefined,
+  ),
 }));
 
 const expiredInvite = {
@@ -76,7 +84,7 @@ vi.mock("@/lib/server/prisma", () => ({ prisma: prismaMock }));
 vi.mock("@/lib/server/session", () => ({ getSessionCompanyId: vi.fn(async () => "company-a") }));
 vi.mock("@/lib/server/mailer", () => ({ sendAssessmentInviteEmail: mocks.sendAssessmentInviteEmail }));
 vi.mock("@/lib/notifications/service", () => ({
-  NotificationService: { create: vi.fn(async () => undefined) },
+  NotificationService: { create: mocks.createNotification },
 }));
 
 let POST: typeof import("@/app/api/applications/[id]/assessment-invite/route")["POST"];
@@ -111,5 +119,17 @@ describe("assessment invite resend", () => {
     expect(new Date(body.attempt.expiresAt).toISOString()).toBe(activeAttempt.expiresAt.toISOString());
     expect(tx.assessmentInvite.update).not.toHaveBeenCalled();
     expect(tx.assessmentAttempt.updateMany).not.toHaveBeenCalled();
+    expect(mocks.createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "ASSESSMENT_INVITATION",
+        metadata: expect.objectContaining({
+          templateId: "template-a",
+          token: "token-a",
+        }),
+      }),
+    );
+    expect(mocks.createNotification.mock.calls[0]?.[0]?.metadata).not.toHaveProperty(
+      "inviteUrl",
+    );
   });
 });

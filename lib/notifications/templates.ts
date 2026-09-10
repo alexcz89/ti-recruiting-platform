@@ -2,6 +2,7 @@
 // Notification templates - defines how each type is formatted
 
 import type { NotificationType } from '@prisma/client';
+import { assessmentInvitationPath } from '@/lib/assessments/navigation';
 
 interface NotificationTemplate {
   title: (data: any) => string;
@@ -63,39 +64,7 @@ export const NOTIFICATION_TEMPLATES: Record<NotificationType, NotificationTempla
     message: (data) =>
       `Has sido invitado a completar una evaluación para ${data.jobTitle}`,
     actionText: () => 'Iniciar',
-    // ✅ FIX: prioridad de URL:
-    // 1. inviteUrl completa (con token) si viene en metadata
-    // 2. templateId + token si están disponibles
-    // 3. templateId + attemptId como fallback
-    // 4. /assessments como último recurso
-    actionUrl: (data) => {
-      // Opción 1: URL completa preconstruida (la más confiable)
-      if (data?.inviteUrl && typeof data.inviteUrl === 'string') {
-        return data.inviteUrl;
-      }
-
-      // Opción 2: templateId + token
-      if (data?.templateId && data?.token) {
-        const params = new URLSearchParams({ token: String(data.token) });
-        return `/assessments/${data.templateId}?${params.toString()}`;
-      }
-
-      // Opción 3: templateId + attemptId
-      if (data?.templateId && data?.attemptId) {
-        const params = new URLSearchParams({
-          attemptId: String(data.attemptId),
-        });
-        return `/assessments/${data.templateId}?${params.toString()}`;
-      }
-
-      // Opción 4: solo templateId
-      if (data?.templateId) {
-        return `/assessments/${data.templateId}`;
-      }
-
-      // Fallback
-      return '/assessments';
-    },
+    actionUrl: (data) => assessmentInvitationPath(data),
     priority: 'HIGH',
     defaultChannels: ['IN_APP', 'EMAIL'],
     emailSubject: () => 'Invitación a evaluación técnica',

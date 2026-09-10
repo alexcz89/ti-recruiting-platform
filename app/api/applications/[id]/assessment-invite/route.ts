@@ -468,7 +468,7 @@ export async function POST(
         assessmentId: invite.id,
         templateId: template.id,
         dueDate: invite.expiresAt || newExpiresAt,
-        inviteUrl: inviteUrlString,
+        token: invite.token,
       },
     }).catch((notifErr) => {
       console.warn(

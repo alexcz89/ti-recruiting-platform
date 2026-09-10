@@ -6,6 +6,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { assessmentState, type AssessmentState } from '@/lib/assessments/expiration';
+import { assessmentInvitationPath } from '@/lib/assessments/navigation';
+import { CandidateAssessmentAction } from './CandidateAssessmentAction';
 
 type UiState = AssessmentState;
 
@@ -190,10 +192,7 @@ export default async function CandidateAssessmentsPage() {
     const templateTitle = inv?.template?.title ?? "Assessment";
     const timeLimit = inv?.template?.timeLimit ?? null;
 
-    const startUrl =
-      templateId && token
-        ? `/assessments/${encodeURIComponent(templateId)}?token=${encodeURIComponent(token)}`
-        : `/assessments/${encodeURIComponent(templateId)}`;
+    const startUrl = assessmentInvitationPath({ templateId, token });
 
     const resumeUrl = attempt?.id
       ? `/assessments/${encodeURIComponent(templateId)}?attemptId=${encodeURIComponent(attempt.id)}`
@@ -318,14 +317,7 @@ export default async function CandidateAssessmentsPage() {
               count={pending.length}
               emptyText="No tienes evaluaciones pendientes."
               rows={pending}
-              renderAction={(r) => (
-                <Link
-                  href={r.startUrl}
-                  className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700"
-                >
-                  Iniciar
-                </Link>
-              )}
+              renderAction={(r) => <CandidateAssessmentAction {...r} />}
             />
 
             {/* En progreso */}
@@ -335,14 +327,7 @@ export default async function CandidateAssessmentsPage() {
               count={inProgress.length}
               emptyText="No tienes evaluaciones en progreso."
               rows={inProgress}
-              renderAction={(r) => (
-                <Link
-                  href={r.resumeUrl}
-                  className="inline-flex items-center rounded-full bg-sky-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-sky-700"
-                >
-                  Continuar
-                </Link>
-              )}
+              renderAction={(r) => <CandidateAssessmentAction {...r} />}
             />
 
             {/* Completadas */}
@@ -378,17 +363,7 @@ export default async function CandidateAssessmentsPage() {
                 count={inactive.length}
                 rows={inactive}
                 muted
-                renderAction={(r) =>
-                  // ✅ si tiene token, puedes dejar que el candidato “reinicie” (tu /start con token creará un attempt nuevo si el previo expiró)
-                  r.token ? (
-                    <Link
-                      href={r.startUrl}
-                      className="inline-flex items-center rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                    >
-                      Reiniciar
-                    </Link>
-                  ) : null
-                }
+                renderAction={(r) => <CandidateAssessmentAction {...r} />}
                 renderFooter={() => (
                   <p className="mt-2 text-[12px] text-zinc-500 dark:text-zinc-400">
                     Si aún deseas completarla, pide al reclutador que te reenvíe el link.

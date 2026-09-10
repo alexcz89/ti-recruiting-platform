@@ -94,7 +94,7 @@ export type NotificationMetadata = {
     assessmentId: string;
     templateId: string;
     dueDate: Date;
-    // ✅ URL completa con token para redirect directo desde la notificación
+    // Kept for legacy notifications; in-app navigation normalizes it to a relative path.
     inviteUrl?: string;
     token?: string;
     attemptId?: string;
