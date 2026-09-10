@@ -1,9 +1,11 @@
 // app/auth/signin/page.tsx
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
 import SignInUnified from "./SignInUnified";
 import { FormSkeleton } from "@/components/ui/Skeleton";
-import type { Role } from "@prisma/client";
+import { authOptions } from "@/lib/server/auth";
+import { authenticatedSigninDestination } from "@/lib/auth/login";
 
 type SearchParams = {
   role?: string;
@@ -19,7 +21,15 @@ export const metadata = {
   title: "Iniciar sesión | Bolsa TI",
 };
 
-export default function SignInPage({ searchParams }: PageProps) {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function SignInPage({ searchParams }: PageProps) {
+  const session = await getServerSession(authOptions);
+  if (session?.user) {
+    redirect(authenticatedSigninDestination(session.user.role));
+  }
+
   const roleParam = searchParams?.role?.toUpperCase();
   const callbackUrl = searchParams?.callbackUrl || "/";
   const isSignup = searchParams?.signup === "true";
