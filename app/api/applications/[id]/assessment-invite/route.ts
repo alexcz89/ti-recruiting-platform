@@ -14,6 +14,10 @@ import {
   computeInviteExpiresAt,
   inviteResendAction,
 } from "@/lib/assessments/expiration";
+import {
+  assessmentInviteEmailDedupeKey,
+  resolveAssessmentResendOperation,
+} from "@/lib/assessments/resend-operation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -98,7 +102,12 @@ export async function POST(
       return json(403, { error: "Sin empresa asociada" });
     }
 
-    let body: { templateId?: unknown; expiresInDays?: unknown } = {};
+    let body: {
+      templateId?: unknown;
+      expiresInDays?: unknown;
+      resendOperationId?: unknown;
+      resendRequestedAt?: unknown;
+    } = {};
     const contentType = request.headers.get("content-type") || "";
 
     if (contentType.includes("application/json")) {
@@ -121,7 +130,11 @@ export async function POST(
         : 7;
 
     const now = new Date();
-    const newExpiresAt = computeInviteExpiresAt(now, expiresInDays);
+    const resendOperation = resolveAssessmentResendOperation(body, now);
+    const newExpiresAt = computeInviteExpiresAt(
+      resendOperation.requestedAt,
+      expiresInDays,
+    );
 
     const application = await prisma.application.findFirst({
       where: {
@@ -422,7 +435,10 @@ export async function POST(
           timeLimit: template.timeLimit ?? null,
           expiresAt: invite.expiresAt ?? null,
           inviteUrl: inviteUrlString,
-          dedupeKey: invite.id,
+          dedupeKey: assessmentInviteEmailDedupeKey(
+            invite.id,
+            resendOperation.id,
+          ),
         });
 
         if (typeof r === "object" && r !== null && "ok" in r && r.ok === true) {

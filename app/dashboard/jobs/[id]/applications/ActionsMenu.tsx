@@ -4,6 +4,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
 import {
   MoreHorizontal,
   FileText,
@@ -127,7 +128,7 @@ export default function ActionsMenu(props: Props) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ templateId }),
+        body: JSON.stringify(createAssessmentResendBody(templateId)),
       }
     );
     const data = (await res.json().catch(() => ({}))) as InviteResponse;
