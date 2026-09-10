@@ -18,7 +18,11 @@ import {
   Loader2,
 } from "lucide-react";
 import { SignInSchema } from "@/lib/validation";
+import {
+  loginRoleMismatchMessage,
+} from "@/lib/auth/login";
 import ForgotPasswordModal from "./ForgotPasswordModal";
+import SignInSessionGuard from "./SignInSessionGuard";
 
 type FormData = z.infer<typeof SignInSchema> & { remember?: boolean };
 type Role = "CANDIDATE" | "RECRUITER";
@@ -100,6 +104,15 @@ export default function SignInUnified({
         return;
       }
 
+      const roleMismatchMessage = loginRoleMismatchMessage(res.error);
+      if (roleMismatchMessage) {
+        setError("root", {
+          type: "auth",
+          message: roleMismatchMessage,
+        });
+        return;
+      }
+
       setError("root", {
         type: "auth",
         message: "No se pudo iniciar sesión. Verifica tus datos.",
@@ -137,7 +150,8 @@ export default function SignInUnified({
   };
 
   return (
-    <div className="relative overflow-hidden">
+    <SignInSessionGuard>
+      <div className="relative overflow-hidden">
       {/* Fondo decorativo */}
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#80808005_1px,transparent_1px),linear-gradient(to_bottom,#80808005_1px,transparent_1px)] bg-[size:32px_32px]" />
 
@@ -405,6 +419,7 @@ export default function SignInUnified({
         isOpen={showForgotPasswordModal}
         onClose={() => setShowForgotPasswordModal(false)}
       />
-    </div>
+      </div>
+    </SignInSessionGuard>
   );
 }

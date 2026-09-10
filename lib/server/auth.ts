@@ -6,6 +6,10 @@ import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
+import {
+  accountRoleMatchesLoginMode,
+  parseLoginMode,
+} from "@/lib/auth/login";
 
 const prisma = (globalThis as any).prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") {
@@ -61,8 +65,11 @@ export const authOptions: AuthOptions = {
           }
 
           const email = credentials.email.toLowerCase().trim();
-          const intendedRole: Role =
-            credentials.role === "RECRUITER" ? "RECRUITER" : "CANDIDATE";
+          const intendedRole = parseLoginMode(credentials.role);
+          if (!intendedRole) {
+            console.log("[AUTH] invalid or missing login role");
+            return null;
+          }
 
           console.log("[AUTH] normalized input", {
             email,
@@ -124,10 +131,10 @@ export const authOptions: AuthOptions = {
             matches: dbUser.role === intendedRole,
           });
 
-          // ADMIN puede autenticarse desde el tab de Reclutador
-          if (dbUser.role !== intendedRole && dbUser.role !== "ADMIN") {
+          // ADMIN usa el mismo flujo que RECRUITER.
+          if (!accountRoleMatchesLoginMode(dbUser.role, intendedRole)) {
             console.log("[AUTH] role mismatch");
-            return null;
+            throw new Error(`LOGIN_ROLE_MISMATCH:${dbUser.role}`);
           }
 
           if (!dbUser.emailVerified) {
