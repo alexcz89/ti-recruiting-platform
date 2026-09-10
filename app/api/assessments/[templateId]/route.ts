@@ -4,6 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { isAntiCheatBypassed } from "@/lib/server/assessmentAntiCheat";
+import { assessmentState } from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ function jsonNoStore(data: unknown, status = 200) {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { templateId: string } }
 ) {
   try {
@@ -78,7 +79,11 @@ export async function GET(
       ? template.sections
       : [];
 
-    const [attemptsUsed, lastAttempt] = await Promise.all([
+    const requestUrl = new URL(request.url);
+    const token = requestUrl.searchParams.get("token");
+    const attemptId = requestUrl.searchParams.get("attemptId");
+
+    const [attemptsUsed, lastAttempt, inviteAccess, attemptAccess] = await Promise.all([
       prisma.assessmentAttempt.count({
         where: {
           candidateId: userId,
@@ -100,11 +105,42 @@ export async function GET(
           passed: true,
         },
       }),
+      token
+        ? prisma.assessmentInvite.findFirst({
+            where: {
+              token,
+              candidateId: userId,
+              templateId: params.templateId,
+            },
+            select: {
+              status: true,
+              expiresAt: true,
+              attempt: {
+                select: { status: true, expiresAt: true },
+              },
+            },
+          })
+        : Promise.resolve(null),
+      !token && attemptId
+        ? prisma.assessmentAttempt.findFirst({
+            where: {
+              id: attemptId,
+              candidateId: userId,
+              templateId: params.templateId,
+            },
+            select: { status: true, expiresAt: true },
+          })
+        : Promise.resolve(null),
     ]);
 
     const canRetry = Boolean(template.allowRetry);
     const maxAttempts = template.maxAttempts ?? 1;
     const canStart = canRetry ? attemptsUsed < maxAttempts : attemptsUsed === 0;
+    const accessState = inviteAccess
+      ? assessmentState(inviteAccess, inviteAccess.attempt, new Date())
+      : attemptAccess
+        ? assessmentState(null, attemptAccess, new Date())
+        : null;
 
     return jsonNoStore({
       template: {
@@ -118,6 +154,7 @@ export async function GET(
         canStart,
         lastAttempt: lastAttempt || null,
       },
+      accessState,
       antiCheatBypass: isAntiCheatBypassed(user.email),
     });
   } catch (error) {

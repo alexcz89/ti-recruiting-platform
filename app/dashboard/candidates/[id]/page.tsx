@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { redirect, notFound } from "next/navigation";
 import { prisma } from "@/lib/server/prisma";
+import { isAssessmentExpired } from "@/lib/assessments/expiration";
 import Link from "next/link";
 import {
   buildCandidateSkillInputs,
@@ -290,8 +291,8 @@ export default async function CandidateDetailPage({
           }),
         ]);
 
-        const attemptExpired = !!attempt?.expiresAt && new Date(attempt.expiresAt) <= now;
-        const inviteExpired  = !!invite?.expiresAt  && new Date(invite.expiresAt)  <= now;
+        const attemptExpired = isAssessmentExpired(attempt?.expiresAt, now);
+        const inviteExpired = isAssessmentExpired(invite?.expiresAt, now);
         const attemptStatus  = String(attempt?.status || "").toUpperCase();
         const inviteStatus   = String(invite?.status  || "").toUpperCase();
 
@@ -309,13 +310,13 @@ export default async function CandidateDetailPage({
           score = attempt.totalScore ?? null;
           passed = (attempt as any).passed ?? null;
           completedAt = (attempt as any).submittedAt ? new Date((attempt as any).submittedAt).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" }) : null;
+        } else if (attempt && attemptStatus === "IN_PROGRESS") {
+          state = attemptExpired ? "EXPIRED" : "STARTED";
+          attemptId = attempt.id;
+          token = invite?.token ?? null;
         } else if (attemptExpired || inviteExpired) {
           state = "EXPIRED";
           attemptId = attempt?.id ?? null;
-          token = invite?.token ?? null;
-        } else if (attempt && attemptStatus === "IN_PROGRESS") {
-          state = "STARTED";
-          attemptId = attempt.id;
           token = invite?.token ?? null;
         } else if (invite) {
           state = inviteStatus === "STARTED" ? "STARTED" : "SENT";

@@ -12,6 +12,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
+import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
 
 export type AssessmentState = {
   applicationId: string;
@@ -90,7 +91,7 @@ function SingleAssessmentButton({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ templateId: a.templateId }),
+            body: JSON.stringify(createAssessmentResendBody(a.templateId)),
           }
         );
         const data = (await res.json().catch(() => ({}))) as InviteResponse;
@@ -218,7 +219,7 @@ function DropdownItem({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ templateId: a.templateId }),
+            body: JSON.stringify(createAssessmentResendBody(a.templateId)),
           }
         );
         const data = (await res.json().catch(() => ({}))) as InviteResponse;

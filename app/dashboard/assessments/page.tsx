@@ -29,7 +29,7 @@ import {
 export const metadata = { title: "Evaluaciones | Panel" };
 export const dynamic = "force-dynamic";
 
-type StateFilter = "ALL" | "PENDING" | "IN_PROGRESS" | "COMPLETED" | "INACTIVE";
+type StateFilter = "ALL" | "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXPIRED" | "CANCELLED";
 
 function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
@@ -40,14 +40,16 @@ function normalizeState(s: string | null): StateFilter {
   if (v === "PENDING") return "PENDING";
   if (v === "IN_PROGRESS") return "IN_PROGRESS";
   if (v === "COMPLETED") return "COMPLETED";
-  if (v === "INACTIVE") return "INACTIVE";
+  if (v === "EXPIRED") return "EXPIRED";
+  if (v === "CANCELLED") return "CANCELLED";
   return "ALL";
 }
 
 function stateLabel(state: Exclude<StateFilter, "ALL">) {
   if (state === "COMPLETED") return "Completado";
   if (state === "IN_PROGRESS") return "En progreso";
-  if (state === "INACTIVE") return "Inactivo";
+  if (state === "EXPIRED") return "Expirada";
+  if (state === "CANCELLED") return "Cancelada";
   return "Pendiente";
 }
 
@@ -56,7 +58,7 @@ function tone(state: Exclude<StateFilter, "ALL">) {
     return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50";
   if (state === "IN_PROGRESS")
     return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800/50";
-  if (state === "INACTIVE")
+  if (state === "EXPIRED" || state === "CANCELLED")
     return "bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400 dark:border-zinc-700";
   return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50";
 }
@@ -185,7 +187,7 @@ export default async function CompanyAssessmentsPage({
   const mCompleted = rows.filter((r) => r.uiState === "COMPLETED").length;
   const mInProgress = rows.filter((r) => r.uiState === "IN_PROGRESS").length;
   const mPending = rows.filter((r) => r.uiState === "PENDING").length;
-  const mInactive = rows.filter((r) => r.uiState === "INACTIVE").length;
+  const mExpired = rows.filter((r) => r.uiState === "EXPIRED").length;
   const hasInProgress = mInProgress > 0;
 
   const scored = rows
@@ -229,7 +231,7 @@ export default async function CompanyAssessmentsPage({
           <MetricCard label="Pendientes" value={mPending} icon={Clock} color="zinc" total={mTotal} />
           <MetricCard label="En progreso" value={mInProgress} icon={TrendingUp} color="blue" total={mTotal} />
           <MetricCard label="Completadas" value={mCompleted} icon={CheckCircle2} color="emerald" total={mTotal} />
-          <MetricCard label="Inactivas" value={mInactive} icon={Users} color="zinc" total={mTotal} />
+          <MetricCard label="Expiradas" value={mExpired} icon={Users} color="zinc" total={mTotal} />
           <MetricCard label="Score prom." value={`${avgScore}%`} icon={TrendingUp} color="teal" isPercentage />
           <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert alertHref={"/dashboard/assessments?state=COMPLETED&cheat=1"} />
         </div>
@@ -304,7 +306,8 @@ export default async function CompanyAssessmentsPage({
                     <option value="PENDING">Pendiente</option>
                     <option value="IN_PROGRESS">En progreso</option>
                     <option value="COMPLETED">Completado</option>
-                    <option value="INACTIVE">Inactivo</option>
+                    <option value="EXPIRED">Expirada</option>
+                    <option value="CANCELLED">Cancelada</option>
                   </select>
                   <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
                     <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -439,7 +442,7 @@ export default async function CompanyAssessmentsPage({
                   const inv = (r?.inv ?? r) as any;
                   const attempt = (r?.attempt ?? null) as any;
 
-                  const st = r.uiState as "PENDING" | "IN_PROGRESS" | "COMPLETED" | "INACTIVE";
+                  const st = r.uiState as Exclude<StateFilter, "ALL">;
                   const stTone = tone(st);
                   const stLabel = stateLabel(st);
 
@@ -552,7 +555,9 @@ export default async function CompanyAssessmentsPage({
                               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
                             )}
                             {st === "PENDING" && <Clock className="h-2.5 w-2.5" />}
-                            {st === "INACTIVE" && <XCircle className="h-2.5 w-2.5" />}
+                            {(st === "EXPIRED" || st === "CANCELLED") && (
+                              <XCircle className="h-2.5 w-2.5" />
+                            )}
                             {stLabel}
                           </span>
                         </div>

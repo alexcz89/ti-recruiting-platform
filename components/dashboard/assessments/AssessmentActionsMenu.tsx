@@ -4,6 +4,7 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import Link from "next/link";
+import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
@@ -169,7 +170,7 @@ export default function AssessmentActionsMenu({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ templateId }),
+          body: JSON.stringify(createAssessmentResendBody(templateId)),
         }
       );
       const data = await res.json().catch(() => ({}));

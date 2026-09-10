@@ -31,7 +31,7 @@ export default function AssessmentTimer({
 
   const [timeLeft, setTimeLeft] = useState<number>(() => {
     if (!Number.isFinite(expiresMs)) return 0;
-    return Math.max(0, Math.floor((expiresMs - Date.now()) / 1000));
+    return Math.max(0, Math.ceil((expiresMs - Date.now()) / 1000));
   });
 
   useEffect(() => {
@@ -43,7 +43,7 @@ export default function AssessmentTimer({
     }
 
     const tick = () => {
-      const remaining = Math.max(0, Math.floor((expiresMs - Date.now()) / 1000));
+      const remaining = Math.max(0, Math.ceil((expiresMs - Date.now()) / 1000));
       setTimeLeft(remaining);
 
       if (remaining === 0 && !firedRef.current) {

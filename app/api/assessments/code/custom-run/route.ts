@@ -8,6 +8,10 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
 import { validateReadOnlySqlQuery, validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
+import {
+  ASSESSMENT_EXPIRED_CODE,
+  isAssessmentExpired,
+} from "@/lib/assessments/expiration";
 
 const CUSTOM_RUN_LIMIT = 30;
 const CUSTOM_STATUS_PREFIX = "CUSTOM_";
@@ -95,8 +99,12 @@ export async function POST(request: Request) {
       if (String(attempt.status).toUpperCase() !== "IN_PROGRESS") {
         return { error: "El intento no está en progreso", status: 400 } as const;
       }
-      if (attempt.expiresAt && new Date() > attempt.expiresAt) {
-        return { error: "Tiempo expirado", status: 400 } as const;
+      if (isAssessmentExpired(attempt.expiresAt)) {
+        return {
+          error: "Tiempo expirado",
+          code: ASSESSMENT_EXPIRED_CODE,
+          status: 410,
+        } as const;
       }
 
       const question = await tx.assessmentQuestion.findFirst({
@@ -142,7 +150,13 @@ export async function POST(request: Request) {
     });
 
     if ("error" in reservation) {
-      return jsonNoStore({ error: reservation.error }, reservation.status);
+      return jsonNoStore(
+        {
+          error: reservation.error,
+          ...("code" in reservation ? { code: reservation.code } : {}),
+        },
+        reservation.status
+      );
     }
     reservationId = reservation.executionId;
 

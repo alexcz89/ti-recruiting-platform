@@ -348,8 +348,19 @@ export async function sendAssessmentInviteEmail(params: {
     (params.expiresAt ? `Expira: ${formatDateTime(params.expiresAt)}\n` : "") +
     `\nAbrir evaluación:\n${params.inviteUrl}\n`;
 
+  const payloadHash = crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        to: params.to,
+        subject,
+        html,
+        text,
+      }),
+    )
+    .digest("hex");
   const dedupeKey = params.dedupeKey
-    ? `assessment-invite:${params.dedupeKey}`
+    ? `assessment-invite:${params.dedupeKey}:payload:${payloadHash}`
     : undefined;
 
   return sendEmail({ to: params.to, subject, html, text, dedupeKey });

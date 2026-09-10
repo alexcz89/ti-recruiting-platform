@@ -17,6 +17,7 @@ import AssessmentQuestion from './AssessmentQuestion';
 import AssessmentProgress from './AssessmentProgress';
 import AssessmentTimer from './AssessmentTimer';
 import { useAntiCheating } from './useAntiCheating';
+import type { AssessmentState } from '@/lib/assessments/expiration';
 
 type Option = {
   id?: string;
@@ -112,6 +113,7 @@ export default function AssessmentPage() {
   const [template, setTemplate] = useState<any>(null);
   const [started, setStarted] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [accessState, setAccessState] = useState<AssessmentState | null>(null);
 
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -219,7 +221,14 @@ export default function AssessmentPage() {
   useEffect(() => {
     async function loadTemplate() {
       try {
-        const res = await fetch(`/api/assessments/${templateId}`, { cache: 'no-store' });
+        const accessParams = new URLSearchParams();
+        if (inviteToken) accessParams.set('token', inviteToken);
+        if (attemptIdQS) accessParams.set('attemptId', attemptIdQS);
+        const query = accessParams.toString();
+        const res = await fetch(
+          `/api/assessments/${templateId}${query ? `?${query}` : ''}`,
+          { cache: 'no-store' },
+        );
 
         if (res.status === 401) {
           const callbackUrl = encodeURIComponent(
@@ -232,6 +241,7 @@ export default function AssessmentPage() {
         if (!res.ok) throw new Error('Error al cargar template');
         const data = await res.json();
         setTemplate(data.template);
+        setAccessState(data.accessState ?? null);
         setAntiCheatBypass(Boolean(data.antiCheatBypass));
 
         if (!data.userStatus.canStart && !inviteToken && !attemptIdQS) {
@@ -425,13 +435,14 @@ export default function AssessmentPage() {
     if (loading) return;
     if (!template) return;
     if (started || starting) return;
+    if (accessState === 'EXPIRED' || accessState === 'CANCELLED') return;
 
     if (attemptIdQS) {
       autoStartOnceRef.current = true;
       handleStart();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, template, inviteToken, attemptIdQS, started, starting]);
+  }, [loading, template, inviteToken, attemptIdQS, started, starting, accessState]);
 
   const currentQuestion = questions[currentIndex];
   const currentAnswer = answers[currentQuestion?.id || ''] || [];
@@ -454,9 +465,14 @@ export default function AssessmentPage() {
         body: JSON.stringify({ questionId, selectedOptions: unique, timeSpent: questionTime }),
       });
 
-      if (!res.ok && res.status === 400) {
+      if (!res.ok && (res.status === 400 || res.status === 410)) {
         const data = await res.json().catch(() => null);
-        if (data?.error?.toLowerCase?.().includes('expir')) handleExpire();
+        if (
+          data?.code === 'ASSESSMENT_EXPIRED' ||
+          data?.error?.toLowerCase?.().includes('expir')
+        ) {
+          handleExpire();
+        }
         return false;
       }
 
@@ -638,7 +654,7 @@ export default function AssessmentPage() {
   }
 
   if (!started) {
-    return <AssessmentIntro template={template} onStart={handleStart} />;
+    return <AssessmentIntro template={template} onStart={handleStart} accessState={accessState} />;
   }
 
   if (!currentQuestion) {

@@ -77,6 +77,8 @@ type ResultsData = {
     attemptNumber?: number;
     startedAt?: string;
     submittedAt?: string;
+    expiresAt?: string | null;
+    expiredAtSubmission?: boolean;
     timeSpent?: number;
     totalScore?: number;
     sectionScores?: SectionScore;
@@ -514,6 +516,11 @@ export default async function AttemptResultsPage({
                 {hasSuspiciousFlags && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-300">
                     <ShieldAlert className="h-3 w-3" />Anti-cheat
+                  </span>
+                )}
+                {attempt.expiredAtSubmission && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">
+                    <Clock className="h-3 w-3" />Finalizada por tiempo
                   </span>
                 )}
               </div>

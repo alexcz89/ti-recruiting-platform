@@ -5,49 +5,11 @@ import type { ReactNode } from "react";
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
+import { assessmentState, type AssessmentState } from '@/lib/assessments/expiration';
+import { assessmentInvitationPath } from '@/lib/assessments/navigation';
+import { CandidateAssessmentAction } from './CandidateAssessmentAction';
 
-type UiState = "COMPLETED" | "IN_PROGRESS" | "EXPIRED" | "CANCELLED" | "PENDING";
-
-function pickUiState(inv: any, attempt: any, now: Date): UiState {
-  const invStatus = String(inv?.status ?? "").toUpperCase();
-
-  // Detectar attempt obsoleto: fue creado ANTES de que el invite fuera reenviado.
-  // Cuando se reenvía un assessment, el invite conserva el mismo ID pero se actualiza
-  // (updatedAt cambia y status vuelve a "SENT"). Un attempt cuyo createdAt < inv.updatedAt
-  // es de una ronda anterior y no debe bloquear el estado Pendiente.
-  const rawAtStatus = String(attempt?.status ?? "").toUpperCase();
-  const isStaleAttempt =
-    attempt != null &&
-    invStatus === "SENT" &&
-    ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(rawAtStatus) &&
-    attempt.createdAt != null &&
-    inv.updatedAt != null &&
-    new Date(attempt.createdAt) < new Date(inv.updatedAt);
-
-  const effectiveAttempt = isStaleAttempt ? null : attempt;
-  const atStatus = String(effectiveAttempt?.status ?? "").toUpperCase();
-
-  // Attempt final siempre manda (SUBMITTED, EVALUATED, COMPLETED) — no importa expiresAt
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
-
-  // Attempt activo pero su tiempo expiró (ya no puede continuar)
-  if (effectiveAttempt?.expiresAt && new Date(effectiveAttempt.expiresAt) <= now) return "EXPIRED";
-
-  if (atStatus === "IN_PROGRESS") return "IN_PROGRESS";
-
-  if (atStatus === "NOT_STARTED") {
-    if (invStatus === "STARTED") return "IN_PROGRESS";
-    return "PENDING";
-  }
-
-  // Sin attempt válido: el invite manda
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
-  if (invStatus === "CANCELLED") return "CANCELLED";
-  if (inv?.expiresAt && new Date(inv.expiresAt) <= now) return "EXPIRED";
-  if (invStatus === "STARTED") return "IN_PROGRESS";
-
-  return "PENDING";
-}
+type UiState = AssessmentState;
 
 function statusLabel(state: UiState) {
   if (state === "COMPLETED") return "Completada";
@@ -223,17 +185,14 @@ export default async function CandidateAssessmentsPage() {
 
     const attempt = isStaleHere ? null : rawAttempt;
 
-    const state = pickUiState(inv, attempt, now);
+    const state = assessmentState(inv, attempt, now);
 
     const jobTitle = inv?.application?.job?.title ?? "Vacante";
     const companyName = inv?.application?.job?.company?.name ?? "—";
     const templateTitle = inv?.template?.title ?? "Assessment";
     const timeLimit = inv?.template?.timeLimit ?? null;
 
-    const startUrl =
-      templateId && token
-        ? `/assessments/${encodeURIComponent(templateId)}?token=${encodeURIComponent(token)}`
-        : `/assessments/${encodeURIComponent(templateId)}`;
+    const startUrl = assessmentInvitationPath({ templateId, token });
 
     const resumeUrl = attempt?.id
       ? `/assessments/${encodeURIComponent(templateId)}?attemptId=${encodeURIComponent(attempt.id)}`
@@ -358,14 +317,7 @@ export default async function CandidateAssessmentsPage() {
               count={pending.length}
               emptyText="No tienes evaluaciones pendientes."
               rows={pending}
-              renderAction={(r) => (
-                <Link
-                  href={r.startUrl}
-                  className="inline-flex items-center rounded-full bg-emerald-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-emerald-700"
-                >
-                  Iniciar
-                </Link>
-              )}
+              renderAction={(r) => <CandidateAssessmentAction {...r} />}
             />
 
             {/* En progreso */}
@@ -375,14 +327,7 @@ export default async function CandidateAssessmentsPage() {
               count={inProgress.length}
               emptyText="No tienes evaluaciones en progreso."
               rows={inProgress}
-              renderAction={(r) => (
-                <Link
-                  href={r.resumeUrl}
-                  className="inline-flex items-center rounded-full bg-sky-600 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-sky-700"
-                >
-                  Continuar
-                </Link>
-              )}
+              renderAction={(r) => <CandidateAssessmentAction {...r} />}
             />
 
             {/* Completadas */}
@@ -418,17 +363,7 @@ export default async function CandidateAssessmentsPage() {
                 count={inactive.length}
                 rows={inactive}
                 muted
-                renderAction={(r) =>
-                  // ✅ si tiene token, puedes dejar que el candidato “reinicie” (tu /start con token creará un attempt nuevo si el previo expiró)
-                  r.token ? (
-                    <Link
-                      href={r.startUrl}
-                      className="inline-flex items-center rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                    >
-                      Reiniciar
-                    </Link>
-                  ) : null
-                }
+                renderAction={(r) => <CandidateAssessmentAction {...r} />}
                 renderFooter={() => (
                   <p className="mt-2 text-[12px] text-zinc-500 dark:text-zinc-400">
                     Si aún deseas completarla, pide al reclutador que te reenvíe el link.

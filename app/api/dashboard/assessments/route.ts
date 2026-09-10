@@ -4,11 +4,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
+import { assessmentState, type AssessmentState } from '@/lib/assessments/expiration';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-type StateFilter = "ALL" | "PENDING" | "IN_PROGRESS" | "COMPLETED" | "INACTIVE";
+type StateFilter = "ALL" | AssessmentState;
 
 function jsonNoStore(data: any, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -23,30 +24,9 @@ function normalizeState(s: string | null): StateFilter {
   if (v === "PENDING") return "PENDING";
   if (v === "IN_PROGRESS") return "IN_PROGRESS";
   if (v === "COMPLETED") return "COMPLETED";
-  if (v === "INACTIVE") return "INACTIVE";
+  if (v === "EXPIRED") return "EXPIRED";
+  if (v === "CANCELLED") return "CANCELLED";
   return "ALL";
-}
-
-function pickUiState(inv: any, attempt: any, now: Date): Exclude<StateFilter, "ALL"> {
-  const invStatus = String(inv?.status ?? "").toUpperCase();
-  const atStatus = String(attempt?.status ?? "").toUpperCase();
-
-  // ✅ attempt final manda
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
-
-  // ✅ si hay attempt pero ya expiró, se vuelve INACTIVE (aunque diga IN_PROGRESS)
-  if (attempt?.expiresAt && new Date(attempt.expiresAt) <= now) return "INACTIVE";
-
-  // ✅ attempt activo
-  if (["IN_PROGRESS", "NOT_STARTED"].includes(atStatus)) return "IN_PROGRESS";
-
-  // Sin attempt: invite manda
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
-  if (invStatus === "STARTED") return "IN_PROGRESS";
-  if (["CANCELLED", "REVOKED"].includes(invStatus)) return "INACTIVE";
-  if (inv?.expiresAt && new Date(inv.expiresAt) <= now) return "INACTIVE";
-
-  return "PENDING";
 }
 
 // GET /api/dashboard/assessments?q=&jobId=&state=&hasAttempt=&page=
@@ -204,7 +184,7 @@ export async function GET(request: Request) {
         attemptByKey.get(`${String(inv.applicationId)}::${String(inv.templateId)}::${String(inv.candidateId)}`) ||
         null;
 
-      const uiState = pickUiState(inv, attempt, now);
+      const uiState = assessmentState(inv, attempt, now);
 
       const attemptFinal =
         attempt && ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(String(attempt.status ?? "").toUpperCase());

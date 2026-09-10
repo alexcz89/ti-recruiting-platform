@@ -8,21 +8,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
+import { assessmentState, type AssessmentState } from "@/lib/assessments/expiration";
 
-type UiState = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "INACTIVE";
-
-function pickUiState(inv: any, attempt: any, now: Date): UiState {
-  const invStatus = String(inv?.status ?? "").toUpperCase();
-  const atStatus = String(attempt?.status ?? "").toUpperCase();
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
-  if (attempt?.expiresAt && new Date(attempt.expiresAt) <= now) return "INACTIVE";
-  if (["IN_PROGRESS", "NOT_STARTED"].includes(atStatus)) return "IN_PROGRESS";
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
-  if (invStatus === "STARTED") return "IN_PROGRESS";
-  if (["CANCELLED", "REVOKED"].includes(invStatus)) return "INACTIVE";
-  if (inv?.expiresAt && new Date(inv.expiresAt) <= now) return "INACTIVE";
-  return "PENDING";
-}
+type UiState = AssessmentState;
 
 function csvEscape(value: string | null | undefined): string {
   const str = String(value ?? "");
@@ -46,18 +34,27 @@ export async function GET(request: Request) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
-      return new Response(JSON.stringify({ error: "No autorizado" }), { status: 401 });
+      return new Response(JSON.stringify({ error: "No autorizado" }), {
+        status: 401,
+        headers: { "Cache-Control": "no-store" },
+      });
     }
 
     const user = session.user as any;
     const role = String(user?.role ?? "").toUpperCase();
     if (role !== "RECRUITER" && role !== "ADMIN") {
-      return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
+      return new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { "Cache-Control": "no-store" },
+      });
     }
 
     const companyId = await getSessionCompanyId().catch(() => null);
     if (!companyId && role !== "ADMIN") {
-      return new Response(JSON.stringify({ error: "Sin empresa asociada" }), { status: 403 });
+      return new Response(JSON.stringify({ error: "Sin empresa asociada" }), {
+        status: 403,
+        headers: { "Cache-Control": "no-store" },
+      });
     }
 
     const url = new URL(request.url);
@@ -157,7 +154,7 @@ export async function GET(request: Request) {
         attemptByInviteId.get(String(inv.id)) ||
         attemptByKey.get(`${inv.applicationId}::${inv.templateId}::${inv.candidateId}`) ||
         null;
-      return { inv, attempt, uiState: pickUiState(inv, attempt, now) };
+      return { inv, attempt, uiState: assessmentState(inv, attempt, now) as UiState };
     });
 
     // Filters
@@ -241,6 +238,9 @@ export async function GET(request: Request) {
     });
   } catch (e) {
     console.error("[GET /api/dashboard/assessments/export] ERROR", e);
-    return new Response(JSON.stringify({ error: "Error interno" }), { status: 500 });
+    return new Response(JSON.stringify({ error: "Error interno" }), {
+      status: 500,
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 }

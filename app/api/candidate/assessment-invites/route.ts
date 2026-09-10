@@ -4,10 +4,11 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { assessmentState, type AssessmentState } from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 
-type UiState = "COMPLETED" | "IN_PROGRESS" | "EXPIRED" | "CANCELLED" | "PENDING";
+type UiState = AssessmentState;
 
 type SessionUser = {
   id?: string | null;
@@ -44,42 +45,6 @@ function jsonNoStore(data: unknown, status = 200) {
       Expires: "0",
     },
   });
-}
-
-function pickUiState(inv: InviteRow, attempt: AttemptRow | null, now: Date): UiState {
-  const invStatus = String(inv.status ?? "").toUpperCase();
-
-  // Detectar attempt obsoleto: fue creado ANTES de que el invite fuera reenviado.
-  // Cuando se reenvía un assessment, el invite reutiliza el mismo ID pero se actualiza
-  // (updatedAt cambia). Un attempt cuyo createdAt < inv.updatedAt es de una ronda anterior.
-  const isStaleAttempt =
-    attempt !== null &&
-    invStatus === "SENT" &&
-    ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(String(attempt.status ?? "").toUpperCase()) &&
-    attempt.createdAt < inv.updatedAt;
-
-  const effectiveAttempt = isStaleAttempt ? null : attempt;
-  const atStatus = String(effectiveAttempt?.status ?? "").toUpperCase();
-
-  // Attempt final siempre manda (SUBMITTED, EVALUATED, COMPLETED) — no importa expiresAt
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(atStatus)) return "COMPLETED";
-
-  // Attempt activo pero su tiempo expiró (ya no puede continuar)
-  if (effectiveAttempt?.expiresAt && new Date(effectiveAttempt.expiresAt) <= now) return "EXPIRED";
-
-  if (["IN_PROGRESS"].includes(atStatus)) return "IN_PROGRESS";
-  if (["NOT_STARTED"].includes(atStatus)) {
-    if (invStatus === "STARTED") return "IN_PROGRESS";
-    return "PENDING";
-  }
-
-  // Sin attempt válido: el invite manda
-  if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(invStatus)) return "COMPLETED";
-  if (inv.expiresAt && new Date(inv.expiresAt) <= now) return "EXPIRED";
-  if (invStatus === "CANCELLED") return "CANCELLED";
-  if (invStatus === "STARTED") return "IN_PROGRESS";
-
-  return "PENDING";
 }
 
 // GET /api/candidate/assessment-invites
@@ -218,15 +183,17 @@ export async function GET(request: Request) {
       const key = `${String(inv.applicationId)}::${String(inv.templateId)}`;
       const attempt =
         attemptByInviteId.get(String(inv.id)) || attemptByKey.get(key) || null;
+      const isStale =
+        attempt !== null &&
+        String(inv.status ?? "").toUpperCase() === "SENT" &&
+        ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(
+          String(attempt.status ?? "").toUpperCase()
+        ) &&
+        attempt.createdAt < inv.updatedAt;
 
       if (process.env.NODE_ENV !== "production") {
         const attemptExpires = attempt?.expiresAt ? new Date(attempt.expiresAt) : null;
         const attemptExpired = Boolean(attemptExpires && attemptExpires <= now);
-        const isStale =
-          attempt !== null &&
-          String(inv.status ?? "").toUpperCase() === "SENT" &&
-          ["SUBMITTED", "EVALUATED", "COMPLETED"].includes(String(attempt.status ?? "").toUpperCase()) &&
-          attempt.createdAt < inv.updatedAt;
 
         console.log("[INVITE_STATE]", {
           key,
@@ -240,11 +207,11 @@ export async function GET(request: Request) {
           atExpiresAt: attempt?.expiresAt ?? null,
           attemptExpired,
           isStaleAttempt: isStale,
-          pickedState: pickUiState(inv, attempt, now),
+          pickedState: assessmentState(inv, isStale ? null : attempt, now),
         });
       }
 
-      const state = pickUiState(inv, attempt, now);
+      const state = assessmentState(inv, isStale ? null : attempt, now) as UiState;
 
       if (state === "PENDING") pending += 1;
       else if (state === "IN_PROGRESS") inProgress += 1;

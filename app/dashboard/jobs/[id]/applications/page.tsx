@@ -1,6 +1,7 @@
 // app/dashboard/jobs/[id]/applications/page.tsx
 import Link from "next/link";
 import { prisma } from "@/lib/server/prisma";
+import { isAssessmentExpired } from "@/lib/assessments/expiration";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
@@ -321,17 +322,20 @@ export default async function JobApplicationsPage({
       const key = `${appId}:${templateId}`;
       const at = attemptByKey.get(key);
       const iv = inviteByKey.get(key);
-      const attemptExpired = !!at?.expiresAt && new Date(at.expiresAt) <= now;
-      const inviteExpired = !!iv?.expiresAt && new Date(iv.expiresAt) <= now;
+      const attemptExpired = isAssessmentExpired(at?.expiresAt, now);
+      const inviteExpired = isAssessmentExpired(iv?.expiresAt, now);
 
       if (at && (at.status === "SUBMITTED" || at.status === "EVALUATED" || at.status === "COMPLETED")) {
         return { state: "COMPLETED" as const, token: iv?.token ?? null, attemptId: at.id, score: at.totalScore ?? null };
       }
+      if (at && at.status === "IN_PROGRESS") {
+        if (!attemptExpired) {
+          return { state: "STARTED" as const, token: iv?.token ?? null, attemptId: at.id, score: null };
+        }
+        return { state: "EXPIRED" as const, token: iv?.token ?? null, attemptId: at.id, score: null };
+      }
       if (attemptExpired || inviteExpired) {
         return { state: "EXPIRED" as const, token: iv?.token ?? null, attemptId: at?.id ?? null, score: null };
-      }
-      if (at && at.status === "IN_PROGRESS") {
-        return { state: "STARTED" as const, token: iv?.token ?? null, attemptId: at.id, score: null };
       }
       if (iv) {
         const s = String(iv.status || "").toUpperCase();

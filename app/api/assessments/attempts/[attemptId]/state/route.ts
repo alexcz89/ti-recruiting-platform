@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
+import { isAssessmentExpired } from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +106,7 @@ export async function GET(
       ? meta.questionOrder
       : [];
 
-    const expired = Boolean(attempt.expiresAt && attempt.expiresAt <= now);
+    const expired = isAssessmentExpired(attempt.expiresAt, now);
 
     const answeredCount = order.length
       ? order.reduce(

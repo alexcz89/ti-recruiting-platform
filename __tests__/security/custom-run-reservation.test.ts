@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   transactionCommitted: false,
   events: [] as string[],
   updates: [] as Array<Record<string, unknown>>,
+  attemptExpiresAt: new Date(Date.now() + 60_000) as Date | null,
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -21,7 +22,7 @@ const tx = {
       candidateId: "candidate-a",
       templateId: "template-a",
       status: "IN_PROGRESS",
-      expiresAt: new Date(Date.now() + 60_000),
+      expiresAt: state.attemptExpiresAt,
     })),
   },
   assessmentQuestion: {
@@ -99,6 +100,7 @@ describe("custom-run reservation", () => {
     state.transactionCommitted = false;
     state.events.length = 0;
     state.updates.length = 0;
+    state.attemptExpiresAt = new Date(Date.now() + 60_000);
     transactionQueue = Promise.resolve();
     vi.clearAllMocks();
     mocks.getServerSession.mockResolvedValue({
@@ -144,5 +146,22 @@ describe("custom-run reservation", () => {
     expect(state.updates[state.updates.length - 1]).toMatchObject({
       data: { status: "CUSTOM_ERROR", error: "Judge0 unavailable" },
     });
+  });
+
+  it("allows a legacy attempt with no deadline", async () => {
+    state.attemptExpiresAt = null;
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(mocks.executeCode).toHaveBeenCalledOnce();
+  });
+
+  it("rejects an attempt at its exact deadline with the canonical expired response", async () => {
+    state.attemptExpiresAt = new Date(0);
+    const response = await POST(request());
+    expect(response.status).toBe(410);
+    await expect(response.json()).resolves.toMatchObject({
+      code: "ASSESSMENT_EXPIRED",
+    });
+    expect(mocks.executeCode).not.toHaveBeenCalled();
   });
 });

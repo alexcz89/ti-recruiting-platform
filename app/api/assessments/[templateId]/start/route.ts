@@ -5,6 +5,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import type { Prisma } from "@prisma/client";
 import { challengeAvailability } from "@/lib/contests/domain";
+import {
+  ASSESSMENT_EXPIRED_CODE,
+  computeAttemptExpiresAt,
+  isAssessmentExpired,
+  isFinalAttemptStatus,
+} from "@/lib/assessments/expiration";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -305,14 +311,6 @@ async function ensureMeta(
   };
 }
 
-function computeExpiresAt(now: Date, timeLimit?: number | null) {
-  const tl =
-    typeof timeLimit === "number" && Number.isFinite(timeLimit) && timeLimit > 0
-      ? Math.floor(timeLimit)
-      : null;
-  return tl ? new Date(now.getTime() + tl * 60 * 1000) : null;
-}
-
 type DbClient = Prisma.TransactionClient;
 
 async function markInviteStartedTx(tx: DbClient, inviteId: string, now: Date) {
@@ -322,13 +320,33 @@ async function markInviteStartedTx(tx: DbClient, inviteId: string, now: Date) {
   });
 }
 
-function isAttemptFinal(status: AttemptStatusLike) {
-  const s = String(status ?? "").toUpperCase();
-  return s === "SUBMITTED" || s === "EVALUATED" || s === "COMPLETED";
-}
+async function assertInviteMayStartTx(
+  tx: DbClient,
+  args: {
+    inviteId: string;
+    candidateId: string;
+    templateId: string;
+    applicationId: string;
+    now: Date;
+  }
+) {
+  const validInvite = await tx.assessmentInvite.findFirst({
+    where: {
+      id: args.inviteId,
+      candidateId: args.candidateId,
+      templateId: args.templateId,
+      applicationId: args.applicationId,
+      status: { in: ["SENT", "STARTED"] },
+      OR: [{ expiresAt: null }, { expiresAt: { gt: args.now } }],
+    },
+    select: { id: true },
+  });
 
-function isExpired(expiresAt: Date | null, now: Date) {
-  return Boolean(expiresAt && expiresAt <= now);
+  if (!validInvite) {
+    throw Object.assign(new Error("ASSESSMENT_INVITE_EXPIRED"), {
+      code: ASSESSMENT_EXPIRED_CODE,
+    });
+  }
 }
 
 async function buildSaved(attemptId: string) {
@@ -491,10 +509,6 @@ export async function POST(
           400
         );
       }
-      if (invite.expiresAt && invite.expiresAt <= now) {
-        return jsonNoStore({ error: "Invitación expirada" }, 410);
-      }
-
       const invStatus = String(invite.status ?? "").toUpperCase();
       if (invStatus === "CANCELLED") {
         return jsonNoStore({ error: "Invitación cancelada" }, 410);
@@ -597,9 +611,18 @@ export async function POST(
       applicationIdToUse: string | null;
     }) {
       const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
-      const newExpiresAt = computeExpiresAt(now, tmplTimeLimit);
+      const newExpiresAt = computeAttemptExpiresAt(now, tmplTimeLimit);
 
       const created = await prisma.$transaction(async (tx) => {
+        if (invite) {
+          await assertInviteMayStartTx(tx, {
+            inviteId: invite.id,
+            candidateId: user.id!,
+            templateId: params.templateId,
+            applicationId: invite.applicationId,
+            now: new Date(),
+          });
+        }
         if (args.oldAttemptId && args.oldInviteId) {
           await tx.assessmentAttempt.update({
             where: { id: args.oldAttemptId },
@@ -650,7 +673,26 @@ export async function POST(
     }
 
     if (invite) {
-      const attemptByInvite = await prisma.assessmentAttempt.findFirst({
+      const activeAttempt = await prisma.assessmentAttempt.findFirst({
+        where: {
+          applicationId: invite.applicationId,
+          candidateId: user.id,
+          templateId: params.templateId,
+          status: { in: ["NOT_STARTED", "IN_PROGRESS"] },
+          OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+        },
+        select: {
+          id: true,
+          status: true,
+          applicationId: true,
+          expiresAt: true,
+          startedAt: true,
+          flagsJson: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      });
+      const linkedAttempt = await prisma.assessmentAttempt.findFirst({
         where: {
           inviteId: invite.id,
           candidateId: user.id,
@@ -666,16 +708,23 @@ export async function POST(
           createdAt: true,
         },
       });
+      const attemptByInvite = activeAttempt ?? linkedAttempt;
 
       if (attemptByInvite) {
         // Detectar attempt obsoleto: fue creado antes del último reenvío del invite.
         // Ocurre cuando el resend se ejecutó con código anterior al fix que desasocia
         // el attempt (inviteId → null). En ese caso, desasociamos aquí y creamos uno nuevo.
         const isStaleAttempt =
-          isAttemptFinal(attemptByInvite.status) &&
+          isFinalAttemptStatus(attemptByInvite.status) &&
           attemptByInvite.createdAt < invite.updatedAt;
 
         if (isStaleAttempt) {
+          if (isAssessmentExpired(invite.expiresAt, now)) {
+            return jsonNoStore(
+              { error: "Invitación expirada", code: ASSESSMENT_EXPIRED_CODE },
+              410
+            );
+          }
           // Desasociar el attempt obsoleto para liberar el UNIQUE constraint
           await prisma.assessmentAttempt.update({
             where: { id: attemptByInvite.id },
@@ -689,14 +738,14 @@ export async function POST(
           });
         }
 
-        if (isAttemptFinal(attemptByInvite.status)) {
+        if (isFinalAttemptStatus(attemptByInvite.status)) {
           return jsonNoStore({
             attemptId: attemptByInvite.id,
             completed: true,
           });
         }
 
-        if (isExpired(attemptByInvite.expiresAt, now)) {
+        if (isAssessmentExpired(attemptByInvite.expiresAt, now)) {
           let expiredMeta = (attemptByInvite.flagsJson as FlagsMeta) || null;
           if (!Array.isArray(expiredMeta?.questionOrder) || expiredMeta.questionOrder.length === 0) {
             expiredMeta = (await ensureMeta(
@@ -724,8 +773,7 @@ export async function POST(
           });
         }
 
-        const finalExpiresAt =
-          attemptByInvite.expiresAt ?? computeExpiresAt(now, tmplTimeLimit);
+        const finalExpiresAt = attemptByInvite.expiresAt;
 
         let meta = (attemptByInvite.flagsJson as FlagsMeta) || null;
         const hasMeta =
@@ -753,9 +801,6 @@ export async function POST(
 
           if (applicationId && attemptByInvite.applicationId !== applicationId) {
             data.applicationId = applicationId;
-          }
-          if (!attemptByInvite.expiresAt && finalExpiresAt) {
-            data.expiresAt = finalExpiresAt;
           }
           if (!hasMeta && meta) {
             data.flagsJson = meta as unknown as Prisma.InputJsonObject;
@@ -793,6 +838,13 @@ export async function POST(
           savedAnswers,
           savedTimeSpent,
         });
+      }
+
+      if (isAssessmentExpired(invite.expiresAt, now)) {
+        return jsonNoStore(
+          { error: "Invitación expirada", code: ASSESSMENT_EXPIRED_CODE },
+          410
+        );
       }
     }
 
@@ -833,7 +885,7 @@ export async function POST(
           400
         );
       }
-      if (isAttemptFinal(attempt.status)) {
+      if (isFinalAttemptStatus(attempt.status)) {
         return jsonNoStore({
           attemptId: attempt.id,
           completed: true,
@@ -848,8 +900,11 @@ export async function POST(
         }
         // Un concurso permite exactamente una participación. Un intento vencido
         // queda cerrado; nunca se reemplaza por otro intento sin registro.
-        if (isExpired(attempt.expiresAt, now)) {
-          return jsonNoStore({ error: "El tiempo del reto ha expirado" }, 410);
+        if (isAssessmentExpired(attempt.expiresAt, now)) {
+          return jsonNoStore(
+            { error: "El tiempo del reto ha expirado", code: ASSESSMENT_EXPIRED_CODE },
+            410
+          );
         }
       }
 
@@ -861,12 +916,15 @@ export async function POST(
         }
         // Un concurso permite exactamente una participación. Un intento vencido
         // queda cerrado; nunca se reemplaza por otro intento sin registro.
-        if (isExpired(attempt.expiresAt, now)) {
-          return jsonNoStore({ error: "El tiempo del reto ha expirado" }, 410);
+        if (isAssessmentExpired(attempt.expiresAt, now)) {
+          return jsonNoStore(
+            { error: "El tiempo del reto ha expirado", code: ASSESSMENT_EXPIRED_CODE },
+            410
+          );
         }
       }
 
-      if (isExpired(attempt.expiresAt, now)) {
+      if (isAssessmentExpired(attempt.expiresAt, now)) {
         let expiredMeta = (attempt.flagsJson as FlagsMeta) || null;
         if (!Array.isArray(expiredMeta?.questionOrder) || expiredMeta.questionOrder.length === 0) {
           expiredMeta = (await ensureMeta(
@@ -894,7 +952,7 @@ export async function POST(
         });
       }
 
-      const finalExpiresAt = attempt.expiresAt ?? computeExpiresAt(now, tmplTimeLimit);
+      const finalExpiresAt = attempt.expiresAt;
 
       let meta = (attempt.flagsJson as FlagsMeta) || null;
       const hasMeta =
@@ -925,9 +983,7 @@ export async function POST(
           upd.ipAddress = getClientIp(request);
           upd.userAgent = request.headers.get("user-agent") || "unknown";
           if (meta) upd.flagsJson = meta as unknown as Prisma.InputJsonObject;
-          if (!attempt.expiresAt && finalExpiresAt) upd.expiresAt = finalExpiresAt;
         } else {
-          if (!attempt.expiresAt && finalExpiresAt) upd.expiresAt = finalExpiresAt;
           if (!hasMeta && meta) {
             upd.flagsJson = meta as unknown as Prisma.InputJsonObject;
           }
@@ -959,35 +1015,46 @@ export async function POST(
       });
     }
 
-    const expiresAt = computeExpiresAt(now, tmplTimeLimit);
+    const expiresAt = computeAttemptExpiresAt(now, tmplTimeLimit);
     const meta = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
     const questions = buildQuestionsPayload(
       questionsRaw as unknown as QuestionRow[],
       meta as unknown as FlagsMeta
     );
 
-    const created = await prisma.assessmentAttempt.create({
-      data: {
-        candidateId: user.id,
-        templateId: params.templateId,
-        applicationId: applicationId || null,
-        inviteId: invite ? invite.id : null,
-        status: "IN_PROGRESS",
-        attemptNumber: attemptsUsed + 1,
-        startedAt: now,
-        expiresAt,
-        ipAddress: getClientIp(request),
-        userAgent: request.headers.get("user-agent") || "unknown",
-        flagsJson: meta,
-      },
-      select: { id: true },
-    });
+    const created = await prisma.$transaction(async (tx) => {
+      if (invite) {
+        await assertInviteMayStartTx(tx, {
+          inviteId: invite.id,
+          candidateId: user.id!,
+          templateId: params.templateId,
+          applicationId: invite.applicationId,
+          now: new Date(),
+        });
+      }
 
-    if (invite) {
-      await prisma.$transaction(async (tx) => {
-        await markInviteStartedTx(tx, invite.id, now);
+      const fresh = await tx.assessmentAttempt.create({
+        data: {
+          candidateId: user.id!,
+          templateId: params.templateId,
+          applicationId: applicationId || null,
+          inviteId: invite ? invite.id : null,
+          status: "IN_PROGRESS",
+          attemptNumber: attemptsUsed + 1,
+          startedAt: now,
+          expiresAt,
+          ipAddress: getClientIp(request),
+          userAgent: request.headers.get("user-agent") || "unknown",
+          flagsJson: meta,
+        },
+        select: { id: true },
       });
-    }
+
+      if (invite) {
+        await markInviteStartedTx(tx, invite.id, now);
+      }
+      return fresh;
+    });
 
     const { savedAnswers, savedTimeSpent } = await buildSaved(created.id);
 
@@ -1002,6 +1069,17 @@ export async function POST(
     });
   } catch (error: unknown) {
     console.error("Error starting attempt:", error);
+
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String(error.code)
+        : "";
+    if (code === ASSESSMENT_EXPIRED_CODE) {
+      return jsonNoStore(
+        { error: "Invitación expirada", code: ASSESSMENT_EXPIRED_CODE },
+        410
+      );
+    }
 
     const isDev = process.env.NODE_ENV !== "production";
     return jsonNoStore(

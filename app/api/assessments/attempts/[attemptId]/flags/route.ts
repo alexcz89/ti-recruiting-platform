@@ -4,6 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { isAntiCheatBypassed } from '@/lib/server/assessmentAntiCheat';
+import { ASSESSMENT_EXPIRED_CODE, isAssessmentExpired } from '@/lib/assessments/expiration';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -202,7 +203,12 @@ export async function PATCH(
     if (!attempt) return noStoreJson({ error: "Intento no encontrado" }, 404);
     if (attempt.candidateId !== user.id) return noStoreJson({ error: "No autorizado" }, 403);
     if (attempt.status !== "IN_PROGRESS") return noStoreJson({ error: "El intento no está en progreso" }, 400);
-    if (attempt.expiresAt && new Date() > attempt.expiresAt) return noStoreJson({ error: "El tiempo ha expirado" }, 400);
+    if (isAssessmentExpired(attempt.expiresAt)) {
+      return noStoreJson(
+        { error: "El tiempo ha expirado", code: ASSESSMENT_EXPIRED_CODE },
+        410
+      );
+    }
 
     const inc = {
       tabSwitches: 0,
