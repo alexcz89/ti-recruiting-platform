@@ -78,22 +78,23 @@ export default async function Home() {
   if (role === "CANDIDATE") redirect("/profile/summary");
 
   return (
-    <div className="-mx-4 -mb-10 overflow-x-clip bg-white text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:-mx-6 lg:-mx-8">
-      <section className="relative border-b border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="landing-shell -mx-4 -mb-10 overflow-x-clip text-zinc-950 dark:text-zinc-50 sm:-mx-6 lg:-mx-8">
+      <section className="relative border-b border-zinc-200/80 bg-transparent dark:border-white/10">
         <div aria-hidden="true" className="landing-grid absolute inset-0 opacity-60 dark:opacity-25" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[0.88fr_1.12fr] lg:gap-16 lg:px-8 lg:py-28">
+        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-2 lg:gap-12 lg:px-8 lg:py-16 xl:py-20">
           <div className="max-w-2xl">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 sm:mb-6">
               <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-              Evaluación técnica para equipos de contratación
+              <span className="sm:hidden">Evaluación técnica para equipos TI</span>
+              <span className="hidden sm:inline">Evaluación técnica para equipos de contratación</span>
             </div>
-            <h1 className="max-w-[12ch] text-balance font-display text-[clamp(2.75rem,7.4vw,5.25rem)] font-extrabold leading-[0.98] tracking-[-0.035em] text-[#082B33] dark:text-white">
+            <h1 className="max-w-[14ch] text-balance font-display text-[clamp(2.45rem,11vw,3rem)] font-extrabold leading-[1.02] tracking-[-0.035em] text-[#082B33] dark:text-white lg:text-[clamp(3.5rem,5.3vw,4.75rem)] lg:leading-[0.98]">
               Evalúa talento TI antes de contratarlo
             </h1>
-            <p className="mt-6 max-w-xl text-pretty text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:text-lg sm:leading-8">
-              Valida habilidades técnicas con assessments, coding challenges y resultados claros antes de tomar una decisión.
+            <p className="mt-5 max-w-xl text-pretty text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:mt-6 sm:text-lg sm:leading-8">
+              Evalúa habilidades técnicas con assessments y coding challenges antes de avanzar a un candidato.
             </p>
-            <div className="mt-8 flex flex-col gap-3 min-[420px]:flex-row">
+            <div className="mt-7 flex flex-col gap-3 min-[420px]:flex-row sm:mt-8">
               <Link href="/contact" className="landing-button-primary group min-h-12 px-6">
                 Solicitar demo
                 <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
@@ -112,7 +113,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section id="problema" className="scroll-mt-24 bg-[#082B33] py-16 text-white sm:py-20 lg:py-24">
+      <section id="problema" className="landing-problem scroll-mt-20 py-14 text-white sm:py-20 lg:py-24">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:items-end lg:gap-20 lg:px-8">
           <div>
             <p className="font-mono text-sm text-emerald-300">La brecha de señal</p>
@@ -131,7 +132,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section id="solucion" className="scroll-mt-24 py-16 sm:py-20 lg:py-28">
+      <section id="solucion" className="scroll-mt-20 py-14 sm:py-20 lg:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="max-w-2xl">
             <h2 className="text-balance font-display text-3xl font-bold tracking-[-0.025em] text-[#082B33] dark:text-white sm:text-4xl lg:text-5xl">
@@ -142,19 +143,19 @@ export default async function Home() {
             </p>
           </div>
 
-          <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-200 sm:grid-cols-2 lg:grid-cols-4 dark:border-zinc-800 dark:bg-zinc-800">
+          <div className="mt-10 grid gap-px overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-200 sm:mt-12 sm:grid-cols-2 lg:grid-cols-4 dark:border-white/15 dark:bg-white/15">
             {solutions.map(({ icon: Icon, title, description }) => (
-              <article key={title} className="bg-white p-6 sm:p-7 dark:bg-zinc-950">
+              <article key={title} className="landing-solution-card p-5 sm:p-7">
                 <Icon className="h-6 w-6 text-emerald-600 dark:text-emerald-400" strokeWidth={1.75} aria-hidden="true" />
-                <h3 className="mt-8 text-lg font-bold text-zinc-950 dark:text-white">{title}</h3>
-                <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{description}</p>
+                <h3 className="mt-6 text-lg font-extrabold text-zinc-950 dark:text-white sm:mt-7">{title}</h3>
+                <p className="mt-2.5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="como-funciona" className="scroll-mt-24 border-y border-zinc-200 bg-zinc-50 py-16 dark:border-zinc-800 dark:bg-zinc-900/50 sm:py-20 lg:py-28">
+      <section id="como-funciona" className="landing-muted-section scroll-mt-20 border-y border-zinc-200 py-14 dark:border-white/10 sm:py-20 lg:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
@@ -171,13 +172,13 @@ export default async function Home() {
             </div>
           </div>
 
-          <ol className="relative mt-12 grid gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-0">
+          <ol className="relative mt-10 grid gap-3 sm:mt-12 md:grid-cols-2 lg:grid-cols-4 lg:gap-0">
             {steps.map((step, index) => (
-              <li key={step.title} className="relative flex gap-4 rounded-xl bg-white p-5 ring-1 ring-zinc-200 md:block lg:rounded-none lg:bg-transparent lg:p-0 lg:pr-7 lg:ring-0 dark:bg-zinc-950 dark:ring-zinc-800 lg:dark:bg-transparent">
+              <li key={step.title} className="landing-step relative flex gap-4 rounded-xl p-4 ring-1 ring-zinc-200 md:block sm:p-5 lg:rounded-none lg:bg-transparent lg:p-0 lg:pr-7 lg:ring-0 dark:ring-white/15 lg:dark:bg-transparent">
                 <div className="relative z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#082B33] font-mono text-sm font-semibold text-white ring-4 ring-zinc-50 dark:bg-emerald-500 dark:text-[#082B33] dark:ring-zinc-900">
                   {index + 1}
                 </div>
-                {index < steps.length - 1 && <div aria-hidden="true" className="absolute left-10 right-0 top-5 hidden h-px bg-zinc-300 lg:block dark:bg-zinc-700" />}
+                {index < steps.length - 1 && <div aria-hidden="true" className="absolute left-10 right-0 top-5 hidden h-px bg-zinc-400 lg:block dark:bg-zinc-600" />}
                 <div className="md:mt-5">
                   <h3 className="text-base font-bold text-zinc-950 dark:text-white">{step.title}</h3>
                   <p className="mt-1.5 text-sm leading-6 text-zinc-600 dark:text-zinc-400">{step.description}</p>
@@ -188,7 +189,7 @@ export default async function Home() {
         </div>
       </section>
 
-      <section id="beneficios" className="scroll-mt-24 py-16 sm:py-20 lg:py-28">
+      <section id="beneficios" className="scroll-mt-20 py-14 sm:py-20 lg:py-24">
         <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-20 lg:px-8">
           <div>
             <h2 className="text-balance font-display text-3xl font-bold tracking-[-0.025em] text-[#082B33] dark:text-white sm:text-4xl lg:text-5xl">
@@ -236,17 +237,17 @@ export default async function Home() {
         </div>
       </section>
 
-      <section className="px-4 pb-16 sm:px-6 sm:pb-20 lg:px-8 lg:pb-28">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-2xl bg-emerald-500 px-5 py-12 text-center text-[#062b27] sm:px-10 sm:py-16">
-          <h2 className="mx-auto max-w-3xl text-balance font-display text-3xl font-extrabold tracking-[-0.025em] sm:text-4xl lg:text-5xl">Evalúa a tu próximo candidato con TaskIO</h2>
+      <section className="px-4 pb-14 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
+        <div className="landing-cta-panel mx-auto max-w-5xl overflow-hidden rounded-2xl px-5 py-9 text-center sm:px-10 sm:py-11 lg:py-12">
+          <h2 className="mx-auto max-w-3xl text-balance font-display text-3xl font-extrabold tracking-[-0.025em] sm:text-4xl lg:text-[2.75rem]">Evalúa a tu próximo candidato con TaskIO</h2>
           <p className="mx-auto mt-4 max-w-2xl text-pretty text-base leading-7 text-[#073d36] sm:text-lg">Prueba el flujo completo antes de tomar tu próxima decisión de contratación.</p>
-          <Link href="/contact" className="mt-8 inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#082B33] px-6 font-bold text-white transition-colors hover:bg-[#0d3b44] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#082B33]">
+          <Link href="/contact" className="landing-button-inverse mt-7 min-h-12 px-6">
             Solicitar demo <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>
       </section>
 
-      <footer className="border-t border-zinc-200 bg-zinc-50 py-10 dark:border-zinc-800 dark:bg-zinc-900/60">
+      <footer className="landing-muted-section border-t border-zinc-200 py-10 dark:border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
           <div>
             <LogoTaskio />

@@ -47,8 +47,12 @@ export default function CodeEditorStory() {
 
   return (
     <div className="relative mx-auto w-full min-w-0 max-w-2xl" aria-label="Vista previa de un resultado técnico">
-      <div aria-hidden="true" className="absolute -inset-3 -z-10 rounded-2xl bg-emerald-100/70 dark:bg-emerald-500/5 sm:-inset-5" />
-      <div className="overflow-hidden rounded-2xl bg-[#0b1f24] shadow-[0_8px_0_rgba(16,185,129,0.28)] ring-1 ring-black/10 dark:ring-white/10">
+      <div aria-hidden="true" className="absolute -inset-3 -z-10 rounded-2xl bg-emerald-100/70 dark:bg-emerald-500/5 sm:-inset-4" />
+      <p className="mb-2.5 ml-1 flex items-center gap-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+        Candidate evaluation
+      </p>
+      <div className="landing-editor overflow-hidden rounded-2xl border border-black/10 shadow-[0_6px_8px_rgba(2,13,16,0.18)] dark:border-white/15">
         <div className="flex h-12 items-center justify-between border-b border-white/10 px-3 sm:px-4">
           <div className="flex items-center gap-1.5" aria-hidden="true">
             <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b6b]" />
@@ -65,7 +69,7 @@ export default function CodeEditorStory() {
         </div>
 
         <div className="grid min-w-0 sm:grid-cols-[minmax(0,1fr)_11rem]">
-          <div className="min-w-0 overflow-hidden px-3 py-5 font-mono text-[12px] leading-7 sm:px-5 sm:text-[13px]">
+          <div className="min-w-0 overflow-hidden px-3 py-4 font-mono text-[12px] leading-7 sm:px-5 sm:py-5 sm:text-[13px]">
             {codeLines.map((line, index) => {
               const start = cursor;
               cursor += line.text.length + 1;
@@ -98,9 +102,9 @@ export default function CodeEditorStory() {
           </div>
         </div>
 
-        <div className="flex min-h-9 items-center justify-between border-t border-white/10 px-3 font-mono text-[10px] text-teal-100/50 sm:px-5 sm:text-[11px]">
+        <div className="flex min-h-10 items-center justify-between gap-3 border-t border-white/10 px-4 font-mono text-[10px] text-teal-100/60 sm:px-5 sm:text-[11px]">
           <span>Python Developer</span>
-          <span className="flex items-center gap-1.5 text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Assessment complete</span>
+          <span className="flex shrink-0 items-center gap-1.5 text-emerald-300"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Assessment complete</span>
         </div>
       </div>
     </div>

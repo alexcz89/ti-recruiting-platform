@@ -112,9 +112,9 @@ function LandingHeader({
   ];
 
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+    <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/95 backdrop-blur dark:border-white/10 dark:bg-[#101418]/95">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between gap-4">
+        <div className="flex h-14 items-center justify-between gap-3 md:h-16 md:gap-4">
           <Link href="/" className="flex shrink-0 items-center text-zinc-950 hover:no-underline dark:text-white" onClick={() => setMobileMenuOpen(false)}>
             <LogoTaskio />
             <span className="sr-only">Inicio de TaskIO</span>
@@ -129,17 +129,17 @@ function LandingHeader({
           </nav>
 
           <div className="hidden items-center gap-2 md:flex">
-            <ThemeToggle />
+            <ThemeToggle compact />
             <Link href="/auth/signin" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white">
               Iniciar sesión
             </Link>
-            <Link href="/contact" className="inline-flex min-h-11 items-center rounded-lg bg-emerald-500 px-4 text-sm font-bold text-[#062b27] transition-colors hover:bg-emerald-400 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
+            <Link href="/contact" className="landing-button-primary min-h-11 px-4 text-sm">
               Solicitar demo
             </Link>
           </div>
 
           <div className="flex items-center gap-2 md:hidden">
-            <ThemeToggle />
+            <ThemeToggle compact />
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -165,7 +165,7 @@ function LandingHeader({
               <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:no-underline dark:text-zinc-200 dark:hover:bg-zinc-800">
                 Iniciar sesión
               </Link>
-              <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="mt-2 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-500 px-4 text-sm font-bold text-[#062b27] hover:bg-emerald-400 hover:no-underline">
+              <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="landing-button-primary mt-2 min-h-11 px-4 text-sm">
                 Solicitar demo
               </Link>
             </div>
