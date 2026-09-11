@@ -21,6 +21,15 @@ export default function Header() {
   const pathname = usePathname();
   const isAssessmentMode = /^\/assessments\/[^/]+$/.test(pathname ?? "");
 
+  if (pathname === "/") {
+    return (
+      <LandingHeader
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />
+    );
+  }
+
   return (
     <header
       className="
@@ -82,6 +91,85 @@ export default function Header() {
         {/* Mobile Menu */}
         {!isAssessmentMode && mobileMenuOpen && (
           <MobileMenu onClose={() => setMobileMenuOpen(false)} />
+        )}
+      </div>
+    </header>
+  );
+}
+
+function LandingHeader({
+  mobileMenuOpen,
+  setMobileMenuOpen,
+}: {
+  mobileMenuOpen: boolean;
+  setMobileMenuOpen: (open: boolean) => void;
+}) {
+  const sectionLinks = [
+    { href: "/#problema", label: "El problema" },
+    { href: "/#solucion", label: "Solución" },
+    { href: "/#como-funciona", label: "Cómo funciona" },
+    { href: "/#beneficios", label: "Beneficios" },
+  ];
+
+  return (
+    <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/95 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between gap-4">
+          <Link href="/" className="flex shrink-0 items-center text-zinc-950 hover:no-underline dark:text-white" onClick={() => setMobileMenuOpen(false)}>
+            <LogoTaskio />
+            <span className="sr-only">Inicio de TaskIO</span>
+          </Link>
+
+          <nav aria-label="Navegación principal" className="hidden items-center gap-1 lg:flex">
+            {sectionLinks.map((link) => (
+              <Link key={link.href} href={link.href} className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-950 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white">
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="hidden items-center gap-2 md:flex">
+            <ThemeToggle />
+            <Link href="/auth/signin" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white">
+              Iniciar sesión
+            </Link>
+            <Link href="/contact" className="inline-flex min-h-11 items-center rounded-lg bg-emerald-500 px-4 text-sm font-bold text-[#062b27] transition-colors hover:bg-emerald-400 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500">
+              Solicitar demo
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-700 transition-colors hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="landing-mobile-menu"
+              aria-label={mobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
+        </div>
+
+        {mobileMenuOpen && (
+          <nav id="landing-mobile-menu" aria-label="Navegación móvil" className="border-t border-zinc-200 py-4 dark:border-zinc-800 md:hidden">
+            <div className="flex flex-col gap-1">
+              {sectionLinks.map((link) => (
+                <Link key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100 hover:no-underline dark:text-zinc-200 dark:hover:bg-zinc-800">
+                  {link.label}
+                </Link>
+              ))}
+              <div className="my-2 h-px bg-zinc-200 dark:bg-zinc-800" />
+              <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:no-underline dark:text-zinc-200 dark:hover:bg-zinc-800">
+                Iniciar sesión
+              </Link>
+              <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="mt-2 inline-flex min-h-11 items-center justify-center rounded-lg bg-emerald-500 px-4 text-sm font-bold text-[#062b27] hover:bg-emerald-400 hover:no-underline">
+                Solicitar demo
+              </Link>
+            </div>
+          </nav>
         )}
       </div>
     </header>

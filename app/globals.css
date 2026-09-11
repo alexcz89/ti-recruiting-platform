@@ -555,3 +555,49 @@ p {
     transform: none !important;
   }
 }
+
+/* Public landing: editor-inspired texture and restrained interaction tokens. */
+.landing-grid {
+  background-image:
+    linear-gradient(rgba(8, 43, 51, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8, 43, 51, 0.045) 1px, transparent 1px);
+  background-size: 40px 40px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 82%);
+}
+
+.landing-button-primary,
+.landing-button-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.landing-button-primary { background: #10b981; color: #062b27; }
+.landing-button-primary:hover { background: #34d399; text-decoration: none; }
+.landing-button-secondary { border: 1px solid #d4d4d8; background: white; color: #18181b; }
+.landing-button-secondary:hover { border-color: #a1a1aa; background: #fafafa; text-decoration: none; }
+
+.landing-button-primary:focus-visible,
+.landing-button-secondary:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 3px;
+}
+
+.code-cursor { animation: code-cursor-blink 800ms steps(1, end) infinite; }
+
+@keyframes code-cursor-blink {
+  50% { opacity: 0; }
+}
+
+.dark .landing-button-secondary { border-color: #3f3f46; background: #18181b; color: #fafafa; }
+.dark .landing-button-secondary:hover { border-color: #52525b; background: #27272a; }
+
+@media (prefers-reduced-motion: reduce) {
+  .code-cursor { animation: none; }
+}
