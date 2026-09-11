@@ -574,6 +574,7 @@ p {
 
 .landing-muted-section { background-color: var(--landing-muted); }
 .landing-editor { background-color: var(--landing-editor); }
+.landing-assessment-hero { background-color: var(--landing-bg); }
 .landing-step,
 .landing-solution-card { background-color: var(--landing-elevated); }
 .landing-problem { background-color: #082b33; }
@@ -584,12 +585,37 @@ p {
   color: #062b27;
 }
 
-.landing-grid {
-  background-image:
-    linear-gradient(rgba(8, 43, 51, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(8, 43, 51, 0.045) 1px, transparent 1px);
-  background-size: 40px 40px;
-  mask-image: linear-gradient(to bottom, black 0%, transparent 82%);
+.assessment-demo-shell {
+  min-width: 0;
+}
+
+.assessment-demo-body,
+.assessment-workspace,
+.assessment-results-grid {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .assessment-demo-shell {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: clamp(30rem, 62vh, 36rem);
+  }
+
+  .assessment-demo-body {
+    display: grid;
+    grid-template-columns: minmax(17rem, 30%) minmax(0, 70%);
+  }
+
+  .assessment-workspace {
+    display: grid;
+    grid-template-rows: minmax(15rem, 1fr) auto;
+  }
+
+  .assessment-results-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 28%);
+  }
 }
 
 .landing-button-primary,
@@ -654,4 +680,11 @@ p {
 @media (prefers-reduced-motion: reduce) {
   .code-cursor { animation: none; }
   .landing-solution-card { transition: none; }
+  .assessment-demo-shell *,
+  .assessment-demo-shell *::before,
+  .assessment-demo-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

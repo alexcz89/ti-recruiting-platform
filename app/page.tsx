@@ -5,7 +5,6 @@ import { getServerSession } from "next-auth";
 import {
   ArrowRight,
   Braces,
-  CircleCheck,
   ClipboardCheck,
   Code2,
   Gauge,
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 import { authOptions } from "@/lib/server/auth";
 import LogoTaskio from "@/components/LogoTaskio";
-import CodeEditorStory from "@/components/landing/CodeEditorStory";
+import CodeAssessmentHero from "@/components/landing/CodeAssessmentHero";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -79,39 +78,7 @@ export default async function Home() {
 
   return (
     <div className="landing-shell -mx-4 -mb-10 overflow-x-clip text-zinc-950 dark:text-zinc-50 sm:-mx-6 lg:-mx-8">
-      <section className="relative border-b border-zinc-200/80 bg-transparent dark:border-white/10">
-        <div aria-hidden="true" className="landing-grid absolute inset-0 opacity-60 dark:opacity-25" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-10 px-4 py-10 sm:px-6 sm:py-14 lg:grid-cols-2 lg:gap-12 lg:px-8 lg:py-16 xl:py-20">
-          <div className="max-w-2xl">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300 sm:mb-6">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-              <span className="sm:hidden">Evaluación técnica para equipos TI</span>
-              <span className="hidden sm:inline">Evaluación técnica para equipos de contratación</span>
-            </div>
-            <h1 className="max-w-[14ch] text-balance font-display text-[clamp(2.45rem,11vw,3rem)] font-extrabold leading-[1.02] tracking-[-0.035em] text-[#082B33] dark:text-white lg:text-[clamp(3.5rem,5.3vw,4.75rem)] lg:leading-[0.98]">
-              Evalúa talento TI antes de contratarlo
-            </h1>
-            <p className="mt-5 max-w-xl text-pretty text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:mt-6 sm:text-lg sm:leading-8">
-              Evalúa habilidades técnicas con assessments y coding challenges antes de avanzar a un candidato.
-            </p>
-            <div className="mt-7 flex flex-col gap-3 min-[420px]:flex-row sm:mt-8">
-              <Link href="/contact" className="landing-button-primary group min-h-12 px-6">
-                Solicitar demo
-                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true" />
-              </Link>
-              <Link href="#como-funciona" className="landing-button-secondary min-h-12 px-6">
-                Ver cómo funciona
-              </Link>
-            </div>
-            <p className="mt-5 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-              <CircleCheck className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true" />
-              Diseñado para recruiters, líderes técnicos y equipos de talento.
-            </p>
-          </div>
-
-          <CodeEditorStory />
-        </div>
-      </section>
+      <CodeAssessmentHero />
 
       <section id="problema" className="landing-problem scroll-mt-20 py-14 text-white sm:py-20 lg:py-24">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:items-end lg:gap-20 lg:px-8">
@@ -190,15 +157,15 @@ export default async function Home() {
       </section>
 
       <section id="beneficios" className="scroll-mt-20 py-14 sm:py-20 lg:py-24">
-        <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-20 lg:px-8">
-          <div>
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+          <div className="max-w-3xl">
             <h2 className="text-balance font-display text-3xl font-bold tracking-[-0.025em] text-[#082B33] dark:text-white sm:text-4xl lg:text-5xl">
               Menos intuición. Más evidencia.
             </h2>
             <p className="mt-4 max-w-lg text-pretty text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:text-lg">
               Convierte señales técnicas dispersas en una decisión que recruiting y engineering pueden defender.
             </p>
-            <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+            <ul className="mt-8 grid gap-3 sm:grid-cols-2">
               {benefits.map(({ icon: Icon, text }) => (
                 <li key={text} className="flex min-h-12 items-center gap-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200 sm:text-base">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
@@ -208,31 +175,6 @@ export default async function Home() {
                 </li>
               ))}
             </ul>
-          </div>
-
-          <div className="overflow-hidden rounded-2xl bg-[#0b1f24] text-white shadow-[0_8px_0_#10B981]">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 sm:px-6">
-              <div>
-                <p className="text-sm font-semibold">Reporte técnico</p>
-                <p className="text-xs text-teal-200/70">Python Developer · Juan Pérez</p>
-              </div>
-              <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-semibold text-emerald-300">Recomendado</span>
-            </div>
-            <div className="grid gap-6 p-5 sm:grid-cols-[auto_1fr] sm:p-7">
-              <div className="flex h-28 w-28 items-center justify-center rounded-full border-[10px] border-emerald-400/20 border-t-emerald-400 font-display text-3xl font-bold">87</div>
-              <div className="space-y-4">
-                {[["Resolución técnica", "92%"], ["Calidad de código", "86%"], ["Casos de prueba", "83%"]].map(([label, value]) => (
-                  <div key={label}>
-                    <div className="mb-1.5 flex justify-between text-xs text-teal-50"><span>{label}</span><span className="font-mono">{value}</span></div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-400" style={{ width: value }} /></div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 border-t border-white/10 text-sm">
-              <div className="border-r border-white/10 p-4 sm:px-6"><p className="text-xs text-teal-200/70">Tests aprobados</p><p className="mt-1 font-mono font-semibold">18 / 20</p></div>
-              <div className="p-4 sm:px-6"><p className="text-xs text-teal-200/70">Tiempo</p><p className="mt-1 font-mono font-semibold">43 min</p></div>
-            </div>
           </div>
         </div>
       </section>
