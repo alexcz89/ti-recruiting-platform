@@ -555,3 +555,157 @@ p {
     transform: none !important;
   }
 }
+
+/* Public landing: scoped surfaces and restrained interaction tokens. */
+.landing-shell {
+  --landing-bg: #ffffff;
+  --landing-muted: #fafafa;
+  --landing-elevated: #ffffff;
+  --landing-editor: #0b1f24;
+  background-color: var(--landing-bg);
+}
+
+.dark .landing-shell {
+  --landing-bg: #101418;
+  --landing-muted: #141a1e;
+  --landing-elevated: #181f23;
+  --landing-editor: #071b20;
+}
+
+.landing-muted-section { background-color: var(--landing-muted); }
+.landing-editor { background-color: var(--landing-editor); }
+.landing-assessment-hero { background-color: var(--landing-bg); }
+.landing-step,
+.landing-solution-card { background-color: var(--landing-elevated); }
+.landing-problem { background-color: #082b33; }
+.dark .landing-problem { background-color: #0b282d; }
+
+.landing-cta-panel {
+  background-color: #10b981;
+  color: #062b27;
+}
+
+.taskio-code-editor {
+  min-width: 0;
+}
+
+.taskio-code-lines {
+  min-height: 29rem;
+}
+
+@media (max-width: 639px) {
+  .taskio-code-lines {
+    min-height: 27.5rem;
+  }
+}
+
+.assessment-demo-shell {
+  min-width: 0;
+}
+
+.assessment-demo-body,
+.assessment-workspace,
+.assessment-results-grid {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .assessment-demo-shell {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    min-height: clamp(30rem, 62vh, 36rem);
+  }
+
+  .assessment-demo-body {
+    display: grid;
+    grid-template-columns: minmax(17rem, 30%) minmax(0, 70%);
+  }
+
+  .assessment-workspace {
+    display: grid;
+    grid-template-rows: minmax(15rem, 1fr) auto;
+  }
+
+  .assessment-results-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(12rem, 28%);
+  }
+}
+
+.landing-button-primary,
+.landing-button-secondary,
+.landing-button-inverse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 0.75rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.landing-button-primary { background: #10b981; color: #062b27 !important; }
+.landing-button-primary:hover { background: #34d399; text-decoration: none; }
+.landing-button-secondary { border: 1px solid #d4d4d8; background: white; color: #18181b; }
+.landing-button-secondary:hover { border-color: #a1a1aa; background: #fafafa; text-decoration: none; }
+.landing-button-inverse { background: #082b33; color: #ffffff !important; }
+.landing-button-inverse:hover { background: #0d3b44; text-decoration: none; }
+
+.landing-button-primary:active,
+.landing-button-secondary:active,
+.landing-button-inverse:active { transform: translateY(1px); }
+
+.landing-button-primary:focus-visible,
+.landing-button-secondary:focus-visible,
+.landing-button-inverse:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 3px;
+}
+
+.landing-cta-panel .landing-button-inverse:focus-visible {
+  outline-color: #082b33;
+  outline-offset: 4px;
+}
+
+.code-cursor { animation: code-cursor-blink 800ms steps(1, end) infinite; }
+
+@keyframes code-cursor-blink {
+  50% { opacity: 0; }
+}
+
+.dark .landing-button-secondary { border-color: #3f3f46; background: #18181b; color: #fafafa; }
+.dark .landing-button-secondary:hover { border-color: #52525b; background: #27272a; }
+
+@media (hover: hover) {
+  .landing-solution-card {
+    transition: background-color 180ms cubic-bezier(0.22, 1, 0.36, 1), transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .landing-solution-card:hover {
+    background-color: #f8faf9;
+    transform: translateY(-2px);
+  }
+
+  .dark .landing-solution-card:hover { background-color: #1c2529; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .code-cursor { animation: none; }
+  .landing-solution-card { transition: none; }
+  .assessment-demo-shell *,
+  .assessment-demo-shell *::before,
+  .assessment-demo-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .taskio-code-editor *,
+  .taskio-code-editor *::before,
+  .taskio-code-editor *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
