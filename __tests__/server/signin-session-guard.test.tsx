@@ -20,7 +20,10 @@ vi.mock("next/navigation", () => ({
 
 import SignInSessionGuard from "@/app/auth/signin/SignInSessionGuard";
 
-globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", {
+  configurable: true,
+  value: true,
+});
 
 let container: HTMLDivElement;
 let root: Root;
