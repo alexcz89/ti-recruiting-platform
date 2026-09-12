@@ -3,7 +3,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import {
-  ArrowRight,
   Braces,
   ClipboardCheck,
   Code2,
@@ -15,6 +14,7 @@ import {
 } from "lucide-react";
 import { authOptions } from "@/lib/server/auth";
 import LogoTaskio from "@/components/LogoTaskio";
+import CandidateChallengeSection from "@/components/landing/CandidateChallengeSection";
 import CodeAssessmentHero from "@/components/landing/CodeAssessmentHero";
 
 export const dynamic = "force-dynamic";
@@ -79,6 +79,7 @@ export default async function Home() {
   return (
     <div className="landing-shell -mx-4 -mb-10 overflow-x-clip text-zinc-950 dark:text-zinc-50 sm:-mx-6 lg:-mx-8">
       <CodeAssessmentHero />
+      <CandidateChallengeSection />
 
       <section id="problema" className="landing-problem scroll-mt-20 py-14 text-white sm:py-20 lg:py-24">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 sm:px-6 lg:grid-cols-[0.82fr_1.18fr] lg:items-end lg:gap-20 lg:px-8">
@@ -176,16 +177,6 @@ export default async function Home() {
               ))}
             </ul>
           </div>
-        </div>
-      </section>
-
-      <section className="px-4 pb-14 sm:px-6 sm:pb-20 lg:px-8 lg:pb-24">
-        <div className="landing-cta-panel mx-auto max-w-5xl overflow-hidden rounded-2xl px-5 py-9 text-center sm:px-10 sm:py-11 lg:py-12">
-          <h2 className="mx-auto max-w-3xl text-balance font-display text-3xl font-extrabold tracking-[-0.025em] sm:text-4xl lg:text-[2.75rem]">Evalúa a tu próximo candidato con TaskIO</h2>
-          <p className="mx-auto mt-4 max-w-2xl text-pretty text-base leading-7 text-[#073d36] sm:text-lg">Prueba el flujo completo antes de tomar tu próxima decisión de contratación.</p>
-          <Link href="/contact" className="landing-button-inverse mt-7 min-h-12 px-6">
-            Solicitar demo <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
         </div>
       </section>
 

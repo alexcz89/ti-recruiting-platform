@@ -585,6 +585,20 @@ p {
   color: #062b27;
 }
 
+.taskio-code-editor {
+  min-width: 0;
+}
+
+.taskio-code-lines {
+  min-height: 29rem;
+}
+
+@media (max-width: 639px) {
+  .taskio-code-lines {
+    min-height: 27.5rem;
+  }
+}
+
 .assessment-demo-shell {
   min-width: 0;
 }
@@ -683,6 +697,13 @@ p {
   .assessment-demo-shell *,
   .assessment-demo-shell *::before,
   .assessment-demo-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .taskio-code-editor *,
+  .taskio-code-editor *::before,
+  .taskio-code-editor *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;

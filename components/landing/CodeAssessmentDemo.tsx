@@ -29,7 +29,7 @@ const codeLines: CodeToken[][] = [
   ],
 ];
 
-const tests = Array.from({ length: 8 }, (_, index) => `Test ${index + 1}`);
+const tests = Array.from({ length: 8 }, (_, index) => `Prueba ${index + 1}`);
 
 export default function CodeAssessmentDemo() {
   const totalCharacters = useMemo(
@@ -87,7 +87,7 @@ export default function CodeAssessmentDemo() {
   }, [totalCharacters]);
 
   const liveStatus = showRecommendation
-    ? "Evaluación completa. Puntaje técnico 87 de 100. Recomendación: avanzar."
+    ? "Evaluación completada. Puntaje técnico 87 de 100. Resultado: aprobado."
     : showScore
       ? "Puntaje técnico calculado: 87 de 100."
       : passedTests > 0
@@ -99,6 +99,7 @@ export default function CodeAssessmentDemo() {
             : "Solución lista para ejecutar.";
 
   let characterCursor = 0;
+  const assessmentCompleted = passedTests === tests.length;
 
   return (
     <div
@@ -112,7 +113,7 @@ export default function CodeAssessmentDemo() {
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-bold text-zinc-950 dark:text-white">
-              TaskIO Technical Assessment
+              Evaluación técnica TaskIO
             </p>
             <p className="hidden text-xs text-zinc-600 dark:text-zinc-400 sm:block">
               Python · Nivel junior
@@ -122,9 +123,11 @@ export default function CodeAssessmentDemo() {
         <div className="flex shrink-0 items-center gap-2 text-xs font-semibold text-zinc-600 dark:text-zinc-300">
           <span
             className="h-2 w-2 rounded-full bg-emerald-500"
-            aria-label="Evaluación en curso"
+            aria-label={assessmentCompleted ? "Evaluación completada" : "Evaluación en curso"}
           />
-          <span className="hidden sm:inline">Evaluación en curso</span>
+          <span className="hidden sm:inline">
+            {assessmentCompleted ? "Evaluación completada" : "Evaluación en curso"}
+          </span>
         </div>
       </div>
 
@@ -227,9 +230,9 @@ export default function CodeAssessmentDemo() {
                     <Play className="h-3.5 w-3.5" fill="currentColor" aria-hidden="true" />
                   )}
                   {isRunning && passedTests < tests.length
-                    ? "Running tests..."
+                    ? "Ejecutando pruebas..."
                     : passedTests === tests.length
-                      ? "8/8 tests passed"
+                      ? "8/8 pruebas aprobadas"
                       : "Listo para ejecutar"}
                 </span>
               </div>
@@ -268,7 +271,7 @@ export default function CodeAssessmentDemo() {
                 <div
                   className={`transition-opacity duration-300 ${showScore ? "opacity-100" : "opacity-35"}`}
                 >
-                  <dt className="text-xs text-teal-100/65">Technical score</dt>
+                  <dt className="text-xs text-teal-100/65">Puntaje técnico</dt>
                   <dd className="mt-1 font-mono text-xl font-bold tabular-nums text-white">
                     {showScore ? "87/100" : "—/100"}
                   </dd>
@@ -276,9 +279,9 @@ export default function CodeAssessmentDemo() {
                 <div
                   className={`transition-opacity duration-300 ${showScore ? "opacity-100" : "opacity-35"}`}
                 >
-                  <dt className="text-xs text-teal-100/65">Code quality</dt>
-                  <dd className="mt-1 font-semibold text-emerald-300">
-                    {showScore ? "Strong" : "Analyzing"}
+                  <dt className="text-xs text-teal-100/65">Pruebas aprobadas</dt>
+                  <dd className="mt-1 font-mono text-xl font-bold tabular-nums text-white">
+                    {showScore ? "8/8" : "—/8"}
                   </dd>
                 </div>
                 <div
@@ -286,9 +289,9 @@ export default function CodeAssessmentDemo() {
                     showRecommendation ? "opacity-100" : "opacity-35"
                   }`}
                 >
-                  <dt className="text-xs text-teal-100/65">Recommendation</dt>
+                  <dt className="text-xs text-teal-100/65">Resultado</dt>
                   <dd className="mt-2 inline-flex rounded-md bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300 ring-1 ring-inset ring-emerald-400/20">
-                    {showRecommendation ? "Advance" : "Pending"}
+                    {showRecommendation ? "Aprobado" : "Pendiente"}
                   </dd>
                 </div>
               </dl>
