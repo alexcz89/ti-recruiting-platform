@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import TaskioCodeEditor from "@/components/landing/TaskioCodeEditor";
+import { ANALYTICS_EVENTS } from "@/lib/analytics";
 
 export default function CodeAssessmentHero() {
   return (
@@ -23,6 +24,7 @@ export default function CodeAssessmentHero() {
           </div>
           <Link
             href="#experiencia-candidato"
+            data-analytics-click={ANALYTICS_EVENTS.howItWorksClicked}
             className="group inline-flex min-h-11 w-fit items-center gap-2 text-sm font-bold text-[#082B33] underline-offset-4 hover:text-emerald-700 hover:underline dark:text-teal-50 dark:hover:text-emerald-300"
           >
             Ver cómo funciona

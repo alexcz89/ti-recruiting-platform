@@ -118,6 +118,7 @@ export default function TaskioCodeEditor() {
     <div
       className="taskio-code-editor overflow-hidden rounded-2xl border border-white/10 bg-[#071b20] text-white shadow-[0_24px_70px_rgba(2,22,27,0.22)]"
       aria-label="Código Python que explica qué es TaskIO"
+      data-analytics-editor=""
     >
       <div className="flex min-h-12 items-center justify-between gap-3 border-b border-white/10 bg-[#0a242a] px-3 sm:px-5">
         <div className="flex min-w-0 self-stretch">

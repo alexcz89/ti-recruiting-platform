@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoTaskio from "@/components/LogoTaskio";
+import { ANALYTICS_EVENTS } from "@/lib/analytics";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import {
   ClipboardList,
@@ -133,7 +134,7 @@ function LandingHeader({
             <Link href="/auth/signin" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white">
               Iniciar sesión
             </Link>
-            <Link href="/contact" className="landing-button-primary min-h-11 px-4 text-sm">
+            <Link href="/contact" data-analytics-click={ANALYTICS_EVENTS.demoClicked} className="landing-button-primary min-h-11 px-4 text-sm">
               Solicitar demo
             </Link>
           </div>
@@ -165,7 +166,7 @@ function LandingHeader({
               <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:no-underline dark:text-zinc-200 dark:hover:bg-zinc-800">
                 Iniciar sesión
               </Link>
-              <Link href="/contact" onClick={() => setMobileMenuOpen(false)} className="landing-button-primary mt-2 min-h-11 px-4 text-sm">
+              <Link href="/contact" data-analytics-click={ANALYTICS_EVENTS.demoClicked} onClick={() => setMobileMenuOpen(false)} className="landing-button-primary mt-2 min-h-11 px-4 text-sm">
                 Solicitar demo
               </Link>
             </div>
