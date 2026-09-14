@@ -61,6 +61,8 @@ Todos los nombres están centralizados en `lib/analytics.ts`.
 | `landing_scroll_100` | Llega al fondo (tolerancia de 1 px) | Una vez por visita |
 | `candidate_signup_started` | Formulario real montado y documento visible | Una vez por montaje |
 | `candidate_signup_completed` | `createCandidateImproved` responde `ok: true`, antes de navegar a verificación | Una vez por montaje exitoso |
+| `demo_request_started` | Primer cambio real en el formulario de `/contact` | Una vez por montaje |
+| `demo_request_submitted` | `POST /api/contact` confirma que Resend aceptó el correo | Una vez por envío exitoso |
 
 Una visita a la landing termina al cambiar de ruta; regresar inicia otra.
 Cambiar el hash, redimensionar, volver a una pestaña o repetir efectos de
@@ -76,7 +78,7 @@ ancla también cuentan como profundidad, no demuestran lectura.
 Todos los eventos llevan únicamente `name`, `domain`, `url`, `referrer` e
 `interactive`. No se aceptan propiedades arbitrarias en `track`.
 
-- `url`: origin + ruta permitida (`/` o `/auth/signup/candidate`) y UTM aprobados.
+- `url`: origin + ruta permitida (`/`, `/contact` o `/auth/signup/candidate`) y UTM aprobados.
   No se envían hash, email, callbackUrl, jobId, tokens ni otras rutas.
 - `referrer`: sólo origin HTTP(S) de `document.referrer`; se eliminan ruta,
   query, credenciales y hash. Se sacrifica detalle por privacidad.
@@ -101,10 +103,10 @@ del navegador pueden causar subregistro: no es un registro contable garantizado.
 
 ## Límites reales
 
-- Demo: `/contact` muestra un correo `mailto:` genérico. No hay formulario,
-  calendario ni confirmación de recepción. No se implementan
-  `demo_request_started` ni `demo_request_submitted`; abrir contacto o el cliente
-  de correo no demuestra una solicitud de demo iniciada/enviada.
+- Demo: `/contact` confirma la conversión sólo cuando el endpoint recibe una
+  aceptación del proveedor de correo. No equivale a una reunión agendada ni a
+  una oportunidad comercial calificada. La implementación y sus límites se
+  documentan en `docs/demo-request.md`.
 - Signup completed mide creación por contraseña, no verificación del correo.
   Si el servidor crea la cuenta pero falla antes de devolver `ok`, no se cuenta.
 - Google OAuth puede crear una cuenta o iniciar sesión en una existente. No se

@@ -61,6 +61,7 @@ export async function sendEmail(opts: {
   html: string;
   text?: string;
   from?: string;
+  replyTo?: string;
   dedupeKey?: string;
 }): Promise<SendResult> {
   const resolvedFrom = (opts.from || RESEND_FROM || "").trim();
@@ -93,6 +94,7 @@ export async function sendEmail(opts: {
     subject: opts.subject,
     html: opts.html,
     text: opts.text,
+    replyTo: opts.replyTo,
   };
 
   try {
@@ -118,6 +120,61 @@ export async function sendEmail(opts: {
       return { error: e2?.message || e1?.message || "send failed" };
     }
   }
+}
+
+export type DemoRequestEmail = {
+  name: string;
+  company: string;
+  email: string;
+  role?: string;
+  hiringNeeds: string;
+  message?: string;
+};
+
+export function buildDemoRequestEmail(request: DemoRequestEmail) {
+  const optionalRow = (label: string, value?: string) =>
+    value
+      ? `<p style="margin:0 0 12px"><strong>${label}:</strong><br/>${escapeHtml(value).replace(/\r?\n/g, "<br/>")}</p>`
+      : "";
+
+  const html = htmlLayout({
+    title: "Nueva solicitud de demo",
+    body: `<p style="margin:0 0 12px"><strong>Nombre:</strong><br/>${escapeHtml(request.name)}</p>
+      <p style="margin:0 0 12px"><strong>Empresa:</strong><br/>${escapeHtml(request.company)}</p>
+      <p style="margin:0 0 12px"><strong>Correo:</strong><br/>${escapeHtml(request.email)}</p>
+      ${optionalRow("Cargo", request.role)}
+      <p style="margin:0 0 12px"><strong>Necesidades de contratación:</strong><br/>${escapeHtml(request.hiringNeeds).replace(/\r?\n/g, "<br/>")}</p>
+      ${optionalRow("Mensaje adicional", request.message)}`,
+  });
+
+  const text = [
+    "Nueva solicitud de demo",
+    `Nombre: ${request.name}`,
+    `Empresa: ${request.company}`,
+    `Correo: ${request.email}`,
+    request.role ? `Cargo: ${request.role}` : null,
+    `Necesidades de contratación: ${request.hiringNeeds}`,
+    request.message ? `Mensaje adicional: ${request.message}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return {
+    subject: "Nueva solicitud de demo de TaskIO",
+    html,
+    text,
+    replyTo: request.email,
+  };
+}
+
+export async function sendDemoRequestEmail(
+  request: DemoRequestEmail,
+): Promise<SendResult> {
+  return sendEmail({
+    to: "alejandro@taskio.com.mx",
+    ...buildDemoRequestEmail(request),
+    dedupeKey: `demo-request:${crypto.randomUUID()}`,
+  });
 }
 
 /* ====================== Verification Email ======================= */
