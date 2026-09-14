@@ -1,7 +1,8 @@
 // app/auth/signup/candidate/components/SignupMultiStep.tsx
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { ANALYTICS_EVENTS, track } from "@/lib/analytics";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { signIn } from "next-auth/react";
@@ -126,6 +127,19 @@ export default function SignupMultiStep({
   callbackUrl,
 }: Props) {
   const router = useRouter();
+  const signupStarted = useRef(false);
+  const signupCompleted = useRef(false);
+  useEffect(() => {
+    const started = () => {
+      if (document.visibilityState === "hidden" || signupStarted.current) return;
+      signupStarted.current = true;
+      track(ANALYTICS_EVENTS.pageview);
+      track(ANALYTICS_EVENTS.signupStarted);
+    };
+    started();
+    document.addEventListener("visibilitychange", started);
+    return () => document.removeEventListener("visibilitychange", started);
+  }, []);
   const safeCallbackUrl = sanitizeInternalCallbackUrl(callbackUrl);
   const postAuthUrl = safeCallbackUrl || "/onboarding/candidate";
   const signinHref = safeCallbackUrl
@@ -267,6 +281,11 @@ export default function SignupMultiStep({
         // ✅ Fix #23: Usar mensajes de error específicos
         toastError(getErrorMessage(result?.error));
         return;
+      }
+
+      if (!signupCompleted.current) {
+        signupCompleted.current = true;
+        track(ANALYTICS_EVENTS.signupCompleted);
       }
 
       toastSuccess(

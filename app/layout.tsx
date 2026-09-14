@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { Inter, Bricolage_Grotesque } from "next/font/google";
 import Providers from "@/components/Providers";
 import Header from "@/components/Header";
+import LandingAnalytics from "@/components/landing/LandingAnalytics";
 import { ThemeScript } from "@/components/ThemeProvider";
 import { generateOrganizationSchema, generateWebsiteSchema } from "@/lib/seo/schema";
 
@@ -66,6 +67,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
       <body className="min-h-screen antialiased bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-50">
         <Providers>
+          <LandingAnalytics />
           <Header />
 
           <main
