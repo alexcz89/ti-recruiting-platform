@@ -97,12 +97,12 @@ export default function ContactForm() {
 
   return (
     <form
-      className="relative rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-7 dark:border-zinc-800 dark:bg-zinc-950"
+      className="relative rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm sm:p-6 dark:border-zinc-800 dark:bg-zinc-950"
       noValidate
       onChangeCapture={markStarted}
       onSubmit={handleSubmit(submit)}
     >
-      <div className="grid gap-5 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <Field id="name" label="Nombre" error={errors.name?.message} required>
           <input
             {...register("name")}
@@ -157,7 +157,7 @@ export default function ContactForm() {
         </Field>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-4">
         <Field
           id="hiringNeeds"
           label="¿Qué perfiles necesitas contratar?"
@@ -169,6 +169,7 @@ export default function ContactForm() {
             className={`${inputClass} min-h-28 resize-y`}
             id="hiringNeeds"
             maxLength={300}
+            placeholder="Ej. Backend Python, Data Engineer, QA Automation..."
             aria-required="true"
             aria-invalid={Boolean(errors.hiringNeeds)}
             aria-describedby={errors.hiringNeeds ? "hiringNeeds-error" : undefined}
@@ -176,11 +177,11 @@ export default function ContactForm() {
         </Field>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-4">
         <Field id="message" label="Mensaje adicional" error={errors.message?.message}>
           <textarea
             {...register("message")}
-            className={`${inputClass} min-h-32 resize-y`}
+            className={`${inputClass} min-h-24 resize-y`}
             id="message"
             maxLength={1000}
             aria-invalid={Boolean(errors.message)}
@@ -194,7 +195,7 @@ export default function ContactForm() {
         <input {...register("website")} autoComplete="off" id="website" tabIndex={-1} />
       </div>
 
-      <div className="mt-6" aria-live="polite">
+      <div className="mt-5" aria-live="polite">
         {submissionState === "error" ? (
           <p className="mb-4 text-sm text-red-700 dark:text-red-300" role="alert">
             {submissionError}
@@ -202,7 +203,7 @@ export default function ContactForm() {
         ) : null}
 
         <button
-          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-950 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:bg-white dark:text-slate-950 dark:hover:bg-zinc-200 dark:focus-visible:outline-white"
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto dark:bg-emerald-500 dark:text-zinc-950 dark:hover:bg-emerald-400 dark:focus-visible:outline-emerald-400"
           disabled={isSubmitting}
           type="submit"
         >

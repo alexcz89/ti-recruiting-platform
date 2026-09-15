@@ -22,7 +22,7 @@ export default function Header() {
   const pathname = usePathname();
   const isAssessmentMode = /^\/assessments\/[^/]+$/.test(pathname ?? "");
 
-  if (pathname === "/") {
+  if (pathname === "/" || pathname === "/contact") {
     return (
       <LandingHeader
         mobileMenuOpen={mobileMenuOpen}
@@ -106,10 +106,10 @@ function LandingHeader({
   setMobileMenuOpen: (open: boolean) => void;
 }) {
   const sectionLinks = [
-    { href: "/#problema", label: "El problema" },
-    { href: "/#solucion", label: "Solución" },
     { href: "/#como-funciona", label: "Cómo funciona" },
-    { href: "/#beneficios", label: "Beneficios" },
+    { href: "/jobs", label: "Vacantes" },
+    { href: "/certificaciones", label: "Certificaciones" },
+    { href: "/concursos/taskio-coding-challenge-2026", label: "Coding Challenge" },
   ];
 
   return (
@@ -129,17 +129,17 @@ function LandingHeader({
             ))}
           </nav>
 
-          <div className="hidden items-center gap-2 md:flex">
+          <div className="hidden items-center gap-2 lg:flex">
             <ThemeToggle compact />
             <Link href="/auth/signin" className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950 hover:no-underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:hover:text-white">
-              Iniciar sesión
+              Acceder
             </Link>
             <Link href="/contact" data-analytics-click={ANALYTICS_EVENTS.demoClicked} className="landing-button-primary min-h-11 px-4 text-sm">
               Solicitar demo
             </Link>
           </div>
 
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-2 lg:hidden">
             <ThemeToggle compact />
             <button
               type="button"
@@ -155,7 +155,7 @@ function LandingHeader({
         </div>
 
         {mobileMenuOpen && (
-          <nav id="landing-mobile-menu" aria-label="Navegación móvil" className="border-t border-zinc-200 py-4 dark:border-zinc-800 md:hidden">
+          <nav id="landing-mobile-menu" aria-label="Navegación móvil" className="border-t border-zinc-200 py-4 dark:border-zinc-800 lg:hidden">
             <div className="flex flex-col gap-1">
               {sectionLinks.map((link) => (
                 <Link key={link.href} href={link.href} onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-100 hover:no-underline dark:text-zinc-200 dark:hover:bg-zinc-800">
@@ -164,7 +164,7 @@ function LandingHeader({
               ))}
               <div className="my-2 h-px bg-zinc-200 dark:bg-zinc-800" />
               <Link href="/auth/signin" onClick={() => setMobileMenuOpen(false)} className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold text-zinc-700 hover:bg-zinc-100 hover:no-underline dark:text-zinc-200 dark:hover:bg-zinc-800">
-                Iniciar sesión
+                Acceder
               </Link>
               <Link href="/contact" data-analytics-click={ANALYTICS_EVENTS.demoClicked} onClick={() => setMobileMenuOpen(false)} className="landing-button-primary mt-2 min-h-11 px-4 text-sm">
                 Solicitar demo
