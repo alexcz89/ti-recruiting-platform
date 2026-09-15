@@ -11,10 +11,12 @@ export const ANALYTICS_EVENTS = {
   scroll100: "landing_scroll_100",
   signupStarted: "candidate_signup_started",
   signupCompleted: "candidate_signup_completed",
+  demoRequestStarted: "demo_request_started",
+  demoRequestSubmitted: "demo_request_submitted",
 } as const;
 
 export type AnalyticsEvent = typeof ANALYTICS_EVENTS[keyof typeof ANALYTICS_EVENTS];
-export const ANALYTICS_PATHS = ["/", "/auth/signup/candidate"] as const;
+export const ANALYTICS_PATHS = ["/", "/contact", "/auth/signup/candidate"] as const;
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content"] as const;
 const passiveEvents: ReadonlySet<AnalyticsEvent> = new Set([
   ANALYTICS_EVENTS.editorViewed, ANALYTICS_EVENTS.candidateExperienceViewed,
