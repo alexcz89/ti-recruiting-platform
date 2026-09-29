@@ -89,4 +89,32 @@ describe("assessment answer expiration", () => {
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.not.toHaveProperty("code");
   });
+
+  it("keeps one authoritative answer when the same question is saved again", async () => {
+    tx.attemptAnswer.create
+      .mockResolvedValueOnce({ id: "answer-a" })
+      .mockRejectedValueOnce({ code: "P2002" });
+    tx.attemptAnswer.update.mockResolvedValueOnce({ id: "answer-a" });
+
+    const first = await POST(request(), { params: { attemptId: "attempt-a" } });
+    const second = await POST(
+      new Request("http://localhost/api/assessments/attempts/attempt-a/answer", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ questionId: "question-a", selectedOptions: ["correct"] }),
+      }),
+      { params: { attemptId: "attempt-a" } },
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(tx.attemptAnswer.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        attemptId_questionId: {
+          attemptId: "attempt-a",
+          questionId: "question-a",
+        },
+      },
+    }));
+  });
 });
