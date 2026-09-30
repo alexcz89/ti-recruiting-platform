@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   AnswerPersistenceQueue,
   answerQueueStorageKey,
+  summarizeExpiredAnswers,
   type AnswerPersistenceStorage,
   type PersistAnswer,
   type PersistAnswerResult,
@@ -93,7 +94,7 @@ describe("AnswerPersistenceQueue", () => {
     expect(queue.getSnapshot().states["question-a"]?.status).toBe("saved");
   });
 
-  it("retries a 500 response but does not retry 400 or 410 responses", async () => {
+  it("retries a 500 response but does not retry permanent client responses", async () => {
     const transient = vi
       .fn<PersistAnswer>()
       .mockResolvedValueOnce({ ok: false, status: 500 })
@@ -111,7 +112,7 @@ describe("AnswerPersistenceQueue", () => {
     expect(transient).toHaveBeenCalledTimes(2);
     expect(transientQueue.getSnapshot().states["question-a"]?.status).toBe("saved");
 
-    for (const status of [400, 410]) {
+    for (const status of [400, 401, 403, 410]) {
       const permanent = vi.fn<PersistAnswer>().mockResolvedValue({ ok: false, status });
       const queue = new AnswerPersistenceQueue({
         attemptId: `attempt-${status}`,
@@ -309,6 +310,35 @@ describe("AnswerPersistenceQueue", () => {
     });
   });
 
+  it("keeps the bounded flush open for a scheduled retry", async () => {
+    const persist = vi
+      .fn<PersistAnswer>()
+      .mockRejectedValueOnce(new TypeError("offline"))
+      .mockRejectedValueOnce(new TypeError("still offline"))
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+    const queue = new AnswerPersistenceQueue({
+      attemptId: "attempt-timer-reconnects",
+      storage: new MemoryStorage(),
+      persist,
+      retryDelaysMs: [10_000, 200],
+    });
+
+    queue.select("question-a", ["option-a"], 1);
+    await settle();
+
+    const flush = queue.flushPending(1_000);
+    await settle();
+    expect(persist).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(199);
+    await settle();
+    expect(queue.getSnapshot().states["question-a"]?.status).toBe("unconfirmed");
+
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(flush).resolves.toEqual({ allConfirmed: true, pendingCount: 0 });
+    expect(persist).toHaveBeenCalledTimes(3);
+  });
+
   it("reports the pending answer when timer expiry occurs while offline", async () => {
     const queue = new AnswerPersistenceQueue({
       attemptId: "attempt-timer-offline",
@@ -374,5 +404,12 @@ describe("AnswerPersistenceQueue", () => {
     });
     expect(JSON.stringify(events)).not.toContain("secret-option");
     expect(JSON.stringify(events)).not.toContain("question-a");
+  });
+
+  it("keeps confirmed and unconfirmed answers distinct after expiry", () => {
+    expect(summarizeExpiredAnswers(3, 1)).toEqual({
+      confirmedCount: 2,
+      unconfirmedCount: 1,
+    });
   });
 });

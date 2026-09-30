@@ -42,6 +42,18 @@ export type AnswerServerSnapshot = {
   clientToServerOffsetMs?: number;
 };
 
+export function summarizeExpiredAnswers(answeredCount: number, pendingCount: number) {
+  const safeAnsweredCount = Math.max(0, Math.floor(answeredCount));
+  const unconfirmedCount = Math.min(
+    safeAnsweredCount,
+    Math.max(0, Math.floor(pendingCount)),
+  );
+  return {
+    confirmedCount: safeAnsweredCount - unconfirmedCount,
+    unconfirmedCount,
+  };
+}
+
 export type AnswerPersistenceTelemetry =
   | { name: "assessment_answer_save_failed"; status: number | "network"; retryCount: number }
   | { name: "assessment_answer_save_recovered"; retryCount: number }
@@ -269,10 +281,23 @@ export class AnswerPersistenceQueue {
 
     while (this.snapshot.pendingCount > 0) {
       const active = Array.from(this.inFlight.values());
-      if (active.length === 0) break;
-
       const remainingMs = Math.max(0, deadline - Date.now());
       if (remainingMs === 0) break;
+
+      if (active.length === 0) {
+        const hasRetryablePending = Array.from(this.states.values()).some(
+          (state) =>
+            state.status !== "saved" &&
+            state.retryable &&
+            !state.permanentFailure,
+        );
+        if (!hasRetryablePending) break;
+
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, Math.min(25, remainingMs));
+        });
+        continue;
+      }
 
       let timedOut = false;
       let timeout: ReturnType<typeof setTimeout> | null = null;

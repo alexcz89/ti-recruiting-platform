@@ -21,7 +21,10 @@ import AssessmentTimer from './AssessmentTimer';
 import { useAntiCheating } from './useAntiCheating';
 import { useAnswerPersistence } from './useAnswerPersistence';
 import type { AssessmentState } from '@/lib/assessments/expiration';
-import type { AnswerServerSnapshot } from '@/lib/assessments/answer-persistence';
+import {
+  summarizeExpiredAnswers,
+  type AnswerServerSnapshot,
+} from '@/lib/assessments/answer-persistence';
 
 type Option = {
   id?: string;
@@ -136,6 +139,7 @@ export default function AssessmentPage() {
   const [expirationState, setExpirationState] = useState<
     'idle' | 'finalizing' | 'finalized' | 'error'
   >('idle');
+  const [expiredUnconfirmedCount, setExpiredUnconfirmedCount] = useState(0);
   const [antiCheatBypass, setAntiCheatBypass] = useState(false);
 
   // Anti-cheat: modal bloqueante al regresar al tab
@@ -179,6 +183,7 @@ export default function AssessmentPage() {
 
     try {
       const flushResult = await flushPending(2_500);
+      setExpiredUnconfirmedCount(flushResult.pendingCount);
       if (!flushResult.allConfirmed) {
         toastWarning(
           `${flushResult.pendingCount} ${
@@ -437,6 +442,7 @@ export default function AssessmentPage() {
       setStarted(true);
       setExpired(expiredAtStart);
       setExpirationState('idle');
+      setExpiredUnconfirmedCount(0);
       setSubmitting(false);
 
       if (data.expiresAt) setExpiresAt(new Date(data.expiresAt));
@@ -509,6 +515,10 @@ export default function AssessmentPage() {
   const savedAnswerCount = Object.values(answerStates).filter(
     (state) => state.status === 'saved',
   ).length;
+  const expiredAnswerSummary = summarizeExpiredAnswers(
+    answeredCount,
+    expiredUnconfirmedCount,
+  );
 
   const handleAnswer = (
     questionId: string,
@@ -991,7 +1001,11 @@ export default function AssessmentPage() {
             <div>
               <p className="text-sm font-semibold">La evaluación terminó por tiempo.</p>
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200/80">
-                Respondidas: {answeredCount} de {total}. Se califican únicamente las respuestas enviadas a tiempo.
+                Confirmadas: {expiredAnswerSummary.confirmedCount} de {total}.
+                {expiredAnswerSummary.unconfirmedCount > 0 && (
+                  <> No confirmadas: {expiredAnswerSummary.unconfirmedCount}.</>
+                )}{' '}
+                Se califican únicamente las respuestas enviadas a tiempo.
               </p>
             </div>
             {expirationState === 'finalized' ? (
