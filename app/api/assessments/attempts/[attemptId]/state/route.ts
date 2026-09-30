@@ -18,10 +18,12 @@ type AttemptFlags = {
 
 type StatePayload = {
   attemptId: string;
+  serverNow: Date;
   status: string;
   expiresAt: Date | null;
   expired: boolean;
   answers: Record<string, string[]>;
+  answerUpdatedAt: Record<string, Date>;
   timeSpent: Record<string, number>;
   lastAnsweredQuestionId: string | null;
   answeredCount: number;
@@ -87,12 +89,14 @@ export async function GET(
     });
 
     const answers: Record<string, string[]> = {};
+    const answerUpdatedAt: Record<string, Date> = {};
     const timeSpent: Record<string, number> = {};
 
     for (const r of rows) {
       answers[r.questionId] = Array.isArray(r.selectedOptions)
         ? (r.selectedOptions as string[])
         : [];
+      answerUpdatedAt[r.questionId] = r.answeredAt;
 
       if (typeof r.timeSpent === "number") {
         timeSpent[r.questionId] = r.timeSpent;
@@ -133,10 +137,12 @@ export async function GET(
 
     const payload: StatePayload = {
       attemptId: attempt.id,
+      serverNow: now,
       status: String(attempt.status),
       expiresAt: attempt.expiresAt,
       expired,
       answers,
+      answerUpdatedAt,
       timeSpent,
       lastAnsweredQuestionId,
       answeredCount,

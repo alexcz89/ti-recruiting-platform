@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleHelp,
+  Loader2,
+  RefreshCw,
   SkipForward,
 } from 'lucide-react';
 import { toastSuccess, toastError, toastInfo, toastWarning } from '@/lib/ui/toast';
@@ -17,7 +19,12 @@ import AssessmentQuestion from './AssessmentQuestion';
 import AssessmentProgress from './AssessmentProgress';
 import AssessmentTimer from './AssessmentTimer';
 import { useAntiCheating } from './useAntiCheating';
+import { useAnswerPersistence } from './useAnswerPersistence';
 import type { AssessmentState } from '@/lib/assessments/expiration';
+import {
+  summarizeExpiredAnswers,
+  type AnswerServerSnapshot,
+} from '@/lib/assessments/answer-persistence';
 
 type Option = {
   id?: string;
@@ -45,10 +52,12 @@ type Question = {
 
 type AttemptState = {
   attemptId: string;
+  serverNow?: string | Date;
   status?: string;
   expiresAt?: string | Date | null;
   expired?: boolean;
   answers?: Record<string, string[]>;
+  answerUpdatedAt?: Record<string, string | Date>;
   timeSpent?: Record<string, number>;
   currentIndex?: number;
 };
@@ -120,6 +129,8 @@ export default function AssessmentPage() {
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [answerServerSnapshot, setAnswerServerSnapshot] =
+    useState<AnswerServerSnapshot | null>(null);
   const [timeSpent, setTimeSpent] = useState<Record<string, number>>({});
   const [expiresAt, setExpiresAt] = useState<Date | null>(null);
 
@@ -128,6 +139,7 @@ export default function AssessmentPage() {
   const [expirationState, setExpirationState] = useState<
     'idle' | 'finalizing' | 'finalized' | 'error'
   >('idle');
+  const [expiredUnconfirmedCount, setExpiredUnconfirmedCount] = useState(0);
   const [antiCheatBypass, setAntiCheatBypass] = useState(false);
 
   // Anti-cheat: modal bloqueante al regresar al tab
@@ -143,6 +155,25 @@ export default function AssessmentPage() {
     state: 'finalizing' | 'finalized';
   } | null>(null);
 
+  const {
+    ready: answerPersistenceReady,
+    answerStates,
+    pendingCount,
+    saveAnswer,
+    retryPending,
+    flushPending,
+    clearPending,
+  } = useAnswerPersistence({
+    attemptId,
+    serverSnapshot: answerServerSnapshot,
+    onAnswersChange: (nextAnswers) => {
+      setAnswers((previous) => ({ ...previous, ...nextAnswers }));
+    },
+    onExpired: () => {
+      setExpired(true);
+    },
+  });
+
   async function finalizeExpiredAttempt(targetAttemptId: string) {
     const tracked = expirationAttemptRef.current;
     if (tracked?.id === targetAttemptId) return;
@@ -151,6 +182,16 @@ export default function AssessmentPage() {
     setExpirationState('finalizing');
 
     try {
+      const flushResult = await flushPending(2_500);
+      setExpiredUnconfirmedCount(flushResult.pendingCount);
+      if (!flushResult.allConfirmed) {
+        toastWarning(
+          `${flushResult.pendingCount} ${
+            flushResult.pendingCount === 1 ? 'respuesta no pudo confirmarse' : 'respuestas no pudieron confirmarse'
+          } antes de terminar el tiempo. Se calificarán únicamente las respuestas guardadas.`,
+        );
+      }
+
       const res = await fetch(`/api/assessments/attempts/${targetAttemptId}/submit`, {
         method: 'POST',
         cache: 'no-store',
@@ -163,6 +204,7 @@ export default function AssessmentPage() {
 
       expirationAttemptRef.current = { id: targetAttemptId, state: 'finalized' };
       setExpirationState('finalized');
+      clearPending();
       localStorage.removeItem(`assessment:${targetAttemptId}:currentIndex`);
     } catch (error) {
       console.error('Error finalizing expired assessment:', error);
@@ -182,6 +224,13 @@ export default function AssessmentPage() {
   function handleExpire() {
     markExpired(attemptId, true);
   }
+
+  useEffect(() => {
+    if (!expired || !attemptId || expirationState !== 'idle') return;
+    void finalizeExpiredAttempt(attemptId);
+    // finalizeExpiredAttempt is guarded by expirationAttemptRef for timer/API races.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expired, attemptId, expirationState]);
 
   useAntiCheating({
     enabled: started && !!attemptId && !expired && !submitting && !antiCheatBypass,
@@ -216,6 +265,10 @@ export default function AssessmentPage() {
         return Array.isArray(answer) && answer.length > 0;
       }),
     [answers, questions]
+  );
+  const requiresAnswerPersistence = useMemo(
+    () => questions.some((question) => question.type !== 'CODING'),
+    [questions],
   );
 
   useEffect(() => {
@@ -301,9 +354,21 @@ export default function AssessmentPage() {
     const st = (await res.json()) as AttemptState;
 
     const savedAnswers = st.answers || {};
+    const answerUpdatedAt = Object.fromEntries(
+      Object.entries(st.answerUpdatedAt || {}).map(([questionId, value]) => [
+        questionId,
+        new Date(value).getTime(),
+      ]),
+    );
     const savedTimeSpent = st.timeSpent || {};
 
     setAnswers(savedAnswers);
+    const serverNow = st.serverNow ? new Date(st.serverNow).getTime() : Date.now();
+    setAnswerServerSnapshot({
+      answers: savedAnswers,
+      answeredAt: answerUpdatedAt,
+      clientToServerOffsetMs: serverNow - Date.now(),
+    });
     setTimeSpent(savedTimeSpent);
 
     if (st.expiresAt) setExpiresAt(new Date(st.expiresAt));
@@ -372,10 +437,12 @@ export default function AssessmentPage() {
       );
 
       setAttemptId(newAttemptId);
+      setAnswerServerSnapshot(null);
       setQuestions(qs);
       setStarted(true);
       setExpired(expiredAtStart);
       setExpirationState('idle');
+      setExpiredUnconfirmedCount(0);
       setSubmitting(false);
 
       if (data.expiresAt) setExpiresAt(new Date(data.expiresAt));
@@ -392,27 +459,25 @@ export default function AssessmentPage() {
         typeof savedAnswers === 'object' &&
         Object.keys(savedAnswers).some((k) => (savedAnswers as any)[k]?.length > 0);
 
-      if (hasSavedAnswers) {
-        setAnswers(savedAnswers!);
-        setTimeSpent(savedTimeSpent || {});
-        setCurrentIndex(firstUnansweredIndex(qs, savedAnswers!));
-
-        // Restaurar codingSubmitted
-        const submitted: Record<string, boolean> = {};
-        for (const [qid, opts] of Object.entries(savedAnswers!)) {
-          if (Array.isArray(opts) && opts.includes(CODE_SENTINEL)) {
-            submitted[qid] = true;
-          }
-        }
-        setCodingSubmitted(submitted);
-      } else {
-        try {
-          await hydrateFromState(newAttemptId, qs);
-        } catch {
+      try {
+        await hydrateFromState(newAttemptId, qs);
+      } catch (stateError) {
+        if (data.reused) {
+          setStarted(false);
+          setAttemptId(null);
+          setQuestions([]);
           setAnswers({});
           setTimeSpent({});
-          setCurrentIndex(0);
+          setCodingSubmitted({});
+          setAnswerServerSnapshot(null);
+          throw stateError;
         }
+
+        const initialAnswers = hasSavedAnswers ? savedAnswers! : {};
+        setAnswers(initialAnswers);
+        setAnswerServerSnapshot({ answers: initialAnswers, answeredAt: {} });
+        setTimeSpent(savedTimeSpent || {});
+        setCurrentIndex(firstUnansweredIndex(qs, initialAnswers));
       }
 
       if (expiredAtStart) {
@@ -446,15 +511,31 @@ export default function AssessmentPage() {
 
   const currentQuestion = questions[currentIndex];
   const currentAnswer = answers[currentQuestion?.id || ''] || [];
+  const currentAnswerState = answerStates[currentQuestion?.id || ''];
+  const savedAnswerCount = Object.values(answerStates).filter(
+    (state) => state.status === 'saved',
+  ).length;
+  const expiredAnswerSummary = summarizeExpiredAnswers(
+    answeredCount,
+    expiredUnconfirmedCount,
+  );
 
-  const handleAnswer = async (
+  const handleAnswer = (
     questionId: string,
     selectedOptions: string[]
-  ): Promise<boolean> => {
-    if (!attemptId || expired) return false;
+  ) => {
+    if (!attemptId || expired) return;
 
     const unique = Array.from(new Set(selectedOptions.map((x) => String(x).trim()))).filter(Boolean);
-    setAnswers((prev) => ({ ...prev, [questionId]: unique }));
+    const questionTime = timeSpent[questionId] || 0;
+    saveAnswer(questionId, unique, questionTime);
+  };
+
+  const saveCodeCompletion = async (
+    questionId: string,
+    selectedOptions: string[],
+  ): Promise<boolean> => {
+    if (!attemptId || expired) return false;
 
     const questionTime = timeSpent[questionId] || 0;
 
@@ -462,7 +543,7 @@ export default function AssessmentPage() {
       const res = await fetch(`/api/assessments/attempts/${attemptId}/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ questionId, selectedOptions: unique, timeSpent: questionTime }),
+        body: JSON.stringify({ questionId, selectedOptions, timeSpent: questionTime }),
       });
 
       if (!res.ok && (res.status === 400 || res.status === 410)) {
@@ -512,6 +593,11 @@ export default function AssessmentPage() {
   const handleSubmit = async (options: SubmitOptions = {}) => {
     if (!attemptId || submitting) return;
 
+    if (!expired && requiresAnswerPersistence && !answerPersistenceReady) {
+      toastInfo('Estamos preparando el guardado de respuestas. Intenta nuevamente en un momento.');
+      return;
+    }
+
     if (expired) {
       await finalizeExpiredAttempt(attemptId);
       return;
@@ -540,6 +626,17 @@ export default function AssessmentPage() {
 
     setSubmitting(true);
 
+    const flushResult = await flushPending(5_000);
+    if (!flushResult.allConfirmed) {
+      toastWarning(
+        `No pudimos confirmar ${flushResult.pendingCount} ${
+          flushResult.pendingCount === 1 ? 'respuesta' : 'respuestas'
+        }. Revisa tu conexión e intenta nuevamente antes de enviar.`,
+      );
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/assessments/attempts/${attemptId}/submit`, {
         method: 'POST',
@@ -560,6 +657,7 @@ export default function AssessmentPage() {
           : `Evaluación completada. Score: ${result.totalScore}%`
       );
 
+      clearPending();
       localStorage.removeItem(`assessment:${attemptId}:currentIndex`);
       router.push(`/assessments/attempts/${attemptId}/results`);
     } catch (error: any) {
@@ -575,7 +673,7 @@ export default function AssessmentPage() {
     setAnswers((prev) => ({ ...prev, [qid]: [CODE_SENTINEL] }));
     setCodingSubmitted((prev) => ({ ...prev, [qid]: true }));
 
-    const answerSaved = await handleAnswer(qid, [CODE_SENTINEL]);
+    const answerSaved = await saveCodeCompletion(qid, [CODE_SENTINEL]);
     if (!answerSaved) {
       toastError('La solución se ejecutó, pero no pudimos cerrar la respuesta. Intenta de nuevo.');
       return;
@@ -864,12 +962,50 @@ export default function AssessmentPage() {
           </div>
         )}
 
+        {!expired && (pendingCount > 0 || savedAnswerCount > 0) && (
+          <div
+            role="status"
+            aria-live="polite"
+            className={[
+              'mb-3 flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-sm',
+              pendingCount > 0
+                ? 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100'
+                : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:text-emerald-200',
+            ].join(' ')}
+          >
+            <span className="inline-flex items-center gap-2 font-medium">
+              {pendingCount > 0 ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+              )}
+              {pendingCount > 0
+                ? `${pendingCount} ${pendingCount === 1 ? 'respuesta pendiente' : 'respuestas pendientes'} de guardar`
+                : 'Todas las respuestas están guardadas'}
+            </span>
+            {pendingCount > 0 && (
+              <button
+                type="button"
+                onClick={retryPending}
+                className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-amber-400 bg-white px-3 py-2 font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/60 dark:text-amber-100 dark:hover:bg-amber-900/40"
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                Reintentar ahora
+              </button>
+            )}
+          </div>
+        )}
+
         {expired && (
           <div className="mb-3 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-950 md:flex-row md:items-center md:justify-between dark:border-amber-500/40 dark:bg-amber-950/30 dark:text-amber-100">
             <div>
               <p className="text-sm font-semibold">La evaluación terminó por tiempo.</p>
               <p className="mt-0.5 text-xs text-amber-800 dark:text-amber-200/80">
-                Respondidas: {answeredCount} de {total}. Se califican únicamente las respuestas enviadas a tiempo.
+                Confirmadas: {expiredAnswerSummary.confirmedCount} de {total}.
+                {expiredAnswerSummary.unconfirmedCount > 0 && (
+                  <> No confirmadas: {expiredAnswerSummary.unconfirmedCount}.</>
+                )}{' '}
+                Se califican únicamente las respuestas enviadas a tiempo.
               </p>
             </div>
             {expirationState === 'finalized' ? (
@@ -950,7 +1086,9 @@ export default function AssessmentPage() {
           }}
           selectedOptions={currentAnswer}
           onAnswer={(optionKeys) => handleAnswer(currentQuestion.id, optionKeys)}
-          disabled={expired}
+          persistenceStatus={isCodingQuestion ? undefined : currentAnswerState?.status}
+          onRetry={retryPending}
+          disabled={expired || (!isCodingQuestion && !answerPersistenceReady)}
           attemptId={attemptId || undefined}
           onCodeSubmit={() => handleCodeSubmitted(currentQuestion.id)}
           templateLanguage={preferredLanguageQS || template?.language || 'javascript'}

@@ -1,9 +1,11 @@
 // app/assessments/[templateId]/AssessmentQuestion.tsx
 'use client';
 
+import React from 'react';
 import dynamic from 'next/dynamic';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import type { AnswerSaveStatus } from '@/lib/assessments/answer-persistence';
 
 // Lazy load CodeEditor para mejor performance
 const CodeEditor = dynamic(() => import('@/components/assessments/CodeEditor'), {
@@ -64,6 +66,8 @@ type Props = {
   question: Question;
   selectedOptions: string[];
   onAnswer: (options: string[]) => void;
+  persistenceStatus?: AnswerSaveStatus;
+  onRetry?: () => void;
   disabled?: boolean;
   attemptId?: string;
   onCodeSubmit?: (code: string, language: string) => void;
@@ -143,6 +147,8 @@ export default function AssessmentQuestion({
   question,
   selectedOptions,
   onAnswer,
+  persistenceStatus,
+  onRetry,
   disabled = false,
   attemptId,
   onCodeSubmit,
@@ -296,6 +302,46 @@ export default function AssessmentQuestion({
           );
         })}
       </div>
+
+      {persistenceStatus && selectedOptions.length > 0 && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={[
+            'mt-4 flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm',
+            persistenceStatus === 'saved'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800/50 dark:bg-emerald-950/20 dark:text-emerald-200'
+              : persistenceStatus === 'saving'
+                ? 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200'
+                : 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-100',
+          ].join(' ')}
+        >
+          <span className="inline-flex items-center gap-2 font-medium">
+            {persistenceStatus === 'saved' ? (
+              <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+            ) : persistenceStatus === 'saving' ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            )}
+            {persistenceStatus === 'saved'
+              ? 'Guardada'
+              : persistenceStatus === 'saving'
+                ? 'Guardando…'
+                : 'No confirmada'}
+          </span>
+          {persistenceStatus === 'unconfirmed' && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-amber-400 bg-white px-3 py-2 font-semibold text-amber-900 transition hover:bg-amber-100 dark:border-amber-600 dark:bg-amber-950/60 dark:text-amber-100 dark:hover:bg-amber-900/40"
+            >
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              Reintentar
+            </button>
+          )}
+        </div>
+      )}
 
       {question.allowMultiple && (
         <p className="text-muted mt-4 text-sm">Puedes seleccionar múltiples opciones.</p>
