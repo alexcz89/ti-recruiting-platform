@@ -81,6 +81,7 @@ model Company {
   industry                      String?
   size                          CompanySize?
   assessmentInviteCharges       AssessmentInviteChargeLedger[]
+  applicationEvents             ApplicationEvent[]
   customTemplates               AssessmentTemplate[]
   invoices                      Invoice[]
   jobs                          Job[]
@@ -316,21 +317,24 @@ model Job {
 }
 
 model Application {
-  id                 String              @id @default(cuid())
+  id                 String                  @id @default(cuid())
   jobId              String
   candidateId        String
   resumeUrl          String?
   coverLetter        String?
-  status             ApplicationStatus   @default(SUBMITTED)
-  createdAt          DateTime            @default(now())
+  status             ApplicationStatus       @default(SUBMITTED)
+  stage              ApplicationStage?
+  disposition        ApplicationDisposition?
+  stateVersion       Int                     @default(0)
+  createdAt          DateTime                @default(now())
   rejectedAt         DateTime?
-  rejectionEmailSent Boolean             @default(false)
-  recruiterInterest  ApplicationInterest @default(REVIEW)
-  updatedAt          DateTime            @default(now()) @updatedAt
+  rejectionEmailSent Boolean                 @default(false)
+  recruiterInterest  ApplicationInterest     @default(REVIEW)
+  updatedAt          DateTime                @default(now()) @updatedAt
   assignedAt         DateTime?
   assignedTo         String?
   followUpAt         DateTime?
-  followUpDone       Boolean             @default(false)
+  followUpDone       Boolean                 @default(false)
   hiredAt            DateTime?
   internalNotes      String?
   interviewAt        DateTime?
@@ -342,19 +346,20 @@ model Application {
   rejectionReason    String?
   reviewingAt        DateTime?
   source             String?
-  starred            Boolean             @default(false)
+  starred            Boolean                 @default(false)
   starredAt          DateTime?
-  submittedAt        DateTime            @default(now())
+  submittedAt        DateTime                @default(now())
   utmCampaign        String?
   utmMedium          String?
   utmSource          String?
-  viewCount          Int                 @default(0)
-  candidate          User                @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  job                Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  viewCount          Int                     @default(0)
+  candidate          User                    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  job                Job                     @relation(fields: [jobId], references: [id], onDelete: Cascade)
   assessmentAttempts AssessmentAttempt[]
   assessmentInvites  AssessmentInvite[]
   messages           Message[]
   liveInterviews     LiveInterview[]
+  events             ApplicationEvent[]
 
   @@unique([candidateId, jobId])
   @@index([candidateId]) // ✅ NEW: Fast candidate application lookups
@@ -365,6 +370,31 @@ model Application {
   @@index([assignedTo])
   @@index([starred])
   @@index([source])
+}
+
+model ApplicationEvent {
+  id              String                     @id @default(cuid())
+  applicationId   String
+  companyId       String
+  actorType       ApplicationEventActorType
+  actorId         String?
+  type            ApplicationEventType
+  fromStage       ApplicationStage?
+  toStage         ApplicationStage?
+  fromDisposition ApplicationDisposition?
+  toDisposition   ApplicationDisposition?
+  visibility      ApplicationEventVisibility @default(INTERNAL)
+  reasonCode      String?
+  metadata        Json?
+  happenedAt      DateTime                   @default(now())
+  recordedAt      DateTime                   @default(now())
+  idempotencyKey  String?
+  application     Application                @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  company         Company                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, applicationId, idempotencyKey])
+  @@index([applicationId, happenedAt])
+  @@index([companyId, happenedAt])
 }
 
 model Plan {
@@ -1191,6 +1221,48 @@ enum ApplicationStatus {
   OFFER
   REJECTED
   HIRED
+}
+
+enum ApplicationStage {
+  APPLIED
+  REVIEW
+  ASSESSMENT
+  INTERVIEW
+  OFFER
+  CLOSED
+}
+
+enum ApplicationDisposition {
+  ACTIVE
+  HOLD
+  REJECTED
+  WITHDRAWN
+  HIRED
+  CANCELLED
+}
+
+enum ApplicationEventActorType {
+  CANDIDATE
+  RECRUITER
+  ADMIN
+  SYSTEM
+  IMPORT
+}
+
+enum ApplicationEventType {
+  APPLICATION_STAGE_CHANGED
+  APPLICATION_DISPOSITION_CHANGED
+  CANDIDATE_REJECTED
+  CANDIDATE_WITHDREW
+  CANDIDATE_HIRED
+  PROCESS_CANCELLED
+  LEGACY_STATE_IMPORTED
+}
+
+enum ApplicationEventVisibility {
+  INTERNAL
+  CANDIDATE
+  BOTH
 }
 
 enum JobStatus {
