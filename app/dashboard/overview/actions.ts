@@ -7,6 +7,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { getSessionCompanyId } from "@/lib/server/session";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
+import { isCanonicalHiringProcessEnabled } from "@/lib/hiring-process/feature-flags";
+import { transitionApplication } from "@/lib/hiring-process/transition-application";
 
 export async function updateApplicationStatus(
   applicationId: string,
@@ -34,24 +36,66 @@ export async function updateApplicationStatus(
     // Verificar que la aplicación pertenezca a una vacante de la empresa
     const application = await prisma.application.findFirst({
       where: scopedWhere,
-      select: { id: true },
+      select: {
+        id: true,
+        stage: true,
+        disposition: true,
+        stateVersion: true,
+      },
     });
 
     if (!application) {
       return { success: false, error: "Aplicación no encontrada" };
     }
 
-    // Actualizar status
-    await prisma.application.update({
-      where: { id: application.id },
-      data: {
-        status,
-        recruiterInterest: status === "REVIEWING" ? "ACCEPTED" : "REJECTED",
-        ...(status === "REJECTED" && {
-          rejectedAt: new Date(),
-        }),
-      },
-    });
+    const canonicalPilotEnabled =
+      status === "REVIEWING" && isCanonicalHiringProcessEnabled();
+
+    if (canonicalPilotEnabled) {
+      const actorId = session.user.id ? String(session.user.id) : null;
+      if (!actorId) {
+        return { success: false, error: "No autorizado" };
+      }
+
+      const isIdempotentReplay =
+        application.stage === "REVIEW" &&
+        application.disposition === "ACTIVE";
+      const isApprovedPilotSource =
+        application.stage === "APPLIED" &&
+        application.disposition === "ACTIVE";
+      if (!isApprovedPilotSource && !isIdempotentReplay) {
+        return { success: false, error: "Error al actualizar" };
+      }
+
+      const sourceVersion = isIdempotentReplay
+        ? application.stateVersion - 1
+        : application.stateVersion;
+
+      await transitionApplication({
+        applicationId: application.id,
+        targetStage: "REVIEW",
+        targetDisposition: "ACTIVE",
+        expectedVersion: sourceVersion,
+        actor: {
+          type: role,
+          id: actorId,
+          companyId,
+        },
+        idempotencyKey: `overview-review:${application.id}:v${sourceVersion}`,
+      });
+    } else {
+      // Legacy behavior remains the authority while the pilot flag is off.
+      await prisma.application.update({
+        where: { id: application.id },
+        data: {
+          status,
+          recruiterInterest: status === "REVIEWING" ? "ACCEPTED" : "REJECTED",
+          ...(status === "REJECTED" && {
+            rejectedAt: new Date(),
+          }),
+        },
+      });
+    }
 
     revalidatePath("/dashboard/overview");
     revalidatePath("/dashboard/jobs");
