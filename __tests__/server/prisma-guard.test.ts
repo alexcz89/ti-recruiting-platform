@@ -7,8 +7,17 @@ import { describe, expect, it } from 'vitest';
 
 const guardPath = path.resolve(process.cwd(), 'scripts/prisma-guard.cjs');
 const require = createRequire(import.meta.url);
-const { assertNoSchemaEnvFile } = require(guardPath) as {
+const {
+  assertNoSchemaEnvFile,
+  buildReconciliationCommand,
+  parseReconciliationArguments,
+} = require(guardPath) as {
   assertNoSchemaEnvFile: (schemaEnvFile?: string) => void;
+  buildReconciliationCommand: (args: string[]) => {
+    command: string;
+    args: string[];
+  };
+  parseReconciliationArguments: (args: string[]) => string[];
 };
 const localUrl = 'postgresql://postgres:postgres@localhost:5432/taskio_test';
 const loopbackUrl = 'postgresql://postgres:postgres@127.0.0.1:5432/taskio_test';
@@ -27,6 +36,7 @@ function runGuard(
   delete childEnv.DATABASE_URL;
   delete childEnv.DIRECT_URL;
   delete childEnv.ALLOW_REMOTE_DB_MIGRATION;
+  delete childEnv.ALLOW_REMOTE_DATA_RECONCILIATION;
   delete childEnv.ALLOWED_REMOTE_DB_HOST;
 
   for (const [key, value] of Object.entries(env)) {
@@ -301,6 +311,106 @@ describe('Prisma database command guard', () => {
     expect(result.stdout).toContain('allowed database tests');
   });
 
+  it('guards application reconciliation with a dedicated remote authorization', () => {
+    const blocked = runGuard(['reconcile-applications'], {
+      NODE_ENV: 'test',
+      DATABASE_URL: neonUrl,
+      DIRECT_URL: neonUrl,
+    });
+    const allowed = runGuard(['reconcile-applications'], {
+      NODE_ENV: 'test',
+      DATABASE_URL: localUrl,
+      DIRECT_URL: localUrl,
+    });
+
+    expect(blocked.status).toBe(1);
+    expect(blocked.stderr).toContain('Blocked remote Neon database command');
+    expect(allowed.status).toBe(0);
+    expect(allowed.stdout).toContain(
+      'allowed application reconciliation for local host',
+    );
+  });
+
+  it('does not accept migration authorization for remote reconciliation', () => {
+    const result = runGuard(['reconcile-applications'], {
+      NODE_ENV: 'test',
+      DATABASE_URL: neonUrl,
+      DIRECT_URL: neonUrl,
+      ALLOW_REMOTE_DB_MIGRATION: 'true',
+      ALLOWED_REMOTE_DB_HOST: neonHost,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Set ALLOW_REMOTE_DATA_RECONCILIATION=true',
+    );
+  });
+
+  it('requires exact host authorization for remote reconciliation', () => {
+    const result = runGuard(['reconcile-applications'], {
+      NODE_ENV: 'test',
+      DATABASE_URL: neonUrl,
+      DIRECT_URL: neonUrl,
+      ALLOW_REMOTE_DATA_RECONCILIATION: 'true',
+      ALLOWED_REMOTE_DB_HOST: neonHost,
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
+      'allowed application reconciliation for authorized remote host',
+    );
+  });
+
+  it('authorizes the runtime DATABASE_URL host instead of DIRECT_URL', () => {
+    const authorizedDirectHostOnly = runGuard(['reconcile-applications'], {
+      NODE_ENV: 'test',
+      DATABASE_URL: neonPoolerUrl,
+      DIRECT_URL: neonUrl,
+      ALLOW_REMOTE_DATA_RECONCILIATION: 'true',
+      ALLOWED_REMOTE_DB_HOST: neonHost,
+    });
+    const authorizedRuntimeHost = runGuard(['reconcile-applications'], {
+      NODE_ENV: 'test',
+      DATABASE_URL: neonPoolerUrl,
+      DIRECT_URL: neonUrl,
+      ALLOW_REMOTE_DATA_RECONCILIATION: 'true',
+      ALLOWED_REMOTE_DB_HOST: neonPoolerHost,
+    });
+
+    expect(authorizedDirectHostOnly.status).toBe(1);
+    expect(authorizedDirectHostOnly.stderr).toContain(neonPoolerHost);
+    expect(authorizedRuntimeHost.status).toBe(0);
+    expect(authorizedRuntimeHost.stdout).toContain(neonPoolerHost);
+  });
+
+  it('builds the fixed reconciliation command and forwards only its arguments', () => {
+    const forwarded = parseReconciliationArguments([
+      'reconcile-applications',
+      '--',
+      '--apply',
+      '--global',
+    ]);
+    const command = buildReconciliationCommand(forwarded);
+
+    expect(command.command).toBe(process.execPath);
+    expect(command.args[0]).toMatch(/node_modules[\\/]tsx[\\/]dist[\\/]cli\.mjs$/);
+    expect(command.args[1]).toMatch(
+      /scripts[\\/]reconcile-application-state\.ts$/,
+    );
+    expect(command.args.slice(2)).toEqual(['--apply', '--global']);
+  });
+
+  it('rejects reconciliation arguments that omit the separator', () => {
+    const result = runGuard(['reconcile-applications', '--apply', '--global'], {
+      NODE_ENV: 'test',
+      DATABASE_URL: localUrl,
+      DIRECT_URL: localUrl,
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('must follow the -- separator');
+  });
+
   it('wires the real PostgreSQL hiring-process suite through test-db', () => {
     const packageJson = JSON.parse(
       fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'),
@@ -308,6 +418,9 @@ describe('Prisma database command guard', () => {
 
     expect(packageJson.scripts['test:hiring-process:db']).toContain(
       'prisma-guard.cjs test-db --',
+    );
+    expect(packageJson.scripts['hiring-process:reconcile']).toContain(
+      'prisma-guard.cjs reconcile-applications --',
     );
   });
 

@@ -158,15 +158,102 @@ function sameDestination(left, right) {
   );
 }
 
-function hasExactRemoteAuthorization(environment, hostname) {
+function hasExactRemoteAuthorization(
+  environment,
+  hostname,
+  authorizationVariable = 'ALLOW_REMOTE_DB_MIGRATION',
+) {
   const allowedHost = environment.ALLOWED_REMOTE_DB_HOST;
   return (
-    environment.ALLOW_REMOTE_DB_MIGRATION === 'true' &&
+    environment[authorizationVariable] === 'true' &&
     typeof allowedHost === 'string' &&
     allowedHost.length > 0 &&
     !allowedHost.includes('*') &&
     allowedHost.toLowerCase() === hostname
   );
+}
+
+function evaluateConfiguredDatabaseTarget(
+  environment,
+  authorizationVariable = 'ALLOW_REMOTE_DB_MIGRATION',
+) {
+  assertNoSchemaEnvFile();
+
+  const databaseTarget = parseDatabaseUrl(environment.DATABASE_URL, 'DATABASE_URL');
+  const directTarget = environment.DIRECT_URL
+    ? parseDatabaseUrl(environment.DIRECT_URL, 'DIRECT_URL')
+    : undefined;
+  const actualTarget = directTarget || databaseTarget;
+  const targetsDiffer = Boolean(directTarget && !sameDestination(databaseTarget, directTarget));
+  const configuredTargets = [databaseTarget, directTarget].filter(Boolean);
+  const configuredRemoteTargets = configuredTargets.filter(
+    (target) => !isLocalHostname(target.hostname),
+  );
+  const actualIsLocal = isLocalHostname(actualTarget.hostname);
+
+  if (targetsDiffer && actualIsLocal && configuredRemoteTargets.length > 0) {
+    throw new GuardError(
+      'DATABASE_URL and DIRECT_URL point to different destinations, including an unused remote target. Refusing to continue.',
+    );
+  }
+
+  if (targetsDiffer && actualIsLocal) {
+    throw new GuardError(
+      'DATABASE_URL and DIRECT_URL point to different local destinations. Refusing to choose silently.',
+    );
+  }
+
+  if (!actualIsLocal) {
+    if (
+      !hasExactRemoteAuthorization(
+        environment,
+        actualTarget.hostname,
+        authorizationVariable,
+      )
+    ) {
+      const remoteKind = isNeonHostname(actualTarget.hostname) ? 'Neon ' : '';
+      throw new GuardError(
+        `Blocked remote ${remoteKind}database command for host "${actualTarget.hostname}". Set ${authorizationVariable}=true and ALLOWED_REMOTE_DB_HOST to this exact hostname to authorize it.`,
+      );
+    }
+  } else if (configuredRemoteTargets.length > 0) {
+    throw new GuardError(
+      'A remote database URL is configured even though Prisma would use a local target. Refusing this ambiguous configuration.',
+    );
+  }
+
+  return {
+    hostname: actualTarget.hostname,
+    targetKind: actualIsLocal ? 'local' : 'authorized remote',
+  };
+}
+
+function evaluateRuntimeDatabaseTarget(
+  environment,
+  authorizationVariable = 'ALLOW_REMOTE_DATA_RECONCILIATION',
+) {
+  assertNoSchemaEnvFile();
+  const actualTarget = parseDatabaseUrl(environment.DATABASE_URL, 'DATABASE_URL');
+  const actualIsLocal = isLocalHostname(actualTarget.hostname);
+
+  if (
+    !actualIsLocal &&
+    !hasExactRemoteAuthorization(
+      environment,
+      actualTarget.hostname,
+      authorizationVariable,
+    )
+  ) {
+    const remoteKind = isNeonHostname(actualTarget.hostname) ? 'Neon ' : '';
+    throw new GuardError(
+      `Blocked remote ${remoteKind}database command for host "${actualTarget.hostname}". Set ${authorizationVariable}=true and ALLOWED_REMOTE_DB_HOST to this exact hostname to authorize it.`,
+    );
+  }
+
+  return {
+    hostname: actualTarget.hostname,
+    targetKind: actualIsLocal ? 'local' : 'authorized remote',
+  };
 }
 
 function evaluatePrismaCommand(args, environment) {
@@ -201,50 +288,12 @@ function evaluatePrismaCommand(args, environment) {
     };
   }
 
-  assertNoSchemaEnvFile();
-
-  const databaseTarget = parseDatabaseUrl(environment.DATABASE_URL, 'DATABASE_URL');
-  const directTarget = environment.DIRECT_URL
-    ? parseDatabaseUrl(environment.DIRECT_URL, 'DIRECT_URL')
-    : undefined;
-  const actualTarget = directTarget || databaseTarget;
-  const targetsDiffer = Boolean(directTarget && !sameDestination(databaseTarget, directTarget));
-  const configuredTargets = [databaseTarget, directTarget].filter(Boolean);
-  const configuredRemoteTargets = configuredTargets.filter(
-    (target) => !isLocalHostname(target.hostname),
-  );
-  const actualIsLocal = isLocalHostname(actualTarget.hostname);
-
-  if (targetsDiffer && actualIsLocal && configuredRemoteTargets.length > 0) {
-    throw new GuardError(
-      'DATABASE_URL and DIRECT_URL point to different destinations, including an unused remote target. Refusing to continue.',
-    );
-  }
-
-  if (targetsDiffer && actualIsLocal) {
-    throw new GuardError(
-      'DATABASE_URL and DIRECT_URL point to different local destinations. Refusing to choose silently.',
-    );
-  }
-
-  if (!actualIsLocal) {
-    if (!hasExactRemoteAuthorization(environment, actualTarget.hostname)) {
-      const remoteKind = isNeonHostname(actualTarget.hostname) ? 'Neon ' : '';
-      throw new GuardError(
-        `Blocked remote ${remoteKind}database command for host "${actualTarget.hostname}". Set ALLOW_REMOTE_DB_MIGRATION=true and ALLOWED_REMOTE_DB_HOST to this exact hostname to authorize it.`,
-      );
-    }
-  } else if (configuredRemoteTargets.length > 0) {
-    throw new GuardError(
-      'A remote database URL is configured even though Prisma would use a local target. Refusing this ambiguous configuration.',
-    );
-  }
+  const target = evaluateConfiguredDatabaseTarget(environment);
 
   return {
     protected: true,
     commandName,
-    hostname: actualTarget.hostname,
-    targetKind: actualIsLocal ? 'local' : 'authorized remote',
+    ...target,
   };
 }
 
@@ -290,12 +339,63 @@ function runCommand(command, args, environment) {
   return result.status ?? 1;
 }
 
+function buildReconciliationCommand(args) {
+  const tsxCli = path.join(PROJECT_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const reconciliationScript = path.join(
+    PROJECT_ROOT,
+    'scripts',
+    'reconcile-application-state.ts',
+  );
+  return {
+    command: process.execPath,
+    args: [tsxCli, reconciliationScript, ...args],
+  };
+}
+
+function parseReconciliationArguments(args) {
+  const separatorIndex = args.indexOf('--');
+  if (separatorIndex === -1) {
+    if (args.length > 1) {
+      throw new GuardError(
+        'Reconciliation arguments must follow the -- separator.',
+      );
+    }
+    return [];
+  }
+  if (separatorIndex !== 1) {
+    throw new GuardError(
+      'Unexpected arguments before the reconciliation -- separator.',
+    );
+  }
+  return args.slice(separatorIndex + 1);
+}
+
 function main() {
   const rawArgs = process.argv.slice(2);
   const checkOnly = rawArgs[0] === '--check';
   const args = checkOnly ? rawArgs.slice(1) : rawArgs;
 
   try {
+    if (args[0] === 'reconcile-applications') {
+      const reconciliationArgs = parseReconciliationArguments(args);
+      const environment = loadPrismaEnvironment(process.env);
+      const result = evaluateRuntimeDatabaseTarget(
+        environment,
+        'ALLOW_REMOTE_DATA_RECONCILIATION',
+      );
+      console.log(
+        `Guard allowed application reconciliation for ${result.targetKind} host "${result.hostname}".`,
+      );
+
+      if (checkOnly) return 0;
+      const command = buildReconciliationCommand(reconciliationArgs);
+      return runCommand(
+        command.command,
+        command.args,
+        environment,
+      );
+    }
+
     if (args[0] === 'test-db') {
       const separatorIndex = args.indexOf('--');
       const testCommand = separatorIndex >= 0 ? args.slice(separatorIndex + 1) : [];
@@ -346,6 +446,9 @@ if (require.main === module) {
 
 module.exports = {
   assertNoSchemaEnvFile,
+  buildReconciliationCommand,
+  evaluateConfiguredDatabaseTarget,
+  evaluateRuntimeDatabaseTarget,
   evaluatePrismaCommand,
   evaluateTestDatabase,
   getCommandName,
@@ -356,4 +459,5 @@ module.exports = {
   loadPrismaEnvironment,
   parseDatabaseUrl,
   parseEnvFile,
+  parseReconciliationArguments,
 };
