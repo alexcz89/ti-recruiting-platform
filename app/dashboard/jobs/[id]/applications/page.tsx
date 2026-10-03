@@ -850,7 +850,7 @@ export default async function JobApplicationsPage({
 
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 max-w-[160px]">
-                        <InterestSelect applicationId={a.id} initial={getAppInterest(a)} />
+                        <InterestSelect applicationId={a.id} initial={getAppInterest(a)} initialStateVersion={a.stateVersion} />
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -1145,7 +1145,7 @@ export default async function JobApplicationsPage({
 
                         <td className="px-3 py-2.5">
                           <div className="inline-flex min-w-[130px] max-w-[150px]">
-                            <InterestSelect applicationId={a.id} initial={getAppInterest(a)} />
+                            <InterestSelect applicationId={a.id} initial={getAppInterest(a)} initialStateVersion={a.stateVersion} />
                           </div>
                         </td>
 

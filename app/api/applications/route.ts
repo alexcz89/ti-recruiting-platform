@@ -8,6 +8,7 @@ import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { sendApplicationEmail } from "@/lib/server/mailer";
 import { NotificationService } from "@/lib/notifications/service";
+import { createCanonicalApplication } from "@/lib/hiring-process/create-application";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -229,14 +230,11 @@ export async function POST(req: NextRequest) {
         ? candidate.resumeUrl
         : null);
 
-    const app = await prisma.application.create({
-      data: {
-        jobId,
-        candidateId,
-        coverLetter,
-        resumeUrl: effectiveResumeUrl,
-      },
-      select: { id: true },
+    const app = await createCanonicalApplication({
+      jobId,
+      candidateId,
+      coverLetter,
+      resumeUrl: effectiveResumeUrl,
     });
 
     // Los assessments se envían MANUALMENTE por el reclutador

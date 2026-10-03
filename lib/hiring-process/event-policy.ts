@@ -8,6 +8,7 @@ import type {
 const EVENT_VISIBILITY_POLICY: Readonly<
   Partial<Record<ApplicationEventTypeValue, ApplicationEventVisibilityValue>>
 > = {
+  APPLICATION_CREATED: "INTERNAL",
   APPLICATION_STAGE_CHANGED: "INTERNAL",
   APPLICATION_DISPOSITION_CHANGED: "INTERNAL",
   CANDIDATE_REJECTED: "BOTH",
