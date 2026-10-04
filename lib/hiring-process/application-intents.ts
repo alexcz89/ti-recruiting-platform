@@ -8,6 +8,7 @@ import { prisma } from "@/lib/server/prisma";
 import { isCanonicalHiringProcessEnabled } from "./feature-flags";
 import {
   ApplicationNotFoundError,
+  CanonicalStateUnavailableError,
   ConcurrentApplicationTransitionError,
   transitionApplication,
   UnauthorizedApplicationTransitionError,
@@ -81,9 +82,21 @@ export async function executeApplicationIntent(input: {
 
   const application = await prisma.application.findFirst({
     where: scopedWhere,
-    select: { id: true, stateVersion: true },
+    select: {
+      id: true,
+      stage: true,
+      disposition: true,
+      stateVersion: true,
+    },
   });
   if (!application) throw new ApplicationNotFoundError();
+  if (
+    application.stage !== null ||
+    application.disposition !== null ||
+    application.stateVersion !== 0
+  ) {
+    throw new CanonicalStateUnavailableError();
+  }
   if (application.stateVersion !== command.expectedVersion) {
     throw new ConcurrentApplicationTransitionError();
   }
@@ -91,7 +104,12 @@ export async function executeApplicationIntent(input: {
   // Temporary legacy exception: removed when the canonical flag becomes authoritative.
   const projection = legacyProjectionForIntent(command.intent);
   const updated = await prisma.application.updateMany({
-    where: { id: application.id, stateVersion: command.expectedVersion },
+    where: {
+      id: application.id,
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+    },
     data: {
       ...projection,
       ...(command.intent === "START_REVIEW" ? { reviewingAt: new Date() } : {}),

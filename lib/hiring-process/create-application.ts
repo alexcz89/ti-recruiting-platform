@@ -4,6 +4,8 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/server/prisma";
 
+import { isCanonicalHiringProcessEnabled } from "./feature-flags";
+
 export type CreateCanonicalApplicationInput = {
   jobId: string;
   candidateId: string;
@@ -66,5 +68,32 @@ export async function createCanonicalApplication(
     });
 
     return application;
+  });
+}
+
+/**
+ * Keeps new applications fully legacy until the canonical process is authoritative.
+ * Notifications remain outside this helper so both paths share the same side effects.
+ */
+export async function createApplicationForHiringProcessRollout(
+  input: CreateCanonicalApplicationInput,
+) {
+  if (isCanonicalHiringProcessEnabled()) {
+    return createCanonicalApplication(input);
+  }
+
+  return prisma.application.create({
+    data: {
+      jobId: input.jobId,
+      candidateId: input.candidateId,
+      coverLetter: input.coverLetter,
+      resumeUrl: input.resumeUrl,
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+    },
+    select: { id: true },
   });
 }

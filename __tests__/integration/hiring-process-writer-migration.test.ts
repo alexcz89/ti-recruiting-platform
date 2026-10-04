@@ -1,9 +1,13 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { prisma } from "@/lib/server/prisma";
-import { createCanonicalApplication } from "@/lib/hiring-process/create-application";
+import {
+  createApplicationForHiringProcessRollout,
+  createCanonicalApplication,
+} from "@/lib/hiring-process/create-application";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import {
+  CanonicalStateUnavailableError,
   ConcurrentApplicationTransitionError,
   UnauthorizedApplicationTransitionError,
 } from "@/lib/hiring-process/transition-application";
@@ -91,6 +95,16 @@ async function createApplication() {
   });
 }
 
+async function createRolloutApplication() {
+  return createApplicationForHiringProcessRollout({
+    jobId: ids.job,
+    candidateId: ids.candidate,
+    coverLetter: "QA",
+    resumeUrl: null,
+    happenedAt: new Date("2026-10-03T12:00:00.000Z"),
+  });
+}
+
 describeDatabase("canonical hiring process writer migration", () => {
   beforeEach(async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
@@ -105,8 +119,8 @@ describeDatabase("canonical hiring process writer migration", () => {
     vi.unstubAllEnvs();
   });
 
-  it("creates the canonical snapshot, legacy projection, and APPLICATION_CREATED exactly once", async () => {
-    const created = await createApplication();
+  it("creates the canonical snapshot, legacy projection, and APPLICATION_CREATED exactly once when the flag is on", async () => {
+    const created = await createRolloutApplication();
     const stored = await prisma.application.findUniqueOrThrow({
       where: { id: created.id },
       include: { events: true },
@@ -130,8 +144,27 @@ describeDatabase("canonical hiring process writer migration", () => {
       toDisposition: "ACTIVE",
     });
 
-    await expect(createApplication()).rejects.toMatchObject({ code: "P2002" });
+    await expect(createRolloutApplication()).rejects.toMatchObject({ code: "P2002" });
     expect(await prisma.applicationEvent.count({ where: { applicationId: created.id } })).toBe(1);
+  });
+
+  it("preserves exact legacy creation with no canonical event when the flag is off", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+
+    const created = await createRolloutApplication();
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: created.id },
+      include: { events: true },
+    });
+
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+    });
+    expect(stored.events).toHaveLength(0);
   });
 
   it("executes START_REVIEW and MOVE_TO_INTERVIEW with their exact projections", async () => {
@@ -211,25 +244,72 @@ describeDatabase("canonical hiring process writer migration", () => {
     ).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
   });
 
-  it("uses one atomic INTERVIEW + ACCEPTED legacy fallback while the flag is off", async () => {
-    const application = await createApplication();
+  it("keeps flag-off legacy applications non-canonical while applying INTERVIEW + ACCEPTED", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
 
     const result = await executeApplicationIntent({
       applicationId: application.id,
-      command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-legacy-interview" },
+      command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 0, commandId: "qa-legacy-interview" },
       actor: recruiterActor,
     });
     const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
 
-    expect(result.legacy).toEqual({ status: "INTERVIEW", recruiterInterest: "ACCEPTED", stateVersion: 1 });
+    expect(result.legacy).toEqual({ status: "INTERVIEW", recruiterInterest: "ACCEPTED", stateVersion: 0 });
     expect(stored).toMatchObject({
-      stage: "APPLIED",
-      disposition: "ACTIVE",
-      stateVersion: 1,
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
       status: "INTERVIEW",
       recruiterInterest: "ACCEPTED",
     });
-    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(1);
+    expect(stored.status).not.toBe("OFFER");
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("refuses flag-off legacy fallback for an already-canonical application", async () => {
+    const application = await createApplication();
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-unsafe-legacy-interview" },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(CanonicalStateUnavailableError);
+
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: "APPLIED",
+      disposition: "ACTIVE",
+      stateVersion: 1,
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+    });
+  });
+
+  it("fails closed for a partial canonical snapshot while the flag is off", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { stage: "APPLIED" },
+    });
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 0, commandId: "qa-partial-canonical" },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(CanonicalStateUnavailableError);
+
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: "APPLIED",
+      disposition: null,
+      stateVersion: 0,
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+    });
   });
 });

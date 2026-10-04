@@ -52,10 +52,13 @@ describe("canonical hiring process writer migration", () => {
     expect(migration).not.toMatch(/UPDATE|DELETE|DROP|TRUNCATE/i);
   });
 
-  it("routes candidate application submission through atomic canonical creation", () => {
+  it("routes candidate application submission through the feature-flagged rollout creator", () => {
     const applicationsRoute = read("app", "api", "applications", "route.ts");
-    expect(applicationsRoute).toContain("createCanonicalApplication({");
+    const creationModule = read("lib", "hiring-process", "create-application.ts");
+    expect(applicationsRoute).toContain("createApplicationForHiringProcessRollout({");
     expect(applicationsRoute).not.toContain("prisma.application.create({");
+    expect(creationModule).toContain("isCanonicalHiringProcessEnabled()");
+    expect(creationModule).toContain("return createCanonicalApplication(input);");
   });
 
   it("routes Entrevista through one explicit command without OFFER", () => {
@@ -70,5 +73,12 @@ describe("canonical hiring process writer migration", () => {
 
     expect(interestSelect).toContain('intent: "MOVE_TO_INTERVIEW"');
     expect(interestSelect).not.toContain('ACCEPTED: "OFFER"');
+  });
+
+  it("keeps the flag-off legacy write conditional on a fully non-canonical row", () => {
+    const intents = read("lib", "hiring-process", "application-intents.ts");
+    expect(intents).toMatch(
+      /updateMany\(\{\s*where:\s*\{[^}]*stage:\s*null[^}]*disposition:\s*null[^}]*stateVersion:\s*0/s,
+    );
   });
 });
