@@ -4,6 +4,10 @@ import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import { ApplicationStatus } from "@prisma/client";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
+import {
+  APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+  hasApplicationRejectionFootprint,
+} from "@/lib/hiring-process/rejection-footprint";
 
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -112,6 +116,10 @@ export async function PATCH(
       where: scopedWhere,
       select: {
         id: true,
+        stage: true,
+        disposition: true,
+        status: true,
+        recruiterInterest: true,
       },
     });
 
@@ -124,19 +132,58 @@ export async function PATCH(
       if (!allowed.has(body.status)) {
         return jsonNoStore({ error: "Status inválido" }, 400);
       }
+      if (body.status === "REJECTED") {
+        return jsonNoStore(
+          { error: "REJECTED requiere el comando REJECT_CANDIDATE" },
+          400,
+        );
+      }
+      if (hasApplicationRejectionFootprint(found)) {
+        return jsonNoStore(
+          { error: "Reabrir una postulación rechazada está fuera de este slice" },
+          409,
+        );
+      }
     }
 
-    const updated = await prisma.application.update({
-      where: { id: found.id },
-      data: {
-        status: body.status ?? undefined,
-        resumeUrl:
-          typeof body.resumeUrl !== "undefined" ? body.resumeUrl : undefined,
-        coverLetter:
-          typeof body.coverLetter !== "undefined"
-            ? body.coverLetter
-            : undefined,
-      },
+    const data = {
+      status: body.status ?? undefined,
+      resumeUrl:
+        typeof body.resumeUrl !== "undefined" ? body.resumeUrl : undefined,
+      coverLetter:
+        typeof body.coverLetter !== "undefined"
+          ? body.coverLetter
+          : undefined,
+    };
+
+    if (typeof body.status !== "undefined") {
+      const result = await prisma.application.updateMany({
+        where: {
+          AND: [
+            scopedWhere,
+            APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+          ],
+        },
+        data,
+      });
+      if (result.count !== 1) {
+        return jsonNoStore(
+          { error: "Reabrir una postulación rechazada está fuera de este slice" },
+          409,
+        );
+      }
+    } else {
+      const result = await prisma.application.updateMany({
+        where: scopedWhere,
+        data,
+      });
+      if (result.count !== 1) {
+        return jsonNoStore({ error: "Not found" }, 404);
+      }
+    }
+
+    const updated = await prisma.application.findFirstOrThrow({
+      where: scopedWhere,
     });
 
     return jsonNoStore(updated);

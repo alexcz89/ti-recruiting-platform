@@ -669,7 +669,10 @@ export default async function OverviewPage() {
                           </span>
                         )}
                         {r.status === "SUBMITTED" && (
-                          <QuickActionButtons applicationId={r.id} />
+                          <QuickActionButtons
+                            applicationId={r.id}
+                            stateVersion={r.stateVersion}
+                          />
                         )}
                       </div>
                     </div>

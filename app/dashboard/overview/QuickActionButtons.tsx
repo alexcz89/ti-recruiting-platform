@@ -8,9 +8,10 @@ import { updateApplicationStatus } from "./actions";
 
 type Props = {
   applicationId: string;
+  stateVersion: number;
 };
 
-export default function QuickActionButtons({ applicationId }: Props) {
+export default function QuickActionButtons({ applicationId, stateVersion }: Props) {
   const [isPending, startTransition] = useTransition();
   const [hidden, setHidden] = useState(false);
 
@@ -18,7 +19,13 @@ export default function QuickActionButtons({ applicationId }: Props) {
 
   const handleAction = (status: "REVIEWING" | "REJECTED") => {
     startTransition(async () => {
-      const result = await updateApplicationStatus(applicationId, status);
+      const result = await updateApplicationStatus(
+        applicationId,
+        status,
+        status === "REJECTED"
+          ? { expectedVersion: stateVersion, commandId: crypto.randomUUID() }
+          : undefined,
+      );
       
       if (result.success) {
         toastSuccess(

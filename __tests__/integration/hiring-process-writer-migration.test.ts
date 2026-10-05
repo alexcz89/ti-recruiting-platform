@@ -9,8 +9,10 @@ import { executeApplicationIntent } from "@/lib/hiring-process/application-inten
 import {
   CanonicalStateUnavailableError,
   ConcurrentApplicationTransitionError,
+  IdempotencyKeyConflictError,
   UnauthorizedApplicationTransitionError,
 } from "@/lib/hiring-process/transition-application";
+import { InvalidApplicationTransitionError } from "@/lib/hiring-process/rules";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const safeDatabase =
@@ -26,6 +28,7 @@ const ids = {
   candidate: "qa-writer-candidate",
   recruiter: "qa-writer-recruiter",
   otherRecruiter: "qa-writer-other-recruiter",
+  admin: "qa-writer-admin",
   job: "qa-writer-job",
 };
 
@@ -45,7 +48,7 @@ async function cleanup() {
     where: { userId: { in: [ids.recruiter, ids.otherRecruiter] } },
   });
   await prisma.user.deleteMany({
-    where: { id: { in: [ids.candidate, ids.recruiter, ids.otherRecruiter] } },
+    where: { id: { in: [ids.candidate, ids.recruiter, ids.otherRecruiter, ids.admin] } },
   });
   await prisma.company.deleteMany({
     where: { id: { in: [ids.company, ids.otherCompany] } },
@@ -64,6 +67,7 @@ async function fixtures() {
       { id: ids.candidate, email: "qa-writer-candidate@example.invalid", role: "CANDIDATE" },
       { id: ids.recruiter, email: "qa-writer-recruiter@example.invalid", role: "RECRUITER" },
       { id: ids.otherRecruiter, email: "qa-writer-other@example.invalid", role: "RECRUITER" },
+      { id: ids.admin, email: "qa-writer-admin@example.invalid", role: "ADMIN" },
     ],
   });
   await prisma.recruiterProfile.createMany({
@@ -204,6 +208,160 @@ describeDatabase("canonical hiring process writer migration", () => {
     ]);
   });
 
+  it.each(["APPLIED", "REVIEW", "ASSESSMENT", "INTERVIEW", "OFFER"] as const)(
+    "rejects from %s/ACTIVE with one terminal domain event",
+    async (stage) => {
+      const application = await createApplication();
+      if (stage !== "APPLIED") {
+        await prisma.application.update({
+          where: { id: application.id },
+          data: { stage },
+        });
+      }
+
+      const result = await executeApplicationIntent({
+        applicationId: application.id,
+        command: {
+          intent: "REJECT_CANDIDATE",
+          expectedVersion: 1,
+          commandId: `qa-reject-${stage.toLowerCase()}`,
+        },
+        actor: recruiterActor,
+      });
+      const stored = await prisma.application.findUniqueOrThrow({
+        where: { id: application.id },
+        include: { events: { orderBy: { recordedAt: "asc" } } },
+      });
+
+      expect(result).toMatchObject({
+        state: { stage: "CLOSED", disposition: "REJECTED", stateVersion: 2 },
+        replayed: false,
+        legacy: {
+          status: "REJECTED",
+          recruiterInterest: "REJECTED",
+          stateVersion: 2,
+        },
+      });
+      expect(stored).toMatchObject({
+        stage: "CLOSED",
+        disposition: "REJECTED",
+        stateVersion: 2,
+        status: "REJECTED",
+        recruiterInterest: "REJECTED",
+        rejectionEmailSent: false,
+      });
+      expect(stored.rejectedAt).toBeInstanceOf(Date);
+      const rejectionEvents = stored.events.filter((event) => event.type === "CANDIDATE_REJECTED");
+      expect(rejectionEvents).toHaveLength(1);
+      expect(rejectionEvents[0]).toMatchObject({
+        actorType: "RECRUITER",
+        actorId: ids.recruiter,
+        fromStage: stage,
+        toStage: "CLOSED",
+        fromDisposition: "ACTIVE",
+        toDisposition: "REJECTED",
+        visibility: "BOTH",
+      });
+    },
+  );
+
+  it("deduplicates rejection, rejects a conflicting fingerprint, and refuses a new terminal command", async () => {
+    const application = await createApplication();
+    const command = {
+      intent: "REJECT_CANDIDATE" as const,
+      expectedVersion: 1,
+      commandId: "qa-reject-retry",
+    };
+    const first = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const retry = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+
+    expect(first.replayed).toBe(false);
+    expect(retry.replayed).toBe(true);
+    expect(await prisma.applicationEvent.count({
+      where: { applicationId: application.id, type: "CANDIDATE_REJECTED" },
+    })).toBe(1);
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: command.commandId },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(IdempotencyKeyConflictError);
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { ...command, commandId: "qa-reject-again", expectedVersion: 2 },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+  });
+
+  it("rejects HOLD, stale versions, and concurrent rejection losers", async () => {
+    const held = await createApplication();
+    await prisma.application.update({
+      where: { id: held.id },
+      data: { disposition: "HOLD" },
+    });
+    await expect(
+      executeApplicationIntent({
+        applicationId: held.id,
+        command: { intent: "REJECT_CANDIDATE", expectedVersion: 1, commandId: "qa-reject-hold" },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+
+    await prisma.applicationEvent.deleteMany({ where: { applicationId: held.id } });
+    await prisma.application.delete({ where: { id: held.id } });
+    const active = await createApplication();
+    await expect(
+      executeApplicationIntent({
+        applicationId: active.id,
+        command: { intent: "REJECT_CANDIDATE", expectedVersion: 0, commandId: "qa-reject-stale" },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+
+    const concurrent = await Promise.allSettled([
+      executeApplicationIntent({
+        applicationId: active.id,
+        command: { intent: "REJECT_CANDIDATE", expectedVersion: 1, commandId: "qa-reject-race-a" },
+        actor: recruiterActor,
+      }),
+      executeApplicationIntent({
+        applicationId: active.id,
+        command: { intent: "REJECT_CANDIDATE", expectedVersion: 1, commandId: "qa-reject-race-b" },
+        actor: recruiterActor,
+      }),
+    ]);
+    expect(concurrent.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(concurrent.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(await prisma.applicationEvent.count({
+      where: { applicationId: active.id, type: "CANDIDATE_REJECTED" },
+    })).toBe(1);
+  });
+
+  it("authorizes an active admin and rejects a missing actor", async () => {
+    const application = await createApplication();
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "REJECT_CANDIDATE", expectedVersion: 1, commandId: "qa-reject-missing-actor" },
+        actor: { type: "RECRUITER", id: null, companyId: ids.company },
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "REJECT_CANDIDATE", expectedVersion: 1, commandId: "qa-reject-admin" },
+        actor: { type: "ADMIN", id: ids.admin, companyId: null },
+      }),
+    ).resolves.toMatchObject({
+      state: { stage: "CLOSED", disposition: "REJECTED", stateVersion: 2 },
+    });
+  });
+
   it("deduplicates an interview retry and rejects a stale different command", async () => {
     const application = await createApplication();
     const command = {
@@ -244,6 +402,37 @@ describeDatabase("canonical hiring process writer migration", () => {
     ).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
   });
 
+  it("denies cross-tenant recruiters and candidates specifically for rejection", async () => {
+    const application = await createApplication();
+    const baseCommand = {
+      intent: "REJECT_CANDIDATE" as const,
+      expectedVersion: 1,
+    };
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { ...baseCommand, commandId: "qa-reject-cross-tenant" },
+        actor: { type: "RECRUITER", id: ids.otherRecruiter, companyId: ids.otherCompany },
+      }),
+    ).rejects.toMatchObject({ code: "APPLICATION_NOT_FOUND" });
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { ...baseCommand, commandId: "qa-reject-candidate" },
+        actor: { type: "CANDIDATE", id: ids.candidate },
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: "APPLIED",
+      disposition: "ACTIVE",
+      stateVersion: 1,
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+    });
+  });
+
   it("keeps flag-off legacy applications non-canonical while applying INTERVIEW + ACCEPTED", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
     const application = await createRolloutApplication();
@@ -264,6 +453,162 @@ describeDatabase("canonical hiring process writer migration", () => {
       recruiterInterest: "ACCEPTED",
     });
     expect(stored.status).not.toBe("OFFER");
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("applies flag-off rejection once and preserves its first rejectedAt on retry", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const staleRejectedAt = new Date("2026-01-01T00:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { rejectedAt: staleRejectedAt },
+    });
+    const command = {
+      intent: "REJECT_CANDIDATE" as const,
+      expectedVersion: 0,
+      commandId: "qa-legacy-reject",
+    };
+
+    const first = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const firstStored = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+    const retry = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const retriedStored = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+
+    expect(first.replayed).toBe(false);
+    expect(retry.replayed).toBe(true);
+    expect(retriedStored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REJECTED",
+      recruiterInterest: "REJECTED",
+      rejectionEmailSent: false,
+    });
+    expect(firstStored.rejectedAt).toBeInstanceOf(Date);
+    expect(firstStored.rejectedAt).not.toEqual(staleRejectedAt);
+    expect(retriedStored.rejectedAt).toEqual(firstStored.rejectedAt);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("treats an exact delivered legacy rejection as a true flag-off no-op", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const rejectedAt = new Date("2026-02-01T00:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        status: "REJECTED",
+        recruiterInterest: "REJECTED",
+        rejectedAt,
+        rejectionEmailSent: true,
+      },
+    });
+    const before = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    const result = await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "REJECT_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-reject-delivered-retry",
+      },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    expect(result.replayed).toBe(true);
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REJECTED",
+      recruiterInterest: "REJECTED",
+      rejectedAt,
+      rejectionEmailSent: true,
+      updatedAt: before.updatedAt,
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("normalizes a status-only delivered legacy rejection without resetting delivery", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const rejectedAt = new Date("2026-02-02T00:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        status: "REJECTED",
+        recruiterInterest: "REVIEW",
+        rejectedAt,
+        rejectionEmailSent: true,
+      },
+    });
+
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "REJECT_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-reject-status-only",
+      },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REJECTED",
+      recruiterInterest: "REJECTED",
+      rejectedAt,
+      rejectionEmailSent: true,
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("normalizes an interest-only legacy rejection and sets a missing rejectedAt once", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        status: "SUBMITTED",
+        recruiterInterest: "REJECTED",
+        rejectedAt: null,
+        rejectionEmailSent: true,
+      },
+    });
+
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "REJECT_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-reject-interest-only",
+      },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REJECTED",
+      recruiterInterest: "REJECTED",
+      rejectionEmailSent: true,
+    });
+    expect(stored.rejectedAt).toBeInstanceOf(Date);
     expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
   });
 

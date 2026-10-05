@@ -316,14 +316,28 @@ export default async function JobPipelinePage({ params }: PageProps) {
     // Verificar que la aplicación pertenece a una vacante de esta empresa
     const app = await prisma.application.findFirst({
       where: { id: appId, job: { companyId: companyId2 } },
-      select: { id: true, stateVersion: true },
+      select: {
+        id: true,
+        stateVersion: true,
+        stage: true,
+        disposition: true,
+        recruiterInterest: true,
+      },
     });
 
     if (!app) {
       return { ok: false, message: "No tienes acceso a esta postulación" };
     }
 
-    if (newStatusStr === "ACCEPTED") {
+    if (
+      newStatusStr !== "REJECTED" &&
+      (app.recruiterInterest === "REJECTED" ||
+        (app.stage === "CLOSED" && app.disposition === "REJECTED"))
+    ) {
+      return { ok: false, message: "Reabrir una postulación está fuera de este slice" };
+    }
+
+    if (newStatusStr === "ACCEPTED" || newStatusStr === "REJECTED") {
       const expectedVersion = Number(fd.get("expectedVersion"));
       const commandId = String(fd.get("commandId") || "");
       if (!Number.isInteger(expectedVersion) || expectedVersion < 0 || !commandId) {
@@ -338,7 +352,9 @@ export default async function JobPipelinePage({ params }: PageProps) {
         await executeApplicationIntent({
           applicationId: app.id,
           command: {
-            intent: "MOVE_TO_INTERVIEW",
+            intent: newStatusStr === "ACCEPTED"
+              ? "MOVE_TO_INTERVIEW"
+              : "REJECT_CANDIDATE",
             expectedVersion,
             commandId,
           },
@@ -350,21 +366,22 @@ export default async function JobPipelinePage({ params }: PageProps) {
         });
         return { ok: true };
       } catch (error) {
-        console.error("[Kanban MOVE_TO_INTERVIEW]", error);
-        return { ok: false, message: "No se pudo mover a Entrevista" };
+        console.error("[Kanban application intent]", error);
+        return {
+          ok: false,
+          message: newStatusStr === "ACCEPTED"
+            ? "No se pudo mover a Entrevista"
+            : "No se pudo descartar al candidato",
+        };
       }
     }
-
-    const isRejected = newStatusStr === "REJECTED";
 
     await prisma.application.update({
       where: { id: app.id },
       data: {
         recruiterInterest: newStatusStr,
-        status: isRejected
-          ? ApplicationStatus.REJECTED
-          : ApplicationStatus.REVIEWING,
-        rejectedAt: isRejected ? new Date() : null,
+        status: ApplicationStatus.REVIEWING,
+        rejectedAt: null,
         rejectionEmailSent: false,
       },
     });

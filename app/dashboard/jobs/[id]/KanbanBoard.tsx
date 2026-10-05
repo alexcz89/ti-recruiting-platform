@@ -107,6 +107,7 @@ export default function Kanbanboard({
 
   // Ejecutar acción de mover (drag o quick action)
   const doMove = (appId: string, fromStatus: string, toStatus: string, fromIdx: number, toIdx: number) => {
+    if (fromStatus === "REJECTED") return;
     const prev = items;
 
     const cols: Record<string, AppCard[]> = {};
@@ -126,7 +127,7 @@ export default function Kanbanboard({
     const fd = new FormData();
     fd.set("appId", appId);
     fd.set("newStatus", toStatus);
-    if (toStatus === "ACCEPTED") {
+    if (toStatus === "ACCEPTED" || toStatus === "REJECTED") {
       fd.set("expectedVersion", String(moved.stateVersion));
       fd.set("commandId", crypto.randomUUID());
     }
