@@ -25,7 +25,7 @@ const LABEL: Record<InterestKey, string> = {
 const TO_APPLICATION_STATUS: Record<InterestKey, string> = {
   REVIEW: "REVIEWING",
   MAYBE: "REVIEWING", // En duda también es "revisando"
-  ACCEPTED: "OFFER",  // Aceptado = oferta
+  ACCEPTED: "INTERVIEW",
   REJECTED: "REJECTED",
 };
 
@@ -63,12 +63,15 @@ const DOT_COLOR: Record<InterestKey, string> = {
 export default function InterestSelect({
   applicationId,
   initial,
+  initialStateVersion,
 }: {
   applicationId: string;
   initial: InterestKey;
+  initialStateVersion: number;
 }) {
   const router = useRouter();
   const [value, setValue] = useState<InterestKey>(initial);
+  const [stateVersion, setStateVersion] = useState(initialStateVersion);
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -78,6 +81,24 @@ export default function InterestSelect({
     setValue(next); // UI optimista
 
     try {
+      if (next === "ACCEPTED") {
+        const res = await fetch(`/api/applications/${applicationId}/intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            intent: "MOVE_TO_INTERVIEW",
+            expectedVersion: stateVersion,
+            commandId: crypto.randomUUID(),
+          }),
+        });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        setStateVersion(data.application.stateVersion);
+        toastSuccess("Nivel de interés actualizado");
+        router.refresh();
+        return;
+      }
+
       // 🔔 LLAMAR AL ENDPOINT DE STATUS (que tiene notificaciones)
       const applicationStatus = TO_APPLICATION_STATUS[next];
       

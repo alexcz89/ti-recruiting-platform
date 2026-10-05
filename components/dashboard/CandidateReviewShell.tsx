@@ -27,6 +27,7 @@ export type AppState = {
   id: string;
   status: string;
   recruiterInterest: string;
+  stateVersion: number;
   internalNotes: string | null;
   starred: boolean;
   createdAt: string;
@@ -169,21 +170,38 @@ export default function CandidateReviewShell({
     // Actualización optimista inmediata — el botón responde al instante
     setCurrentInterest(recruiterInterest);
     startTransition(async () => {
-      const res = await fetch(`/api/applications/${applicationId}/interest`, {
-        method: "PATCH",
+      const isInterview = recruiterInterest === "ACCEPTED";
+      const res = await fetch(
+        `/api/applications/${applicationId}/${isInterview ? "intent" : "interest"}`,
+        {
+        method: isInterview ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recruiterInterest }),
+        body: JSON.stringify(
+          isInterview
+            ? {
+                intent: "MOVE_TO_INTERVIEW",
+                expectedVersion: app?.stateVersion ?? 0,
+                commandId: crypto.randomUUID(),
+              }
+            : { recruiterInterest },
+        ),
       });
       if (res.ok) {
         const data = await res.json();
-        setCurrentInterest(data.recruiterInterest);
-        setApp((prev) => prev ? { ...prev, recruiterInterest: data.recruiterInterest } : prev);
+        const updated = isInterview ? data.application : data;
+        setCurrentInterest(updated.recruiterInterest);
+        setApp((prev) => prev ? {
+          ...prev,
+          recruiterInterest: updated.recruiterInterest,
+          status: updated.status ?? prev.status,
+          stateVersion: updated.stateVersion ?? prev.stateVersion,
+        } : prev);
       } else {
         // Revertir si falla
         setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
       }
     });
-  }, [applicationId, app?.recruiterInterest]);
+  }, [applicationId, app?.recruiterInterest, app?.stateVersion]);
 
   const saveNotes = useCallback(() => {
     if (!applicationId) return;

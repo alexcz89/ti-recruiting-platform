@@ -34,6 +34,7 @@ type AssessmentMeta = {
 type AppCard = {
   id: string;
   status: string;
+  stateVersion: number;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
   _score?: number | null;
@@ -125,6 +126,10 @@ export default function Kanbanboard({
     const fd = new FormData();
     fd.set("appId", appId);
     fd.set("newStatus", toStatus);
+    if (toStatus === "ACCEPTED") {
+      fd.set("expectedVersion", String(moved.stateVersion));
+      fd.set("commandId", crypto.randomUUID());
+    }
 
     startTransition(async () => {
       const res = await moveAction(fd);

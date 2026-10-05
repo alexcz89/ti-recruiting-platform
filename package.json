@@ -33,7 +33,7 @@
     "test:unit": "vitest run __tests__/server",
     "test:all": "vitest run",
     "test:integration": "vitest run __tests__/integration",
-    "test:hiring-process:db": "cross-env RUN_HIRING_PROCESS_DB_TESTS=true node scripts/prisma-guard.cjs test-db -- node node_modules/vitest/vitest.mjs run --no-file-parallelism __tests__/integration/hiring-process-transition.test.ts __tests__/integration/hiring-process-pilot-writer.test.ts __tests__/integration/hiring-process-reconciliation.test.ts",
+    "test:hiring-process:db": "cross-env RUN_HIRING_PROCESS_DB_TESTS=true node scripts/prisma-guard.cjs test-db -- node node_modules/vitest/vitest.mjs run --no-file-parallelism __tests__/integration/hiring-process-transition.test.ts __tests__/integration/hiring-process-pilot-writer.test.ts __tests__/integration/hiring-process-reconciliation.test.ts __tests__/integration/hiring-process-writer-migration.test.ts",
     "test:security": "vitest run __tests__/security",
     "test:performance": "vitest run __tests__/performance"
   },

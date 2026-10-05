@@ -47,6 +47,7 @@ export type PlannedApplicationTransition = CanonicalApplicationState & {
 };
 
 export const APPLICATION_EVENT_TYPES = [
+  "APPLICATION_CREATED",
   "APPLICATION_STAGE_CHANGED",
   "APPLICATION_DISPOSITION_CHANGED",
   "CANDIDATE_REJECTED",

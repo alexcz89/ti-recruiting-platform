@@ -8,6 +8,7 @@ import { getSessionCompanyId } from '@/lib/server/session';
 import { isAssessmentExpired } from '@/lib/assessments/expiration';
 import Kanbanboard from "./KanbanBoard";
 import { ApplicationInterest, ApplicationStatus } from "@prisma/client";
+import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import {
   computeMatchScore,
   applyPlanGate,
@@ -267,6 +268,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     return {
       id: a.id,
       status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
+      stateVersion: a.stateVersion,
       createdAt: a.createdAt,
       updatedAt: (a as any).updatedAt ?? a.createdAt,
       _score: gatedScore,
@@ -314,11 +316,43 @@ export default async function JobPipelinePage({ params }: PageProps) {
     // Verificar que la aplicación pertenece a una vacante de esta empresa
     const app = await prisma.application.findFirst({
       where: { id: appId, job: { companyId: companyId2 } },
-      select: { id: true },
+      select: { id: true, stateVersion: true },
     });
 
     if (!app) {
       return { ok: false, message: "No tienes acceso a esta postulación" };
+    }
+
+    if (newStatusStr === "ACCEPTED") {
+      const expectedVersion = Number(fd.get("expectedVersion"));
+      const commandId = String(fd.get("commandId") || "");
+      if (!Number.isInteger(expectedVersion) || expectedVersion < 0 || !commandId) {
+        return { ok: false, message: "Comando inválido" };
+      }
+      const role = String(s.user.role ?? "").toUpperCase();
+      if (role !== "RECRUITER" && role !== "ADMIN") {
+        return { ok: false, message: "No autorizado" };
+      }
+
+      try {
+        await executeApplicationIntent({
+          applicationId: app.id,
+          command: {
+            intent: "MOVE_TO_INTERVIEW",
+            expectedVersion,
+            commandId,
+          },
+          actor: {
+            type: role,
+            id: s.user.id ? String(s.user.id) : null,
+            companyId: companyId2,
+          },
+        });
+        return { ok: true };
+      } catch (error) {
+        console.error("[Kanban MOVE_TO_INTERVIEW]", error);
+        return { ok: false, message: "No se pudo mover a Entrevista" };
+      }
     }
 
     const isRejected = newStatusStr === "REJECTED";
