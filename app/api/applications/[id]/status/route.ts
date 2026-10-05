@@ -6,6 +6,10 @@ import { ApplicationStatus } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
+import {
+  APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+  hasApplicationRejectionFootprint,
+} from "@/lib/hiring-process/rejection-footprint";
 
 const ALLOWED = new Set<ApplicationStatus>([
   "SUBMITTED",
@@ -51,6 +55,9 @@ async function updateStatus(id: string, status: string) {
     select: {
       id: true,
       status: true,
+      recruiterInterest: true,
+      stage: true,
+      disposition: true,
       job: {
         select: {
           id: true,
@@ -85,13 +92,39 @@ async function updateStatus(id: string, status: string) {
     );
   }
 
-  const updated = await prisma.application.update({
-    where: { id },
+  if (hasApplicationRejectionFootprint(app)) {
+    return jsonNoStore(
+      { error: "Reabrir una postulación rechazada está fuera de este slice" },
+      409,
+    );
+  }
+
+  const authorizedWhere = role === "ADMIN"
+    ? { id }
+    : { id, job: { companyId: companyId as string } };
+
+  const result = await prisma.application.updateMany({
+    where: {
+      AND: [
+        authorizedWhere,
+        APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+      ],
+    },
     data: {
       status: newStatus,
       rejectedAt: null,
       rejectionEmailSent: false,
     },
+  });
+  if (result.count !== 1) {
+    return jsonNoStore(
+      { error: "Reabrir una postulación rechazada está fuera de este slice" },
+      409,
+    );
+  }
+
+  const updated = await prisma.application.findFirstOrThrow({
+    where: authorizedWhere,
     select: {
       id: true,
       status: true,

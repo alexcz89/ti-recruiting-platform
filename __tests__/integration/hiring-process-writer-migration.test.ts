@@ -491,6 +491,127 @@ describeDatabase("canonical hiring process writer migration", () => {
     expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
   });
 
+  it("treats an exact delivered legacy rejection as a true flag-off no-op", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const rejectedAt = new Date("2026-02-01T00:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        status: "REJECTED",
+        recruiterInterest: "REJECTED",
+        rejectedAt,
+        rejectionEmailSent: true,
+      },
+    });
+    const before = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    const result = await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "REJECT_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-reject-delivered-retry",
+      },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    expect(result.replayed).toBe(true);
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REJECTED",
+      recruiterInterest: "REJECTED",
+      rejectedAt,
+      rejectionEmailSent: true,
+      updatedAt: before.updatedAt,
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("normalizes a status-only delivered legacy rejection without resetting delivery", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const rejectedAt = new Date("2026-02-02T00:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        status: "REJECTED",
+        recruiterInterest: "REVIEW",
+        rejectedAt,
+        rejectionEmailSent: true,
+      },
+    });
+
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "REJECT_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-reject-status-only",
+      },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REJECTED",
+      recruiterInterest: "REJECTED",
+      rejectedAt,
+      rejectionEmailSent: true,
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("normalizes an interest-only legacy rejection and sets a missing rejectedAt once", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        status: "SUBMITTED",
+        recruiterInterest: "REJECTED",
+        rejectedAt: null,
+        rejectionEmailSent: true,
+      },
+    });
+
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "REJECT_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-reject-interest-only",
+      },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REJECTED",
+      recruiterInterest: "REJECTED",
+      rejectionEmailSent: true,
+    });
+    expect(stored.rejectedAt).toBeInstanceOf(Date);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
   it("refuses flag-off legacy fallback for an already-canonical application", async () => {
     const application = await createApplication();
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");

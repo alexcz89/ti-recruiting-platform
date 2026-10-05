@@ -60,18 +60,26 @@ function dataInitializer(
   source: ts.SourceFile,
 ): ts.Node | null {
   const data = object.properties.find(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) && propertyName(property.name) === "data",
+    (property) =>
+      (ts.isPropertyAssignment(property) ||
+        ts.isShorthandPropertyAssignment(property)) &&
+      propertyName(property.name) === "data",
   );
   if (!data) return null;
-  if (!ts.isIdentifier(data.initializer)) return data.initializer;
+  const initializer = ts.isPropertyAssignment(data)
+    ? data.initializer
+    : ts.isShorthandPropertyAssignment(data)
+      ? data.name
+      : null;
+  if (!initializer) return null;
+  if (!ts.isIdentifier(initializer)) return initializer;
 
   let resolved: ts.Node | null = null;
   const findDeclaration = (node: ts.Node) => {
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
-      node.name.text === data.initializer.getText(source) &&
+      node.name.text === initializer.getText(source) &&
       node.initializer
     ) {
       resolved = node.initializer;
@@ -79,7 +87,7 @@ function dataInitializer(
     node.forEachChild(findDeclaration);
   };
   source.forEachChild(findDeclaration);
-  return resolved ?? data.initializer;
+  return resolved ?? initializer;
 }
 
 function directApplicationStateWrites(path: string) {

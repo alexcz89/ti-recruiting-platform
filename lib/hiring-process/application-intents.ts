@@ -200,6 +200,10 @@ export async function executeApplicationIntent(input: {
   }
 
   const happenedAt = new Date();
+  const hasPartialLegacyRejection =
+    command.intent === "REJECT_CANDIDATE" &&
+    (application.status === "REJECTED" ||
+      application.recruiterInterest === "REJECTED");
   const updated = await prisma.application.updateMany({
     where: {
       id: application.id,
@@ -216,8 +220,13 @@ export async function executeApplicationIntent(input: {
       ...(command.intent === "MOVE_TO_INTERVIEW" ? { interviewAt: happenedAt } : {}),
       ...(command.intent === "REJECT_CANDIDATE"
         ? {
-            rejectedAt: happenedAt,
-            rejectionEmailSent: false,
+            rejectedAt:
+              hasPartialLegacyRejection && application.rejectedAt
+                ? application.rejectedAt
+                : happenedAt,
+            ...(hasPartialLegacyRejection
+              ? {}
+              : { rejectionEmailSent: false }),
           }
         : {}),
     },

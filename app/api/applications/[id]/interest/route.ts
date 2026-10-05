@@ -5,6 +5,10 @@ import { getSessionCompanyId } from "@/lib/server/session";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
+import {
+  APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+  hasApplicationRejectionFootprint,
+} from "@/lib/hiring-process/rejection-footprint";
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const ALLOWED: InterestKey[] = ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"];
@@ -56,7 +60,13 @@ export async function PATCH(
 
     const app = await prisma.application.findFirst({
       where: scopedWhere,
-      select: { id: true },
+      select: {
+        id: true,
+        stage: true,
+        disposition: true,
+        status: true,
+        recruiterInterest: true,
+      },
     });
 
     if (!app) {
@@ -70,9 +80,31 @@ export async function PATCH(
       );
     }
 
-    const updated = await prisma.application.update({
-      where: { id: params.id },
+    if (hasApplicationRejectionFootprint(app)) {
+      return jsonNoStore(
+        { error: "Reabrir una postulación rechazada está fuera de este slice" },
+        409,
+      );
+    }
+
+    const result = await prisma.application.updateMany({
+      where: {
+        AND: [
+          scopedWhere,
+          APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+        ],
+      },
       data: { recruiterInterest: next },
+    });
+    if (result.count !== 1) {
+      return jsonNoStore(
+        { error: "Reabrir una postulación rechazada está fuera de este slice" },
+        409,
+      );
+    }
+
+    const updated = await prisma.application.findFirstOrThrow({
+      where: scopedWhere,
       select: { id: true, recruiterInterest: true },
     });
 
