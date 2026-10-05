@@ -124,6 +124,12 @@ export async function PATCH(
       if (!allowed.has(body.status)) {
         return jsonNoStore({ error: "Status inválido" }, 400);
       }
+      if (body.status === "REJECTED") {
+        return jsonNoStore(
+          { error: "REJECTED requiere el comando REJECT_CANDIDATE" },
+          400,
+        );
+      }
     }
 
     const updated = await prisma.application.update({

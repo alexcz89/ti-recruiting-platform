@@ -4,6 +4,9 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { updateApplicationStatus } from "@/app/dashboard/overview/actions";
 import { PATCH as patchApplicationStatus } from "@/app/api/applications/[id]/status/route";
+import { POST as postApplicationStatus } from "@/app/api/applications/[id]/status/route";
+import { PATCH as patchApplicationInterest } from "@/app/api/applications/[id]/interest/route";
+import { PATCH as patchApplication } from "@/app/api/applications/[id]/route";
 import { transitionApplication } from "@/lib/hiring-process/transition-application";
 
 const mocks = vi.hoisted(() => ({
@@ -431,22 +434,117 @@ describeDatabase("canonical hiring process pilot writer", () => {
     expect(stored.events).toHaveLength(0);
   });
 
-  it("leaves the non-pilot rejection path on its legacy writer", async () => {
+  it("routes overview rejection through the canonical command", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
 
     expect(
-      await updateApplicationStatus(ids.application, "REJECTED"),
+      await updateApplicationStatus(ids.application, "REJECTED", {
+        expectedVersion: 0,
+        commandId: "qa-overview-reject",
+      }),
     ).toEqual({ success: true });
     const stored = await storedApplication();
     expect(stored).toMatchObject({
       status: "REJECTED",
       recruiterInterest: "REJECTED",
+      stage: "CLOSED",
+      disposition: "REJECTED",
+      stateVersion: 1,
+    });
+    expect(stored.rejectedAt).toBeInstanceOf(Date);
+    expect(stored.rejectionEmailSent).toBe(false);
+    expect(stored.events).toHaveLength(1);
+    expect(stored.events[0]).toMatchObject({
+      type: "CANDIDATE_REJECTED",
+      actorType: "RECRUITER",
+      actorId: ids.recruiter,
+      visibility: "BOTH",
+    });
+  });
+
+  it("rejects direct REJECTED writes through the generic status endpoint", async () => {
+    const request = new NextRequest(
+      `http://localhost/api/applications/${ids.application}/status`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REJECTED" }),
+      },
+    );
+
+    const response = await patchApplicationStatus(request, {
+      params: { id: ids.application },
+    });
+    const stored = await storedApplication();
+
+    expect(response.status).toBe(400);
+    expect(stored).toMatchObject({
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
       stage: "APPLIED",
       disposition: "ACTIVE",
       stateVersion: 0,
     });
-    expect(stored.rejectedAt).toBeInstanceOf(Date);
     expect(stored.events).toHaveLength(0);
+  });
+
+  it("rejects every remaining direct rejection endpoint and method", async () => {
+    const statusPost = await postApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REJECTED" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const interestPatch = await patchApplicationInterest(
+      new Request(`http://localhost/api/applications/${ids.application}/interest`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recruiterInterest: "REJECTED" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const genericPatch = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REJECTED" }),
+      }),
+      { params: { id: ids.application } },
+    );
+
+    expect([statusPost.status, interestPatch.status, genericPatch.status]).toEqual([400, 400, 400]);
+    expect(await storedApplication()).toMatchObject({
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+      stage: "APPLIED",
+      disposition: "ACTIVE",
+      stateVersion: 0,
+      events: [],
+    });
+  });
+
+  it("keeps canonical rejection eligible for the delayed rejection cron", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
+    expect(
+      await updateApplicationStatus(ids.application, "REJECTED", {
+        expectedVersion: 0,
+        commandId: "qa-overview-reject-cron",
+      }),
+    ).toEqual({ success: true });
+
+    const cutoff = new Date(Date.now() + 1_000);
+    const eligible = await prisma.application.findMany({
+      where: {
+        id: ids.application,
+        status: "REJECTED",
+        rejectionEmailSent: false,
+        rejectedAt: { lte: cutoff },
+      },
+      select: { id: true },
+    });
+    expect(eligible).toEqual([{ id: ids.application }]);
   });
 
   it("does not intercept the separate generic Application.status writer", async () => {

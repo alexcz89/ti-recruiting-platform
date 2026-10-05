@@ -63,6 +63,13 @@ export async function PATCH(
       return jsonNoStore({ error: "Application not found" }, 404);
     }
 
+    if (next === "REJECTED") {
+      return jsonNoStore(
+        { error: "REJECTED requiere el comando REJECT_CANDIDATE" },
+        400,
+      );
+    }
+
     const updated = await prisma.application.update({
       where: { id: params.id },
       data: { recruiterInterest: next },

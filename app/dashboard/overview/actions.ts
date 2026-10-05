@@ -8,11 +8,13 @@ import { authOptions } from '@/lib/server/auth';
 import { getSessionCompanyId } from "@/lib/server/session";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
 import { isCanonicalHiringProcessEnabled } from "@/lib/hiring-process/feature-flags";
+import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import { transitionApplication } from "@/lib/hiring-process/transition-application";
 
 export async function updateApplicationStatus(
   applicationId: string,
-  status: "REVIEWING" | "REJECTED"
+  status: "REVIEWING" | "REJECTED",
+  command?: { expectedVersion: number; commandId: string },
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -46,6 +48,33 @@ export async function updateApplicationStatus(
 
     if (!application) {
       return { success: false, error: "Aplicación no encontrada" };
+    }
+
+    if (status === "REJECTED") {
+      const actorId = session.user.id ? String(session.user.id) : null;
+      if (
+        !actorId ||
+        !command ||
+        !Number.isInteger(command.expectedVersion) ||
+        command.expectedVersion < 0 ||
+        !command.commandId.trim()
+      ) {
+        return { success: false, error: "Comando inválido" };
+      }
+
+      await executeApplicationIntent({
+        applicationId: application.id,
+        command: {
+          intent: "REJECT_CANDIDATE",
+          expectedVersion: command.expectedVersion,
+          commandId: command.commandId,
+        },
+        actor: { type: role, id: actorId, companyId },
+      });
+
+      revalidatePath("/dashboard/overview");
+      revalidatePath("/dashboard/jobs");
+      return { success: true };
     }
 
     const canonicalPilotEnabled =
@@ -89,10 +118,7 @@ export async function updateApplicationStatus(
         where: { id: application.id },
         data: {
           status,
-          recruiterInterest: status === "REVIEWING" ? "ACCEPTED" : "REJECTED",
-          ...(status === "REJECTED" && {
-            rejectedAt: new Date(),
-          }),
+          recruiterInterest: "ACCEPTED",
         },
       });
     }

@@ -1,7 +1,7 @@
 // app/dashboard/jobs/[id]/applications/InterestSelect.tsx
 "use client";
 
-import {
+import React, {
   useState,
   useTransition,
   useEffect,
@@ -22,11 +22,9 @@ const LABEL: Record<InterestKey, string> = {
 };
 
 // 🔔 MAPEO A STATUS DE LA APLICACIÓN (para notificaciones)
-const TO_APPLICATION_STATUS: Record<InterestKey, string> = {
+const TO_APPLICATION_STATUS: Record<"REVIEW" | "MAYBE", string> = {
   REVIEW: "REVIEWING",
   MAYBE: "REVIEWING", // En duda también es "revisando"
-  ACCEPTED: "INTERVIEW",
-  REJECTED: "REJECTED",
 };
 
 const INTEREST_KEYS: InterestKey[] = [
@@ -81,12 +79,12 @@ export default function InterestSelect({
     setValue(next); // UI optimista
 
     try {
-      if (next === "ACCEPTED") {
+      if (next === "ACCEPTED" || next === "REJECTED") {
         const res = await fetch(`/api/applications/${applicationId}/intent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            intent: "MOVE_TO_INTERVIEW",
+            intent: next === "ACCEPTED" ? "MOVE_TO_INTERVIEW" : "REJECT_CANDIDATE",
             expectedVersion: stateVersion,
             commandId: crypto.randomUUID(),
           }),
@@ -128,6 +126,7 @@ export default function InterestSelect({
 
   const handleSelect = (next: InterestKey) => {
     setOpen(false);
+    if (value === "REJECTED") return;
     if (next === value) return;
     startTransition(() => updateInterest(next));
   };

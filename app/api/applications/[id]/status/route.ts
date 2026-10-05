@@ -78,22 +78,20 @@ async function updateStatus(id: string, status: string) {
     );
   }
 
-  const oldStatus = app.status;
-  const isRejected = newStatus === "REJECTED";
+  if (newStatus === "REJECTED") {
+    return jsonNoStore(
+      { error: "REJECTED requiere el comando REJECT_CANDIDATE" },
+      400,
+    );
+  }
 
   const updated = await prisma.application.update({
     where: { id },
-    data: isRejected
-      ? {
-          status: "REJECTED",
-          rejectedAt: new Date(),
-          rejectionEmailSent: false,
-        }
-      : {
-          status: newStatus,
-          rejectedAt: null,
-          rejectionEmailSent: false,
-        },
+    data: {
+      status: newStatus,
+      rejectedAt: null,
+      rejectionEmailSent: false,
+    },
     select: {
       id: true,
       status: true,
@@ -102,9 +100,6 @@ async function updateStatus(id: string, status: string) {
       updatedAt: true,
     },
   });
-
-  // El email de rechazo se envía con 3 días de delay por el cron /api/cron/rejections
-  // (rejectedAt + rejectionEmailSent=false ya quedaron guardados arriba)
 
   return jsonNoStore({ ok: true, application: updated });
 }

@@ -1,7 +1,7 @@
 // components/dashboard/CandidateReviewShell.tsx
 "use client";
 
-import { useState, useCallback, useTransition, useRef, useEffect } from "react";
+import React, { useState, useCallback, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, GitBranch,
@@ -167,19 +167,24 @@ export default function CandidateReviewShell({
 
   const patchInterest = useCallback((recruiterInterest: string) => {
     if (!applicationId) return;
+    if (currentInterest === "REJECTED") return;
     // Actualización optimista inmediata — el botón responde al instante
     setCurrentInterest(recruiterInterest);
     startTransition(async () => {
-      const isInterview = recruiterInterest === "ACCEPTED";
+      const canonicalIntent = recruiterInterest === "ACCEPTED"
+        ? "MOVE_TO_INTERVIEW"
+        : recruiterInterest === "REJECTED"
+          ? "REJECT_CANDIDATE"
+          : null;
       const res = await fetch(
-        `/api/applications/${applicationId}/${isInterview ? "intent" : "interest"}`,
+        `/api/applications/${applicationId}/${canonicalIntent ? "intent" : "interest"}`,
         {
-        method: isInterview ? "POST" : "PATCH",
+        method: canonicalIntent ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          isInterview
+          canonicalIntent
             ? {
-                intent: "MOVE_TO_INTERVIEW",
+                intent: canonicalIntent,
                 expectedVersion: app?.stateVersion ?? 0,
                 commandId: crypto.randomUUID(),
               }
@@ -188,7 +193,7 @@ export default function CandidateReviewShell({
       });
       if (res.ok) {
         const data = await res.json();
-        const updated = isInterview ? data.application : data;
+        const updated = canonicalIntent ? data.application : data;
         setCurrentInterest(updated.recruiterInterest);
         setApp((prev) => prev ? {
           ...prev,
@@ -201,7 +206,7 @@ export default function CandidateReviewShell({
         setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
       }
     });
-  }, [applicationId, app?.recruiterInterest, app?.stateVersion]);
+  }, [applicationId, app?.recruiterInterest, app?.stateVersion, currentInterest]);
 
   const saveNotes = useCallback(() => {
     if (!applicationId) return;
@@ -348,7 +353,10 @@ export default function CandidateReviewShell({
                     key={key}
                     type="button"
                     disabled={isPending}
-                    onClick={() => patchInterest(isSelected ? "REVIEW" : key)}
+                    onClick={() => {
+                      if (key === "REJECTED" && isSelected) return;
+                      patchInterest(isSelected ? "REVIEW" : key);
+                    }}
                     className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                       isSelected ? m.activeColor : m.color
                     }`}
