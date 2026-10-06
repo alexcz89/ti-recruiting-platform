@@ -10,6 +10,10 @@ import { applicationWhereForActor } from "@/lib/server/candidate-access";
 import { isCanonicalHiringProcessEnabled } from "@/lib/hiring-process/feature-flags";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import { transitionApplication } from "@/lib/hiring-process/transition-application";
+import {
+  APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+  hasCanonicalApplicationOffer,
+} from "@/lib/hiring-process/offer-footprint";
 
 export async function updateApplicationStatus(
   applicationId: string,
@@ -48,6 +52,13 @@ export async function updateApplicationStatus(
 
     if (!application) {
       return { success: false, error: "Aplicación no encontrada" };
+    }
+
+    if (status === "REVIEWING" && hasCanonicalApplicationOffer(application)) {
+      return {
+        success: false,
+        error: "La oferta canónica no admite retroceso legacy",
+      };
     }
 
     if (status === "REJECTED") {
@@ -114,13 +125,21 @@ export async function updateApplicationStatus(
       });
     } else {
       // Legacy behavior remains the authority while the pilot flag is off.
-      await prisma.application.update({
-        where: { id: application.id },
+      const updated = await prisma.application.updateMany({
+        where: {
+          AND: [scopedWhere, APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE],
+        },
         data: {
           status,
           recruiterInterest: "ACCEPTED",
         },
       });
+      if (updated.count !== 1) {
+        return {
+          success: false,
+          error: "La oferta canónica no admite retroceso legacy",
+        };
+      }
     }
 
     revalidatePath("/dashboard/overview");

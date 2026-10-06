@@ -7,6 +7,7 @@ import { PATCH as patchApplicationStatus } from "@/app/api/applications/[id]/sta
 import { POST as postApplicationStatus } from "@/app/api/applications/[id]/status/route";
 import { PATCH as patchApplicationInterest } from "@/app/api/applications/[id]/interest/route";
 import { PATCH as patchApplication } from "@/app/api/applications/[id]/route";
+import { PATCH as patchApplicationNotes } from "@/app/api/applications/[id]/notes/route";
 import { transitionApplication } from "@/lib/hiring-process/transition-application";
 
 const mocks = vi.hoisted(() => ({
@@ -488,6 +489,52 @@ describeDatabase("canonical hiring process pilot writer", () => {
     expect(stored.events).toHaveLength(0);
   });
 
+  it("rejects direct OFFER writes through both status methods and generic PATCH", async () => {
+    const statusPatch = await patchApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "OFFER" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const statusPost = await postApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "OFFER" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const genericPatch = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "OFFER" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const unrelatedPatch = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coverLetter: "Offer bypass remains closed" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    expect([statusPatch.status, statusPost.status, genericPatch.status]).toEqual([400, 400, 400]);
+    expect(unrelatedPatch.status).toBe(200);
+    expect(await storedApplication()).toMatchObject({
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+      stage: "APPLIED",
+      disposition: "ACTIVE",
+      stateVersion: 0,
+      coverLetter: "Offer bypass remains closed",
+      events: [],
+    });
+  });
+
   it("rejects every remaining direct rejection endpoint and method", async () => {
     const statusPost = await postApplicationStatus(
       new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
@@ -645,6 +692,99 @@ describeDatabase("canonical hiring process pilot writer", () => {
       status: "SUBMITTED",
       recruiterInterest: "REVIEW",
       stateVersion: 0,
+      events: [],
+    });
+  });
+
+  it("protects canonical OFFER/ACTIVE from every generic legacy state endpoint", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    await prisma.application.update({
+      where: { id: ids.application },
+      data: {
+        stage: "OFFER",
+        disposition: "ACTIVE",
+        stateVersion: 2,
+        status: "OFFER",
+        recruiterInterest: "ACCEPTED",
+      },
+    });
+
+    const statusPatch = await patchApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REVIEWING" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const statusPost = await postApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "INTERVIEW" }),
+      }),
+      { params: { id: ids.application } },
+    );
+
+    const interestStatuses: number[] = [];
+    for (const recruiterInterest of ["REVIEW", "MAYBE", "ACCEPTED"]) {
+      const response = await patchApplicationInterest(
+        new Request(`http://localhost/api/applications/${ids.application}/interest`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recruiterInterest }),
+        }),
+        { params: { id: ids.application } },
+      );
+      interestStatuses.push(response.status);
+    }
+
+    const genericStatusPatch = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REVIEWING" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const unrelatedPatch = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeUrl: "https://example.invalid/offer-resume.pdf",
+          coverLetter: "La oferta sigue vigente",
+        }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const notesPatch = await patchApplicationNotes(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/notes`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: "Seguimiento de la oferta" }),
+      }),
+      { params: { id: ids.application } },
+    );
+
+    expect([statusPatch.status, statusPost.status]).toEqual([409, 409]);
+    expect(interestStatuses).toEqual([409, 409, 409]);
+    expect(genericStatusPatch.status).toBe(409);
+    expect(unrelatedPatch.status).toBe(200);
+    expect(notesPatch.status).toBe(200);
+    expect(
+      await updateApplicationStatus(ids.application, "REVIEWING"),
+    ).toEqual({ success: false, error: "La oferta canónica no admite retroceso legacy" });
+
+    expect(await storedApplication()).toMatchObject({
+      stage: "OFFER",
+      disposition: "ACTIVE",
+      stateVersion: 2,
+      status: "OFFER",
+      recruiterInterest: "ACCEPTED",
+      resumeUrl: "https://example.invalid/offer-resume.pdf",
+      coverLetter: "La oferta sigue vigente",
+      internalNotes: "Seguimiento de la oferta",
       events: [],
     });
   });

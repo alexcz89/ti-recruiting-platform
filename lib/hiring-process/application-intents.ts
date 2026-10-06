@@ -19,6 +19,7 @@ import {
 export const APPLICATION_INTENTS = [
   "START_REVIEW",
   "MOVE_TO_INTERVIEW",
+  "MOVE_TO_OFFER",
   "REJECT_CANDIDATE",
 ] as const;
 
@@ -40,6 +41,8 @@ export function applicationIntentTarget(intent: ApplicationIntent) {
       return { targetStage: "REVIEW" as const, targetDisposition: "ACTIVE" as const };
     case "MOVE_TO_INTERVIEW":
       return { targetStage: "INTERVIEW" as const, targetDisposition: "ACTIVE" as const };
+    case "MOVE_TO_OFFER":
+      return { targetStage: "OFFER" as const, targetDisposition: "ACTIVE" as const };
     case "REJECT_CANDIDATE":
       return { targetStage: "CLOSED" as const, targetDisposition: "REJECTED" as const };
   }
@@ -51,6 +54,8 @@ function legacyProjectionForIntent(intent: ApplicationIntent) {
       return { status: "REVIEWING" as const, recruiterInterest: "REVIEW" as const };
     case "MOVE_TO_INTERVIEW":
       return { status: "INTERVIEW" as const, recruiterInterest: "ACCEPTED" as const };
+    case "MOVE_TO_OFFER":
+      return { status: "OFFER" as const, recruiterInterest: "ACCEPTED" as const };
     case "REJECT_CANDIDATE":
       return { status: "REJECTED" as const, recruiterInterest: "REJECTED" as const };
   }
@@ -72,13 +77,37 @@ export async function executeApplicationIntent(input: {
   const { applicationId, command, actor } = input;
 
   if (
-    command.intent === "REJECT_CANDIDATE" &&
+    (command.intent === "REJECT_CANDIDATE" || command.intent === "MOVE_TO_OFFER") &&
     (!actor.id || (actor.type !== "RECRUITER" && actor.type !== "ADMIN"))
   ) {
     throw new UnauthorizedApplicationTransitionError();
   }
 
   if (isCanonicalHiringProcessEnabled()) {
+    if (command.intent === "MOVE_TO_OFFER") {
+      const scopedWhere = applicationWhereForActor(
+        { role: actor.type, companyId: actor.companyId ?? null },
+        { applicationId },
+      );
+      if (!scopedWhere) throw new UnauthorizedApplicationTransitionError();
+
+      const source = await prisma.application.findFirst({
+        where: scopedWhere,
+        select: { stage: true, disposition: true },
+      });
+      if (!source) throw new ApplicationNotFoundError();
+
+      const isPotentialReplay =
+        source.stage === "OFFER" && source.disposition === "ACTIVE";
+      const isApprovedSource =
+        source.stage === "INTERVIEW" && source.disposition === "ACTIVE";
+      if (!isApprovedSource && !isPotentialReplay) {
+        throw new InvalidApplicationTransitionError(
+          "MOVE_TO_OFFER requiere INTERVIEW / ACTIVE",
+        );
+      }
+    }
+
     if (command.intent === "REJECT_CANDIDATE") {
       const scopedWhere = applicationWhereForActor(
         { role: actor.type, companyId: actor.companyId ?? null },
@@ -127,7 +156,7 @@ export async function executeApplicationIntent(input: {
   );
   if (!scopedWhere) throw new UnauthorizedApplicationTransitionError();
 
-  if (command.intent === "REJECT_CANDIDATE") {
+  if (command.intent === "REJECT_CANDIDATE" || command.intent === "MOVE_TO_OFFER") {
     const actorId = actor.id;
     if (!actorId || (actor.type !== "RECRUITER" && actor.type !== "ADMIN")) {
       throw new UnauthorizedApplicationTransitionError();
@@ -168,6 +197,7 @@ export async function executeApplicationIntent(input: {
       stateVersion: true,
       status: true,
       recruiterInterest: true,
+      offerAt: true,
       rejectedAt: true,
     },
   });
@@ -185,6 +215,31 @@ export async function executeApplicationIntent(input: {
 
   // Temporary legacy exception: removed when the canonical flag becomes authoritative.
   const projection = legacyProjectionForIntent(command.intent);
+  if (command.intent === "MOVE_TO_OFFER") {
+    const isExactLegacyRetry =
+      application.status === "OFFER" &&
+      application.recruiterInterest === "ACCEPTED";
+    if (isExactLegacyRetry) {
+      return {
+        state: null,
+        event: null,
+        replayed: true,
+        legacyProjectionApplied: true,
+        timestamps: { offerAt: application.offerAt },
+        legacy: { ...projection, stateVersion: application.stateVersion },
+      };
+    }
+
+    const isExactLegacySource =
+      application.status === "INTERVIEW" &&
+      application.recruiterInterest === "ACCEPTED";
+    if (!isExactLegacySource) {
+      throw new InvalidApplicationTransitionError(
+        "MOVE_TO_OFFER legacy requiere INTERVIEW / ACCEPTED",
+      );
+    }
+  }
+
   if (
     command.intent === "REJECT_CANDIDATE" &&
     application.status === "REJECTED" &&
@@ -195,6 +250,7 @@ export async function executeApplicationIntent(input: {
       event: null,
       replayed: true,
       legacyProjectionApplied: true,
+      timestamps: { offerAt: application.offerAt },
       legacy: { ...projection, stateVersion: application.stateVersion },
     };
   }
@@ -212,12 +268,16 @@ export async function executeApplicationIntent(input: {
       stateVersion: 0,
       status: application.status,
       recruiterInterest: application.recruiterInterest,
+      offerAt: application.offerAt,
       rejectedAt: application.rejectedAt,
     },
     data: {
       ...projection,
       ...(command.intent === "START_REVIEW" ? { reviewingAt: happenedAt } : {}),
       ...(command.intent === "MOVE_TO_INTERVIEW" ? { interviewAt: happenedAt } : {}),
+      ...(command.intent === "MOVE_TO_OFFER"
+        ? { offerAt: application.offerAt ?? happenedAt }
+        : {}),
       ...(command.intent === "REJECT_CANDIDATE"
         ? {
             rejectedAt:
@@ -238,6 +298,12 @@ export async function executeApplicationIntent(input: {
     event: null,
     replayed: false,
     legacyProjectionApplied: true,
+    timestamps: {
+      offerAt:
+        command.intent === "MOVE_TO_OFFER"
+          ? application.offerAt ?? happenedAt
+          : application.offerAt,
+    },
     legacy: { ...projection, stateVersion: application.stateVersion },
   };
 }

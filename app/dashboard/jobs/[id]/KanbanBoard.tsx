@@ -34,6 +34,8 @@ type AssessmentMeta = {
 type AppCard = {
   id: string;
   status: string;
+  stage: string | null;
+  disposition: string | null;
   stateVersion: number;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
@@ -115,8 +117,16 @@ export default function Kanbanboard({
 
     const sourceCol = cols[fromStatus] || [];
     const destCol = cols[toStatus] || sourceCol;
-    const [moved] = sourceCol.splice(fromIdx, 1);
+    const moved = sourceCol[fromIdx];
     if (!moved) return;
+    if (
+      moved.stage === "OFFER" &&
+      moved.disposition === "ACTIVE" &&
+      toStatus !== "REJECTED"
+    ) {
+      return;
+    }
+    sourceCol.splice(fromIdx, 1);
 
     destCol.splice(toIdx, 0, { ...moved, status: toStatus });
     cols[fromStatus] = sourceCol;

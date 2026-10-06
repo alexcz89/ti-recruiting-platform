@@ -62,10 +62,14 @@ export default function InterestSelect({
   applicationId,
   initial,
   initialStateVersion,
+  canonicalStage = null,
+  canonicalDisposition = null,
 }: {
   applicationId: string;
   initial: InterestKey;
   initialStateVersion: number;
+  canonicalStage?: string | null;
+  canonicalDisposition?: string | null;
 }) {
   const router = useRouter();
   const [value, setValue] = useState<InterestKey>(initial);
@@ -73,6 +77,8 @@ export default function InterestSelect({
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const canonicalOffer =
+    canonicalStage === "OFFER" && canonicalDisposition === "ACTIVE";
 
   async function updateInterest(next: InterestKey) {
     const prev = value;
@@ -127,6 +133,7 @@ export default function InterestSelect({
   const handleSelect = (next: InterestKey) => {
     setOpen(false);
     if (value === "REJECTED") return;
+    if (canonicalOffer && next !== "REJECTED") return;
     if (next === value) return;
     startTransition(() => updateInterest(next));
   };
@@ -205,12 +212,14 @@ export default function InterestSelect({
         >
           {INTEREST_KEYS.map((key) => {
             const isActive = key === value;
+            const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
             return (
               <button
                 key={key}
                 type="button"
                 role="option"
                 aria-selected={isActive}
+                disabled={blockedByCanonicalOffer}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelect(key)}
                 className={`
@@ -221,6 +230,7 @@ export default function InterestSelect({
                       ? "bg-zinc-50 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
                       : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   }
+                  disabled:cursor-not-allowed disabled:opacity-50
                 `}
               >
                 <span className="flex items-center gap-2">

@@ -10,6 +10,10 @@ import Kanbanboard from "./KanbanBoard";
 import { ApplicationInterest, ApplicationStatus } from "@prisma/client";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import {
+  APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+  hasCanonicalApplicationOffer,
+} from "@/lib/hiring-process/offer-footprint";
+import {
   computeMatchScore,
   applyPlanGate,
   scoreToTextColor,
@@ -268,6 +272,8 @@ export default async function JobPipelinePage({ params }: PageProps) {
     return {
       id: a.id,
       status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
+      stage: a.stage,
+      disposition: a.disposition,
       stateVersion: a.stateVersion,
       createdAt: a.createdAt,
       updatedAt: (a as any).updatedAt ?? a.createdAt,
@@ -331,6 +337,13 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
     if (
       newStatusStr !== "REJECTED" &&
+      hasCanonicalApplicationOffer(app)
+    ) {
+      return { ok: false, message: "La oferta canónica no admite retroceso" };
+    }
+
+    if (
+      newStatusStr !== "REJECTED" &&
       (app.recruiterInterest === "REJECTED" ||
         (app.stage === "CLOSED" && app.disposition === "REJECTED"))
     ) {
@@ -376,8 +389,13 @@ export default async function JobPipelinePage({ params }: PageProps) {
       }
     }
 
-    await prisma.application.update({
-      where: { id: app.id },
+    const updated = await prisma.application.updateMany({
+      where: {
+        AND: [
+          { id: app.id, job: { companyId: companyId2 } },
+          APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+        ],
+      },
       data: {
         recruiterInterest: newStatusStr,
         status: ApplicationStatus.REVIEWING,
@@ -385,6 +403,10 @@ export default async function JobPipelinePage({ params }: PageProps) {
         rejectionEmailSent: false,
       },
     });
+
+    if (updated.count !== 1) {
+      return { ok: false, message: "La oferta canónica no admite retroceso" };
+    }
 
     return { ok: true };
   }

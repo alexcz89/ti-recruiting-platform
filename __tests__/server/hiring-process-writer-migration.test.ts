@@ -12,7 +12,7 @@ const root = process.cwd();
 const read = (...parts: string[]) => readFileSync(join(root, ...parts), "utf8");
 
 describe("canonical hiring process writer migration", () => {
-  it("supports only the three approved explicit intents", () => {
+  it("supports only the four approved explicit intents", () => {
     expect(
       applicationIntentSchema.parse({
         intent: "START_REVIEW",
@@ -30,9 +30,12 @@ describe("canonical hiring process writer migration", () => {
     expect(
       applicationIntentTarget("REJECT_CANDIDATE"),
     ).toEqual({ targetStage: "CLOSED", targetDisposition: "REJECTED" });
+    expect(
+      applicationIntentTarget("MOVE_TO_OFFER"),
+    ).toEqual({ targetStage: "OFFER", targetDisposition: "ACTIVE" });
     expect(() =>
       applicationIntentSchema.parse({
-        intent: "MOVE_TO_OFFER",
+        intent: "HIRE_CANDIDATE",
         expectedVersion: 1,
         commandId: "unsupported-command",
       }),
@@ -78,6 +81,23 @@ describe("canonical hiring process writer migration", () => {
     expect(interestSelect).not.toContain('ACCEPTED: "OFFER"');
   });
 
+  it("exposes one explicit CandidateReviewShell offer command without reinterpreting Entrevista", () => {
+    const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
+    const candidatePage = read("app", "dashboard", "candidates", "[id]", "page.tsx");
+
+    expect(candidateShell).toContain('intent: "MOVE_TO_OFFER"');
+    expect(candidateShell).toContain('app?.stage === "INTERVIEW"');
+    expect(candidateShell).toContain('app.disposition === "ACTIVE"');
+    expect(candidateShell).toContain("Mover a oferta");
+    expect(candidateShell).toContain('? "MOVE_TO_INTERVIEW"');
+    expect(candidatePage).toContain("stage: currentApplication.stage");
+    expect(candidatePage).toContain("disposition: currentApplication.disposition");
+
+    const intentRoute = read("app", "api", "applications", "[id]", "intent", "route.ts");
+    expect(intentRoute).toContain("result.timestamps.offerAt");
+    expect(intentRoute).not.toContain("prisma.application.findUnique");
+  });
+
   it("keeps the flag-off legacy write conditional on a fully non-canonical row", () => {
     const intents = read("lib", "hiring-process", "application-intents.ts");
     expect(intents).toMatch(
@@ -118,5 +138,62 @@ describe("canonical hiring process writer migration", () => {
     for (const source of [statusRoute, interestRoute, applicationRoute]) {
       expect(source).toContain("REJECT_CANDIDATE");
     }
+  });
+
+  it("closes direct OFFER endpoint bypasses", () => {
+    const statusRoute = read("app", "api", "applications", "[id]", "status", "route.ts");
+    const applicationRoute = read("app", "api", "applications", "[id]", "route.ts");
+
+    expect(statusRoute).toContain('if (newStatus === "OFFER")');
+    expect(applicationRoute).toContain('if (body.status === "OFFER")');
+    for (const source of [statusRoute, applicationRoute]) {
+      expect(source).toContain("MOVE_TO_OFFER");
+    }
+  });
+
+  it("protects canonical OFFER/ACTIVE from every remaining legacy writer and surface", () => {
+    const helper = read("lib", "hiring-process", "offer-footprint.ts");
+    expect(helper).toContain('application.stage === "OFFER"');
+    expect(helper).toContain('application.disposition === "ACTIVE"');
+    expect(helper).not.toContain('status === "OFFER"');
+    expect(helper).not.toContain('recruiterInterest === "ACCEPTED"');
+
+    const serverWriters = [
+      read("app", "api", "applications", "[id]", "status", "route.ts"),
+      read("app", "api", "applications", "[id]", "interest", "route.ts"),
+      read("app", "api", "applications", "[id]", "route.ts"),
+      read("app", "dashboard", "jobs", "[id]", "page.tsx"),
+      read("app", "dashboard", "overview", "actions.ts"),
+    ];
+    for (const source of serverWriters) {
+      expect(source).toContain("hasCanonicalApplicationOffer");
+      expect(source).toContain("APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE");
+    }
+
+    const interestSelect = read(
+      "app",
+      "dashboard",
+      "jobs",
+      "[id]",
+      "applications",
+      "InterestSelect.tsx",
+    );
+    const applicationsPage = read(
+      "app",
+      "dashboard",
+      "jobs",
+      "[id]",
+      "applications",
+      "page.tsx",
+    );
+    const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
+    const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
+
+    expect(interestSelect).toContain("blockedByCanonicalOffer");
+    expect(applicationsPage).toContain("canonicalStage={a.stage}");
+    expect(applicationsPage).toContain("canonicalDisposition={a.disposition}");
+    expect(candidateShell).toContain("blockedByCanonicalOffer");
+    expect(kanban).toContain('moved.stage === "OFFER"');
+    expect(kanban).toContain('moved.disposition === "ACTIVE"');
   });
 });

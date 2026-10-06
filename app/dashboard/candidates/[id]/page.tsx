@@ -419,6 +419,8 @@ export default async function CandidateDetailPage({
         }) ?? { id: "__unauthorized__" },
         select: {
           id: true,
+          stage: true,
+          disposition: true,
           status: true,
           recruiterInterest: true,
           stateVersion: true,
@@ -559,6 +561,8 @@ export default async function CandidateDetailPage({
   const appStateForShell: CandidateAppState | null = currentApplication
     ? {
         id: currentApplication.id,
+        stage: currentApplication.stage,
+        disposition: currentApplication.disposition,
         status: currentApplication.status,
         recruiterInterest: currentApplication.recruiterInterest,
         stateVersion: currentApplication.stateVersion,

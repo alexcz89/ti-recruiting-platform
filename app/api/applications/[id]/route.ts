@@ -8,6 +8,10 @@ import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
   hasApplicationRejectionFootprint,
 } from "@/lib/hiring-process/rejection-footprint";
+import {
+  APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+  hasCanonicalApplicationOffer,
+} from "@/lib/hiring-process/offer-footprint";
 
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -138,9 +142,21 @@ export async function PATCH(
           400,
         );
       }
+      if (body.status === "OFFER") {
+        return jsonNoStore(
+          { error: "OFFER requiere el comando MOVE_TO_OFFER" },
+          400,
+        );
+      }
       if (hasApplicationRejectionFootprint(found)) {
         return jsonNoStore(
           { error: "Reabrir una postulación rechazada está fuera de este slice" },
+          409,
+        );
+      }
+      if (hasCanonicalApplicationOffer(found)) {
+        return jsonNoStore(
+          { error: "La oferta canónica no admite retroceso por APIs legacy" },
           409,
         );
       }
@@ -162,6 +178,7 @@ export async function PATCH(
           AND: [
             scopedWhere,
             APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+            APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
           ],
         },
         data,

@@ -63,6 +63,7 @@ export async function POST(
         stateVersion: result.legacy.stateVersion,
         status: result.legacy.status,
         recruiterInterest: result.legacy.recruiterInterest,
+        offerAt: result.timestamps.offerAt?.toISOString() ?? null,
       },
       replayed: result.replayed,
     });
