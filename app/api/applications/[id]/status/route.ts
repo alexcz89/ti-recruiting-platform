@@ -92,6 +92,13 @@ async function updateStatus(id: string, status: string) {
     );
   }
 
+  if (newStatus === "OFFER") {
+    return jsonNoStore(
+      { error: "OFFER requiere el comando MOVE_TO_OFFER" },
+      400,
+    );
+  }
+
   if (hasApplicationRejectionFootprint(app)) {
     return jsonNoStore(
       { error: "Reabrir una postulación rechazada está fuera de este slice" },

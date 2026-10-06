@@ -138,6 +138,12 @@ export async function PATCH(
           400,
         );
       }
+      if (body.status === "OFFER") {
+        return jsonNoStore(
+          { error: "OFFER requiere el comando MOVE_TO_OFFER" },
+          400,
+        );
+      }
       if (hasApplicationRejectionFootprint(found)) {
         return jsonNoStore(
           { error: "Reabrir una postulación rechazada está fuera de este slice" },

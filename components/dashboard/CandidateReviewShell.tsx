@@ -3,10 +3,16 @@
 
 import React, { useState, useCallback, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toastError, toastSuccess } from "@/lib/ui/toast";
+import type {
+  ApplicationDispositionValue,
+  ApplicationStageValue,
+} from "@/lib/hiring-process/types";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, GitBranch,
   CheckCircle2, Clock, Star, FileText, User, ClipboardList,
-  Sparkles, ThumbsUp, XCircle,
+  Sparkles, ThumbsUp, XCircle, Send,
   Download, MessageCircle,
 } from "lucide-react";
 
@@ -25,6 +31,8 @@ export type NavEntry = {
 
 export type AppState = {
   id: string;
+  stage: ApplicationStageValue | null;
+  disposition: ApplicationDispositionValue | null;
   status: string;
   recruiterInterest: string;
   stateVersion: number;
@@ -141,6 +149,7 @@ export default function CandidateReviewShell({
   navIndex,
   slots,
 }: ShellProps) {
+  const router = useRouter();
   const [app, setApp] = useState<AppState | null>(currentApplication);
   // currentInterest es estado propio para que el botón se resalte incluso si app es null
   const [currentInterest, setCurrentInterest] = useState<string>(
@@ -207,6 +216,51 @@ export default function CandidateReviewShell({
       }
     });
   }, [applicationId, app?.recruiterInterest, app?.stateVersion, currentInterest]);
+
+  const moveToOffer = useCallback(() => {
+    if (
+      !applicationId ||
+      app?.stage !== "INTERVIEW" ||
+      app.disposition !== "ACTIVE"
+    ) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/applications/${applicationId}/intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            intent: "MOVE_TO_OFFER",
+            expectedVersion: app.stateVersion,
+            commandId: crypto.randomUUID(),
+          }),
+        });
+        if (!res.ok) {
+          toastError("No se pudo mover al candidato a oferta. Intenta de nuevo.");
+          return;
+        }
+
+        const data = await res.json();
+        const updated = data.application;
+        setCurrentInterest(updated.recruiterInterest);
+        setApp((prev) => prev ? {
+          ...prev,
+          stage: updated.stage,
+          disposition: updated.disposition,
+          status: updated.status,
+          recruiterInterest: updated.recruiterInterest,
+          stateVersion: updated.stateVersion,
+          offerAt: updated.offerAt,
+        } : prev);
+        toastSuccess("Candidato movido a oferta");
+        router.refresh();
+      } catch {
+        toastError("No se pudo mover al candidato a oferta. Intenta de nuevo.");
+      }
+    });
+  }, [applicationId, app, router]);
 
   const saveNotes = useCallback(() => {
     if (!applicationId) return;
@@ -366,6 +420,18 @@ export default function CandidateReviewShell({
                   </button>
                 );
               })}
+
+              {app?.stage === "INTERVIEW" && app.disposition === "ACTIVE" && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={moveToOffer}
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50 dark:border-violet-700/60 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  Mover a oferta
+                </button>
+              )}
 
               {/* Divider */}
               <span className="hidden sm:block h-5 w-px bg-zinc-200 dark:bg-zinc-700" />

@@ -28,6 +28,8 @@ import CandidateReviewShell, {
 
 const rejectedApplication: AppState = {
   id: "application-1",
+  stage: "CLOSED",
+  disposition: "REJECTED",
   status: "REJECTED",
   recruiterInterest: "REJECTED",
   stateVersion: 2,
@@ -42,6 +44,17 @@ const rejectedApplication: AppState = {
   rejectedAt: "2026-10-05T12:05:00.000Z",
   lastViewedAt: null,
   viewCount: 0,
+};
+
+const interviewApplication: AppState = {
+  ...rejectedApplication,
+  status: "INTERVIEW",
+  recruiterInterest: "ACCEPTED",
+  stage: "INTERVIEW",
+  disposition: "ACTIVE",
+  stateVersion: 3,
+  interviewAt: "2026-10-05T12:05:00.000Z",
+  rejectedAt: null,
 };
 
 describe("canonical rejection surfaces", () => {
@@ -116,5 +129,103 @@ describe("canonical rejection surfaces", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Descartar/ }));
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends exactly one MOVE_TO_OFFER command from CandidateReviewShell", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          application: {
+            stage: "OFFER",
+            disposition: "ACTIVE",
+            status: "OFFER",
+            recruiterInterest: "ACCEPTED",
+            stateVersion: 4,
+            offerAt: "2026-10-05T12:10:00.000Z",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    render(
+      <CandidateReviewShell
+        candidateId="candidate-1"
+        candidateName="Candidate"
+        candidateSeniority={null}
+        candidateLocation={null}
+        resumeUrl={null}
+        waHref={null}
+        fromJobId="job-1"
+        jobTitle="Job"
+        matchScore={null}
+        matchLocked={false}
+        applicationId="application-1"
+        currentApplication={interviewApplication}
+        navList={[]}
+        navIndex={-1}
+        slots={{
+          summary: <div>Summary</div>,
+          profile: <div>Profile</div>,
+          cv: null,
+          assessments: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Mover a oferta" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("/api/applications/application-1/intent");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      intent: "MOVE_TO_OFFER",
+      expectedVersion: 3,
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Mover a oferta" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeInTheDocument();
+    expect(screen.getByText("Oferta enviada")).toBeInTheDocument();
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Candidato movido a oferta");
+  });
+
+  it("shows a Spanish error when MOVE_TO_OFFER fails", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 409 }));
+
+    render(
+      <CandidateReviewShell
+        candidateId="candidate-1"
+        candidateName="Candidate"
+        candidateSeniority={null}
+        candidateLocation={null}
+        resumeUrl={null}
+        waHref={null}
+        fromJobId="job-1"
+        jobTitle="Job"
+        matchScore={null}
+        matchLocked={false}
+        applicationId="application-1"
+        currentApplication={interviewApplication}
+        navList={[]}
+        navIndex={-1}
+        slots={{
+          summary: <div>Summary</div>,
+          profile: <div>Profile</div>,
+          cv: null,
+          assessments: null,
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Mover a oferta" }));
+
+    await waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith(
+        "No se pudo mover al candidato a oferta. Intenta de nuevo.",
+      ),
+    );
+    expect(screen.getByRole("button", { name: "Mover a oferta" })).toBeInTheDocument();
   });
 });

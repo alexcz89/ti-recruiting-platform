@@ -488,6 +488,53 @@ describeDatabase("canonical hiring process pilot writer", () => {
     expect(stored.events).toHaveLength(0);
   });
 
+  it("rejects direct OFFER writes through both status methods and generic PATCH", async () => {
+    const statusPatch = await patchApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "OFFER" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const statusPost = await postApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "OFFER" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const genericPatch = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "OFFER" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const unrelatedPatch = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coverLetter: "Offer bypass remains closed" }),
+      }),
+      { params: { id: ids.application } },
+    );
+
+    expect([statusPatch.status, statusPost.status, genericPatch.status]).toEqual([400, 400, 400]);
+    expect(unrelatedPatch.status).toBe(200);
+    expect(await storedApplication()).toMatchObject({
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+      stage: "APPLIED",
+      disposition: "ACTIVE",
+      stateVersion: 0,
+      coverLetter: "Offer bypass remains closed",
+      events: [],
+    });
+  });
+
   it("rejects every remaining direct rejection endpoint and method", async () => {
     const statusPost = await postApplicationStatus(
       new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {

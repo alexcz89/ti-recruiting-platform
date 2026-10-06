@@ -18,6 +18,10 @@ const requiredDynamicRejectionGuards = new Map<string, RegExp>([
   ["app/api/applications/[id]/status/route.ts", /if \(newStatus === "REJECTED"\)/],
   ["app/api/applications/[id]/interest/route.ts", /if \(next === "REJECTED"\)/],
 ]);
+const requiredDynamicOfferGuards = new Map<string, RegExp>([
+  ["app/api/applications/[id]/route.ts", /if \(body\.status === "OFFER"\)/],
+  ["app/api/applications/[id]/status/route.ts", /if \(newStatus === "OFFER"\)/],
+]);
 
 // Canonical infrastructure is expected to write the snapshot. Every other entry is
 // temporary legacy debt and must be removed as its writer moves in Slice 3B2/readers.
@@ -161,6 +165,41 @@ function directApplicationRejectionWriteLines(path: string) {
   return writes;
 }
 
+function directApplicationOfferWriteLines(path: string) {
+  const contents = readFileSync(path, "utf8");
+  const source = ts.createSourceFile(
+    path,
+    contents,
+    ts.ScriptTarget.Latest,
+    true,
+    path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const writes: number[] = [];
+
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const method = node.expression.name.text;
+      const model = node.expression.expression;
+      if (
+        mutationMethods.has(method) &&
+        ts.isPropertyAccessExpression(model) &&
+        model.name.text === "application"
+      ) {
+        const argument = node.arguments[0];
+        if (argument && ts.isObjectLiteralExpression(argument)) {
+          const data = dataInitializer(argument, source);
+          if (data?.getText(source).includes("OFFER")) {
+            writes.push(source.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+          }
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  source.forEachChild(visit);
+  return writes;
+}
+
 describe("Application state writer architecture", () => {
   it("allows direct production writers only through the documented allowlist", () => {
     const files = ["app", "components", "lib"].flatMap((directory) =>
@@ -207,6 +246,27 @@ describe("Application state writer architecture", () => {
       const source = readFileSync(join(root, path), "utf8");
       expect(source, `${path} must fail closed for dynamic REJECTED input`).toMatch(guard);
       expect(source).toContain("REJECT_CANDIDATE");
+    }
+  });
+
+  it("blocks direct offer writes outside canonical infrastructure", () => {
+    const files = ["app", "components", "lib"].flatMap((directory) =>
+      sourceFiles(join(root, directory)),
+    );
+    const violations: Record<string, number[]> = {};
+
+    for (const file of files) {
+      const relativePath = relative(root, file).replaceAll("\\", "/");
+      if (canonicalInfrastructure.has(relativePath)) continue;
+      const lines = directApplicationOfferWriteLines(file);
+      if (lines.length) violations[relativePath] = lines;
+    }
+    expect(violations, "Direct OFFER Application writer(s) must use MOVE_TO_OFFER").toEqual({});
+
+    for (const [path, guard] of requiredDynamicOfferGuards) {
+      const source = readFileSync(join(root, path), "utf8");
+      expect(source, `${path} must fail closed for dynamic OFFER input`).toMatch(guard);
+      expect(source).toContain("MOVE_TO_OFFER");
     }
   });
 

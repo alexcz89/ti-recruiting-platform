@@ -165,6 +165,9 @@ type TransitionApplicationResult = {
   event: StoredApplicationEvent;
   replayed: boolean;
   legacyProjectionApplied: boolean;
+  timestamps: {
+    offerAt: Date | null;
+  };
 };
 
 async function authorize(
@@ -252,6 +255,7 @@ function commandFingerprint(
 function replayResult(
   event: StoredApplicationEvent,
   fingerprint: string,
+  application: TransitionApplicationRecord,
 ): TransitionApplicationResult {
   const metadata = readReplayMetadata(event.metadata);
   if (!metadata || metadata.commandFingerprint !== fingerprint) {
@@ -269,6 +273,7 @@ function replayResult(
     event,
     replayed: true,
     legacyProjectionApplied: metadata.legacyProjectionApplied,
+    timestamps: { offerAt: application.offerAt },
   };
 }
 
@@ -290,7 +295,7 @@ async function executeTransition(
       application.id,
       idempotencyKey,
     );
-    if (priorEvent) return replayResult(priorEvent, fingerprint);
+    if (priorEvent) return replayResult(priorEvent, fingerprint, application);
   }
 
   if (!application.stage || !application.disposition) {
@@ -369,6 +374,7 @@ async function executeTransition(
     event,
     replayed: false,
     legacyProjectionApplied: Boolean(legacyProjection),
+    timestamps: { offerAt: changes.offerAt ?? application.offerAt },
   };
 }
 
@@ -416,7 +422,7 @@ export async function transitionApplication(
           application.id,
           idempotencyKey,
         );
-        return event ? replayResult(event, fingerprint) : null;
+        return event ? replayResult(event, fingerprint, application) : null;
       });
     } catch (replayError) {
       if (writeConflict || isSerializableWriteConflict(replayError)) {
