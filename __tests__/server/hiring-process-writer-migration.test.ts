@@ -150,4 +150,50 @@ describe("canonical hiring process writer migration", () => {
       expect(source).toContain("MOVE_TO_OFFER");
     }
   });
+
+  it("protects canonical OFFER/ACTIVE from every remaining legacy writer and surface", () => {
+    const helper = read("lib", "hiring-process", "offer-footprint.ts");
+    expect(helper).toContain('application.stage === "OFFER"');
+    expect(helper).toContain('application.disposition === "ACTIVE"');
+    expect(helper).not.toContain('status === "OFFER"');
+    expect(helper).not.toContain('recruiterInterest === "ACCEPTED"');
+
+    const serverWriters = [
+      read("app", "api", "applications", "[id]", "status", "route.ts"),
+      read("app", "api", "applications", "[id]", "interest", "route.ts"),
+      read("app", "api", "applications", "[id]", "route.ts"),
+      read("app", "dashboard", "jobs", "[id]", "page.tsx"),
+      read("app", "dashboard", "overview", "actions.ts"),
+    ];
+    for (const source of serverWriters) {
+      expect(source).toContain("hasCanonicalApplicationOffer");
+      expect(source).toContain("APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE");
+    }
+
+    const interestSelect = read(
+      "app",
+      "dashboard",
+      "jobs",
+      "[id]",
+      "applications",
+      "InterestSelect.tsx",
+    );
+    const applicationsPage = read(
+      "app",
+      "dashboard",
+      "jobs",
+      "[id]",
+      "applications",
+      "page.tsx",
+    );
+    const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
+    const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
+
+    expect(interestSelect).toContain("blockedByCanonicalOffer");
+    expect(applicationsPage).toContain("canonicalStage={a.stage}");
+    expect(applicationsPage).toContain("canonicalDisposition={a.disposition}");
+    expect(candidateShell).toContain("blockedByCanonicalOffer");
+    expect(kanban).toContain('moved.stage === "OFFER"');
+    expect(kanban).toContain('moved.disposition === "ACTIVE"');
+  });
 });

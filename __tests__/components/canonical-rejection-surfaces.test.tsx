@@ -57,6 +57,16 @@ const interviewApplication: AppState = {
   rejectedAt: null,
 };
 
+const offerApplication: AppState = {
+  ...interviewApplication,
+  status: "OFFER",
+  recruiterInterest: "ACCEPTED",
+  stage: "OFFER",
+  disposition: "ACTIVE",
+  stateVersion: 4,
+  offerAt: "2026-10-05T12:10:00.000Z",
+};
+
 describe("canonical rejection surfaces", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
@@ -227,5 +237,59 @@ describe("canonical rejection surfaces", () => {
       ),
     );
     expect(screen.getByRole("button", { name: "Mover a oferta" })).toBeInTheDocument();
+  });
+
+  it("does not expose working backward interest actions after canonical Offer", () => {
+    render(
+      <CandidateReviewShell
+        candidateId="candidate-1"
+        candidateName="Candidate"
+        candidateSeniority={null}
+        candidateLocation={null}
+        resumeUrl={null}
+        waHref={null}
+        fromJobId="job-1"
+        jobTitle="Job"
+        matchScore={null}
+        matchLocked={false}
+        applicationId="application-1"
+        currentApplication={offerApplication}
+        navList={[]}
+        navIndex={-1}
+        slots={{
+          summary: <div>Summary</div>,
+          profile: <div>Profile</div>,
+          cv: null,
+          assessments: null,
+        }}
+      />,
+    );
+
+    const preselected = screen.getByRole("button", { name: /Preselecto/ });
+    const interview = screen.getByRole("button", { name: /Entrevista/ });
+    expect(preselected).toBeDisabled();
+    expect(interview).toBeDisabled();
+    fireEvent.click(preselected);
+    fireEvent.click(interview);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps InterestSelect legacy choices inert for a canonical Offer", () => {
+    render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="ACCEPTED"
+        initialStateVersion={4}
+        canonicalStage="OFFER"
+        canonicalDisposition="ACTIVE"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
+    expect(screen.getByRole("option", { name: /Por revisar/ })).toBeDisabled();
+    expect(screen.getByRole("option", { name: /Preselecto/ })).toBeDisabled();
+    expect(screen.getByRole("option", { name: /Entrevista/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("option", { name: /Preselecto/ }));
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,10 @@ import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
   hasApplicationRejectionFootprint,
 } from "@/lib/hiring-process/rejection-footprint";
+import {
+  APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+  hasCanonicalApplicationOffer,
+} from "@/lib/hiring-process/offer-footprint";
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const ALLOWED: InterestKey[] = ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"];
@@ -87,11 +91,19 @@ export async function PATCH(
       );
     }
 
+    if (hasCanonicalApplicationOffer(app)) {
+      return jsonNoStore(
+        { error: "La oferta canónica no admite retroceso por APIs legacy" },
+        409,
+      );
+    }
+
     const result = await prisma.application.updateMany({
       where: {
         AND: [
           scopedWhere,
           APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+          APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
         ],
       },
       data: { recruiterInterest: next },

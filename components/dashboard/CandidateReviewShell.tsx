@@ -162,6 +162,8 @@ export default function CandidateReviewShell({
   const [notesSaved, setNotesSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
   const notesTimer = useRef<NodeJS.Timeout | null>(null);
+  const canonicalOffer =
+    app?.stage === "OFFER" && app.disposition === "ACTIVE";
 
   const prevNav = navIndex > 0 ? navList[navIndex - 1] : null;
   const nextNav = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
@@ -177,6 +179,7 @@ export default function CandidateReviewShell({
   const patchInterest = useCallback((recruiterInterest: string) => {
     if (!applicationId) return;
     if (currentInterest === "REJECTED") return;
+    if (canonicalOffer && recruiterInterest !== "REJECTED") return;
     // Actualización optimista inmediata — el botón responde al instante
     setCurrentInterest(recruiterInterest);
     startTransition(async () => {
@@ -215,7 +218,7 @@ export default function CandidateReviewShell({
         setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
       }
     });
-  }, [applicationId, app?.recruiterInterest, app?.stateVersion, currentInterest]);
+  }, [applicationId, app?.recruiterInterest, app?.stateVersion, canonicalOffer, currentInterest]);
 
   const moveToOffer = useCallback(() => {
     if (
@@ -402,11 +405,12 @@ export default function CandidateReviewShell({
               {(["MAYBE", "ACCEPTED", "REJECTED"] as const).map((key) => {
                 const m = INTEREST_MAP[key];
                 const isSelected = currentInterest === key;
+                const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
                 return (
                   <button
                     key={key}
                     type="button"
-                    disabled={isPending}
+                    disabled={isPending || blockedByCanonicalOffer}
                     onClick={() => {
                       if (key === "REJECTED" && isSelected) return;
                       patchInterest(isSelected ? "REVIEW" : key);
