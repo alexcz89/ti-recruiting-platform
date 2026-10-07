@@ -7,7 +7,10 @@ import { PATCH as patchApplicationStatus } from "@/app/api/applications/[id]/sta
 import { POST as postApplicationStatus } from "@/app/api/applications/[id]/status/route";
 import { PATCH as patchApplicationInterest } from "@/app/api/applications/[id]/interest/route";
 import { PATCH as patchApplication } from "@/app/api/applications/[id]/route";
+import { DELETE as deleteApplication } from "@/app/api/applications/[id]/route";
 import { PATCH as patchApplicationNotes } from "@/app/api/applications/[id]/notes/route";
+import { DELETE as deleteJob } from "@/app/api/jobs/[id]/route";
+import { POST as deleteDashboardJob } from "@/app/dashboard/jobs/delete/route";
 import { transitionApplication } from "@/lib/hiring-process/transition-application";
 
 const mocks = vi.hoisted(() => ({
@@ -856,5 +859,223 @@ describeDatabase("canonical hiring process pilot writer", () => {
     });
     expect(stored.status).toBe("REVIEWING");
     expect(stored.events[0].visibility).toBe("INTERNAL");
+  });
+
+  it.each([
+    {
+      name: "canonical",
+      stage: "CLOSED" as const,
+      disposition: "HIRED" as const,
+      legacyStatus: "OFFER" as const,
+    },
+    {
+      name: "legacy",
+      stage: null,
+      disposition: null,
+      legacyStatus: "HIRED" as const,
+    },
+  ])("protects a $name HIRED row from generic writers and deletes", async ({
+    stage,
+    disposition,
+    legacyStatus,
+  }) => {
+    await prisma.application.update({
+      where: { id: ids.application },
+      data: {
+        stage,
+        disposition,
+        stateVersion: stage ? 3 : 0,
+        status: legacyStatus,
+        recruiterInterest: "ACCEPTED",
+        hiredAt: new Date("2026-10-06T10:00:00.000Z"),
+      },
+    });
+
+    const statusResponses = [];
+    for (const status of ["SUBMITTED", "REVIEWING", "INTERVIEW", "OFFER"]) {
+      statusResponses.push(await patchApplicationStatus(
+        new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        }),
+        { params: { id: ids.application } },
+      ));
+    }
+    expect(statusResponses.map((response) => response.status)).toEqual([409, 409, 409, 400]);
+
+    const interestResponses = [];
+    for (const recruiterInterest of ["REVIEW", "MAYBE", "ACCEPTED"]) {
+      interestResponses.push(await patchApplicationInterest(
+        new Request(`http://localhost/api/applications/${ids.application}/interest`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recruiterInterest }),
+        }),
+        { params: { id: ids.application } },
+      ));
+    }
+    expect(interestResponses.map((response) => response.status)).toEqual([409, 409, 409]);
+
+    const genericState = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REVIEWING" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const unrelated = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resumeUrl: "https://example.invalid/hired.pdf", coverLetter: "Contratado" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    expect(genericState.status).toBe(409);
+    expect(unrelated.status).toBe(200);
+    expect(await updateApplicationStatus(ids.application, "REVIEWING")).toEqual({
+      success: false,
+      error: "HIRED es terminal",
+    });
+
+    const applicationDelete = await deleteApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, { method: "DELETE" }),
+      { params: { id: ids.application } },
+    );
+    const jobDelete = await deleteJob(
+      new NextRequest(`http://localhost/api/jobs/${ids.job}`, { method: "DELETE" }),
+      { params: { id: ids.job } },
+    );
+    const form = new FormData();
+    form.set("jobId", ids.job);
+    const dashboardDelete = await deleteDashboardJob(
+      new Request("http://localhost/dashboard/jobs/delete", { method: "POST", body: form }),
+    );
+    expect([applicationDelete.status, jobDelete.status, dashboardDelete.status]).toEqual([409, 409, 409]);
+
+    expect(await storedApplication()).toMatchObject({
+      stage,
+      disposition,
+      status: legacyStatus,
+      recruiterInterest: "ACCEPTED",
+      resumeUrl: "https://example.invalid/hired.pdf",
+      coverLetter: "Contratado",
+    });
+    expect(await prisma.job.count({ where: { id: ids.job } })).toBe(1);
+  });
+
+  it("blocks direct HIRED inputs and preserves deletion for a non-HIRED application", async () => {
+    const statusPatch = await patchApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "HIRED" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const statusPost = await postApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "HIRED" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const generic = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "HIRED" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    expect([statusPatch.status, statusPost.status, generic.status]).toEqual([400, 400, 400]);
+
+    const deleted = await deleteApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, { method: "DELETE" }),
+      { params: { id: ids.application } },
+    );
+    expect(deleted.status).toBe(200);
+    expect(await prisma.application.count({ where: { id: ids.application } })).toBe(0);
+  });
+
+  it("preserves API Job deletion when the job has no HIRED application", async () => {
+    const response = await deleteJob(
+      new NextRequest(`http://localhost/api/jobs/${ids.job}`, { method: "DELETE" }),
+      { params: { id: ids.job } },
+    );
+    expect(response.status).toBe(200);
+    expect(await prisma.job.count({ where: { id: ids.job } })).toBe(0);
+    expect(await prisma.application.count({ where: { jobId: ids.job } })).toBe(0);
+  });
+
+  it("preserves dashboard Job deletion when the job has no HIRED application", async () => {
+    const form = new FormData();
+    form.set("jobId", ids.job);
+    const response = await deleteDashboardJob(
+      new Request("http://localhost/dashboard/jobs/delete", { method: "POST", body: form }),
+    );
+    expect(response.status).toBe(200);
+    expect(await prisma.job.count({ where: { id: ids.job } })).toBe(0);
+    expect(await prisma.application.count({ where: { jobId: ids.job } })).toBe(0);
+  });
+
+  async function addApplicationHistory() {
+    await prisma.applicationEvent.create({
+      data: {
+        applicationId: ids.application,
+        companyId: ids.company,
+        actorType: "SYSTEM",
+        type: "APPLICATION_CREATED",
+        toStage: "APPLIED",
+        toDisposition: "ACTIVE",
+        visibility: "INTERNAL",
+        happenedAt: new Date("2026-10-03T12:00:00.000Z"),
+      },
+    });
+  }
+
+  it("returns 409 instead of deleting a non-HIRED application with canonical history", async () => {
+    await addApplicationHistory();
+
+    const response = await deleteApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, { method: "DELETE" }),
+      { params: { id: ids.application } },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await prisma.application.count({ where: { id: ids.application } })).toBe(1);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: ids.application } })).toBe(1);
+  });
+
+  it("returns 409 without partial API Job deletion when canonical history exists", async () => {
+    await addApplicationHistory();
+
+    const response = await deleteJob(
+      new NextRequest(`http://localhost/api/jobs/${ids.job}`, { method: "DELETE" }),
+      { params: { id: ids.job } },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await prisma.job.count({ where: { id: ids.job } })).toBe(1);
+    expect(await prisma.application.count({ where: { id: ids.application } })).toBe(1);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: ids.application } })).toBe(1);
+  });
+
+  it("returns 409 without partial dashboard Job deletion when canonical history exists", async () => {
+    await addApplicationHistory();
+    const form = new FormData();
+    form.set("jobId", ids.job);
+
+    const response = await deleteDashboardJob(
+      new Request("http://localhost/dashboard/jobs/delete", { method: "POST", body: form }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await prisma.job.count({ where: { id: ids.job } })).toBe(1);
+    expect(await prisma.application.count({ where: { id: ids.application } })).toBe(1);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: ids.application } })).toBe(1);
   });
 });

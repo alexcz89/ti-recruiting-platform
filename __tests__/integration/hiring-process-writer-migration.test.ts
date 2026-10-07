@@ -123,6 +123,20 @@ async function createInterviewApplication() {
   });
 }
 
+async function createOfferApplication() {
+  const application = await createApplication();
+  return prisma.application.update({
+    where: { id: application.id },
+    data: {
+      stage: "OFFER",
+      disposition: "ACTIVE",
+      status: "OFFER",
+      recruiterInterest: "ACCEPTED",
+      offerAt: new Date("2026-10-05T12:10:00.000Z"),
+    },
+  });
+}
+
 describeDatabase("canonical hiring process writer migration", () => {
   beforeEach(async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
@@ -979,5 +993,339 @@ describeDatabase("canonical hiring process writer migration", () => {
       status: "SUBMITTED",
       recruiterInterest: "REVIEW",
     });
+  });
+
+  it("hires only OFFER/ACTIVE with one BOTH event and replays the exact hiredAt", async () => {
+    const application = await createOfferApplication();
+    const command = {
+      intent: "HIRE_CANDIDATE" as const,
+      expectedVersion: 1,
+      commandId: "qa-hire-candidate",
+    };
+
+    const first = await executeApplicationIntent({
+      applicationId: application.id,
+      command,
+      actor: recruiterActor,
+    });
+    const storedAfterFirst = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: true },
+    });
+    const replay = await executeApplicationIntent({
+      applicationId: application.id,
+      command,
+      actor: recruiterActor,
+    });
+
+    expect(first).toMatchObject({
+      state: { stage: "CLOSED", disposition: "HIRED", stateVersion: 2 },
+      legacy: { status: "HIRED", recruiterInterest: "ACCEPTED", stateVersion: 2 },
+      replayed: false,
+    });
+    expect(storedAfterFirst.hiredAt).toBeInstanceOf(Date);
+    expect(first.timestamps.hiredAt).toEqual(storedAfterFirst.hiredAt);
+    expect(replay.replayed).toBe(true);
+    expect(replay.timestamps.hiredAt).toEqual(storedAfterFirst.hiredAt);
+    expect(storedAfterFirst.events.filter((event) => event.type === "CANDIDATE_HIRED")).toHaveLength(1);
+    expect(storedAfterFirst.events.find((event) => event.type === "CANDIDATE_HIRED")).toMatchObject({
+      actorType: "RECRUITER",
+      actorId: ids.recruiter,
+      fromStage: "OFFER",
+      toStage: "CLOSED",
+      fromDisposition: "ACTIVE",
+      toDisposition: "HIRED",
+      visibility: "BOTH",
+    });
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { ...command, expectedVersion: 2 },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(IdempotencyKeyConflictError);
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 2, commandId: "qa-new-hire-command" },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+  });
+
+  it.each([
+    ["APPLIED", "ACTIVE"],
+    ["REVIEW", "ACTIVE"],
+    ["ASSESSMENT", "ACTIVE"],
+    ["INTERVIEW", "ACTIVE"],
+    ["OFFER", "HOLD"],
+    ["CLOSED", "REJECTED"],
+  ] as const)("rejects HIRE_CANDIDATE from %s/%s", async (stage, disposition) => {
+    const application = await createApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { stage, disposition },
+    });
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 1, commandId: `qa-hire-${stage}-${disposition}` },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+  });
+
+  it("enforces HIRE_CANDIDATE tenant, role, admin, stale-version, and concurrency rules", async () => {
+    let application = await createOfferApplication();
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 0, commandId: "qa-hire-stale" },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 1, commandId: "qa-hire-cross-tenant" },
+        actor: { type: "RECRUITER", id: ids.otherRecruiter, companyId: ids.otherCompany },
+      }),
+    ).rejects.toBeInstanceOf(ApplicationNotFoundError);
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 1, commandId: "qa-hire-candidate-actor" },
+        actor: { type: "CANDIDATE", id: ids.candidate, companyId: null },
+      }),
+    ).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+
+    const adminResult = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "HIRE_CANDIDATE", expectedVersion: 1, commandId: "qa-hire-admin" },
+      actor: { type: "ADMIN", id: ids.admin, companyId: null },
+    });
+    expect(adminResult.state).toMatchObject({ stage: "CLOSED", disposition: "HIRED" });
+
+    await cleanup();
+    await fixtures();
+    application = await createOfferApplication();
+    const results = await Promise.allSettled([
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 1, commandId: "qa-hire-race-a" },
+        actor: recruiterActor,
+      }),
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 1, commandId: "qa-hire-race-b" },
+        actor: recruiterActor,
+      }),
+    ]);
+    const applied = results.filter(
+      (result) => result.status === "fulfilled" && result.value.replayed === false,
+    );
+    expect(applied).toHaveLength(1);
+    expect(await prisma.applicationEvent.count({
+      where: { applicationId: application.id, type: "CANDIDATE_HIRED" },
+    })).toBe(1);
+  });
+
+  it("implements the exact flag-off HIRE_CANDIDATE source and retry contracts", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const existingHiredAt = new Date("2026-10-04T10:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "OFFER", recruiterInterest: "ACCEPTED", hiredAt: existingHiredAt },
+    });
+    const command = { intent: "HIRE_CANDIDATE" as const, expectedVersion: 0, commandId: "qa-legacy-hire" };
+
+    const first = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const afterFirst = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+    const retry = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const afterRetry = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+
+    expect(first.replayed).toBe(false);
+    expect(afterFirst).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "HIRED",
+      recruiterInterest: "ACCEPTED",
+      hiredAt: existingHiredAt,
+    });
+    expect(retry.replayed).toBe(true);
+    expect(retry.timestamps.hiredAt).toEqual(existingHiredAt);
+    expect(afterRetry.updatedAt).toEqual(afterFirst.updatedAt);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("sets flag-off hiredAt once and does not overwrite a concurrent winner", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "OFFER", recruiterInterest: "ACCEPTED", hiredAt: null },
+    });
+    const results = await Promise.allSettled([
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 0, commandId: "qa-legacy-hire-race-a" },
+        actor: recruiterActor,
+      }),
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "HIRE_CANDIDATE", expectedVersion: 0, commandId: "qa-legacy-hire-race-b" },
+        actor: recruiterActor,
+      }),
+    ]);
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+
+    const writes = results.filter(
+      (result) => result.status === "fulfilled" && result.value.replayed === false,
+    );
+    expect(writes).toHaveLength(1);
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "HIRED",
+      recruiterInterest: "ACCEPTED",
+    });
+    expect(stored.hiredAt).toBeInstanceOf(Date);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("does not overwrite hiredAt when a concurrent writer wins before the legacy CAS", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "OFFER", recruiterInterest: "ACCEPTED", hiredAt: null },
+    });
+    const concurrentHiredAt = new Date("2026-10-06T14:00:00.000Z");
+    let releaseRowLock = () => {};
+    let reportRowLock = () => {};
+    const rowLockReady = new Promise<void>((resolve) => {
+      reportRowLock = resolve;
+    });
+    const rowLockRelease = new Promise<void>((resolve) => {
+      releaseRowLock = resolve;
+    });
+    const concurrentWinner = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT "id"
+        FROM "Application"
+        WHERE "id" = ${application.id}
+        FOR UPDATE
+      `;
+      reportRowLock();
+      await rowLockRelease;
+      await tx.application.update({
+        where: { id: application.id },
+        data: { hiredAt: concurrentHiredAt },
+      });
+    });
+    await rowLockReady;
+
+    const command = executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "HIRE_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-hire-hired-at-race",
+      },
+      actor: recruiterActor,
+    });
+    const losingCommand = expect(command).rejects.toBeInstanceOf(
+      ConcurrentApplicationTransitionError,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    releaseRowLock();
+    await concurrentWinner;
+    await losingCommand;
+
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "OFFER",
+      recruiterInterest: "ACCEPTED",
+      hiredAt: concurrentHiredAt,
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("preserves null hiredAt on an exact flag-off HIRED/ACCEPTED retry", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "HIRED", recruiterInterest: "ACCEPTED", hiredAt: null },
+    });
+    const before = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+
+    const result = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "HIRE_CANDIDATE", expectedVersion: 0, commandId: "qa-legacy-hire-null" },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+
+    expect(result.replayed).toBe(true);
+    expect(result.timestamps.hiredAt).toBeNull();
+    expect(stored.hiredAt).toBeNull();
+    expect(stored.updatedAt).toEqual(before.updatedAt);
+  });
+
+  it("fails closed for ambiguous flag-off HIRE_CANDIDATE tuples and existing HIRED mutation", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const cases = [
+      { status: "INTERVIEW", interest: "ACCEPTED" },
+      { status: "REVIEWING", interest: "ACCEPTED" },
+      { status: "SUBMITTED", interest: "ACCEPTED" },
+      { status: "OFFER", interest: "REVIEW" },
+      { status: "OFFER", interest: "MAYBE" },
+      { status: "HIRED", interest: "REVIEW" },
+      { status: "HIRED", interest: "MAYBE" },
+      { status: "HIRED", interest: "REJECTED" },
+      { status: "REJECTED", interest: "REJECTED" },
+    ] as const;
+
+    for (const [index, tuple] of cases.entries()) {
+      const application = await createRolloutApplication();
+      await prisma.application.update({
+        where: { id: application.id },
+        data: { status: tuple.status, recruiterInterest: tuple.interest },
+      });
+      await expect(
+        executeApplicationIntent({
+          applicationId: application.id,
+          command: { intent: "HIRE_CANDIDATE", expectedVersion: 0, commandId: `qa-legacy-hire-invalid-${index}` },
+          actor: recruiterActor,
+        }),
+      ).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+      await prisma.application.delete({ where: { id: application.id } });
+    }
+
+    const legacyHired = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: legacyHired.id },
+      data: { status: "HIRED", recruiterInterest: "ACCEPTED" },
+    });
+    for (const intent of ["START_REVIEW", "MOVE_TO_INTERVIEW", "MOVE_TO_OFFER", "REJECT_CANDIDATE"] as const) {
+      await expect(
+        executeApplicationIntent({
+          applicationId: legacyHired.id,
+          command: { intent, expectedVersion: 0, commandId: `qa-hired-terminal-${intent}` },
+          actor: recruiterActor,
+        }),
+      ).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    }
   });
 });

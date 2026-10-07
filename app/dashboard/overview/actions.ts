@@ -14,6 +14,10 @@ import {
   APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
   hasCanonicalApplicationOffer,
 } from "@/lib/hiring-process/offer-footprint";
+import {
+  APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+  hasApplicationHiredFootprint,
+} from "@/lib/hiring-process/hired-footprint";
 
 export async function updateApplicationStatus(
   applicationId: string,
@@ -47,11 +51,16 @@ export async function updateApplicationStatus(
         stage: true,
         disposition: true,
         stateVersion: true,
+        status: true,
       },
     });
 
     if (!application) {
       return { success: false, error: "Aplicación no encontrada" };
+    }
+
+    if (hasApplicationHiredFootprint(application)) {
+      return { success: false, error: "HIRED es terminal" };
     }
 
     if (status === "REVIEWING" && hasCanonicalApplicationOffer(application)) {
@@ -127,7 +136,11 @@ export async function updateApplicationStatus(
       // Legacy behavior remains the authority while the pilot flag is off.
       const updated = await prisma.application.updateMany({
         where: {
-          AND: [scopedWhere, APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE],
+          AND: [
+            scopedWhere,
+            APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+            APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+          ],
         },
         data: {
           status,

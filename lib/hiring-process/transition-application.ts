@@ -167,6 +167,7 @@ type TransitionApplicationResult = {
   legacyProjectionApplied: boolean;
   timestamps: {
     offerAt: Date | null;
+    hiredAt: Date | null;
   };
 };
 
@@ -273,7 +274,10 @@ function replayResult(
     event,
     replayed: true,
     legacyProjectionApplied: metadata.legacyProjectionApplied,
-    timestamps: { offerAt: application.offerAt },
+    timestamps: {
+      offerAt: application.offerAt,
+      hiredAt: application.hiredAt,
+    },
   };
 }
 
@@ -374,7 +378,10 @@ async function executeTransition(
     event,
     replayed: false,
     legacyProjectionApplied: Boolean(legacyProjection),
-    timestamps: { offerAt: changes.offerAt ?? application.offerAt },
+    timestamps: {
+      offerAt: changes.offerAt ?? application.offerAt,
+      hiredAt: changes.hiredAt ?? application.hiredAt,
+    },
   };
 }
 

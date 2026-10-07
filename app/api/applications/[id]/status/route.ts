@@ -14,6 +14,10 @@ import {
   APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
   hasCanonicalApplicationOffer,
 } from "@/lib/hiring-process/offer-footprint";
+import {
+  APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+  hasApplicationHiredFootprint,
+} from "@/lib/hiring-process/hired-footprint";
 
 const ALLOWED = new Set<ApplicationStatus>([
   "SUBMITTED",
@@ -103,6 +107,13 @@ async function updateStatus(id: string, status: string) {
     );
   }
 
+  if (newStatus === "HIRED") {
+    return jsonNoStore(
+      { error: "HIRED requiere el comando HIRE_CANDIDATE" },
+      400,
+    );
+  }
+
   if (hasApplicationRejectionFootprint(app)) {
     return jsonNoStore(
       { error: "Reabrir una postulación rechazada está fuera de este slice" },
@@ -117,6 +128,13 @@ async function updateStatus(id: string, status: string) {
     );
   }
 
+  if (hasApplicationHiredFootprint(app)) {
+    return jsonNoStore(
+      { error: "HIRED es terminal y no admite reapertura" },
+      409,
+    );
+  }
+
   const authorizedWhere = role === "ADMIN"
     ? { id }
     : { id, job: { companyId: companyId as string } };
@@ -127,6 +145,7 @@ async function updateStatus(id: string, status: string) {
         authorizedWhere,
         APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
         APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+        APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
       ],
     },
     data: {
@@ -137,7 +156,7 @@ async function updateStatus(id: string, status: string) {
   });
   if (result.count !== 1) {
     return jsonNoStore(
-      { error: "Reabrir una postulación rechazada está fuera de este slice" },
+      { error: "La postulación terminal no admite reapertura" },
       409,
     );
   }

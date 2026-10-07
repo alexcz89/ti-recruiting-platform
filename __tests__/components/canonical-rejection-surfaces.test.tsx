@@ -67,6 +67,15 @@ const offerApplication: AppState = {
   offerAt: "2026-10-05T12:10:00.000Z",
 };
 
+const hiredApplication: AppState = {
+  ...offerApplication,
+  status: "HIRED",
+  stage: "CLOSED",
+  disposition: "HIRED",
+  stateVersion: 5,
+  hiredAt: "2026-10-05T12:15:00.000Z",
+};
+
 describe("canonical rejection surfaces", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
@@ -290,6 +299,92 @@ describe("canonical rejection surfaces", () => {
     expect(screen.getByRole("option", { name: /Preselecto/ })).toBeDisabled();
     expect(screen.getByRole("option", { name: /Entrevista/ })).toBeDisabled();
     fireEvent.click(screen.getByRole("option", { name: /Preselecto/ }));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("sends exactly one HIRE_CANDIDATE command and applies its transaction result", async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          application: {
+            stage: "CLOSED",
+            disposition: "HIRED",
+            status: "HIRED",
+            recruiterInterest: "ACCEPTED",
+            stateVersion: 5,
+            hiredAt: "2026-10-05T12:15:00.000Z",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    render(
+      <CandidateReviewShell
+        candidateId="candidate-1"
+        candidateName="Candidate"
+        candidateSeniority={null}
+        candidateLocation={null}
+        resumeUrl={null}
+        waHref={null}
+        fromJobId="job-1"
+        jobTitle="Job"
+        matchScore={null}
+        matchLocked={false}
+        applicationId="application-1"
+        currentApplication={offerApplication}
+        navList={[]}
+        navIndex={-1}
+        slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
+      />,
+    );
+
+    const hireButton = screen.getByRole("button", { name: "Contratar" });
+    fireEvent.click(hireButton);
+    fireEvent.click(hireButton);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("/api/applications/application-1/intent");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      intent: "HIRE_CANDIDATE",
+      expectedVersion: 4,
+    });
+    expect(String(init?.body)).not.toContain("/status");
+    expect(String(init?.body)).not.toContain("/interest");
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Contratar" })).not.toBeInTheDocument());
+    expect(screen.getByText("Candidato contratado")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Preselecto/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Descartar/ })).toBeDisabled();
+    expect(screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")).toBeEnabled();
+  });
+
+  it("keeps canonical and legacy HIRED InterestSelect controls inert", () => {
+    const { rerender } = render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="ACCEPTED"
+        initialStateVersion={5}
+        legacyStatus="HIRED"
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
+    expect(fetch).not.toHaveBeenCalled();
+
+    rerender(
+      <InterestSelect
+        applicationId="application-1"
+        initial="ACCEPTED"
+        initialStateVersion={5}
+        legacyStatus="OFFER"
+        canonicalStage={hiredApplication.stage}
+        canonicalDisposition={hiredApplication.disposition}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeDisabled();
     expect(fetch).not.toHaveBeenCalled();
   });
 });

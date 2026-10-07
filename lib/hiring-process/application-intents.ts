@@ -21,6 +21,7 @@ export const APPLICATION_INTENTS = [
   "MOVE_TO_INTERVIEW",
   "MOVE_TO_OFFER",
   "REJECT_CANDIDATE",
+  "HIRE_CANDIDATE",
 ] as const;
 
 export type ApplicationIntent = (typeof APPLICATION_INTENTS)[number];
@@ -45,6 +46,8 @@ export function applicationIntentTarget(intent: ApplicationIntent) {
       return { targetStage: "OFFER" as const, targetDisposition: "ACTIVE" as const };
     case "REJECT_CANDIDATE":
       return { targetStage: "CLOSED" as const, targetDisposition: "REJECTED" as const };
+    case "HIRE_CANDIDATE":
+      return { targetStage: "CLOSED" as const, targetDisposition: "HIRED" as const };
   }
 }
 
@@ -58,6 +61,8 @@ function legacyProjectionForIntent(intent: ApplicationIntent) {
       return { status: "OFFER" as const, recruiterInterest: "ACCEPTED" as const };
     case "REJECT_CANDIDATE":
       return { status: "REJECTED" as const, recruiterInterest: "REJECTED" as const };
+    case "HIRE_CANDIDATE":
+      return { status: "HIRED" as const, recruiterInterest: "ACCEPTED" as const };
   }
 }
 
@@ -77,13 +82,39 @@ export async function executeApplicationIntent(input: {
   const { applicationId, command, actor } = input;
 
   if (
-    (command.intent === "REJECT_CANDIDATE" || command.intent === "MOVE_TO_OFFER") &&
+    (command.intent === "REJECT_CANDIDATE" ||
+      command.intent === "MOVE_TO_OFFER" ||
+      command.intent === "HIRE_CANDIDATE") &&
     (!actor.id || (actor.type !== "RECRUITER" && actor.type !== "ADMIN"))
   ) {
     throw new UnauthorizedApplicationTransitionError();
   }
 
   if (isCanonicalHiringProcessEnabled()) {
+    if (command.intent === "HIRE_CANDIDATE") {
+      const scopedWhere = applicationWhereForActor(
+        { role: actor.type, companyId: actor.companyId ?? null },
+        { applicationId },
+      );
+      if (!scopedWhere) throw new UnauthorizedApplicationTransitionError();
+
+      const source = await prisma.application.findFirst({
+        where: scopedWhere,
+        select: { stage: true, disposition: true },
+      });
+      if (!source) throw new ApplicationNotFoundError();
+
+      const isPotentialReplay =
+        source.stage === "CLOSED" && source.disposition === "HIRED";
+      const isApprovedSource =
+        source.stage === "OFFER" && source.disposition === "ACTIVE";
+      if (!isApprovedSource && !isPotentialReplay) {
+        throw new InvalidApplicationTransitionError(
+          "HIRE_CANDIDATE requiere OFFER / ACTIVE",
+        );
+      }
+    }
+
     if (command.intent === "MOVE_TO_OFFER") {
       const scopedWhere = applicationWhereForActor(
         { role: actor.type, companyId: actor.companyId ?? null },
@@ -156,7 +187,11 @@ export async function executeApplicationIntent(input: {
   );
   if (!scopedWhere) throw new UnauthorizedApplicationTransitionError();
 
-  if (command.intent === "REJECT_CANDIDATE" || command.intent === "MOVE_TO_OFFER") {
+  if (
+    command.intent === "REJECT_CANDIDATE" ||
+    command.intent === "MOVE_TO_OFFER" ||
+    command.intent === "HIRE_CANDIDATE"
+  ) {
     const actorId = actor.id;
     if (!actorId || (actor.type !== "RECRUITER" && actor.type !== "ADMIN")) {
       throw new UnauthorizedApplicationTransitionError();
@@ -198,6 +233,7 @@ export async function executeApplicationIntent(input: {
       status: true,
       recruiterInterest: true,
       offerAt: true,
+      hiredAt: true,
       rejectedAt: true,
     },
   });
@@ -215,6 +251,40 @@ export async function executeApplicationIntent(input: {
 
   // Temporary legacy exception: removed when the canonical flag becomes authoritative.
   const projection = legacyProjectionForIntent(command.intent);
+  const hasLegacyHiredFootprint = application.status === "HIRED";
+
+  if (command.intent === "HIRE_CANDIDATE") {
+    const isExactLegacyRetry =
+      application.status === "HIRED" &&
+      application.recruiterInterest === "ACCEPTED";
+    if (isExactLegacyRetry) {
+      return {
+        state: null,
+        event: null,
+        replayed: true,
+        legacyProjectionApplied: true,
+        timestamps: {
+          offerAt: application.offerAt,
+          hiredAt: application.hiredAt,
+        },
+        legacy: { ...projection, stateVersion: application.stateVersion },
+      };
+    }
+
+    const isExactLegacySource =
+      application.status === "OFFER" &&
+      application.recruiterInterest === "ACCEPTED";
+    if (!isExactLegacySource) {
+      throw new InvalidApplicationTransitionError(
+        "HIRE_CANDIDATE legacy requiere OFFER / ACCEPTED",
+      );
+    }
+  } else if (hasLegacyHiredFootprint) {
+    throw new InvalidApplicationTransitionError(
+      "HIRED es terminal y no admite otra transición legacy",
+    );
+  }
+
   if (command.intent === "MOVE_TO_OFFER") {
     const isExactLegacyRetry =
       application.status === "OFFER" &&
@@ -225,7 +295,10 @@ export async function executeApplicationIntent(input: {
         event: null,
         replayed: true,
         legacyProjectionApplied: true,
-        timestamps: { offerAt: application.offerAt },
+        timestamps: {
+          offerAt: application.offerAt,
+          hiredAt: application.hiredAt,
+        },
         legacy: { ...projection, stateVersion: application.stateVersion },
       };
     }
@@ -250,7 +323,10 @@ export async function executeApplicationIntent(input: {
       event: null,
       replayed: true,
       legacyProjectionApplied: true,
-      timestamps: { offerAt: application.offerAt },
+      timestamps: {
+        offerAt: application.offerAt,
+        hiredAt: application.hiredAt,
+      },
       legacy: { ...projection, stateVersion: application.stateVersion },
     };
   }
@@ -269,6 +345,7 @@ export async function executeApplicationIntent(input: {
       status: application.status,
       recruiterInterest: application.recruiterInterest,
       offerAt: application.offerAt,
+      hiredAt: application.hiredAt,
       rejectedAt: application.rejectedAt,
     },
     data: {
@@ -277,6 +354,9 @@ export async function executeApplicationIntent(input: {
       ...(command.intent === "MOVE_TO_INTERVIEW" ? { interviewAt: happenedAt } : {}),
       ...(command.intent === "MOVE_TO_OFFER"
         ? { offerAt: application.offerAt ?? happenedAt }
+        : {}),
+      ...(command.intent === "HIRE_CANDIDATE"
+        ? { hiredAt: application.hiredAt ?? happenedAt }
         : {}),
       ...(command.intent === "REJECT_CANDIDATE"
         ? {
@@ -303,6 +383,10 @@ export async function executeApplicationIntent(input: {
         command.intent === "MOVE_TO_OFFER"
           ? application.offerAt ?? happenedAt
           : application.offerAt,
+      hiredAt:
+        command.intent === "HIRE_CANDIDATE"
+          ? application.hiredAt ?? happenedAt
+          : application.hiredAt,
     },
     legacy: { ...projection, stateVersion: application.stateVersion },
   };
