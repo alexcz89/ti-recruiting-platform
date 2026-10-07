@@ -13,6 +13,10 @@ import {
   APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
   hasCanonicalApplicationOffer,
 } from "@/lib/hiring-process/offer-footprint";
+import {
+  APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+  hasApplicationHiredFootprint,
+} from "@/lib/hiring-process/hired-footprint";
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 const ALLOWED: InterestKey[] = ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"];
@@ -98,19 +102,27 @@ export async function PATCH(
       );
     }
 
+    if (hasApplicationHiredFootprint(app)) {
+      return jsonNoStore(
+        { error: "HIRED es terminal y no admite cambios de interés" },
+        409,
+      );
+    }
+
     const result = await prisma.application.updateMany({
       where: {
         AND: [
           scopedWhere,
           APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
           APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+          APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
         ],
       },
       data: { recruiterInterest: next },
     });
     if (result.count !== 1) {
       return jsonNoStore(
-        { error: "Reabrir una postulación rechazada está fuera de este slice" },
+        { error: "La postulación terminal no admite cambios de interés" },
         409,
       );
     }

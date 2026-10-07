@@ -62,12 +62,14 @@ export default function InterestSelect({
   applicationId,
   initial,
   initialStateVersion,
+  legacyStatus = "",
   canonicalStage = null,
   canonicalDisposition = null,
 }: {
   applicationId: string;
   initial: InterestKey;
   initialStateVersion: number;
+  legacyStatus?: string;
   canonicalStage?: string | null;
   canonicalDisposition?: string | null;
 }) {
@@ -79,8 +81,12 @@ export default function InterestSelect({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canonicalOffer =
     canonicalStage === "OFFER" && canonicalDisposition === "ACTIVE";
+  const terminalHired =
+    legacyStatus === "HIRED" ||
+    (canonicalStage === "CLOSED" && canonicalDisposition === "HIRED");
 
   async function updateInterest(next: InterestKey) {
+    if (terminalHired) return;
     const prev = value;
     setValue(next); // UI optimista
 
@@ -132,6 +138,7 @@ export default function InterestSelect({
 
   const handleSelect = (next: InterestKey) => {
     setOpen(false);
+    if (terminalHired) return;
     if (value === "REJECTED") return;
     if (canonicalOffer && next !== "REJECTED") return;
     if (next === value) return;
@@ -139,7 +146,7 @@ export default function InterestSelect({
   };
 
   const handleToggle = () => {
-    if (isPending) return;
+    if (isPending || terminalHired) return;
     setOpen((o) => !o);
   };
 
@@ -190,7 +197,7 @@ export default function InterestSelect({
         className={`${baseButtonClasses} ${COLOR_CLASSES[value]}`}
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
-        disabled={isPending}
+        disabled={isPending || terminalHired}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -219,7 +226,7 @@ export default function InterestSelect({
                 type="button"
                 role="option"
                 aria-selected={isActive}
-                disabled={blockedByCanonicalOffer}
+                disabled={blockedByCanonicalOffer || terminalHired}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelect(key)}
                 className={`

@@ -164,6 +164,9 @@ export default function CandidateReviewShell({
   const notesTimer = useRef<NodeJS.Timeout | null>(null);
   const canonicalOffer =
     app?.stage === "OFFER" && app.disposition === "ACTIVE";
+  const terminalHired =
+    app?.status === "HIRED" ||
+    (app?.stage === "CLOSED" && app.disposition === "HIRED");
 
   const prevNav = navIndex > 0 ? navList[navIndex - 1] : null;
   const nextNav = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
@@ -178,6 +181,7 @@ export default function CandidateReviewShell({
 
   const patchInterest = useCallback((recruiterInterest: string) => {
     if (!applicationId) return;
+    if (terminalHired) return;
     if (currentInterest === "REJECTED") return;
     if (canonicalOffer && recruiterInterest !== "REJECTED") return;
     // Actualización optimista inmediata — el botón responde al instante
@@ -218,7 +222,7 @@ export default function CandidateReviewShell({
         setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
       }
     });
-  }, [applicationId, app?.recruiterInterest, app?.stateVersion, canonicalOffer, currentInterest]);
+  }, [applicationId, app?.recruiterInterest, app?.stateVersion, canonicalOffer, currentInterest, terminalHired]);
 
   const moveToOffer = useCallback(() => {
     if (
@@ -261,6 +265,51 @@ export default function CandidateReviewShell({
         router.refresh();
       } catch {
         toastError("No se pudo mover al candidato a oferta. Intenta de nuevo.");
+      }
+    });
+  }, [applicationId, app, router]);
+
+  const hireCandidate = useCallback(() => {
+    if (
+      !applicationId ||
+      app?.stage !== "OFFER" ||
+      app.disposition !== "ACTIVE"
+    ) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/applications/${applicationId}/intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            intent: "HIRE_CANDIDATE",
+            expectedVersion: app.stateVersion,
+            commandId: crypto.randomUUID(),
+          }),
+        });
+        if (!res.ok) {
+          toastError("No se pudo contratar al candidato. Intenta de nuevo.");
+          return;
+        }
+
+        const data = await res.json();
+        const updated = data.application;
+        setCurrentInterest(updated.recruiterInterest);
+        setApp((prev) => prev ? {
+          ...prev,
+          stage: updated.stage,
+          disposition: updated.disposition,
+          status: updated.status,
+          recruiterInterest: updated.recruiterInterest,
+          stateVersion: updated.stateVersion,
+          hiredAt: updated.hiredAt,
+        } : prev);
+        toastSuccess("Candidato contratado");
+        router.refresh();
+      } catch {
+        toastError("No se pudo contratar al candidato. Intenta de nuevo.");
       }
     });
   }, [applicationId, app, router]);
@@ -410,7 +459,7 @@ export default function CandidateReviewShell({
                   <button
                     key={key}
                     type="button"
-                    disabled={isPending || blockedByCanonicalOffer}
+                    disabled={isPending || blockedByCanonicalOffer || terminalHired}
                     onClick={() => {
                       if (key === "REJECTED" && isSelected) return;
                       patchInterest(isSelected ? "REVIEW" : key);
@@ -434,6 +483,18 @@ export default function CandidateReviewShell({
                 >
                   <Send className="h-3.5 w-3.5" />
                   Mover a oferta
+                </button>
+              )}
+
+              {app?.stage === "OFFER" && app.disposition === "ACTIVE" && (
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={hireCandidate}
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-700/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Contratar
                 </button>
               )}
 

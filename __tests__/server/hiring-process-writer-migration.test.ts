@@ -12,7 +12,7 @@ const root = process.cwd();
 const read = (...parts: string[]) => readFileSync(join(root, ...parts), "utf8");
 
 describe("canonical hiring process writer migration", () => {
-  it("supports only the four approved explicit intents", () => {
+  it("supports the five approved explicit intents", () => {
     expect(
       applicationIntentSchema.parse({
         intent: "START_REVIEW",
@@ -33,13 +33,21 @@ describe("canonical hiring process writer migration", () => {
     expect(
       applicationIntentTarget("MOVE_TO_OFFER"),
     ).toEqual({ targetStage: "OFFER", targetDisposition: "ACTIVE" });
-    expect(() =>
+    expect(
       applicationIntentSchema.parse({
         intent: "HIRE_CANDIDATE",
         expectedVersion: 1,
-        commandId: "unsupported-command",
+        commandId: "hire-command",
       }),
-    ).toThrow();
+    ).toEqual({
+      intent: "HIRE_CANDIDATE",
+      expectedVersion: 1,
+      commandId: "hire-command",
+    });
+    expect(applicationIntentTarget("HIRE_CANDIDATE")).toEqual({
+      targetStage: "CLOSED",
+      targetDisposition: "HIRED",
+    });
   });
 
   it("adds APPLICATION_CREATED with an additive enum migration", () => {
@@ -195,5 +203,45 @@ describe("canonical hiring process writer migration", () => {
     expect(candidateShell).toContain("blockedByCanonicalOffer");
     expect(kanban).toContain('moved.stage === "OFFER"');
     expect(kanban).toContain('moved.disposition === "ACTIVE"');
+  });
+
+  it("routes hire through one explicit command and protects the terminal footprint", () => {
+    const helper = read("lib", "hiring-process", "hired-footprint.ts");
+    expect(helper).toContain('application.stage === "CLOSED"');
+    expect(helper).toContain('application.disposition === "HIRED"');
+    expect(helper).toContain('application.status === "HIRED"');
+    expect(helper).not.toContain('recruiterInterest === "ACCEPTED"');
+    expect(helper).not.toContain("hiredAt");
+
+    const statusRoute = read("app", "api", "applications", "[id]", "status", "route.ts");
+    const interestRoute = read("app", "api", "applications", "[id]", "interest", "route.ts");
+    const applicationRoute = read("app", "api", "applications", "[id]", "route.ts");
+    for (const source of [statusRoute, interestRoute, applicationRoute]) {
+      expect(source).toContain("hasApplicationHiredFootprint");
+      expect(source).toContain("APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE");
+    }
+    expect(statusRoute).toContain('if (newStatus === "HIRED")');
+    expect(applicationRoute).toContain('if (body.status === "HIRED")');
+
+    const shell = read("components", "dashboard", "CandidateReviewShell.tsx");
+    expect(shell).toContain('intent: "HIRE_CANDIDATE"');
+    expect(shell).toContain("Contratar");
+    expect(shell).toContain("terminalHired");
+    expect(shell).toContain("updated.hiredAt");
+
+    const kanbanAction = read("app", "dashboard", "jobs", "[id]", "page.tsx");
+    const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
+    const overview = read("app", "dashboard", "overview", "actions.ts");
+    const interestSelect = read("app", "dashboard", "jobs", "[id]", "applications", "InterestSelect.tsx");
+    for (const source of [kanbanAction, overview]) {
+      expect(source).toContain("hasApplicationHiredFootprint");
+      expect(source).toContain("APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE");
+    }
+    expect(kanban).toContain('moved.applicationStatus === "HIRED"');
+    expect(interestSelect).toContain("terminalHired");
+
+    const intentRoute = read("app", "api", "applications", "[id]", "intent", "route.ts");
+    expect(intentRoute).toContain("result.timestamps.hiredAt");
+    expect(intentRoute).not.toContain("prisma.application.findUnique");
   });
 });

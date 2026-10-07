@@ -854,6 +854,7 @@ export default async function JobApplicationsPage({
                           applicationId={a.id}
                           initial={getAppInterest(a)}
                           initialStateVersion={a.stateVersion}
+                          legacyStatus={a.status}
                           canonicalStage={a.stage}
                           canonicalDisposition={a.disposition}
                         />
@@ -1155,6 +1156,7 @@ export default async function JobApplicationsPage({
                               applicationId={a.id}
                               initial={getAppInterest(a)}
                               initialStateVersion={a.stateVersion}
+                              legacyStatus={a.status}
                               canonicalStage={a.stage}
                               canonicalDisposition={a.disposition}
                             />

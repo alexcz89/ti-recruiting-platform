@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
-import { ApplicationStatus } from "@prisma/client";
+import { ApplicationStatus, Prisma } from "@prisma/client";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
 import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
@@ -12,6 +12,10 @@ import {
   APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
   hasCanonicalApplicationOffer,
 } from "@/lib/hiring-process/offer-footprint";
+import {
+  APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+  hasApplicationHiredFootprint,
+} from "@/lib/hiring-process/hired-footprint";
 
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -148,6 +152,12 @@ export async function PATCH(
           400,
         );
       }
+      if (body.status === "HIRED") {
+        return jsonNoStore(
+          { error: "HIRED requiere el comando HIRE_CANDIDATE" },
+          400,
+        );
+      }
       if (hasApplicationRejectionFootprint(found)) {
         return jsonNoStore(
           { error: "Reabrir una postulación rechazada está fuera de este slice" },
@@ -157,6 +167,12 @@ export async function PATCH(
       if (hasCanonicalApplicationOffer(found)) {
         return jsonNoStore(
           { error: "La oferta canónica no admite retroceso por APIs legacy" },
+          409,
+        );
+      }
+      if (hasApplicationHiredFootprint(found)) {
+        return jsonNoStore(
+          { error: "HIRED es terminal y no admite reapertura" },
           409,
         );
       }
@@ -179,13 +195,14 @@ export async function PATCH(
             scopedWhere,
             APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
             APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+            APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
           ],
         },
         data,
       });
       if (result.count !== 1) {
         return jsonNoStore(
-          { error: "Reabrir una postulación rechazada está fuera de este slice" },
+          { error: "La postulación terminal no admite reapertura" },
           409,
         );
       }
@@ -232,19 +249,38 @@ export async function DELETE(
     );
     if (!scopedWhere) return jsonNoStore({ error: "Unauthorized" }, 401);
 
-    const app = await prisma.application.findFirst({
-      where: scopedWhere,
-      select: { id: true },
-    });
+    const outcome = await prisma.$transaction(async (tx) => {
+      const app = await tx.application.findFirst({
+        where: scopedWhere,
+        select: { id: true, stage: true, disposition: true, status: true },
+      });
+      if (!app) return "NOT_FOUND" as const;
+      if (hasApplicationHiredFootprint(app)) return "HIRED" as const;
 
-    if (!app) {
+      await tx.application.delete({ where: { id: app.id } });
+      return "DELETED" as const;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    if (outcome === "NOT_FOUND") {
       return jsonNoStore({ error: "Application not found" }, 404);
     }
-
-    await prisma.application.delete({ where: { id: app.id } });
+    if (outcome === "HIRED") {
+      return jsonNoStore(
+        { error: "No se puede eliminar una postulación contratada" },
+        409,
+      );
+    }
 
     return jsonNoStore({ ok: true }, 200);
   } catch (err) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code?: unknown }).code === "P2034"
+    ) {
+      return jsonNoStore({ error: "La postulación cambió durante el borrado" }, 409);
+    }
     console.error("[DELETE /api/applications/:id] ", err);
     return jsonNoStore({ error: "Internal Server Error" }, 500);
   }

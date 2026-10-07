@@ -14,6 +14,10 @@ import {
   hasCanonicalApplicationOffer,
 } from "@/lib/hiring-process/offer-footprint";
 import {
+  APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+  hasApplicationHiredFootprint,
+} from "@/lib/hiring-process/hired-footprint";
+import {
   computeMatchScore,
   applyPlanGate,
   scoreToTextColor,
@@ -272,6 +276,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     return {
       id: a.id,
       status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
+      applicationStatus: a.status,
       stage: a.stage,
       disposition: a.disposition,
       stateVersion: a.stateVersion,
@@ -327,12 +332,17 @@ export default async function JobPipelinePage({ params }: PageProps) {
         stateVersion: true,
         stage: true,
         disposition: true,
+        status: true,
         recruiterInterest: true,
       },
     });
 
     if (!app) {
       return { ok: false, message: "No tienes acceso a esta postulación" };
+    }
+
+    if (hasApplicationHiredFootprint(app)) {
+      return { ok: false, message: "HIRED es terminal y no admite movimientos" };
     }
 
     if (
@@ -394,6 +404,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
         AND: [
           { id: app.id, job: { companyId: companyId2 } },
           APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+          APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
         ],
       },
       data: {
@@ -405,7 +416,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     });
 
     if (updated.count !== 1) {
-      return { ok: false, message: "La oferta canónica no admite retroceso" };
+      return { ok: false, message: "La postulación terminal no admite movimientos" };
     }
 
     return { ok: true };

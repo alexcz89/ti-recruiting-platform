@@ -1,6 +1,7 @@
 // app/api/jobs/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { APPLICATION_HIRED_FOOTPRINT_WHERE } from "@/lib/hiring-process/hired-footprint";
 import { syncJobSkills } from "@/lib/server/syncJobSkills";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import {
@@ -8,7 +9,7 @@ import {
   EducationLevel,
   JobStatus,
   LocationType,
-  type Prisma,
+  Prisma,
 } from "@prisma/client";
 import { z } from "zod";
 
@@ -643,19 +644,45 @@ export async function DELETE(
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
-    const job = await prisma.job.findFirst({
-      where: { id: params.id, companyId },
-      select: { id: true },
-    });
+    const outcome = await prisma.$transaction(async (tx) => {
+      const job = await tx.job.findFirst({
+        where: { id: params.id, companyId },
+        select: { id: true },
+      });
+      if (!job) return "NOT_FOUND" as const;
 
-    if (!job) {
+      const hiredApplication = await tx.application.findFirst({
+        where: {
+          AND: [{ jobId: job.id }, APPLICATION_HIRED_FOOTPRINT_WHERE],
+        },
+        select: { id: true },
+      });
+      if (hiredApplication) return "HIRED" as const;
+
+      await tx.job.delete({ where: { id: job.id } });
+      return "DELETED" as const;
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+
+    if (outcome === "NOT_FOUND") {
       return jsonNoStore({ error: "Vacante no encontrada" }, 404);
     }
-
-    await prisma.job.delete({ where: { id: params.id } });
+    if (outcome === "HIRED") {
+      return jsonNoStore(
+        { error: "No se puede eliminar una vacante con candidatos contratados" },
+        409,
+      );
+    }
 
     return jsonNoStore({ ok: true });
   } catch (err) {
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      "code" in err &&
+      (err as { code?: unknown }).code === "P2034"
+    ) {
+      return jsonNoStore({ error: "La vacante cambió durante el borrado" }, 409);
+    }
     console.error("[DELETE /api/jobs/[id]]", err);
     return jsonNoStore({ error: "Error al eliminar la vacante" }, 500);
   }

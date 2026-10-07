@@ -34,6 +34,7 @@ type AssessmentMeta = {
 type AppCard = {
   id: string;
   status: string;
+  applicationStatus: string;
   stage: string | null;
   disposition: string | null;
   stateVersion: number;
@@ -119,6 +120,12 @@ export default function Kanbanboard({
     const destCol = cols[toStatus] || sourceCol;
     const moved = sourceCol[fromIdx];
     if (!moved) return;
+    if (
+      moved.applicationStatus === "HIRED" ||
+      (moved.stage === "CLOSED" && moved.disposition === "HIRED")
+    ) {
+      return;
+    }
     if (
       moved.stage === "OFFER" &&
       moved.disposition === "ACTIVE" &&

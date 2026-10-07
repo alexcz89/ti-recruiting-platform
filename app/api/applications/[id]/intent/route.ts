@@ -64,6 +64,7 @@ export async function POST(
         status: result.legacy.status,
         recruiterInterest: result.legacy.recruiterInterest,
         offerAt: result.timestamps.offerAt?.toISOString() ?? null,
+        hiredAt: result.timestamps.hiredAt?.toISOString() ?? null,
       },
       replayed: result.replayed,
     });
