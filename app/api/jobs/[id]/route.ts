@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { APPLICATION_HIRED_FOOTPRINT_WHERE } from "@/lib/hiring-process/hired-footprint";
+import {
+  isApplicationHistoryDeleteConflict,
+  isSerializableDeleteConflict,
+} from "@/lib/hiring-process/delete-integrity";
 import { syncJobSkills } from "@/lib/server/syncJobSkills";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import {
@@ -675,12 +679,13 @@ export async function DELETE(
 
     return jsonNoStore({ ok: true });
   } catch (err) {
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code?: unknown }).code === "P2034"
-    ) {
+    if (isApplicationHistoryDeleteConflict(err)) {
+      return jsonNoStore(
+        { error: "No se puede eliminar una vacante con historial registrado" },
+        409,
+      );
+    }
+    if (isSerializableDeleteConflict(err)) {
       return jsonNoStore({ error: "La vacante cambió durante el borrado" }, 409);
     }
     console.error("[DELETE /api/jobs/[id]]", err);

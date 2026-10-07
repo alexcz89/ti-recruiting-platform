@@ -162,6 +162,7 @@ export default function CandidateReviewShell({
   const [notesSaved, setNotesSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
   const notesTimer = useRef<NodeJS.Timeout | null>(null);
+  const hireInFlight = useRef(false);
   const canonicalOffer =
     app?.stage === "OFFER" && app.disposition === "ACTIVE";
   const terminalHired =
@@ -273,11 +274,13 @@ export default function CandidateReviewShell({
     if (
       !applicationId ||
       app?.stage !== "OFFER" ||
-      app.disposition !== "ACTIVE"
+      app.disposition !== "ACTIVE" ||
+      hireInFlight.current
     ) {
       return;
     }
 
+    hireInFlight.current = true;
     startTransition(async () => {
       try {
         const res = await fetch(`/api/applications/${applicationId}/intent`, {
@@ -310,6 +313,8 @@ export default function CandidateReviewShell({
         router.refresh();
       } catch {
         toastError("No se pudo contratar al candidato. Intenta de nuevo.");
+      } finally {
+        hireInFlight.current = false;
       }
     });
   }, [applicationId, app, router]);

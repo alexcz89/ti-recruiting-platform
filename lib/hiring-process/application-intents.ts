@@ -345,6 +345,7 @@ export async function executeApplicationIntent(input: {
       status: application.status,
       recruiterInterest: application.recruiterInterest,
       offerAt: application.offerAt,
+      hiredAt: application.hiredAt,
       rejectedAt: application.rejectedAt,
     },
     data: {

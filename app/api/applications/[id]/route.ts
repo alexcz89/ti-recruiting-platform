@@ -16,6 +16,10 @@ import {
   APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
   hasApplicationHiredFootprint,
 } from "@/lib/hiring-process/hired-footprint";
+import {
+  isApplicationHistoryDeleteConflict,
+  isSerializableDeleteConflict,
+} from "@/lib/hiring-process/delete-integrity";
 
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -273,12 +277,13 @@ export async function DELETE(
 
     return jsonNoStore({ ok: true }, 200);
   } catch (err) {
-    if (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code?: unknown }).code === "P2034"
-    ) {
+    if (isApplicationHistoryDeleteConflict(err)) {
+      return jsonNoStore(
+        { error: "No se puede eliminar una postulación con historial registrado" },
+        409,
+      );
+    }
+    if (isSerializableDeleteConflict(err)) {
       return jsonNoStore({ error: "La postulación cambió durante el borrado" }, 409);
     }
     console.error("[DELETE /api/applications/:id] ", err);

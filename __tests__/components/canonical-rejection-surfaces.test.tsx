@@ -339,7 +339,9 @@ describe("canonical rejection surfaces", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Contratar" }));
+    const hireButton = screen.getByRole("button", { name: "Contratar" });
+    fireEvent.click(hireButton);
+    fireEvent.click(hireButton);
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = vi.mocked(fetch).mock.calls[0];

@@ -862,16 +862,30 @@ describeDatabase("canonical hiring process pilot writer", () => {
   });
 
   it.each([
-    { name: "canonical", stage: "CLOSED" as const, disposition: "HIRED" as const },
-    { name: "legacy", stage: null, disposition: null },
-  ])("protects a $name HIRED row from generic writers and deletes", async ({ stage, disposition }) => {
+    {
+      name: "canonical",
+      stage: "CLOSED" as const,
+      disposition: "HIRED" as const,
+      legacyStatus: "OFFER" as const,
+    },
+    {
+      name: "legacy",
+      stage: null,
+      disposition: null,
+      legacyStatus: "HIRED" as const,
+    },
+  ])("protects a $name HIRED row from generic writers and deletes", async ({
+    stage,
+    disposition,
+    legacyStatus,
+  }) => {
     await prisma.application.update({
       where: { id: ids.application },
       data: {
         stage,
         disposition,
         stateVersion: stage ? 3 : 0,
-        status: "HIRED",
+        status: legacyStatus,
         recruiterInterest: "ACCEPTED",
         hiredAt: new Date("2026-10-06T10:00:00.000Z"),
       },
@@ -944,7 +958,7 @@ describeDatabase("canonical hiring process pilot writer", () => {
     expect(await storedApplication()).toMatchObject({
       stage,
       disposition,
-      status: "HIRED",
+      status: legacyStatus,
       recruiterInterest: "ACCEPTED",
       resumeUrl: "https://example.invalid/hired.pdf",
       coverLetter: "Contratado",
@@ -1006,5 +1020,62 @@ describeDatabase("canonical hiring process pilot writer", () => {
     expect(response.status).toBe(200);
     expect(await prisma.job.count({ where: { id: ids.job } })).toBe(0);
     expect(await prisma.application.count({ where: { jobId: ids.job } })).toBe(0);
+  });
+
+  async function addApplicationHistory() {
+    await prisma.applicationEvent.create({
+      data: {
+        applicationId: ids.application,
+        companyId: ids.company,
+        actorType: "SYSTEM",
+        type: "APPLICATION_CREATED",
+        toStage: "APPLIED",
+        toDisposition: "ACTIVE",
+        visibility: "INTERNAL",
+        happenedAt: new Date("2026-10-03T12:00:00.000Z"),
+      },
+    });
+  }
+
+  it("returns 409 instead of deleting a non-HIRED application with canonical history", async () => {
+    await addApplicationHistory();
+
+    const response = await deleteApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, { method: "DELETE" }),
+      { params: { id: ids.application } },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await prisma.application.count({ where: { id: ids.application } })).toBe(1);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: ids.application } })).toBe(1);
+  });
+
+  it("returns 409 without partial API Job deletion when canonical history exists", async () => {
+    await addApplicationHistory();
+
+    const response = await deleteJob(
+      new NextRequest(`http://localhost/api/jobs/${ids.job}`, { method: "DELETE" }),
+      { params: { id: ids.job } },
+    );
+
+    expect(response.status).toBe(409);
+    expect(await prisma.job.count({ where: { id: ids.job } })).toBe(1);
+    expect(await prisma.application.count({ where: { id: ids.application } })).toBe(1);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: ids.application } })).toBe(1);
+  });
+
+  it("returns 409 without partial dashboard Job deletion when canonical history exists", async () => {
+    await addApplicationHistory();
+    const form = new FormData();
+    form.set("jobId", ids.job);
+
+    const response = await deleteDashboardJob(
+      new Request("http://localhost/dashboard/jobs/delete", { method: "POST", body: form }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(await prisma.job.count({ where: { id: ids.job } })).toBe(1);
+    expect(await prisma.application.count({ where: { id: ids.application } })).toBe(1);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: ids.application } })).toBe(1);
   });
 });

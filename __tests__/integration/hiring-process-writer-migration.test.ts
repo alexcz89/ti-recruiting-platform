@@ -1198,6 +1198,69 @@ describeDatabase("canonical hiring process writer migration", () => {
     expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
   });
 
+  it("does not overwrite hiredAt when a concurrent writer wins before the legacy CAS", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "OFFER", recruiterInterest: "ACCEPTED", hiredAt: null },
+    });
+    const concurrentHiredAt = new Date("2026-10-06T14:00:00.000Z");
+    let releaseRowLock = () => {};
+    let reportRowLock = () => {};
+    const rowLockReady = new Promise<void>((resolve) => {
+      reportRowLock = resolve;
+    });
+    const rowLockRelease = new Promise<void>((resolve) => {
+      releaseRowLock = resolve;
+    });
+    const concurrentWinner = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT "id"
+        FROM "Application"
+        WHERE "id" = ${application.id}
+        FOR UPDATE
+      `;
+      reportRowLock();
+      await rowLockRelease;
+      await tx.application.update({
+        where: { id: application.id },
+        data: { hiredAt: concurrentHiredAt },
+      });
+    });
+    await rowLockReady;
+
+    const command = executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "HIRE_CANDIDATE",
+        expectedVersion: 0,
+        commandId: "qa-legacy-hire-hired-at-race",
+      },
+      actor: recruiterActor,
+    });
+    const losingCommand = expect(command).rejects.toBeInstanceOf(
+      ConcurrentApplicationTransitionError,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    releaseRowLock();
+    await concurrentWinner;
+    await losingCommand;
+
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "OFFER",
+      recruiterInterest: "ACCEPTED",
+      hiredAt: concurrentHiredAt,
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
   it("preserves null hiredAt on an exact flag-off HIRED/ACCEPTED retry", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
     const application = await createRolloutApplication();

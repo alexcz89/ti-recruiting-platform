@@ -5,6 +5,10 @@ import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
 import { revalidatePath } from "next/cache";
 import { APPLICATION_HIRED_FOOTPRINT_WHERE } from "@/lib/hiring-process/hired-footprint";
+import {
+  isApplicationHistoryDeleteConflict,
+  isSerializableDeleteConflict,
+} from "@/lib/hiring-process/delete-integrity";
 
 export async function POST(request: Request) {
   try {
@@ -53,19 +57,20 @@ export async function POST(request: Request) {
     revalidatePath("/dashboard/jobs");
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
-    if (
-      typeof e === "object" &&
-      e !== null &&
-      "code" in e &&
-      (e as { code?: unknown }).code === "P2034"
-    ) {
+    if (isApplicationHistoryDeleteConflict(e)) {
+      return NextResponse.json(
+        { error: "No se puede eliminar una vacante con historial registrado" },
+        { status: 409 },
+      );
+    }
+    if (isSerializableDeleteConflict(e)) {
       return NextResponse.json(
         { error: "La vacante cambió durante el borrado" },
         { status: 409 },
       );
     }
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "ERROR" },
+      { error: "No se pudo eliminar la vacante" },
       { status: 500 }
     );
   }
