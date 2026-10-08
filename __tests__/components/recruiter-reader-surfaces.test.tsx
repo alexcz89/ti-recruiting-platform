@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -42,7 +42,10 @@ const baseApplication: AppState = {
   viewCount: 0,
 };
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("recruiter reader surfaces", () => {
   it.each([
@@ -201,5 +204,117 @@ describe("recruiter reader surfaces", () => {
     );
 
     expect(screen.getByRole("button", { name: /Por revisar/ })).toBeEnabled();
+  });
+
+  it("uses canonical Review as the current selector option despite stale Accepted", () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="ACCEPTED"
+        initialStateVersion={2}
+        legacyStatus="REVIEWING"
+        canonicalStage="REVIEW"
+        canonicalDisposition="ACTIVE"
+        canonicalRecruiterReadsEnabled
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /En revisión/ }));
+    const review = screen.getByRole("option", { name: /En revisión/ });
+    expect(review).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("option", { name: /Entrevista/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+
+    fireEvent.click(review);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses Review as the current selector option for canonical Applied", () => {
+    render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="ACCEPTED"
+        initialStateVersion={1}
+        legacyStatus="SUBMITTED"
+        canonicalStage="APPLIED"
+        canonicalDisposition="ACTIVE"
+        canonicalRecruiterReadsEnabled
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Por revisar/ }));
+    expect(screen.getByRole("option", { name: /Por revisar/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("option", { name: /Entrevista/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
+  });
+
+  it("labels canonical Review correctly and clears canonical Preselected", async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          application: {
+            stateVersion: 3,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetch);
+    render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="MAYBE"
+        initialStateVersion={2}
+        legacyStatus="REVIEWING"
+        canonicalStage="REVIEW"
+        canonicalDisposition="ACTIVE"
+        canonicalRecruiterReadsEnabled
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Preselecto/ }));
+    expect(screen.getByRole("option", { name: /Preselecto/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    fireEvent.click(screen.getByRole("option", { name: /En revisión/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
+      intent: "CLEAR_PRESELECTED",
+      expectedVersion: 2,
+    });
+  });
+
+  it("keeps legacy option labels and active selection when reader flag is off", () => {
+    render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="ACCEPTED"
+        initialStateVersion={2}
+        legacyStatus="REVIEWING"
+        canonicalStage="REVIEW"
+        canonicalDisposition="ACTIVE"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
+    expect(screen.getByRole("option", { name: /Entrevista/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByRole("option", { name: /Por revisar/ })).toHaveAttribute(
+      "aria-selected",
+      "false",
+    );
   });
 });

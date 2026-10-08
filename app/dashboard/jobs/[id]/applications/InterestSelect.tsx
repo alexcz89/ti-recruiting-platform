@@ -129,6 +129,20 @@ export default function InterestSelect({
     !(["APPLIED", "REVIEW", "PRESELECTED"] as RecruiterPipelineBucket[]).includes(
       readModel.bucket,
     );
+  const effectiveValue: InterestKey =
+    canonicalRecruiterReadsEnabled && readModel.source === "CANONICAL"
+      ? readModel.bucket === "PRESELECTED"
+        ? "MAYBE"
+        : readModel.bucket === "APPLIED" || readModel.bucket === "REVIEW"
+          ? "REVIEW"
+          : value
+      : value;
+  const reviewOptionLabel =
+    canonicalRecruiterReadsEnabled &&
+    readModel.source === "CANONICAL" &&
+    canonicalStage === "REVIEW"
+      ? "En revisión"
+      : LABEL.REVIEW;
 
   async function updateInterest(next: InterestKey) {
     if (terminalHired) return;
@@ -142,7 +156,7 @@ export default function InterestSelect({
           ? "REJECT_CANDIDATE"
           : next === "MAYBE"
             ? "MARK_PRESELECTED"
-            : value === "MAYBE" && next === "REVIEW"
+            : effectiveValue === "MAYBE" && next === "REVIEW"
               ? "CLEAR_PRESELECTED"
               : null;
 
@@ -174,9 +188,9 @@ export default function InterestSelect({
   const handleSelect = (next: InterestKey) => {
     setOpen(false);
     if (terminalHired || readOnlyCanonicalPresentation) return;
-    if (value === "REJECTED") return;
+    if (effectiveValue === "REJECTED") return;
     if (canonicalOffer && next !== "REJECTED") return;
-    if (next === value) return;
+    if (next === effectiveValue) return;
     startTransition(() => updateInterest(next));
   };
 
@@ -268,7 +282,8 @@ export default function InterestSelect({
           role="listbox"
         >
           {INTEREST_KEYS.map((key) => {
-            const isActive = key === value;
+            const isActive = key === effectiveValue;
+            const optionLabel = key === "REVIEW" ? reviewOptionLabel : LABEL[key];
             const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
             const blockedPreselectBackward =
               (key === "REVIEW" || key === "MAYBE") &&
@@ -302,7 +317,7 @@ export default function InterestSelect({
                     className={`h-2 w-2 rounded-full ${DOT_COLOR[key]}`}
                     aria-hidden
                   />
-                  {LABEL[key]}
+                  {optionLabel}
                 </span>
                 {isActive && (
                   <span className="text-[10px] text-emerald-500">●</span>
