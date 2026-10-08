@@ -7,16 +7,10 @@ import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
 import { isAssessmentExpired } from '@/lib/assessments/expiration';
 import Kanbanboard from "./KanbanBoard";
-import { ApplicationInterest, ApplicationStatus } from "@prisma/client";
+import { ApplicationInterest } from "@prisma/client";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
-import {
-  APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
-  hasCanonicalApplicationOffer,
-} from "@/lib/hiring-process/offer-footprint";
-import {
-  APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
-  hasApplicationHiredFootprint,
-} from "@/lib/hiring-process/hired-footprint";
+import { hasCanonicalApplicationOffer } from "@/lib/hiring-process/offer-footprint";
+import { hasApplicationHiredFootprint } from "@/lib/hiring-process/hired-footprint";
 import {
   computeMatchScore,
   applyPlanGate,
@@ -360,7 +354,17 @@ export default async function JobPipelinePage({ params }: PageProps) {
       return { ok: false, message: "Reabrir una postulación está fuera de este slice" };
     }
 
-    if (newStatusStr === "ACCEPTED" || newStatusStr === "REJECTED") {
+    const canonicalIntent = newStatusStr === "ACCEPTED"
+      ? "MOVE_TO_INTERVIEW"
+      : newStatusStr === "REJECTED"
+        ? "REJECT_CANDIDATE"
+        : newStatusStr === "MAYBE"
+          ? "MARK_PRESELECTED"
+          : app.recruiterInterest === "MAYBE" && newStatusStr === "REVIEW"
+            ? "CLEAR_PRESELECTED"
+            : null;
+
+    if (canonicalIntent) {
       const expectedVersion = Number(fd.get("expectedVersion"));
       const commandId = String(fd.get("commandId") || "");
       if (!Number.isInteger(expectedVersion) || expectedVersion < 0 || !commandId) {
@@ -375,9 +379,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
         await executeApplicationIntent({
           applicationId: app.id,
           command: {
-            intent: newStatusStr === "ACCEPTED"
-              ? "MOVE_TO_INTERVIEW"
-              : "REJECT_CANDIDATE",
+            intent: canonicalIntent,
             expectedVersion,
             commandId,
           },
@@ -392,34 +394,11 @@ export default async function JobPipelinePage({ params }: PageProps) {
         console.error("[Kanban application intent]", error);
         return {
           ok: false,
-          message: newStatusStr === "ACCEPTED"
-            ? "No se pudo mover a Entrevista"
-            : "No se pudo descartar al candidato",
+          message: "No se pudo actualizar el estado del candidato",
         };
       }
     }
-
-    const updated = await prisma.application.updateMany({
-      where: {
-        AND: [
-          { id: app.id, job: { companyId: companyId2 } },
-          APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
-          APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
-        ],
-      },
-      data: {
-        recruiterInterest: newStatusStr,
-        status: ApplicationStatus.REVIEWING,
-        rejectedAt: null,
-        rejectionEmailSent: false,
-      },
-    });
-
-    if (updated.count !== 1) {
-      return { ok: false, message: "La postulación terminal no admite movimientos" };
-    }
-
-    return { ok: true };
+    return { ok: false, message: "Movimiento no soportado" };
   }
 
   return (

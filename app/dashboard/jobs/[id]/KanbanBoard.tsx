@@ -133,6 +133,18 @@ export default function Kanbanboard({
     ) {
       return;
     }
+    const isPreselectCommand =
+      toStatus === "MAYBE" || (fromStatus === "MAYBE" && toStatus === "REVIEW");
+    if (
+      isPreselectCommand &&
+      moved.stage !== null &&
+      !(
+        moved.disposition === "ACTIVE" &&
+        (moved.stage === "APPLIED" || moved.stage === "REVIEW")
+      )
+    ) {
+      return;
+    }
     sourceCol.splice(fromIdx, 1);
 
     destCol.splice(toIdx, 0, { ...moved, status: toStatus });
@@ -144,7 +156,12 @@ export default function Kanbanboard({
     const fd = new FormData();
     fd.set("appId", appId);
     fd.set("newStatus", toStatus);
-    if (toStatus === "ACCEPTED" || toStatus === "REJECTED") {
+    if (
+      toStatus === "ACCEPTED" ||
+      toStatus === "REJECTED" ||
+      toStatus === "MAYBE" ||
+      (fromStatus === "MAYBE" && toStatus === "REVIEW")
+    ) {
       fd.set("expectedVersion", String(moved.stateVersion));
       fd.set("commandId", crypto.randomUUID());
     }

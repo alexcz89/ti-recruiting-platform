@@ -21,12 +21,6 @@ const LABEL: Record<InterestKey, string> = {
   REJECTED: "Descartado",
 };
 
-// 🔔 MAPEO A STATUS DE LA APLICACIÓN (para notificaciones)
-const TO_APPLICATION_STATUS: Record<"REVIEW" | "MAYBE", string> = {
-  REVIEW: "REVIEWING",
-  MAYBE: "REVIEWING", // En duda también es "revisando"
-};
-
 const INTEREST_KEYS: InterestKey[] = [
   "REVIEW",
   "MAYBE",
@@ -91,12 +85,22 @@ export default function InterestSelect({
     setValue(next); // UI optimista
 
     try {
-      if (next === "ACCEPTED" || next === "REJECTED") {
+      const canonicalIntent = next === "ACCEPTED"
+        ? "MOVE_TO_INTERVIEW"
+        : next === "REJECTED"
+          ? "REJECT_CANDIDATE"
+          : next === "MAYBE"
+            ? "MARK_PRESELECTED"
+            : value === "MAYBE" && next === "REVIEW"
+              ? "CLEAR_PRESELECTED"
+              : null;
+
+      if (canonicalIntent) {
         const res = await fetch(`/api/applications/${applicationId}/intent`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            intent: next === "ACCEPTED" ? "MOVE_TO_INTERVIEW" : "REJECT_CANDIDATE",
+            intent: canonicalIntent,
             expectedVersion: stateVersion,
             commandId: crypto.randomUUID(),
           }),
@@ -108,27 +112,7 @@ export default function InterestSelect({
         router.refresh();
         return;
       }
-
-      // 🔔 LLAMAR AL ENDPOINT DE STATUS (que tiene notificaciones)
-      const applicationStatus = TO_APPLICATION_STATUS[next];
-      
-      const res = await fetch(`/api/applications/${applicationId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: applicationStatus }),
-      });
-
-      if (!res.ok) throw new Error(await res.text());
-
-      // Luego actualizar el recruiterInterest (para la UI)
-      await fetch(`/api/applications/${applicationId}/interest`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recruiterInterest: next }),
-      });
-
-      toastSuccess("Nivel de interés actualizado");
-      router.refresh();
+      throw new Error("Transición de interés no soportada");
     } catch (err) {
       setValue(prev);
       toastError("No se pudo actualizar");
@@ -220,13 +204,20 @@ export default function InterestSelect({
           {INTEREST_KEYS.map((key) => {
             const isActive = key === value;
             const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
+            const blockedPreselectBackward =
+              (key === "REVIEW" || key === "MAYBE") &&
+              canonicalStage !== null &&
+              !(
+                canonicalDisposition === "ACTIVE" &&
+                (canonicalStage === "APPLIED" || canonicalStage === "REVIEW")
+              );
             return (
               <button
                 key={key}
                 type="button"
                 role="option"
                 aria-selected={isActive}
-                disabled={blockedByCanonicalOffer || terminalHired}
+                disabled={blockedByCanonicalOffer || blockedPreselectBackward || terminalHired}
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => handleSelect(key)}
                 className={`

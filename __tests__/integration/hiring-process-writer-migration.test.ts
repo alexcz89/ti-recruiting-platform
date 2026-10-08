@@ -236,6 +236,284 @@ describeDatabase("canonical hiring process writer migration", () => {
     ]);
   });
 
+  it("marks APPLIED/ACTIVE preselected atomically and replays without another event", async () => {
+    const application = await createApplication();
+    const command = {
+      intent: "MARK_PRESELECTED" as const,
+      expectedVersion: 1,
+      commandId: "qa-mark-preselected-applied",
+    };
+
+    const first = await executeApplicationIntent({
+      applicationId: application.id,
+      command,
+      actor: recruiterActor,
+    });
+    const storedAfterFirst = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: { orderBy: { recordedAt: "asc" } } },
+    });
+    const retry = await executeApplicationIntent({
+      applicationId: application.id,
+      command,
+      actor: recruiterActor,
+    });
+    const storedAfterRetry = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: { orderBy: { recordedAt: "asc" } } },
+    });
+
+    expect(first).toMatchObject({
+      state: { stage: "REVIEW", disposition: "ACTIVE", stateVersion: 2 },
+      replayed: false,
+      legacy: {
+        status: "REVIEWING",
+        recruiterInterest: "MAYBE",
+        stateVersion: 2,
+      },
+    });
+    expect(storedAfterFirst).toMatchObject({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 2,
+      status: "REVIEWING",
+      recruiterInterest: "MAYBE",
+    });
+    expect(storedAfterFirst.reviewingAt).toBeInstanceOf(Date);
+    expect(storedAfterFirst.events).toHaveLength(2);
+    expect(storedAfterFirst.events[1]).toMatchObject({
+      type: "APPLICATION_STAGE_CHANGED",
+      fromStage: "APPLIED",
+      toStage: "REVIEW",
+      fromDisposition: "ACTIVE",
+      toDisposition: "ACTIVE",
+      visibility: "INTERNAL",
+      actorType: "RECRUITER",
+      actorId: ids.recruiter,
+    });
+    expect(retry.replayed).toBe(true);
+    expect(storedAfterRetry.reviewingAt).toEqual(storedAfterFirst.reviewingAt);
+    expect(storedAfterRetry.events).toHaveLength(2);
+  });
+
+  it("marks and clears the REVIEW/ACTIVE compatibility marker without a fake canonical transition", async () => {
+    const application = await createApplication();
+    const reviewingAt = new Date("2026-10-06T10:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        status: "REVIEWING",
+        recruiterInterest: "REVIEW",
+        reviewingAt,
+      },
+    });
+
+    const marked = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-review" },
+      actor: recruiterActor,
+    });
+    const markRetry = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-review-retry" },
+      actor: recruiterActor,
+    });
+    const cleared = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "CLEAR_PRESELECTED", expectedVersion: 1, commandId: "qa-clear-review" },
+      actor: recruiterActor,
+    });
+    const clearRetry = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "CLEAR_PRESELECTED", expectedVersion: 1, commandId: "qa-clear-review-retry" },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: true },
+    });
+
+    expect(marked).toMatchObject({
+      state: { stage: "REVIEW", disposition: "ACTIVE", stateVersion: 1 },
+      event: null,
+      replayed: false,
+      legacy: { status: "REVIEWING", recruiterInterest: "MAYBE", stateVersion: 1 },
+    });
+    expect(markRetry.replayed).toBe(true);
+    expect(cleared).toMatchObject({
+      state: { stage: "REVIEW", disposition: "ACTIVE", stateVersion: 1 },
+      event: null,
+      replayed: false,
+      legacy: { status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 1 },
+    });
+    expect(clearRetry.replayed).toBe(true);
+    expect(stored).toMatchObject({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 1,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+      reviewingAt,
+    });
+    expect(stored.events).toHaveLength(1);
+  });
+
+  it("fails preselect closed for stale, unauthorized, cross-tenant, and unsupported canonical sources", async () => {
+    const application = await createApplication();
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 0, commandId: "qa-mark-stale" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-tenant" },
+      actor: { type: "RECRUITER", id: ids.otherRecruiter, companyId: ids.otherCompany },
+    })).rejects.toBeInstanceOf(ApplicationNotFoundError);
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-candidate" },
+      actor: { type: "CANDIDATE", id: ids.candidate },
+    })).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "REJECTED", recruiterInterest: "REJECTED" },
+    });
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-applied-rejected" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+
+    const unsupported = [
+      ["ASSESSMENT", "ACTIVE", "REVIEWING", "REVIEW"],
+      ["INTERVIEW", "ACTIVE", "INTERVIEW", "ACCEPTED"],
+      ["OFFER", "ACTIVE", "OFFER", "ACCEPTED"],
+      ["CLOSED", "REJECTED", "REJECTED", "REJECTED"],
+      ["CLOSED", "HIRED", "HIRED", "ACCEPTED"],
+      ["REVIEW", "HOLD", "REVIEWING", "MAYBE"],
+    ] as const;
+    for (const [index, [stage, disposition, status, recruiterInterest]] of unsupported.entries()) {
+      await prisma.application.update({
+        where: { id: application.id },
+        data: { stage, disposition, status, recruiterInterest },
+      });
+      await expect(executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: `qa-mark-invalid-${index}` },
+        actor: recruiterActor,
+      })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+      await expect(executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "CLEAR_PRESELECTED", expectedVersion: 1, commandId: `qa-clear-invalid-${index}` },
+        actor: recruiterActor,
+      })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    }
+  });
+
+  it("does not let a concurrent preselect marker overwrite an interview transition", async () => {
+    const application = await createApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { stage: "REVIEW", status: "REVIEWING", recruiterInterest: "REVIEW" },
+    });
+
+    await Promise.allSettled([
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-race" },
+        actor: recruiterActor,
+      }),
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-interview-mark-race" },
+        actor: recruiterActor,
+      }),
+    ]);
+
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: "INTERVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 2,
+      status: "INTERVIEW",
+      recruiterInterest: "ACCEPTED",
+    });
+  });
+
+  it("preserves exact flag-off preselect and clear behavior without canonical state or events", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const mark = { intent: "MARK_PRESELECTED" as const, expectedVersion: 0, commandId: "qa-legacy-mark" };
+    await executeApplicationIntent({ applicationId: application.id, command: mark, actor: recruiterActor });
+    const afterMark = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+    await executeApplicationIntent({ applicationId: application.id, command: mark, actor: recruiterActor });
+    const afterRetry = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "CLEAR_PRESELECTED", expectedVersion: 0, commandId: "qa-legacy-clear" },
+      actor: recruiterActor,
+    });
+    const clearRetry = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "CLEAR_PRESELECTED", expectedVersion: 0, commandId: "qa-legacy-clear-retry" },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+
+    expect(afterMark).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REVIEWING",
+      recruiterInterest: "MAYBE",
+    });
+    expect(afterMark.reviewingAt).toBeInstanceOf(Date);
+    expect(afterRetry.reviewingAt).toEqual(afterMark.reviewingAt);
+    expect(clearRetry.replayed).toBe(true);
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+  });
+
+  it("supports flag-off REVIEWING/REVIEW and rejects ambiguous preselect tuples", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const existingReviewingAt = new Date("2026-10-01T10:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "REVIEWING", recruiterInterest: "REVIEW", reviewingAt: existingReviewingAt },
+    });
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 0, commandId: "qa-legacy-review-mark" },
+      actor: recruiterActor,
+    });
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      status: "REVIEWING",
+      recruiterInterest: "MAYBE",
+      reviewingAt: existingReviewingAt,
+      stateVersion: 0,
+    });
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "SUBMITTED", recruiterInterest: "MAYBE" },
+    });
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 0, commandId: "qa-legacy-ambiguous" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+  });
+
   it("moves only INTERVIEW/ACTIVE to OFFER/ACTIVE with one internal event", async () => {
     const application = await createInterviewApplication();
     const command = {

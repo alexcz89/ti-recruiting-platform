@@ -154,6 +154,10 @@ export type TransitionApplicationInput = {
   reasonText?: string;
   idempotencyKey?: string;
   happenedAt?: Date;
+  legacyProjectionOverride?: {
+    status: LegacyApplicationStatus;
+    recruiterInterest: LegacyApplicationInterest;
+  };
 };
 
 type TransitionApplicationResult = {
@@ -248,6 +252,7 @@ function commandFingerprint(
         actorId: input.actor.id ?? null,
         actorCompanyId: input.actor.companyId ?? null,
         reasonCode: reasonCode ?? null,
+        legacyProjectionOverride: input.legacyProjectionOverride ?? null,
       }),
     )
     .digest("hex");
@@ -318,7 +323,8 @@ async function executeTransition(
       reasonText: input.reasonText,
     },
   );
-  const legacyProjection = projectCanonicalStateToLegacy(planned);
+  const legacyProjection =
+    input.legacyProjectionOverride ?? projectCanonicalStateToLegacy(planned);
   const changes: ApplicationUpdate = {
     stage: planned.stage,
     disposition: planned.disposition,

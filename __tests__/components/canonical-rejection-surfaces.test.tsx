@@ -76,6 +76,17 @@ const hiredApplication: AppState = {
   hiredAt: "2026-10-05T12:15:00.000Z",
 };
 
+const appliedApplication: AppState = {
+  ...interviewApplication,
+  status: "SUBMITTED",
+  recruiterInterest: "REVIEW",
+  stage: "APPLIED",
+  disposition: "ACTIVE",
+  stateVersion: 1,
+  reviewingAt: null,
+  interviewAt: null,
+};
+
 describe("canonical rejection surfaces", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
@@ -84,6 +95,125 @@ describe("canonical rejection surfaces", () => {
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
+  });
+
+  it("sends one MARK_PRESELECTED command from InterestSelect", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      application: {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        status: "REVIEWING",
+        recruiterInterest: "MAYBE",
+        stateVersion: 2,
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    render(<InterestSelect
+      applicationId="application-1"
+      initial="REVIEW"
+      initialStateVersion={1}
+      canonicalStage="APPLIED"
+      canonicalDisposition="ACTIVE"
+    />);
+    fireEvent.click(screen.getByRole("button", { name: /Por revisar/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Preselecto/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("/api/applications/application-1/intent");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      intent: "MARK_PRESELECTED",
+      expectedVersion: 1,
+    });
+  });
+
+  it("sends one CLEAR_PRESELECTED command from InterestSelect", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      application: {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        status: "REVIEWING",
+        recruiterInterest: "REVIEW",
+        stateVersion: 2,
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    render(<InterestSelect
+      applicationId="application-1"
+      initial="MAYBE"
+      initialStateVersion={2}
+      canonicalStage="REVIEW"
+      canonicalDisposition="ACTIVE"
+    />);
+    fireEvent.click(screen.getByRole("button", { name: /Preselecto/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Por revisar/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
+      intent: "CLEAR_PRESELECTED",
+      expectedVersion: 2,
+    });
+  });
+
+  it("sends one MARK_PRESELECTED command from CandidateReviewShell and updates canonical review state", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      application: {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        status: "REVIEWING",
+        recruiterInterest: "MAYBE",
+        stateVersion: 2,
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    render(<CandidateReviewShell
+      candidateId="candidate-1"
+      candidateName="Candidate"
+      candidateSeniority={null}
+      candidateLocation={null}
+      resumeUrl={null}
+      waHref={null}
+      fromJobId="job-1"
+      jobTitle="Job"
+      matchScore={null}
+      matchLocked={false}
+      applicationId="application-1"
+      currentApplication={appliedApplication}
+      navList={[]}
+      navIndex={-1}
+      slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
+    />);
+    fireEvent.click(screen.getByRole("button", { name: /Preselecto/ }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
+      intent: "MARK_PRESELECTED",
+      expectedVersion: 1,
+    });
+  });
+
+  it("keeps Preselecto inert after Interview", () => {
+    render(<CandidateReviewShell
+      candidateId="candidate-1"
+      candidateName="Candidate"
+      candidateSeniority={null}
+      candidateLocation={null}
+      resumeUrl={null}
+      waHref={null}
+      fromJobId="job-1"
+      jobTitle="Job"
+      matchScore={null}
+      matchLocked={false}
+      applicationId="application-1"
+      currentApplication={interviewApplication}
+      navList={[]}
+      navIndex={-1}
+      slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
+    />);
+
+    expect(screen.getByRole("button", { name: /Preselecto/ })).toBeDisabled();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("sends one REJECT_CANDIDATE command from InterestSelect", async () => {
