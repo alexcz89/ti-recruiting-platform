@@ -829,6 +829,77 @@ describeDatabase("canonical hiring process pilot writer", () => {
     });
   });
 
+  it("protects canonical INTERVIEW/ACTIVE from legacy backward writers", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    await prisma.application.update({
+      where: { id: ids.application },
+      data: {
+        stage: "INTERVIEW",
+        disposition: "ACTIVE",
+        stateVersion: 3,
+        status: "INTERVIEW",
+        recruiterInterest: "ACCEPTED",
+      },
+    });
+
+    const statusResponse = await patchApplicationStatus(
+      new NextRequest(`http://localhost/api/applications/${ids.application}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REVIEWING" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const interestResponse = await patchApplicationInterest(
+      new Request(`http://localhost/api/applications/${ids.application}/interest`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recruiterInterest: "REVIEW" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const genericResponse = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REVIEWING" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    const unrelatedResponse = await patchApplication(
+      new NextRequest(`http://localhost/api/applications/${ids.application}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeUrl: "https://example.invalid/interview.pdf",
+          coverLetter: "Sigue en entrevista",
+        }),
+      }),
+      { params: { id: ids.application } },
+    );
+
+    expect([statusResponse.status, interestResponse.status, genericResponse.status]).toEqual([
+      409,
+      409,
+      409,
+    ]);
+    expect(unrelatedResponse.status).toBe(200);
+    expect(await updateApplicationStatus(ids.application, "REVIEWING")).toEqual({
+      success: false,
+      error: "El retroceso canónico requiere MOVE_BACKWARD",
+    });
+    expect(await storedApplication()).toMatchObject({
+      stage: "INTERVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 3,
+      status: "INTERVIEW",
+      recruiterInterest: "ACCEPTED",
+      resumeUrl: "https://example.invalid/interview.pdf",
+      coverLetter: "Sigue en entrevista",
+      events: [],
+    });
+  });
+
   it("keeps canonical rejection eligible for the delayed rejection cron", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
     expect(

@@ -158,6 +158,7 @@ export type TransitionApplicationInput = {
     status: LegacyApplicationStatus;
     recruiterInterest: LegacyApplicationInterest;
   };
+  allowReopen?: boolean;
 };
 
 type TransitionApplicationResult = {
@@ -252,7 +253,9 @@ function commandFingerprint(
         actorId: input.actor.id ?? null,
         actorCompanyId: input.actor.companyId ?? null,
         reasonCode: reasonCode ?? null,
+        reasonText: input.reasonText ?? null,
         legacyProjectionOverride: input.legacyProjectionOverride ?? null,
+        allowReopen: input.allowReopen ?? false,
       }),
     )
     .digest("hex");
@@ -321,6 +324,7 @@ async function executeTransition(
       targetDisposition: input.targetDisposition,
       reasonCode,
       reasonText: input.reasonText,
+      allowReopen: input.allowReopen,
     },
   );
   const legacyProjection =
@@ -336,6 +340,9 @@ async function executeTransition(
       happenedAt,
     ),
     ...(legacyProjection ?? {}),
+    ...(planned.transitionClass === "REOPEN"
+      ? { rejectedAt: null, rejectionEmailSent: false }
+      : {}),
   };
 
   const updated = await tx.updateApplicationIfVersion({
@@ -403,15 +410,17 @@ export async function transitionApplication(
 
   const idempotencyKey = normalizeOptionalToken(input.idempotencyKey, 200);
   const reasonCode = normalizeOptionalToken(input.reasonCode, 80);
+  const reasonText = normalizeOptionalToken(input.reasonText, 500);
+  const normalizedInput = { ...input, reasonText };
   const happenedAt = input.happenedAt ?? new Date();
-  const fingerprint = commandFingerprint(input, reasonCode);
+  const fingerprint = commandFingerprint(normalizedInput, reasonCode);
   const store = options.store ?? (await import("./prisma-transition-store")).prismaApplicationTransitionStore;
 
   try {
     return await store.transaction((tx) =>
       executeTransition(
         tx,
-        input,
+        normalizedInput,
         idempotencyKey,
         reasonCode,
         happenedAt,
@@ -427,9 +436,9 @@ export async function transitionApplication(
     let replay: TransitionApplicationResult | null;
     try {
       replay = await store.transaction(async (tx) => {
-        const application = await tx.findApplication(input.applicationId);
+        const application = await tx.findApplication(normalizedInput.applicationId);
         if (!application) return null;
-        await authorize(tx, input.actor, application.companyId);
+        await authorize(tx, normalizedInput.actor, application.companyId);
         const event = await tx.findEventByIdempotencyKey(
           application.companyId,
           application.id,

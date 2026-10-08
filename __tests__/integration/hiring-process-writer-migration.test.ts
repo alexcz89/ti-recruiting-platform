@@ -514,6 +514,436 @@ describeDatabase("canonical hiring process writer migration", () => {
     })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
   });
 
+  it("moves INTERVIEW/ACTIVE backward to REVIEW/ACTIVE with one auditable event", async () => {
+    const application = await createInterviewApplication();
+    const reviewingAt = new Date("2026-10-04T10:00:00.000Z");
+    const interviewAt = new Date("2026-10-05T10:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { reviewingAt, interviewAt },
+    });
+    const command = {
+      intent: "MOVE_BACKWARD" as const,
+      targetStage: "REVIEW" as const,
+      expectedVersion: 1,
+      commandId: "qa-backward-interview-review",
+      reasonCode: "ADDITIONAL_REVIEW" as const,
+      reasonText: "Validar experiencia reciente",
+    };
+
+    const first = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const replay = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: { orderBy: { recordedAt: "asc" } } },
+    });
+
+    expect(first).toMatchObject({
+      state: { stage: "REVIEW", disposition: "ACTIVE", stateVersion: 2 },
+      replayed: false,
+      legacy: { status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 2 },
+    });
+    expect(replay.replayed).toBe(true);
+    expect(stored).toMatchObject({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 2,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+      reviewingAt,
+      interviewAt,
+    });
+    expect(stored.events).toHaveLength(2);
+    expect(stored.events[1]).toMatchObject({
+      type: "APPLICATION_STAGE_CHANGED",
+      fromStage: "INTERVIEW",
+      toStage: "REVIEW",
+      fromDisposition: "ACTIVE",
+      toDisposition: "ACTIVE",
+      visibility: "INTERNAL",
+      reasonCode: "ADDITIONAL_REVIEW",
+      metadata: expect.objectContaining({ transitionClass: "BACKWARD", reasonTextProvided: true }),
+    });
+  });
+
+  it.each([
+    ["INTERVIEW", "INTERVIEW", "ACCEPTED"],
+    ["REVIEW", "REVIEWING", "REVIEW"],
+  ] as const)("moves OFFER/ACTIVE backward to %s and preserves offerAt", async (targetStage, status, recruiterInterest) => {
+    const application = await createOfferApplication();
+    const storedBefore = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+    const result = await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "MOVE_BACKWARD",
+        targetStage,
+        expectedVersion: 1,
+        commandId: `qa-backward-offer-${targetStage.toLowerCase()}`,
+        reasonCode: "PROCESS_CHANGE",
+      },
+      actor: recruiterActor,
+    });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: { orderBy: { recordedAt: "asc" } } },
+    });
+    expect(result.state).toEqual({ stage: targetStage, disposition: "ACTIVE", stateVersion: 2 });
+    expect(stored).toMatchObject({
+      stage: targetStage,
+      disposition: "ACTIVE",
+      stateVersion: 2,
+      status,
+      recruiterInterest,
+      offerAt: storedBefore.offerAt,
+    });
+    expect(stored.events[1]).toMatchObject({
+      type: "APPLICATION_STAGE_CHANGED",
+      fromStage: "OFFER",
+      toStage: targetStage,
+      reasonCode: "PROCESS_CHANGE",
+      metadata: expect.objectContaining({ transitionClass: "BACKWARD" }),
+    });
+  });
+
+  it("reopens CLOSED/REJECTED to REVIEW/ACTIVE without erasing rejection history", async () => {
+    const application = await createApplication();
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "REJECT_CANDIDATE", expectedVersion: 1, commandId: "qa-reopen-reject-first" },
+      actor: recruiterActor,
+    });
+    const before = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: { orderBy: { recordedAt: "asc" } } },
+    });
+    const rejectionEvent = before.events[1];
+    const command = {
+      intent: "REOPEN_REJECTED" as const,
+      expectedVersion: 2,
+      commandId: "qa-reopen-rejected",
+      reasonCode: "RECONSIDERED" as const,
+    };
+    const first = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const replay = await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: { orderBy: { recordedAt: "asc" } } },
+    });
+
+    expect(first.state).toEqual({ stage: "REVIEW", disposition: "ACTIVE", stateVersion: 3 });
+    expect(replay.replayed).toBe(true);
+    expect(stored).toMatchObject({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 3,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+      rejectedAt: null,
+      rejectionEmailSent: false,
+    });
+    expect(stored.reviewingAt).toBeInstanceOf(Date);
+    expect(stored.events).toHaveLength(3);
+    expect(stored.events[1]).toEqual(rejectionEvent);
+    expect(stored.events[2]).toMatchObject({
+      type: "APPLICATION_STAGE_CHANGED",
+      fromStage: "CLOSED",
+      toStage: "REVIEW",
+      fromDisposition: "REJECTED",
+      toDisposition: "ACTIVE",
+      visibility: "INTERNAL",
+      reasonCode: "RECONSIDERED",
+      metadata: expect.objectContaining({ transitionClass: "REOPEN", reasonTextProvided: false }),
+    });
+  });
+
+  it("rejects invalid backward/reopen sources, stale commands, actors, tenants, and idempotency conflicts", async () => {
+    const interview = await createInterviewApplication();
+    const base = {
+      intent: "MOVE_BACKWARD" as const,
+      targetStage: "REVIEW" as const,
+      expectedVersion: 1,
+      commandId: "qa-backward-conflict",
+      reasonCode: "CORRECTION" as const,
+    };
+    await expect(executeApplicationIntent({
+      applicationId: interview.id,
+      command: { ...base, expectedVersion: 0, commandId: "qa-backward-stale" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+    await expect(executeApplicationIntent({
+      applicationId: interview.id,
+      command: { ...base, commandId: "qa-backward-candidate" },
+      actor: { type: "CANDIDATE", id: ids.candidate },
+    })).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+    await expect(executeApplicationIntent({
+      applicationId: interview.id,
+      command: { ...base, commandId: "qa-backward-tenant" },
+      actor: { type: "RECRUITER", id: ids.otherRecruiter, companyId: ids.otherCompany },
+    })).rejects.toBeInstanceOf(ApplicationNotFoundError);
+    await executeApplicationIntent({ applicationId: interview.id, command: base, actor: recruiterActor });
+    await expect(executeApplicationIntent({
+      applicationId: interview.id,
+      command: { ...base, reasonCode: "NEW_INFORMATION" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(IdempotencyKeyConflictError);
+    await expect(executeApplicationIntent({
+      applicationId: interview.id,
+      command: { ...base, targetStage: "INTERVIEW" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(IdempotencyKeyConflictError);
+    await expect(executeApplicationIntent({
+      applicationId: interview.id,
+      command: { ...base, reasonText: "Una razón distinta" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(IdempotencyKeyConflictError);
+  });
+
+  it("fails closed for every unapproved canonical backward or reopen source", async () => {
+    const application = await createApplication();
+    const backward = (targetStage: "REVIEW" | "INTERVIEW", suffix: string) =>
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: {
+          intent: "MOVE_BACKWARD",
+          targetStage,
+          expectedVersion: 1,
+          commandId: `qa-invalid-backward-${suffix}`,
+          reasonCode: "CORRECTION",
+        },
+        actor: recruiterActor,
+      });
+    const reopen = (suffix: string) => executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "REOPEN_REJECTED",
+        expectedVersion: 1,
+        commandId: `qa-invalid-reopen-${suffix}`,
+        reasonCode: "RECONSIDERED",
+      },
+      actor: recruiterActor,
+    });
+
+    await expect(backward("INTERVIEW", "review-forward")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+    await expect(reopen("active")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        stage: "CLOSED",
+        disposition: "REJECTED",
+        status: "REVIEWING",
+        recruiterInterest: "REJECTED",
+      },
+    });
+    await expect(reopen("ambiguous")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+    await expect(backward("REVIEW", "rejected")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        stage: "CLOSED",
+        disposition: "HIRED",
+        status: "HIRED",
+        recruiterInterest: "ACCEPTED",
+      },
+    });
+    await expect(reopen("hired")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+    await expect(backward("REVIEW", "hired")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+  });
+
+  it("enforces stale version, actor, and tenant checks for REOPEN_REJECTED", async () => {
+    const application = await createApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        stage: "CLOSED",
+        disposition: "REJECTED",
+        status: "REJECTED",
+        recruiterInterest: "REJECTED",
+      },
+    });
+    const command = {
+      intent: "REOPEN_REJECTED" as const,
+      expectedVersion: 1,
+      commandId: "qa-reopen-authorization",
+      reasonCode: "RECONSIDERED" as const,
+    };
+
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { ...command, expectedVersion: 0, commandId: "qa-reopen-stale" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { ...command, commandId: "qa-reopen-candidate" },
+      actor: { type: "CANDIDATE", id: ids.candidate },
+    })).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { ...command, commandId: "qa-reopen-cross-tenant" },
+      actor: { type: "RECRUITER", id: ids.otherRecruiter, companyId: ids.otherCompany },
+    })).rejects.toBeInstanceOf(ApplicationNotFoundError);
+  });
+
+  it("keeps exact flag-off backward and reopen compatibility fully noncanonical", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const reviewingAt = new Date("2026-10-01T09:00:00.000Z");
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "OFFER", recruiterInterest: "ACCEPTED", reviewingAt, offerAt: new Date("2026-10-06T09:00:00.000Z") },
+    });
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MOVE_BACKWARD", targetStage: "REVIEW", expectedVersion: 0, commandId: "qa-legacy-backward", reasonCode: "CORRECTION" },
+      actor: recruiterActor,
+    });
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+      reviewingAt,
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+
+    const beforeReviewRetry = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+    const reviewRetry = await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "MOVE_BACKWARD",
+        targetStage: "REVIEW",
+        expectedVersion: 0,
+        commandId: "qa-legacy-backward-review-retry",
+        reasonCode: "CORRECTION",
+      },
+      actor: recruiterActor,
+    });
+    expect(reviewRetry.replayed).toBe(true);
+    expect((await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    })).updatedAt).toEqual(beforeReviewRetry.updatedAt);
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "OFFER", recruiterInterest: "ACCEPTED" },
+    });
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "MOVE_BACKWARD",
+        targetStage: "INTERVIEW",
+        expectedVersion: 0,
+        commandId: "qa-legacy-offer-interview",
+        reasonCode: "PROCESS_CHANGE",
+      },
+      actor: recruiterActor,
+    });
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "INTERVIEW",
+      recruiterInterest: "ACCEPTED",
+    });
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "INTERVIEW", recruiterInterest: "ACCEPTED" },
+    });
+    await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "MOVE_BACKWARD",
+        targetStage: "REVIEW",
+        expectedVersion: 0,
+        commandId: "qa-legacy-interview-review",
+        reasonCode: "ADDITIONAL_REVIEW",
+      },
+      actor: recruiterActor,
+    });
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+    });
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        status: "REJECTED",
+        recruiterInterest: "REJECTED",
+        reviewingAt: null,
+        rejectedAt: new Date(),
+        rejectionEmailSent: true,
+      },
+    });
+    const reopen = {
+      intent: "REOPEN_REJECTED" as const,
+      expectedVersion: 0,
+      commandId: "qa-legacy-reopen",
+      reasonCode: "RECONSIDERED" as const,
+    };
+    await executeApplicationIntent({ applicationId: application.id, command: reopen, actor: recruiterActor });
+    const replay = await executeApplicationIntent({ applicationId: application.id, command: reopen, actor: recruiterActor });
+    expect(replay.replayed).toBe(true);
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+      rejectedAt: null,
+      rejectionEmailSent: false,
+      reviewingAt: expect.any(Date),
+    });
+    expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "REJECTED", recruiterInterest: "REVIEW" },
+    });
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { ...reopen, commandId: "qa-legacy-reopen-partial" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "HIRED", recruiterInterest: "ACCEPTED" },
+    });
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "MOVE_BACKWARD",
+        targetStage: "REVIEW",
+        expectedVersion: 0,
+        commandId: "qa-legacy-hired-backward",
+        reasonCode: "CORRECTION",
+      },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+  });
+
   it("moves only INTERVIEW/ACTIVE to OFFER/ACTIVE with one internal event", async () => {
     const application = await createInterviewApplication();
     const command = {

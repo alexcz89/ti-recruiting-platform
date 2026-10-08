@@ -343,7 +343,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       newStatusStr !== "REJECTED" &&
       hasCanonicalApplicationOffer(app)
     ) {
-      return { ok: false, message: "La oferta canónica no admite retroceso" };
+      return { ok: false, message: "El retroceso requiere el flujo explícito del perfil" };
     }
 
     if (
@@ -351,7 +351,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       (app.recruiterInterest === "REJECTED" ||
         (app.stage === "CLOSED" && app.disposition === "REJECTED"))
     ) {
-      return { ok: false, message: "Reabrir una postulación está fuera de este slice" };
+      return { ok: false, message: "La reapertura requiere el flujo explícito del perfil" };
     }
 
     const canonicalIntent = newStatusStr === "ACCEPTED"

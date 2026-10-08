@@ -40,6 +40,7 @@ export type ApplicationTransitionClass =
   | "NORMAL"
   | "FORWARD_SKIP"
   | "BACKWARD"
+  | "REOPEN"
   | "DISPOSITION_ONLY";
 
 export type PlannedApplicationTransition = CanonicalApplicationState & {

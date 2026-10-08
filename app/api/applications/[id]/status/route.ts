@@ -18,6 +18,10 @@ import {
   APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
   hasApplicationHiredFootprint,
 } from "@/lib/hiring-process/hired-footprint";
+import {
+  APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE,
+  hasCanonicalApplicationInterview,
+} from "@/lib/hiring-process/backward-transition-footprint";
 
 const ALLOWED = new Set<ApplicationStatus>([
   "SUBMITTED",
@@ -116,7 +120,17 @@ async function updateStatus(id: string, status: string) {
 
   if (hasApplicationRejectionFootprint(app)) {
     return jsonNoStore(
-      { error: "Reabrir una postulación rechazada está fuera de este slice" },
+      { error: "Reabrir una postulación rechazada requiere REOPEN_REJECTED" },
+      409,
+    );
+  }
+
+  const requestsBackwardLegacyStatus = newStatus !== "INTERVIEW";
+  const movesCanonicalInterviewBackward =
+    hasCanonicalApplicationInterview(app) && requestsBackwardLegacyStatus;
+  if (movesCanonicalInterviewBackward) {
+    return jsonNoStore(
+      { error: "El retroceso canónico requiere MOVE_BACKWARD" },
       409,
     );
   }
@@ -144,6 +158,9 @@ async function updateStatus(id: string, status: string) {
       AND: [
         authorizedWhere,
         APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+        ...(requestsBackwardLegacyStatus
+          ? [APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE]
+          : []),
         APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
         APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
       ],

@@ -335,7 +335,7 @@ describe("canonical rejection surfaces", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Mover a oferta" })).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Entrevista" })).toBeInTheDocument();
     expect(screen.getByText("Oferta enviada")).toBeInTheDocument();
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Candidato movido a oferta");
   });
@@ -405,7 +405,7 @@ describe("canonical rejection surfaces", () => {
     );
 
     const preselected = screen.getByRole("button", { name: /Preselecto/ });
-    const interview = screen.getByRole("button", { name: /Entrevista/ });
+    const interview = screen.getByRole("button", { name: "Entrevista" });
     expect(preselected).toBeDisabled();
     expect(interview).toBeDisabled();
     fireEvent.click(preselected);
@@ -429,6 +429,35 @@ describe("canonical rejection surfaces", () => {
     expect(screen.getByRole("option", { name: /Preselecto/ })).toBeDisabled();
     expect(screen.getByRole("option", { name: /Entrevista/ })).toBeDisabled();
     fireEvent.click(screen.getByRole("option", { name: /Preselecto/ }));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps InterestSelect unable to move canonical Interview backward or reopen rejection", () => {
+    const interview = render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="ACCEPTED"
+        initialStateVersion={3}
+        canonicalStage="INTERVIEW"
+        canonicalDisposition="ACTIVE"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
+    expect(screen.getByRole("option", { name: /Por revisar/ })).toBeDisabled();
+    expect(screen.getByRole("option", { name: /Preselecto/ })).toBeDisabled();
+    interview.unmount();
+
+    render(
+      <InterestSelect
+        applicationId="application-1"
+        initial="REJECTED"
+        initialStateVersion={2}
+        canonicalStage="CLOSED"
+        canonicalDisposition="REJECTED"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Descartado/ }));
+    fireEvent.click(screen.getByRole("option", { name: /Entrevista/ }));
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -516,5 +545,205 @@ describe("canonical rejection surfaces", () => {
     );
     expect(screen.getByRole("button", { name: /Entrevista/ })).toBeDisabled();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("shows only the approved backward and reopen actions for each canonical state", () => {
+    const props = {
+      candidateId: "candidate-1",
+      candidateName: "Candidate",
+      candidateSeniority: null,
+      candidateLocation: null,
+      resumeUrl: null,
+      waHref: null,
+      fromJobId: "job-1",
+      jobTitle: "Job",
+      matchScore: null,
+      matchLocked: false,
+      applicationId: "application-1",
+      navList: [],
+      navIndex: -1,
+      slots: { summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null },
+    };
+
+    const interview = render(
+      <CandidateReviewShell {...props} currentApplication={interviewApplication} />,
+    );
+    expect(screen.getByRole("button", { name: "Regresar a revisión" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Regresar a entrevista" })).not.toBeInTheDocument();
+    interview.unmount();
+
+    const offer = render(
+      <CandidateReviewShell {...props} currentApplication={offerApplication} />,
+    );
+    expect(screen.getByRole("button", { name: "Regresar a entrevista" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Regresar a revisión" })).toBeEnabled();
+    offer.unmount();
+
+    const rejected = render(
+      <CandidateReviewShell {...props} currentApplication={rejectedApplication} />,
+    );
+    expect(screen.getByRole("button", { name: "Reabrir proceso" })).toBeEnabled();
+    rejected.unmount();
+
+    render(<CandidateReviewShell {...props} currentApplication={hiredApplication} />);
+    expect(screen.queryByRole("button", { name: /Regresar a/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reabrir proceso" })).not.toBeInTheDocument();
+  });
+
+  it("submits one reasoned MOVE_BACKWARD command and updates the returned state", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      application: {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        status: "REVIEWING",
+        recruiterInterest: "REVIEW",
+        stateVersion: 4,
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    render(<CandidateReviewShell
+      candidateId="candidate-1"
+      candidateName="Candidate"
+      candidateSeniority={null}
+      candidateLocation={null}
+      resumeUrl={null}
+      waHref={null}
+      fromJobId="job-1"
+      jobTitle="Job"
+      matchScore={null}
+      matchLocked={false}
+      applicationId="application-1"
+      currentApplication={interviewApplication}
+      navList={[]}
+      navIndex={-1}
+      slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Regresar a revisión" }));
+    fireEvent.change(screen.getByLabelText("Motivo"), {
+      target: { value: "ADDITIONAL_REVIEW" },
+    });
+    fireEvent.change(screen.getByLabelText("Nota (opcional)"), {
+      target: { value: "  Validar referencias  " },
+    });
+    const confirm = screen.getByRole("button", { name: "Confirmar" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    const [url, init] = vi.mocked(fetch).mock.calls[0];
+    expect(url).toBe("/api/applications/application-1/intent");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      intent: "MOVE_BACKWARD",
+      targetStage: "REVIEW",
+      expectedVersion: 3,
+      reasonCode: "ADDITIONAL_REVIEW",
+      reasonText: "Validar referencias",
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Regresar a revisión" })).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("button", { name: "Preselecto" })).toBeEnabled();
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Etapa actualizada");
+  });
+
+  it("sends OFFER backward to INTERVIEW only after explicit confirmation", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      application: {
+        stage: "INTERVIEW",
+        disposition: "ACTIVE",
+        status: "INTERVIEW",
+        recruiterInterest: "ACCEPTED",
+        stateVersion: 5,
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    render(<CandidateReviewShell
+      candidateId="candidate-1"
+      candidateName="Candidate"
+      candidateSeniority={null}
+      candidateLocation={null}
+      resumeUrl={null}
+      waHref={null}
+      fromJobId="job-1"
+      jobTitle="Job"
+      matchScore={null}
+      matchLocked={false}
+      applicationId="application-1"
+      currentApplication={offerApplication}
+      navList={[]}
+      navIndex={-1}
+      slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Regresar a entrevista" }));
+    fireEvent.change(screen.getByLabelText("Motivo"), {
+      target: { value: "PROCESS_CHANGE" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
+      intent: "MOVE_BACKWARD",
+      targetStage: "INTERVIEW",
+      expectedVersion: 4,
+      reasonCode: "PROCESS_CHANGE",
+    });
+  });
+
+  it("requires a note for OTHER and reopens rejection with one command", async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      application: {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        status: "REVIEWING",
+        recruiterInterest: "REVIEW",
+        stateVersion: 3,
+        rejectedAt: null,
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    render(<CandidateReviewShell
+      candidateId="candidate-1"
+      candidateName="Candidate"
+      candidateSeniority={null}
+      candidateLocation={null}
+      resumeUrl={null}
+      waHref={null}
+      fromJobId="job-1"
+      jobTitle="Job"
+      matchScore={null}
+      matchLocked={false}
+      applicationId="application-1"
+      currentApplication={rejectedApplication}
+      navList={[]}
+      navIndex={-1}
+      slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
+    />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Reabrir proceso" }));
+    fireEvent.change(screen.getByLabelText("Motivo"), { target: { value: "OTHER" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Describe el motivo cuando seleccionas Otro.",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Nota (obligatoria)"), {
+      target: { value: "El candidato aportó nueva evidencia" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
+      intent: "REOPEN_REJECTED",
+      expectedVersion: 2,
+      reasonCode: "OTHER",
+      reasonText: "El candidato aportó nueva evidencia",
+    });
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: "Reabrir proceso" })).not.toBeInTheDocument(),
+    );
+    expect(mocks.toastSuccess).toHaveBeenCalledWith("Proceso reabierto");
   });
 });

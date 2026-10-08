@@ -27,17 +27,68 @@ export const APPLICATION_INTENTS = [
   "HIRE_CANDIDATE",
   "MARK_PRESELECTED",
   "CLEAR_PRESELECTED",
+  "MOVE_BACKWARD",
+  "REOPEN_REJECTED",
 ] as const;
 
 export type ApplicationIntent = (typeof APPLICATION_INTENTS)[number];
 
-export const applicationIntentSchema = z
-  .object({
-    intent: z.enum(APPLICATION_INTENTS),
+const baseCommandShape = {
     expectedVersion: z.number().int().nonnegative(),
     commandId: z.string().trim().min(1).max(200),
-  })
-  .strict();
+};
+
+export const APPLICATION_TRANSITION_REASON_CODES = [
+  "CORRECTION",
+  "PROCESS_CHANGE",
+  "ADDITIONAL_REVIEW",
+  "NEW_INFORMATION",
+  "RECONSIDERED",
+  "OTHER",
+] as const;
+
+const reasonShape = {
+  reasonCode: z.enum(APPLICATION_TRANSITION_REASON_CODES),
+  reasonText: z.string().trim().max(500).optional(),
+};
+
+export const applicationIntentSchema = z.discriminatedUnion("intent", [
+  z.object({
+    intent: z.enum([
+      "START_REVIEW",
+      "MOVE_TO_INTERVIEW",
+      "MOVE_TO_OFFER",
+      "REJECT_CANDIDATE",
+      "HIRE_CANDIDATE",
+      "MARK_PRESELECTED",
+      "CLEAR_PRESELECTED",
+    ]),
+    ...baseCommandShape,
+  }).strict(),
+  z.object({
+    intent: z.literal("MOVE_BACKWARD"),
+    ...baseCommandShape,
+    targetStage: z.enum(["REVIEW", "INTERVIEW"]),
+    ...reasonShape,
+  }).strict(),
+  z.object({
+    intent: z.literal("REOPEN_REJECTED"),
+    ...baseCommandShape,
+    ...reasonShape,
+  }).strict(),
+]).superRefine((command, context) => {
+  if (
+    (command.intent === "MOVE_BACKWARD" || command.intent === "REOPEN_REJECTED") &&
+    command.reasonCode === "OTHER" &&
+    !command.reasonText?.trim()
+  ) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["reasonText"],
+      message: "reasonText es obligatorio cuando reasonCode es OTHER",
+    });
+  }
+});
 
 export type ApplicationIntentCommand = z.infer<typeof applicationIntentSchema>;
 
@@ -56,6 +107,12 @@ export function applicationIntentTarget(intent: ApplicationIntent) {
     case "MARK_PRESELECTED":
     case "CLEAR_PRESELECTED":
       return { targetStage: "REVIEW" as const, targetDisposition: "ACTIVE" as const };
+    case "REOPEN_REJECTED":
+      return { targetStage: "REVIEW" as const, targetDisposition: "ACTIVE" as const };
+    case "MOVE_BACKWARD":
+      throw new InvalidApplicationTransitionError(
+        "MOVE_BACKWARD requiere targetStage explícito",
+      );
   }
 }
 
@@ -75,7 +132,19 @@ function legacyProjectionForIntent(intent: ApplicationIntent) {
       return { status: "REVIEWING" as const, recruiterInterest: "MAYBE" as const };
     case "CLEAR_PRESELECTED":
       return { status: "REVIEWING" as const, recruiterInterest: "REVIEW" as const };
+    case "REOPEN_REJECTED":
+      return { status: "REVIEWING" as const, recruiterInterest: "REVIEW" as const };
+    case "MOVE_BACKWARD":
+      throw new InvalidApplicationTransitionError(
+        "MOVE_BACKWARD requiere targetStage explícito",
+      );
   }
+}
+
+function legacyProjectionForBackwardTarget(targetStage: "REVIEW" | "INTERVIEW") {
+  return targetStage === "REVIEW"
+    ? { status: "REVIEWING" as const, recruiterInterest: "REVIEW" as const }
+    : { status: "INTERVIEW" as const, recruiterInterest: "ACCEPTED" as const };
 }
 
 const REJECTION_SOURCE_STAGES = new Set([
@@ -130,13 +199,98 @@ export async function executeApplicationIntent(input: {
       command.intent === "MOVE_TO_OFFER" ||
       command.intent === "HIRE_CANDIDATE" ||
       command.intent === "MARK_PRESELECTED" ||
-      command.intent === "CLEAR_PRESELECTED") &&
+      command.intent === "CLEAR_PRESELECTED" ||
+      command.intent === "MOVE_BACKWARD" ||
+      command.intent === "REOPEN_REJECTED") &&
     (!actor.id || (actor.type !== "RECRUITER" && actor.type !== "ADMIN"))
   ) {
     throw new UnauthorizedApplicationTransitionError();
   }
 
   if (isCanonicalHiringProcessEnabled()) {
+    if (
+      command.intent === "MOVE_BACKWARD" ||
+      command.intent === "REOPEN_REJECTED"
+    ) {
+      const scopedWhere = applicationWhereForActor(
+        { role: actor.type, companyId: actor.companyId ?? null },
+        { applicationId },
+      );
+      if (!scopedWhere) throw new UnauthorizedApplicationTransitionError();
+      const source = await prisma.application.findFirst({
+        where: scopedWhere,
+        select: {
+          id: true,
+          stage: true,
+          disposition: true,
+          status: true,
+          recruiterInterest: true,
+        },
+      });
+      if (!source) throw new ApplicationNotFoundError();
+
+      const priorCommand = await prisma.applicationEvent.findFirst({
+        where: {
+          applicationId: source.id,
+          idempotencyKey: command.commandId,
+        },
+        select: { id: true },
+      });
+
+      const targetStage = command.intent === "MOVE_BACKWARD"
+        ? command.targetStage
+        : "REVIEW";
+      const projection = legacyProjectionForBackwardTarget(targetStage);
+      const isPotentialReplay =
+        source.stage === targetStage &&
+        source.disposition === "ACTIVE" &&
+        source.status === projection.status &&
+        source.recruiterInterest === projection.recruiterInterest;
+
+      if (command.intent === "MOVE_BACKWARD") {
+        const isApprovedSource =
+          source.disposition === "ACTIVE" &&
+          source.status === source.stage &&
+          source.recruiterInterest === "ACCEPTED" &&
+          ((source.stage === "INTERVIEW" && targetStage === "REVIEW") ||
+            (source.stage === "OFFER" &&
+              (targetStage === "INTERVIEW" || targetStage === "REVIEW")));
+        if (!isApprovedSource && !isPotentialReplay && !priorCommand) {
+          throw new InvalidApplicationTransitionError(
+            "MOVE_BACKWARD no admite el par source/target solicitado",
+          );
+        }
+      } else {
+        const isApprovedSource =
+          source.stage === "CLOSED" &&
+          source.disposition === "REJECTED" &&
+          source.status === "REJECTED" &&
+          source.recruiterInterest === "REJECTED";
+        if (!isApprovedSource && !isPotentialReplay && !priorCommand) {
+          throw new InvalidApplicationTransitionError(
+            "REOPEN_REJECTED requiere CLOSED / REJECTED sin footprints ambiguos",
+          );
+        }
+      }
+
+      const result = await transitionApplication({
+        applicationId,
+        targetStage,
+        targetDisposition: "ACTIVE",
+        expectedVersion: command.expectedVersion,
+        actor,
+        idempotencyKey: command.commandId,
+        reasonCode: command.reasonCode,
+        reasonText: command.reasonText,
+        legacyProjectionOverride: projection,
+        ...(command.intent === "REOPEN_REJECTED" ? { allowReopen: true } : {}),
+      });
+      return {
+        ...result,
+        legacy: { ...projection, stateVersion: result.state.stateVersion },
+      };
+    }
+
     if (
       command.intent === "MARK_PRESELECTED" ||
       command.intent === "CLEAR_PRESELECTED"
@@ -396,7 +550,9 @@ export async function executeApplicationIntent(input: {
     command.intent === "MOVE_TO_OFFER" ||
     command.intent === "HIRE_CANDIDATE" ||
     command.intent === "MARK_PRESELECTED" ||
-    command.intent === "CLEAR_PRESELECTED"
+    command.intent === "CLEAR_PRESELECTED" ||
+    command.intent === "MOVE_BACKWARD" ||
+    command.intent === "REOPEN_REJECTED"
   ) {
     await assertPersistedPrivilegedActor(actor);
   }
@@ -414,6 +570,7 @@ export async function executeApplicationIntent(input: {
       offerAt: true,
       hiredAt: true,
       rejectedAt: true,
+      rejectionEmailSent: true,
     },
   });
   if (!application) throw new ApplicationNotFoundError();
@@ -429,7 +586,11 @@ export async function executeApplicationIntent(input: {
   }
 
   // Temporary legacy exception: removed when the canonical flag becomes authoritative.
-  const projection = legacyProjectionForIntent(command.intent);
+  const projection = command.intent === "MOVE_BACKWARD"
+    ? legacyProjectionForBackwardTarget(command.targetStage)
+    : command.intent === "REOPEN_REJECTED"
+      ? legacyProjectionForBackwardTarget("REVIEW")
+      : legacyProjectionForIntent(command.intent);
   const hasLegacyHiredFootprint = application.status === "HIRED";
 
   if (command.intent === "HIRE_CANDIDATE") {
@@ -488,6 +649,58 @@ export async function executeApplicationIntent(input: {
     if (!isExactLegacySource) {
       throw new InvalidApplicationTransitionError(
         "MOVE_TO_OFFER legacy requiere INTERVIEW / ACCEPTED",
+      );
+    }
+  }
+
+  if (command.intent === "MOVE_BACKWARD") {
+    const isExactRetry =
+      application.status === projection.status &&
+      application.recruiterInterest === projection.recruiterInterest;
+    if (isExactRetry) {
+      return {
+        state: null,
+        event: null,
+        replayed: true,
+        legacyProjectionApplied: true,
+        timestamps: { offerAt: application.offerAt, hiredAt: application.hiredAt },
+        legacy: { ...projection, stateVersion: 0 },
+      };
+    }
+    const isApprovedSource =
+      application.recruiterInterest === "ACCEPTED" &&
+      ((application.status === "INTERVIEW" && command.targetStage === "REVIEW") ||
+        (application.status === "OFFER" &&
+          (command.targetStage === "INTERVIEW" || command.targetStage === "REVIEW")));
+    if (!isApprovedSource) {
+      throw new InvalidApplicationTransitionError(
+        "MOVE_BACKWARD legacy no admite el par source/target solicitado",
+      );
+    }
+  }
+
+  if (command.intent === "REOPEN_REJECTED") {
+    const isExactRetry =
+      application.status === "REVIEWING" &&
+      application.recruiterInterest === "REVIEW" &&
+      application.rejectedAt === null &&
+      application.rejectionEmailSent === false;
+    if (isExactRetry) {
+      return {
+        state: null,
+        event: null,
+        replayed: true,
+        legacyProjectionApplied: true,
+        timestamps: { offerAt: application.offerAt, hiredAt: application.hiredAt },
+        legacy: { ...projection, stateVersion: 0 },
+      };
+    }
+    if (
+      application.status !== "REJECTED" ||
+      application.recruiterInterest !== "REJECTED"
+    ) {
+      throw new InvalidApplicationTransitionError(
+        "REOPEN_REJECTED legacy requiere REJECTED / REJECTED",
       );
     }
   }
@@ -554,9 +767,11 @@ export async function executeApplicationIntent(input: {
       stateVersion: 0,
       status: application.status,
       recruiterInterest: application.recruiterInterest,
+      reviewingAt: application.reviewingAt,
       offerAt: application.offerAt,
       hiredAt: application.hiredAt,
       rejectedAt: application.rejectedAt,
+      rejectionEmailSent: application.rejectionEmailSent,
     },
     data: {
       ...projection,
@@ -580,6 +795,13 @@ export async function executeApplicationIntent(input: {
             ...(hasPartialLegacyRejection
               ? {}
               : { rejectionEmailSent: false }),
+          }
+        : {}),
+      ...(command.intent === "REOPEN_REJECTED"
+        ? {
+            rejectedAt: null,
+            rejectionEmailSent: false,
+            reviewingAt: application.reviewingAt ?? happenedAt,
           }
         : {}),
     },
