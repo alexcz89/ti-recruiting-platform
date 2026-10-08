@@ -28,6 +28,9 @@ import {
   applicationWhereForActor,
   candidateWhereForActor,
 } from "@/lib/server/candidate-access";
+import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
+import type { NavEntry } from "@/components/dashboard/CandidateReviewShell";
 
 export const metadata = { title: "Candidato | Panel" };
 
@@ -73,6 +76,8 @@ export default async function CandidateDetailPage({
   params: { id: string };
   searchParams?: { applicationId?: string; jobId?: string };
 }) {
+  const canonicalRecruiterReadsEnabled =
+    isCanonicalHiringProcessRecruiterReadsEnabled();
   const session = await getServerSession(authOptions);
   if (!session) redirect("/signin?callbackUrl=/dashboard/candidates");
 
@@ -366,16 +371,6 @@ export default async function CandidateDetailPage({
   const gatedScore = matchResult && !matchLocked ? matchResult.score : null;
 
   // Navegación prev/next entre candidatos de la misma vacante
-  type NavEntry = {
-    candidateId: string;
-    applicationId: string;
-    name: string;
-    seniority: string | null;
-    location: string | null;
-    status: string;
-    recruiterInterest: string;
-    starred: boolean;
-  };
   let navList: NavEntry[] = [];
   let navIndex = -1;
 
@@ -390,6 +385,8 @@ export default async function CandidateDetailPage({
       orderBy: { createdAt: "asc" },
       select: {
         id: true,
+        stage: true,
+        disposition: true,
         status: true,
         recruiterInterest: true,
         starred: true,
@@ -402,8 +399,10 @@ export default async function CandidateDetailPage({
       name: a.candidate.name ?? "Candidato",
       seniority: a.candidate.seniority ?? null,
       location: a.candidate.location ?? null,
-      status: a.status,
-      recruiterInterest: a.recruiterInterest,
+      readModel: getRecruiterApplicationReadModel(a, {
+        canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
+      }),
+      canonicalRecruiterReadsEnabled,
       starred: a.starred,
     }));
     navIndex = navList.findIndex((n) => n.applicationId === activeAppId);

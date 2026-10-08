@@ -11,6 +11,14 @@ import React, {
 } from "react";
 import { useRouter } from "next/navigation";
 import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
+import {
+  getRecruiterApplicationReadModel,
+  type RecruiterPipelineBucket,
+} from "@/lib/hiring-process/recruiter-read-model";
+import type {
+  ApplicationDispositionValue,
+  ApplicationStageValue,
+} from "@/lib/hiring-process/types";
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 
@@ -52,6 +60,32 @@ const DOT_COLOR: Record<InterestKey, string> = {
   REJECTED: "bg-rose-500",
 };
 
+const READ_COLOR_CLASSES: Record<RecruiterPipelineBucket, string> = {
+  APPLIED: COLOR_CLASSES.REVIEW,
+  REVIEW: "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-500/25 dark:text-indigo-50 dark:border-indigo-500/60",
+  PRESELECTED: COLOR_CLASSES.MAYBE,
+  ASSESSMENT: "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-500/25 dark:text-violet-50 dark:border-violet-500/60",
+  INTERVIEW: COLOR_CLASSES.ACCEPTED,
+  OFFER: "bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-500/25 dark:text-cyan-50 dark:border-cyan-500/60",
+  REJECTED: COLOR_CLASSES.REJECTED,
+  HIRED: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-500/25 dark:text-emerald-50 dark:border-emerald-500/60",
+  HOLD: "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-500/25 dark:text-orange-50 dark:border-orange-500/60",
+  CLOSED_OTHER: "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-600",
+};
+
+const READ_DOT_COLOR: Record<RecruiterPipelineBucket, string> = {
+  APPLIED: DOT_COLOR.REVIEW,
+  REVIEW: "bg-indigo-500",
+  PRESELECTED: DOT_COLOR.MAYBE,
+  ASSESSMENT: "bg-violet-500",
+  INTERVIEW: DOT_COLOR.ACCEPTED,
+  OFFER: "bg-cyan-500",
+  REJECTED: DOT_COLOR.REJECTED,
+  HIRED: "bg-emerald-500",
+  HOLD: "bg-orange-500",
+  CLOSED_OTHER: "bg-zinc-500",
+};
+
 export default function InterestSelect({
   applicationId,
   initial,
@@ -59,13 +93,15 @@ export default function InterestSelect({
   legacyStatus = "",
   canonicalStage = null,
   canonicalDisposition = null,
+  canonicalRecruiterReadsEnabled = false,
 }: {
   applicationId: string;
   initial: InterestKey;
   initialStateVersion: number;
   legacyStatus?: string;
-  canonicalStage?: string | null;
-  canonicalDisposition?: string | null;
+  canonicalStage?: ApplicationStageValue | null;
+  canonicalDisposition?: ApplicationDispositionValue | null;
+  canonicalRecruiterReadsEnabled?: boolean;
 }) {
   const router = useRouter();
   const [value, setValue] = useState<InterestKey>(initial);
@@ -78,6 +114,35 @@ export default function InterestSelect({
   const terminalHired =
     legacyStatus === "HIRED" ||
     (canonicalStage === "CLOSED" && canonicalDisposition === "HIRED");
+  const readModel = getRecruiterApplicationReadModel(
+    {
+      stage: canonicalStage,
+      disposition: canonicalDisposition,
+      status: legacyStatus,
+      recruiterInterest: value,
+    },
+    { canonicalReadsEnabled: canonicalRecruiterReadsEnabled },
+  );
+  const readOnlyCanonicalPresentation =
+    canonicalRecruiterReadsEnabled &&
+    readModel.source === "CANONICAL" &&
+    !(["APPLIED", "REVIEW", "PRESELECTED"] as RecruiterPipelineBucket[]).includes(
+      readModel.bucket,
+    );
+  const effectiveValue: InterestKey =
+    canonicalRecruiterReadsEnabled && readModel.source === "CANONICAL"
+      ? readModel.bucket === "PRESELECTED"
+        ? "MAYBE"
+        : readModel.bucket === "APPLIED" || readModel.bucket === "REVIEW"
+          ? "REVIEW"
+          : value
+      : value;
+  const reviewOptionLabel =
+    canonicalRecruiterReadsEnabled &&
+    readModel.source === "CANONICAL" &&
+    canonicalStage === "REVIEW"
+      ? "En revisión"
+      : LABEL.REVIEW;
 
   async function updateInterest(next: InterestKey) {
     if (terminalHired) return;
@@ -91,7 +156,7 @@ export default function InterestSelect({
           ? "REJECT_CANDIDATE"
           : next === "MAYBE"
             ? "MARK_PRESELECTED"
-            : value === "MAYBE" && next === "REVIEW"
+            : effectiveValue === "MAYBE" && next === "REVIEW"
               ? "CLEAR_PRESELECTED"
               : null;
 
@@ -122,15 +187,15 @@ export default function InterestSelect({
 
   const handleSelect = (next: InterestKey) => {
     setOpen(false);
-    if (terminalHired) return;
-    if (value === "REJECTED") return;
+    if (terminalHired || readOnlyCanonicalPresentation) return;
+    if (effectiveValue === "REJECTED") return;
     if (canonicalOffer && next !== "REJECTED") return;
-    if (next === value) return;
+    if (next === effectiveValue) return;
     startTransition(() => updateInterest(next));
   };
 
   const handleToggle = () => {
-    if (isPending || terminalHired) return;
+    if (isPending || terminalHired || readOnlyCanonicalPresentation) return;
     setOpen((o) => !o);
   };
 
@@ -178,16 +243,31 @@ export default function InterestSelect({
       {/* Botón pill con color por estado */}
       <button
         type="button"
-        className={`${baseButtonClasses} ${COLOR_CLASSES[value]}`}
+        className={`${baseButtonClasses} ${
+          canonicalRecruiterReadsEnabled
+            ? READ_COLOR_CLASSES[readModel.bucket]
+            : COLOR_CLASSES[value]
+        }`}
         onClick={handleToggle}
         onKeyDown={handleKeyDown}
-        disabled={isPending || terminalHired}
+        disabled={isPending || terminalHired || readOnlyCanonicalPresentation}
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_COLOR[value]}`} aria-hidden />
-        <span className="flex-1 truncate text-left">{LABEL[value]}</span>
-        <span className="shrink-0 text-[10px] opacity-60">▾</span>
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${
+            canonicalRecruiterReadsEnabled
+              ? READ_DOT_COLOR[readModel.bucket]
+              : DOT_COLOR[value]
+          }`}
+          aria-hidden
+        />
+        <span className="flex-1 truncate text-left">
+          {canonicalRecruiterReadsEnabled ? readModel.label : LABEL[value]}
+        </span>
+        {!readOnlyCanonicalPresentation && (
+          <span className="shrink-0 text-[10px] opacity-60">▾</span>
+        )}
       </button>
 
       {/* Menú: ahora es un bloque normal debajo del botón (no absoluto) */}
@@ -202,7 +282,8 @@ export default function InterestSelect({
           role="listbox"
         >
           {INTEREST_KEYS.map((key) => {
-            const isActive = key === value;
+            const isActive = key === effectiveValue;
+            const optionLabel = key === "REVIEW" ? reviewOptionLabel : LABEL[key];
             const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
             const blockedPreselectBackward =
               (key === "REVIEW" || key === "MAYBE") &&
@@ -236,7 +317,7 @@ export default function InterestSelect({
                     className={`h-2 w-2 rounded-full ${DOT_COLOR[key]}`}
                     aria-hidden
                   />
-                  {LABEL[key]}
+                  {optionLabel}
                 </span>
                 {isActive && (
                   <span className="text-[10px] text-emerald-500">●</span>
