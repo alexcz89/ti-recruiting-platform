@@ -26,6 +26,9 @@ const requiredDynamicHiredGuards = new Map<string, RegExp>([
   ["app/api/applications/[id]/route.ts", /if \(body\.status === "HIRED"\)/],
   ["app/api/applications/[id]/status/route.ts", /if \(newStatus === "HIRED"\)/],
 ]);
+const requiredDynamicMaybeGuards = new Map<string, RegExp>([
+  ["app/api/applications/[id]/interest/route.ts", /if \(next === "MAYBE"\)/],
+]);
 
 // Canonical infrastructure is expected to write the snapshot. Every other entry is
 // temporary legacy debt and must be removed as its writer moves in Slice 3B2/readers.
@@ -35,7 +38,6 @@ const allowedProductionWriters = new Map<string, string>([
   ["lib/hiring-process/reconcile-legacy-applications.ts", "approved one-time reconciliation"],
   ["lib/hiring-process/application-intents.ts", "feature-flag OFF legacy fallback"],
   ["app/dashboard/overview/actions.ts", "temporary flag-OFF review pilot"],
-  ["app/dashboard/jobs/[id]/page.tsx", "temporary MAYBE/REVIEW Kanban writers"],
   ["app/api/applications/[id]/route.ts", "temporary generic legacy endpoint"],
   ["app/api/applications/[id]/status/route.ts", "temporary legacy status endpoint"],
   ["app/api/applications/[id]/interest/route.ts", "temporary MAYBE/REVIEW endpoint"],
@@ -239,6 +241,41 @@ function directApplicationHiredWriteLines(path: string) {
   return writes;
 }
 
+function directApplicationMaybeWriteLines(path: string) {
+  const contents = readFileSync(path, "utf8");
+  const source = ts.createSourceFile(
+    path,
+    contents,
+    ts.ScriptTarget.Latest,
+    true,
+    path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const writes: number[] = [];
+
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const method = node.expression.name.text;
+      const model = node.expression.expression;
+      if (
+        mutationMethods.has(method) &&
+        ts.isPropertyAccessExpression(model) &&
+        model.name.text === "application"
+      ) {
+        const argument = node.arguments[0];
+        if (argument && ts.isObjectLiteralExpression(argument)) {
+          const data = dataInitializer(argument, source);
+          if (data?.getText(source).includes("MAYBE")) {
+            writes.push(source.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+          }
+        }
+      }
+    }
+    node.forEachChild(visit);
+  };
+  source.forEachChild(visit);
+  return writes;
+}
+
 describe("Application state writer architecture", () => {
   it("allows direct production writers only through the documented allowlist", () => {
     const files = ["app", "components", "lib"].flatMap((directory) =>
@@ -327,6 +364,27 @@ describe("Application state writer architecture", () => {
       const source = readFileSync(join(root, path), "utf8");
       expect(source, `${path} must fail closed for dynamic HIRED input`).toMatch(guard);
       expect(source).toContain("HIRE_CANDIDATE");
+    }
+  });
+
+  it("blocks direct MAYBE writes outside canonical compatibility infrastructure", () => {
+    const files = ["app", "components", "lib"].flatMap((directory) =>
+      sourceFiles(join(root, directory)),
+    );
+    const violations: Record<string, number[]> = {};
+
+    for (const file of files) {
+      const relativePath = relative(root, file).replaceAll("\\", "/");
+      if (canonicalInfrastructure.has(relativePath)) continue;
+      const lines = directApplicationMaybeWriteLines(file);
+      if (lines.length) violations[relativePath] = lines;
+    }
+    expect(violations, "Direct MAYBE Application writer(s) must use MARK_PRESELECTED").toEqual({});
+
+    for (const [path, guard] of requiredDynamicMaybeGuards) {
+      const source = readFileSync(join(root, path), "utf8");
+      expect(source, `${path} must fail closed for dynamic MAYBE input`).toMatch(guard);
+      expect(source).toContain("MARK_PRESELECTED");
     }
   });
 

@@ -109,6 +109,20 @@ export async function PATCH(
       );
     }
 
+    if (next === "MAYBE") {
+      return jsonNoStore(
+        { error: "MAYBE requiere el comando MARK_PRESELECTED" },
+        400,
+      );
+    }
+
+    if (app.recruiterInterest === "MAYBE" && next === "REVIEW") {
+      return jsonNoStore(
+        { error: "Quitar MAYBE requiere el comando CLEAR_PRESELECTED" },
+        400,
+      );
+    }
+
     const result = await prisma.application.updateMany({
       where: {
         AND: [

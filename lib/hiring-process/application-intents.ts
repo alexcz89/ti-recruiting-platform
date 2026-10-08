@@ -7,6 +7,9 @@ import { prisma } from "@/lib/server/prisma";
 
 import { isCanonicalHiringProcessEnabled } from "./feature-flags";
 import { InvalidApplicationTransitionError } from "./rules";
+import { APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE } from "./rejection-footprint";
+import { APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE } from "./offer-footprint";
+import { APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE } from "./hired-footprint";
 import {
   ApplicationNotFoundError,
   CanonicalStateUnavailableError,
@@ -22,6 +25,8 @@ export const APPLICATION_INTENTS = [
   "MOVE_TO_OFFER",
   "REJECT_CANDIDATE",
   "HIRE_CANDIDATE",
+  "MARK_PRESELECTED",
+  "CLEAR_PRESELECTED",
 ] as const;
 
 export type ApplicationIntent = (typeof APPLICATION_INTENTS)[number];
@@ -48,6 +53,9 @@ export function applicationIntentTarget(intent: ApplicationIntent) {
       return { targetStage: "CLOSED" as const, targetDisposition: "REJECTED" as const };
     case "HIRE_CANDIDATE":
       return { targetStage: "CLOSED" as const, targetDisposition: "HIRED" as const };
+    case "MARK_PRESELECTED":
+    case "CLEAR_PRESELECTED":
+      return { targetStage: "REVIEW" as const, targetDisposition: "ACTIVE" as const };
   }
 }
 
@@ -63,6 +71,10 @@ function legacyProjectionForIntent(intent: ApplicationIntent) {
       return { status: "REJECTED" as const, recruiterInterest: "REJECTED" as const };
     case "HIRE_CANDIDATE":
       return { status: "HIRED" as const, recruiterInterest: "ACCEPTED" as const };
+    case "MARK_PRESELECTED":
+      return { status: "REVIEWING" as const, recruiterInterest: "MAYBE" as const };
+    case "CLEAR_PRESELECTED":
+      return { status: "REVIEWING" as const, recruiterInterest: "REVIEW" as const };
   }
 }
 
@@ -74,6 +86,38 @@ const REJECTION_SOURCE_STAGES = new Set([
   "OFFER",
 ]);
 
+async function assertPersistedPrivilegedActor(actor: TransitionActor) {
+  const actorId = actor.id;
+  if (!actorId || (actor.type !== "RECRUITER" && actor.type !== "ADMIN")) {
+    throw new UnauthorizedApplicationTransitionError();
+  }
+  const persistedActor = await prisma.user.findFirst({
+    where: actor.type === "ADMIN"
+      ? {
+          id: actorId,
+          role: "ADMIN",
+          isActive: true,
+          isSuspended: false,
+          deletedAt: null,
+        }
+      : {
+          id: actorId,
+          role: "RECRUITER",
+          isActive: true,
+          isSuspended: false,
+          deletedAt: null,
+          recruiterProfile: {
+            is: {
+              companyId: actor.companyId ?? "__missing_company__",
+              status: "APPROVED",
+            },
+          },
+        },
+    select: { id: true },
+  });
+  if (!persistedActor) throw new UnauthorizedApplicationTransitionError();
+}
+
 export async function executeApplicationIntent(input: {
   applicationId: string;
   command: ApplicationIntentCommand;
@@ -84,13 +128,173 @@ export async function executeApplicationIntent(input: {
   if (
     (command.intent === "REJECT_CANDIDATE" ||
       command.intent === "MOVE_TO_OFFER" ||
-      command.intent === "HIRE_CANDIDATE") &&
+      command.intent === "HIRE_CANDIDATE" ||
+      command.intent === "MARK_PRESELECTED" ||
+      command.intent === "CLEAR_PRESELECTED") &&
     (!actor.id || (actor.type !== "RECRUITER" && actor.type !== "ADMIN"))
   ) {
     throw new UnauthorizedApplicationTransitionError();
   }
 
   if (isCanonicalHiringProcessEnabled()) {
+    if (
+      command.intent === "MARK_PRESELECTED" ||
+      command.intent === "CLEAR_PRESELECTED"
+    ) {
+      const scopedWhere = applicationWhereForActor(
+        { role: actor.type, companyId: actor.companyId ?? null },
+        { applicationId },
+      );
+      if (!scopedWhere) throw new UnauthorizedApplicationTransitionError();
+
+      const source = await prisma.application.findFirst({
+        where: scopedWhere,
+        select: {
+          id: true,
+          stage: true,
+          disposition: true,
+          stateVersion: true,
+          status: true,
+          recruiterInterest: true,
+          reviewingAt: true,
+          offerAt: true,
+          hiredAt: true,
+        },
+      });
+      if (!source) throw new ApplicationNotFoundError();
+      const isReviewActive =
+        source.stage === "REVIEW" && source.disposition === "ACTIVE";
+
+      if (
+        command.intent === "MARK_PRESELECTED" &&
+        source.stage === "APPLIED" &&
+        source.disposition === "ACTIVE"
+      ) {
+        if (
+          source.status !== "SUBMITTED" ||
+          source.recruiterInterest !== "REVIEW"
+        ) {
+          throw new InvalidApplicationTransitionError(
+            "MARK_PRESELECTED requiere la proyección SUBMITTED / REVIEW desde APPLIED",
+          );
+        }
+        const result = await transitionApplication({
+          applicationId,
+          ...applicationIntentTarget(command.intent),
+          expectedVersion: command.expectedVersion,
+          actor,
+          idempotencyKey: command.commandId,
+          legacyProjectionOverride: legacyProjectionForIntent(command.intent),
+        });
+        return {
+          ...result,
+          legacy: {
+            ...legacyProjectionForIntent(command.intent),
+            stateVersion: result.state.stateVersion,
+          },
+        };
+      }
+
+      if (!isReviewActive) {
+        throw new InvalidApplicationTransitionError(
+          `${command.intent} requiere REVIEW / ACTIVE${
+            command.intent === "MARK_PRESELECTED" ? " o APPLIED / ACTIVE" : ""
+          }`,
+        );
+      }
+
+      if (source.stateVersion !== command.expectedVersion) {
+        if (command.intent === "MARK_PRESELECTED") {
+          const result = await transitionApplication({
+            applicationId,
+            ...applicationIntentTarget(command.intent),
+            expectedVersion: command.expectedVersion,
+            actor,
+            idempotencyKey: command.commandId,
+            legacyProjectionOverride: legacyProjectionForIntent(command.intent),
+          });
+          return {
+            ...result,
+            legacy: {
+              ...legacyProjectionForIntent(command.intent),
+              stateVersion: result.state.stateVersion,
+            },
+          };
+        }
+        throw new ConcurrentApplicationTransitionError();
+      }
+
+      await assertPersistedPrivilegedActor(actor);
+      const projection = legacyProjectionForIntent(command.intent);
+      if (source.status !== "REVIEWING") {
+        throw new InvalidApplicationTransitionError(
+          `${command.intent} requiere una proyección REVIEWING compatible`,
+        );
+      }
+      const expectedInterest =
+        command.intent === "MARK_PRESELECTED" ? "REVIEW" : "MAYBE";
+      const replayInterest = projection.recruiterInterest;
+      if (source.recruiterInterest === replayInterest) {
+        return {
+          state: {
+            stage: "REVIEW" as const,
+            disposition: "ACTIVE" as const,
+            stateVersion: source.stateVersion,
+          },
+          event: null,
+          replayed: true,
+          legacyProjectionApplied: true,
+          timestamps: { offerAt: source.offerAt, hiredAt: source.hiredAt },
+          legacy: { ...projection, stateVersion: source.stateVersion },
+        };
+      }
+      if (
+        source.recruiterInterest !== expectedInterest
+      ) {
+        throw new InvalidApplicationTransitionError(
+          `${command.intent} requiere una proyección REVIEWING compatible`,
+        );
+      }
+
+      const happenedAt = new Date();
+      const updated = await prisma.application.updateMany({
+        where: {
+          AND: [
+            scopedWhere,
+            APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+            APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
+            APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+            {
+              stage: "REVIEW",
+              disposition: "ACTIVE",
+              stateVersion: source.stateVersion,
+              status: source.status,
+              recruiterInterest: expectedInterest,
+            },
+          ],
+        },
+        data: {
+          ...projection,
+          ...(command.intent === "MARK_PRESELECTED" && !source.reviewingAt
+            ? { reviewingAt: happenedAt }
+            : {}),
+        },
+      });
+      if (updated.count !== 1) throw new ConcurrentApplicationTransitionError();
+      return {
+        state: {
+          stage: "REVIEW" as const,
+          disposition: "ACTIVE" as const,
+          stateVersion: source.stateVersion,
+        },
+        event: null,
+        replayed: false,
+        legacyProjectionApplied: true,
+        timestamps: { offerAt: source.offerAt, hiredAt: source.hiredAt },
+        legacy: { ...projection, stateVersion: source.stateVersion },
+      };
+    }
+
     if (command.intent === "HIRE_CANDIDATE") {
       const scopedWhere = applicationWhereForActor(
         { role: actor.type, companyId: actor.companyId ?? null },
@@ -190,37 +394,11 @@ export async function executeApplicationIntent(input: {
   if (
     command.intent === "REJECT_CANDIDATE" ||
     command.intent === "MOVE_TO_OFFER" ||
-    command.intent === "HIRE_CANDIDATE"
+    command.intent === "HIRE_CANDIDATE" ||
+    command.intent === "MARK_PRESELECTED" ||
+    command.intent === "CLEAR_PRESELECTED"
   ) {
-    const actorId = actor.id;
-    if (!actorId || (actor.type !== "RECRUITER" && actor.type !== "ADMIN")) {
-      throw new UnauthorizedApplicationTransitionError();
-    }
-    const persistedActor = await prisma.user.findFirst({
-      where: actor.type === "ADMIN"
-        ? {
-            id: actorId,
-            role: "ADMIN",
-            isActive: true,
-            isSuspended: false,
-            deletedAt: null,
-          }
-        : {
-            id: actorId,
-            role: "RECRUITER",
-            isActive: true,
-            isSuspended: false,
-            deletedAt: null,
-            recruiterProfile: {
-              is: {
-                companyId: actor.companyId ?? "__missing_company__",
-                status: "APPROVED",
-              },
-            },
-          },
-      select: { id: true },
-    });
-    if (!persistedActor) throw new UnauthorizedApplicationTransitionError();
+    await assertPersistedPrivilegedActor(actor);
   }
 
   const application = await prisma.application.findFirst({
@@ -232,6 +410,7 @@ export async function executeApplicationIntent(input: {
       stateVersion: true,
       status: true,
       recruiterInterest: true,
+      reviewingAt: true,
       offerAt: true,
       hiredAt: true,
       rejectedAt: true,
@@ -314,6 +493,37 @@ export async function executeApplicationIntent(input: {
   }
 
   if (
+    command.intent === "MARK_PRESELECTED" ||
+    command.intent === "CLEAR_PRESELECTED"
+  ) {
+    const isMark = command.intent === "MARK_PRESELECTED";
+    const isExactLegacyRetry =
+      application.status === "REVIEWING" &&
+      application.recruiterInterest === projection.recruiterInterest;
+    if (isExactLegacyRetry) {
+      return {
+        state: null,
+        event: null,
+        replayed: true,
+        legacyProjectionApplied: true,
+        timestamps: { offerAt: application.offerAt, hiredAt: application.hiredAt },
+        legacy: { ...projection, stateVersion: application.stateVersion },
+      };
+    }
+
+    const isExactLegacySource = isMark
+      ? (application.status === "SUBMITTED" || application.status === "REVIEWING") &&
+        application.recruiterInterest === "REVIEW"
+      : application.status === "REVIEWING" &&
+        application.recruiterInterest === "MAYBE";
+    if (!isExactLegacySource) {
+      throw new InvalidApplicationTransitionError(
+        `${command.intent} legacy requiere una proyección de revisión compatible`,
+      );
+    }
+  }
+
+  if (
     command.intent === "REJECT_CANDIDATE" &&
     application.status === "REJECTED" &&
     application.recruiterInterest === "REJECTED"
@@ -351,6 +561,9 @@ export async function executeApplicationIntent(input: {
     data: {
       ...projection,
       ...(command.intent === "START_REVIEW" ? { reviewingAt: happenedAt } : {}),
+      ...(command.intent === "MARK_PRESELECTED"
+        ? { reviewingAt: application.reviewingAt ?? happenedAt }
+        : {}),
       ...(command.intent === "MOVE_TO_INTERVIEW" ? { interviewAt: happenedAt } : {}),
       ...(command.intent === "MOVE_TO_OFFER"
         ? { offerAt: application.offerAt ?? happenedAt }

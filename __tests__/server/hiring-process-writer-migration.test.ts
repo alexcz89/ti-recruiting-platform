@@ -12,7 +12,7 @@ const root = process.cwd();
 const read = (...parts: string[]) => readFileSync(join(root, ...parts), "utf8");
 
 describe("canonical hiring process writer migration", () => {
-  it("supports the five approved explicit intents", () => {
+  it("supports the seven approved explicit intents", () => {
     expect(
       applicationIntentSchema.parse({
         intent: "START_REVIEW",
@@ -47,6 +47,28 @@ describe("canonical hiring process writer migration", () => {
     expect(applicationIntentTarget("HIRE_CANDIDATE")).toEqual({
       targetStage: "CLOSED",
       targetDisposition: "HIRED",
+    });
+    expect(
+      applicationIntentSchema.parse({
+        intent: "MARK_PRESELECTED",
+        expectedVersion: 1,
+        commandId: "mark-preselected-command",
+      }),
+    ).toEqual({
+      intent: "MARK_PRESELECTED",
+      expectedVersion: 1,
+      commandId: "mark-preselected-command",
+    });
+    expect(
+      applicationIntentSchema.parse({
+        intent: "CLEAR_PRESELECTED",
+        expectedVersion: 2,
+        commandId: "clear-preselected-command",
+      }),
+    ).toEqual({
+      intent: "CLEAR_PRESELECTED",
+      expectedVersion: 2,
+      commandId: "clear-preselected-command",
     });
   });
 
@@ -89,6 +111,32 @@ describe("canonical hiring process writer migration", () => {
     expect(interestSelect).not.toContain('ACCEPTED: "OFFER"');
   });
 
+  it("routes every visible Preselecto writer through one explicit command", () => {
+    const interestSelect = read("app", "dashboard", "jobs", "[id]", "applications", "InterestSelect.tsx");
+    const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
+    const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
+    const kanbanAction = read("app", "dashboard", "jobs", "[id]", "page.tsx");
+
+    for (const source of [interestSelect, candidateShell, kanbanAction]) {
+      expect(source).toContain('"MARK_PRESELECTED"');
+      expect(source).toContain('"CLEAR_PRESELECTED"');
+    }
+    expect(interestSelect).not.toContain('/status`');
+    expect(interestSelect).not.toMatch(/recruiterInterest:\s*next/);
+    expect(candidateShell).not.toMatch(/canonicalIntent \? "intent" : "interest"/);
+    expect(kanban).toContain('toStatus === "MAYBE"');
+    expect(kanban).toContain('fromStatus === "MAYBE" && toStatus === "REVIEW"');
+    expect(kanbanAction).not.toContain("prisma.application.updateMany({");
+  });
+
+  it("blocks direct MAYBE and Preselecto clear bypasses in the legacy interest endpoint", () => {
+    const interestRoute = read("app", "api", "applications", "[id]", "interest", "route.ts");
+    expect(interestRoute).toContain('if (next === "MAYBE")');
+    expect(interestRoute).toContain("MARK_PRESELECTED");
+    expect(interestRoute).toMatch(/app\.recruiterInterest === "MAYBE"[\s\S]*next === "REVIEW"/);
+    expect(interestRoute).toContain("CLEAR_PRESELECTED");
+  });
+
   it("exposes one explicit CandidateReviewShell offer command without reinterpreting Entrevista", () => {
     const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
     const candidatePage = read("app", "dashboard", "candidates", "[id]", "page.tsx");
@@ -121,15 +169,15 @@ describe("canonical hiring process writer migration", () => {
     const overviewButtons = read("app", "dashboard", "overview", "QuickActionButtons.tsx");
     const overviewActions = read("app", "dashboard", "overview", "actions.ts");
 
-    expect(interestSelect).toContain('next === "ACCEPTED" || next === "REJECTED"');
     expect(interestSelect).toContain('"REJECT_CANDIDATE"');
     expect(interestSelect).toMatch(
-      /next === "ACCEPTED" \|\| next === "REJECTED"[\s\S]*\/intent[\s\S]*return;/,
+      /next === "REJECTED"[\s\S]*"REJECT_CANDIDATE"[\s\S]*\/intent[\s\S]*return;/,
     );
     expect(candidateShell).toContain('? "REJECT_CANDIDATE"');
     expect(candidateShell).toContain('if (currentInterest === "REJECTED") return;');
-    expect(kanban).toContain('toStatus === "ACCEPTED" || toStatus === "REJECTED"');
-    expect(jobPage).toContain(': "REJECT_CANDIDATE"');
+    expect(kanban).toContain('toStatus === "ACCEPTED"');
+    expect(kanban).toContain('toStatus === "REJECTED"');
+    expect(jobPage).toContain('"REJECT_CANDIDATE"');
     expect(overviewButtons).toContain('commandId: crypto.randomUUID()');
     expect(overviewActions).toContain('intent: "REJECT_CANDIDATE"');
     expect(overviewActions).not.toContain('recruiterInterest: status === "REVIEWING" ? "ACCEPTED" : "REJECTED"');
@@ -166,17 +214,19 @@ describe("canonical hiring process writer migration", () => {
     expect(helper).not.toContain('status === "OFFER"');
     expect(helper).not.toContain('recruiterInterest === "ACCEPTED"');
 
-    const serverWriters = [
+    const guardedDirectWriters = [
       read("app", "api", "applications", "[id]", "status", "route.ts"),
       read("app", "api", "applications", "[id]", "interest", "route.ts"),
       read("app", "api", "applications", "[id]", "route.ts"),
-      read("app", "dashboard", "jobs", "[id]", "page.tsx"),
       read("app", "dashboard", "overview", "actions.ts"),
     ];
-    for (const source of serverWriters) {
+    for (const source of guardedDirectWriters) {
       expect(source).toContain("hasCanonicalApplicationOffer");
       expect(source).toContain("APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE");
     }
+    expect(read("app", "dashboard", "jobs", "[id]", "page.tsx")).toContain(
+      "hasCanonicalApplicationOffer",
+    );
 
     const interestSelect = read(
       "app",
@@ -233,7 +283,8 @@ describe("canonical hiring process writer migration", () => {
     const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
     const overview = read("app", "dashboard", "overview", "actions.ts");
     const interestSelect = read("app", "dashboard", "jobs", "[id]", "applications", "InterestSelect.tsx");
-    for (const source of [kanbanAction, overview]) {
+    expect(kanbanAction).toContain("hasApplicationHiredFootprint");
+    for (const source of [overview]) {
       expect(source).toContain("hasApplicationHiredFootprint");
       expect(source).toContain("APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE");
     }

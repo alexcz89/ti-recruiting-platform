@@ -168,6 +168,10 @@ export default function CandidateReviewShell({
   const terminalHired =
     app?.status === "HIRED" ||
     (app?.stage === "CLOSED" && app.disposition === "HIRED");
+  const preselectAllowed =
+    !app?.stage ||
+    (app.disposition === "ACTIVE" &&
+      (app.stage === "APPLIED" || app.stage === "REVIEW"));
 
   const prevNav = navIndex > 0 ? navList[navIndex - 1] : null;
   const nextNav = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
@@ -192,31 +196,39 @@ export default function CandidateReviewShell({
         ? "MOVE_TO_INTERVIEW"
         : recruiterInterest === "REJECTED"
           ? "REJECT_CANDIDATE"
-          : null;
+          : recruiterInterest === "MAYBE"
+            ? "MARK_PRESELECTED"
+            : currentInterest === "MAYBE" && recruiterInterest === "REVIEW"
+              ? "CLEAR_PRESELECTED"
+              : null;
+      if (!canonicalIntent) {
+        setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
+        return;
+      }
       const res = await fetch(
-        `/api/applications/${applicationId}/${canonicalIntent ? "intent" : "interest"}`,
+        `/api/applications/${applicationId}/intent`,
         {
-        method: canonicalIntent ? "POST" : "PATCH",
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          canonicalIntent
-            ? {
-                intent: canonicalIntent,
-                expectedVersion: app?.stateVersion ?? 0,
-                commandId: crypto.randomUUID(),
-              }
-            : { recruiterInterest },
+          {
+            intent: canonicalIntent,
+            expectedVersion: app?.stateVersion ?? 0,
+            commandId: crypto.randomUUID(),
+          },
         ),
       });
       if (res.ok) {
         const data = await res.json();
-        const updated = canonicalIntent ? data.application : data;
+        const updated = data.application;
         setCurrentInterest(updated.recruiterInterest);
         setApp((prev) => prev ? {
           ...prev,
           recruiterInterest: updated.recruiterInterest,
           status: updated.status ?? prev.status,
           stateVersion: updated.stateVersion ?? prev.stateVersion,
+          stage: updated.stage ?? prev.stage,
+          disposition: updated.disposition ?? prev.disposition,
         } : prev);
       } else {
         // Revertir si falla
@@ -464,7 +476,7 @@ export default function CandidateReviewShell({
                   <button
                     key={key}
                     type="button"
-                    disabled={isPending || blockedByCanonicalOffer || terminalHired}
+                    disabled={isPending || blockedByCanonicalOffer || terminalHired || (key === "MAYBE" && !preselectAllowed)}
                     onClick={() => {
                       if (key === "REJECTED" && isSelected) return;
                       patchInterest(isSelected ? "REVIEW" : key);

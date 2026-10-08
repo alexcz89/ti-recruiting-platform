@@ -575,6 +575,43 @@ describeDatabase("canonical hiring process pilot writer", () => {
     });
   });
 
+  it("rejects direct MAYBE and direct Preselecto clear bypasses", async () => {
+    const directMaybe = await patchApplicationInterest(
+      new Request(`http://localhost/api/applications/${ids.application}/interest`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recruiterInterest: "MAYBE" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    expect(directMaybe.status).toBe(400);
+
+    await prisma.application.update({
+      where: { id: ids.application },
+      data: {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        status: "REVIEWING",
+        recruiterInterest: "MAYBE",
+      },
+    });
+    const directClear = await patchApplicationInterest(
+      new Request(`http://localhost/api/applications/${ids.application}/interest`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recruiterInterest: "REVIEW" }),
+      }),
+      { params: { id: ids.application } },
+    );
+    expect(directClear.status).toBe(400);
+    expect(await storedApplication()).toMatchObject({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      status: "REVIEWING",
+      recruiterInterest: "MAYBE",
+    });
+  });
+
   it("prevents generic legacy endpoints from reopening any rejection footprint", async () => {
     const rejectedAt = new Date("2026-10-05T12:00:00.000Z");
     await prisma.application.update({
