@@ -520,7 +520,7 @@ describeDatabase("canonical hiring process writer migration", () => {
     const interviewAt = new Date("2026-10-05T10:00:00.000Z");
     await prisma.application.update({
       where: { id: application.id },
-      data: { reviewingAt, interviewAt },
+      data: { reviewingAt, interviewAt, recruiterInterest: "REVIEW" },
     });
     const command = {
       intent: "MOVE_BACKWARD" as const,
@@ -571,6 +571,10 @@ describeDatabase("canonical hiring process writer migration", () => {
     ["REVIEW", "REVIEWING", "REVIEW"],
   ] as const)("moves OFFER/ACTIVE backward to %s and preserves offerAt", async (targetStage, status, recruiterInterest) => {
     const application = await createOfferApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { status: "REVIEWING", recruiterInterest: "MAYBE" },
+    });
     const storedBefore = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
     const result = await executeApplicationIntent({
       applicationId: application.id,
@@ -727,6 +731,32 @@ describeDatabase("canonical hiring process writer migration", () => {
       InvalidApplicationTransitionError,
     );
     await expect(reopen("active")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        stage: "INTERVIEW",
+        disposition: "ACTIVE",
+        status: "INTERVIEW",
+        recruiterInterest: "REJECTED",
+      },
+    });
+    await expect(backward("REVIEW", "active-rejection-footprint")).rejects.toBeInstanceOf(
+      InvalidApplicationTransitionError,
+    );
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        stage: "OFFER",
+        disposition: "ACTIVE",
+        status: "HIRED",
+        recruiterInterest: "ACCEPTED",
+      },
+    });
+    await expect(backward("REVIEW", "active-hired-footprint")).rejects.toBeInstanceOf(
       InvalidApplicationTransitionError,
     );
 

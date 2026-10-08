@@ -7,9 +7,15 @@ import { prisma } from "@/lib/server/prisma";
 
 import { isCanonicalHiringProcessEnabled } from "./feature-flags";
 import { InvalidApplicationTransitionError } from "./rules";
-import { APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE } from "./rejection-footprint";
+import {
+  APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+  hasApplicationRejectionFootprint,
+} from "./rejection-footprint";
 import { APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE } from "./offer-footprint";
-import { APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE } from "./hired-footprint";
+import {
+  APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
+  hasApplicationHiredFootprint,
+} from "./hired-footprint";
 import {
   ApplicationNotFoundError,
   CanonicalStateUnavailableError,
@@ -248,10 +254,16 @@ export async function executeApplicationIntent(input: {
         source.recruiterInterest === projection.recruiterInterest;
 
       if (command.intent === "MOVE_BACKWARD") {
+        if (
+          hasApplicationRejectionFootprint(source) ||
+          hasApplicationHiredFootprint(source)
+        ) {
+          throw new InvalidApplicationTransitionError(
+            "MOVE_BACKWARD no admite footprints terminales contradictorios",
+          );
+        }
         const isApprovedSource =
           source.disposition === "ACTIVE" &&
-          source.status === source.stage &&
-          source.recruiterInterest === "ACCEPTED" &&
           ((source.stage === "INTERVIEW" && targetStage === "REVIEW") ||
             (source.stage === "OFFER" &&
               (targetStage === "INTERVIEW" || targetStage === "REVIEW")));
