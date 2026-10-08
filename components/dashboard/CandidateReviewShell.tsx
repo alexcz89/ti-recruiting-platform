@@ -13,7 +13,7 @@ import {
   ArrowLeft, ChevronLeft, ChevronRight, GitBranch,
   CheckCircle2, Clock, Star, FileText, User, ClipboardList,
   Sparkles, ThumbsUp, XCircle, Send,
-  Download, MessageCircle,
+  Download, MessageCircle, RotateCcw,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -119,6 +119,37 @@ const TABS = [
 
 type TabId = typeof TABS[number]["id"];
 
+type TransitionReasonCode =
+  | "CORRECTION"
+  | "PROCESS_CHANGE"
+  | "ADDITIONAL_REVIEW"
+  | "NEW_INFORMATION"
+  | "RECONSIDERED"
+  | "OTHER";
+
+type ExceptionAction =
+  | {
+      intent: "MOVE_BACKWARD";
+      targetStage: "REVIEW" | "INTERVIEW";
+      title: string;
+    }
+  | {
+      intent: "REOPEN_REJECTED";
+      title: string;
+    };
+
+const TRANSITION_REASONS: Array<{
+  value: TransitionReasonCode;
+  label: string;
+}> = [
+  { value: "CORRECTION", label: "Corrección de etapa" },
+  { value: "PROCESS_CHANGE", label: "Cambio en el proceso" },
+  { value: "ADDITIONAL_REVIEW", label: "Revisión adicional" },
+  { value: "NEW_INFORMATION", label: "Nueva información" },
+  { value: "RECONSIDERED", label: "Reconsideración" },
+  { value: "OTHER", label: "Otro" },
+];
+
 // ─── Helper ───────────────────────────────────────────────────────────────────
 
 function navUrl(entry: NavEntry, fromJobId: string | null | undefined) {
@@ -161,8 +192,14 @@ export default function CandidateReviewShell({
   const [notes, setNotes] = useState(currentApplication?.internalNotes ?? "");
   const [notesSaved, setNotesSaved] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [exceptionAction, setExceptionAction] = useState<ExceptionAction | null>(null);
+  const [reasonCode, setReasonCode] = useState<TransitionReasonCode | "">("");
+  const [reasonText, setReasonText] = useState("");
+  const [exceptionError, setExceptionError] = useState("");
+  const [exceptionSubmitting, setExceptionSubmitting] = useState(false);
   const notesTimer = useRef<NodeJS.Timeout | null>(null);
   const hireInFlight = useRef(false);
+  const exceptionInFlight = useRef(false);
   const canonicalOffer =
     app?.stage === "OFFER" && app.disposition === "ACTIVE";
   const terminalHired =
@@ -331,6 +368,87 @@ export default function CandidateReviewShell({
     });
   }, [applicationId, app, router]);
 
+  const openExceptionDialog = useCallback((action: ExceptionAction) => {
+    setExceptionAction(action);
+    setReasonCode("");
+    setReasonText("");
+    setExceptionError("");
+  }, []);
+
+  const closeExceptionDialog = useCallback(() => {
+    if (exceptionInFlight.current) return;
+    setExceptionAction(null);
+    setExceptionError("");
+  }, []);
+
+  const submitExceptionAction = useCallback(() => {
+    if (!applicationId || !app || !exceptionAction || exceptionInFlight.current) {
+      return;
+    }
+    if (!reasonCode) {
+      setExceptionError("Selecciona un motivo.");
+      return;
+    }
+    const normalizedReasonText = reasonText.trim();
+    if (reasonCode === "OTHER" && !normalizedReasonText) {
+      setExceptionError("Describe el motivo cuando seleccionas Otro.");
+      return;
+    }
+
+    exceptionInFlight.current = true;
+    setExceptionSubmitting(true);
+    setExceptionError("");
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/applications/${applicationId}/intent`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            intent: exceptionAction.intent,
+            expectedVersion: app.stateVersion,
+            commandId: crypto.randomUUID(),
+            reasonCode,
+            ...(normalizedReasonText ? { reasonText: normalizedReasonText } : {}),
+            ...(exceptionAction.intent === "MOVE_BACKWARD"
+              ? { targetStage: exceptionAction.targetStage }
+              : {}),
+          }),
+        });
+        if (!res.ok) {
+          setExceptionError("No se pudo actualizar el proceso. Intenta de nuevo.");
+          return;
+        }
+
+        const data = await res.json();
+        const updated = data.application;
+        setCurrentInterest(updated.recruiterInterest);
+        setApp((prev) => prev ? {
+          ...prev,
+          stage: updated.stage,
+          disposition: updated.disposition,
+          status: updated.status,
+          recruiterInterest: updated.recruiterInterest,
+          stateVersion: updated.stateVersion,
+          ...(Object.prototype.hasOwnProperty.call(updated, "rejectedAt")
+            ? { rejectedAt: updated.rejectedAt }
+            : {}),
+        } : prev);
+        setExceptionAction(null);
+        toastSuccess(
+          exceptionAction.intent === "REOPEN_REJECTED"
+            ? "Proceso reabierto"
+            : "Etapa actualizada",
+        );
+        router.refresh();
+      } catch {
+        setExceptionError("No se pudo actualizar el proceso. Intenta de nuevo.");
+      } finally {
+        exceptionInFlight.current = false;
+        setExceptionSubmitting(false);
+      }
+    });
+  }, [applicationId, app, exceptionAction, reasonCode, reasonText, router]);
+
   const saveNotes = useCallback(() => {
     if (!applicationId) return;
     startTransition(async () => {
@@ -492,26 +610,84 @@ export default function CandidateReviewShell({
               })}
 
               {app?.stage === "INTERVIEW" && app.disposition === "ACTIVE" && (
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={moveToOffer}
-                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50 dark:border-violet-700/60 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40"
-                >
-                  <Send className="h-3.5 w-3.5" />
-                  Mover a oferta
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => openExceptionDialog({
+                      intent: "MOVE_BACKWARD",
+                      targetStage: "REVIEW",
+                      title: "Regresar a revisión",
+                    })}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-zinc-300 px-3 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Regresar a revisión
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={moveToOffer}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50 dark:border-violet-700/60 dark:bg-violet-950/30 dark:text-violet-300 dark:hover:bg-violet-900/40"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Mover a oferta
+                  </button>
+                </>
               )}
 
               {app?.stage === "OFFER" && app.disposition === "ACTIVE" && (
+                <>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => openExceptionDialog({
+                      intent: "MOVE_BACKWARD",
+                      targetStage: "INTERVIEW",
+                      title: "Regresar a entrevista",
+                    })}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-zinc-300 px-3 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Regresar a entrevista
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={() => openExceptionDialog({
+                      intent: "MOVE_BACKWARD",
+                      targetStage: "REVIEW",
+                      title: "Regresar a revisión",
+                    })}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-zinc-300 px-3 text-xs font-semibold text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Regresar a revisión
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={hireCandidate}
+                    className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-700/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Contratar
+                  </button>
+                </>
+              )}
+
+              {app?.stage === "CLOSED" && app.disposition === "REJECTED" && (
                 <button
                   type="button"
                   disabled={isPending}
-                  onClick={hireCandidate}
-                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-50 dark:border-emerald-700/60 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
+                  onClick={() => openExceptionDialog({
+                    intent: "REOPEN_REJECTED",
+                    title: "Reabrir proceso",
+                  })}
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-700/60 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-900/40"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  Contratar
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reabrir proceso
                 </button>
               )}
 
@@ -703,6 +879,99 @@ export default function CandidateReviewShell({
           </div>
         </div>
       </aside>
+
+      {exceptionAction && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exception-dialog-title"
+        >
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-xl dark:bg-zinc-900">
+            <h2
+              id="exception-dialog-title"
+              className="text-base font-semibold text-zinc-900 dark:text-zinc-50"
+            >
+              {exceptionAction.title}
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+              Esta acción quedará registrada en el historial del proceso.
+            </p>
+
+            <label
+              htmlFor="exception-reason"
+              className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Motivo
+            </label>
+            <select
+              id="exception-reason"
+              value={reasonCode}
+              onChange={(event) => {
+                setReasonCode(event.target.value as TransitionReasonCode | "");
+                setExceptionError("");
+              }}
+              disabled={exceptionSubmitting}
+              className="mt-1 h-11 w-full rounded-lg border border-zinc-300 bg-white px-3 text-sm text-zinc-900 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            >
+              <option value="">Selecciona un motivo</option>
+              {TRANSITION_REASONS.map((reason) => (
+                <option key={reason.value} value={reason.value}>
+                  {reason.label}
+                </option>
+              ))}
+            </select>
+
+            <label
+              htmlFor="exception-note"
+              className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Nota {reasonCode === "OTHER" ? "(obligatoria)" : "(opcional)"}
+            </label>
+            <textarea
+              id="exception-note"
+              value={reasonText}
+              onChange={(event) => {
+                setReasonText(event.target.value);
+                setExceptionError("");
+              }}
+              maxLength={500}
+              rows={4}
+              disabled={exceptionSubmitting}
+              placeholder="Agrega contexto para el equipo de reclutamiento"
+              className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder-zinc-400 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            />
+            <p className="mt-1 text-right text-xs text-zinc-400">
+              {reasonText.length}/500
+            </p>
+
+            {exceptionError && (
+              <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {exceptionError}
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeExceptionDialog}
+                disabled={exceptionSubmitting}
+                className="h-11 rounded-lg border border-zinc-300 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={submitExceptionAction}
+                disabled={exceptionSubmitting}
+                className="h-11 rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {exceptionSubmitting ? "Guardando…" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

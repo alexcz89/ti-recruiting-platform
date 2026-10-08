@@ -20,6 +20,7 @@ type TransitionTarget = {
   targetDisposition?: ApplicationDispositionValue;
   reasonCode?: string;
   reasonText?: string;
+  allowReopen?: boolean;
 };
 
 const stagePosition = new Map(
@@ -59,8 +60,22 @@ export function planApplicationTransition(
   assertCanonicalApplicationState(current);
 
   if (current.stage === "CLOSED" || isTerminal(current.disposition)) {
+    if (
+      target.allowReopen === true &&
+      current.stage === "CLOSED" &&
+      current.disposition === "REJECTED" &&
+      target.targetStage === "REVIEW" &&
+      target.targetDisposition === "ACTIVE" &&
+      hasReason(target)
+    ) {
+      return {
+        stage: "REVIEW",
+        disposition: "ACTIVE",
+        transitionClass: "REOPEN",
+      };
+    }
     throw new InvalidApplicationTransitionError(
-      "REOPEN está fuera de este slice",
+      "La reapertura requiere REOPEN_REJECTED desde CLOSED / REJECTED",
     );
   }
 

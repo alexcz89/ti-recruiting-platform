@@ -12,7 +12,7 @@ const root = process.cwd();
 const read = (...parts: string[]) => readFileSync(join(root, ...parts), "utf8");
 
 describe("canonical hiring process writer migration", () => {
-  it("supports the seven approved explicit intents", () => {
+  it("supports the nine approved explicit intents and reason contract", () => {
     expect(
       applicationIntentSchema.parse({
         intent: "START_REVIEW",
@@ -70,6 +70,44 @@ describe("canonical hiring process writer migration", () => {
       expectedVersion: 2,
       commandId: "clear-preselected-command",
     });
+    expect(applicationIntentSchema.parse({
+      intent: "MOVE_BACKWARD",
+      expectedVersion: 4,
+      commandId: "move-backward-command",
+      targetStage: "REVIEW",
+      reasonCode: "ADDITIONAL_REVIEW",
+      reasonText: "  Verificar señales nuevas  ",
+    })).toEqual({
+      intent: "MOVE_BACKWARD",
+      expectedVersion: 4,
+      commandId: "move-backward-command",
+      targetStage: "REVIEW",
+      reasonCode: "ADDITIONAL_REVIEW",
+      reasonText: "Verificar señales nuevas",
+    });
+    expect(applicationIntentSchema.parse({
+      intent: "REOPEN_REJECTED",
+      expectedVersion: 5,
+      commandId: "reopen-command",
+      reasonCode: "RECONSIDERED",
+    })).toEqual({
+      intent: "REOPEN_REJECTED",
+      expectedVersion: 5,
+      commandId: "reopen-command",
+      reasonCode: "RECONSIDERED",
+    });
+    expect(() => applicationIntentSchema.parse({
+      intent: "MOVE_BACKWARD",
+      expectedVersion: 4,
+      commandId: "missing-reason",
+      targetStage: "REVIEW",
+    })).toThrow();
+    expect(() => applicationIntentSchema.parse({
+      intent: "REOPEN_REJECTED",
+      expectedVersion: 5,
+      commandId: "other-without-note",
+      reasonCode: "OTHER",
+    })).toThrow();
   });
 
   it("adds APPLICATION_CREATED with an additive enum migration", () => {
@@ -253,6 +291,49 @@ describe("canonical hiring process writer migration", () => {
     expect(candidateShell).toContain("blockedByCanonicalOffer");
     expect(kanban).toContain('moved.stage === "OFFER"');
     expect(kanban).toContain('moved.disposition === "ACTIVE"');
+  });
+
+  it("keeps backward and reopen commands in the explicit CandidateReviewShell path", () => {
+    const helper = read("lib", "hiring-process", "backward-transition-footprint.ts");
+    expect(helper).toContain('application.stage === "INTERVIEW"');
+    expect(helper).toContain('application.disposition === "ACTIVE"');
+
+    const guardedDirectWriters = [
+      read("app", "api", "applications", "[id]", "status", "route.ts"),
+      read("app", "api", "applications", "[id]", "interest", "route.ts"),
+      read("app", "api", "applications", "[id]", "route.ts"),
+      read("app", "dashboard", "overview", "actions.ts"),
+    ];
+    for (const source of guardedDirectWriters) {
+      expect(source).toContain("hasCanonicalApplicationInterview");
+      expect(source).toContain("APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE");
+      expect(source).toContain("MOVE_BACKWARD");
+    }
+    for (const source of guardedDirectWriters.slice(0, 3)) {
+      expect(source).toContain("REOPEN_REJECTED");
+    }
+
+    const shell = read("components", "dashboard", "CandidateReviewShell.tsx");
+    expect(shell).toContain('intent: "MOVE_BACKWARD"');
+    expect(shell).toContain('intent: "REOPEN_REJECTED"');
+    expect(shell).toContain("Regresar a revisión");
+    expect(shell).toContain("Regresar a entrevista");
+    expect(shell).toContain("Reabrir proceso");
+    expect(shell).not.toContain("window.prompt");
+
+    const interestSelect = read(
+      "app",
+      "dashboard",
+      "jobs",
+      "[id]",
+      "applications",
+      "InterestSelect.tsx",
+    );
+    const kanbanAction = read("app", "dashboard", "jobs", "[id]", "page.tsx");
+    for (const source of [interestSelect, kanbanAction]) {
+      expect(source).not.toContain('"MOVE_BACKWARD"');
+      expect(source).not.toContain('"REOPEN_REJECTED"');
+    }
   });
 
   it("routes hire through one explicit command and protects the terminal footprint", () => {

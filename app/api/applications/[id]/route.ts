@@ -20,6 +20,10 @@ import {
   isApplicationHistoryDeleteConflict,
   isSerializableDeleteConflict,
 } from "@/lib/hiring-process/delete-integrity";
+import {
+  APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE,
+  hasCanonicalApplicationInterview,
+} from "@/lib/hiring-process/backward-transition-footprint";
 
 function jsonNoStore(body: unknown, status = 200) {
   return NextResponse.json(body, {
@@ -139,6 +143,9 @@ export async function PATCH(
       return jsonNoStore({ error: "Not found" }, 404);
     }
 
+    const requestsBackwardLegacyStatus =
+      typeof body.status !== "undefined" && body.status !== "INTERVIEW";
+
     if (typeof body.status !== "undefined") {
       const allowed = new Set(Object.values(ApplicationStatus));
       if (!allowed.has(body.status)) {
@@ -164,7 +171,15 @@ export async function PATCH(
       }
       if (hasApplicationRejectionFootprint(found)) {
         return jsonNoStore(
-          { error: "Reabrir una postulación rechazada está fuera de este slice" },
+          { error: "Reabrir una postulación rechazada requiere REOPEN_REJECTED" },
+          409,
+        );
+      }
+      if (
+        hasCanonicalApplicationInterview(found) && requestsBackwardLegacyStatus
+      ) {
+        return jsonNoStore(
+          { error: "El retroceso canónico requiere MOVE_BACKWARD" },
           409,
         );
       }
@@ -198,6 +213,9 @@ export async function PATCH(
           AND: [
             scopedWhere,
             APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
+            ...(requestsBackwardLegacyStatus
+              ? [APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE]
+              : []),
             APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
             APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
           ],

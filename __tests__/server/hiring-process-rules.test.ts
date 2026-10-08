@@ -162,7 +162,41 @@ describe("canonical hiring process transition rules", () => {
         { stage: "CLOSED", disposition: "REJECTED" },
         { targetStage: "REVIEW", targetDisposition: "ACTIVE", reasonCode: "REOPEN" },
       ),
-    ).toThrow("REOPEN está fuera de este slice");
+    ).toThrow(InvalidApplicationTransitionError);
+  });
+
+  it("allows only an explicit rejected reopen to REVIEW / ACTIVE", () => {
+    expect(planApplicationTransition(
+      { stage: "CLOSED", disposition: "REJECTED" },
+      {
+        targetStage: "REVIEW",
+        targetDisposition: "ACTIVE",
+        reasonCode: "RECONSIDERED",
+        allowReopen: true,
+      },
+    )).toEqual({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      transitionClass: "REOPEN",
+    });
+    expect(() => planApplicationTransition(
+      { stage: "CLOSED", disposition: "HIRED" },
+      {
+        targetStage: "REVIEW",
+        targetDisposition: "ACTIVE",
+        reasonCode: "RECONSIDERED",
+        allowReopen: true,
+      },
+    )).toThrow(InvalidApplicationTransitionError);
+    expect(() => planApplicationTransition(
+      { stage: "CLOSED", disposition: "REJECTED" },
+      {
+        targetStage: "INTERVIEW",
+        targetDisposition: "ACTIVE",
+        reasonCode: "RECONSIDERED",
+        allowReopen: true,
+      },
+    )).toThrow(InvalidApplicationTransitionError);
   });
 
   it("rejects a transition that changes nothing", () => {

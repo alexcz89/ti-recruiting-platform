@@ -18,6 +18,10 @@ import {
   APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
   hasApplicationHiredFootprint,
 } from "@/lib/hiring-process/hired-footprint";
+import {
+  APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE,
+  hasCanonicalApplicationInterview,
+} from "@/lib/hiring-process/backward-transition-footprint";
 
 export async function updateApplicationStatus(
   applicationId: string,
@@ -67,6 +71,16 @@ export async function updateApplicationStatus(
       return {
         success: false,
         error: "La oferta canónica no admite retroceso legacy",
+      };
+    }
+
+    if (
+      status === "REVIEWING" &&
+      hasCanonicalApplicationInterview(application)
+    ) {
+      return {
+        success: false,
+        error: "El retroceso canónico requiere MOVE_BACKWARD",
       };
     }
 
@@ -138,6 +152,7 @@ export async function updateApplicationStatus(
         where: {
           AND: [
             scopedWhere,
+            APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE,
             APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
             APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE,
           ],

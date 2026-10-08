@@ -65,6 +65,7 @@ export async function POST(
         recruiterInterest: result.legacy.recruiterInterest,
         offerAt: result.timestamps.offerAt?.toISOString() ?? null,
         hiredAt: result.timestamps.hiredAt?.toISOString() ?? null,
+        ...(command.intent === "REOPEN_REJECTED" ? { rejectedAt: null } : {}),
       },
       replayed: result.replayed,
     });
