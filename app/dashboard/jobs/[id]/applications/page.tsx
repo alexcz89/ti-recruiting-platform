@@ -28,6 +28,16 @@ import {
   type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import { badgeLevelLabel, badgeValidityCutoff } from "@/lib/badges";
+import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import {
+  buildRecruiterApplicationReadRows,
+  countRecruiterPipelineBuckets,
+  filterRecruiterPipelineRows,
+  PRIMARY_RECRUITER_PIPELINE_BUCKETS,
+  RECRUITER_PIPELINE_LABELS,
+  resolveRecruiterPipelineFilter,
+  type RecruiterPipelineBucket,
+} from "@/lib/hiring-process/recruiter-read-model";
 
 const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
   NATIVE: "Nativo",
@@ -49,18 +59,13 @@ const PROFILE_TYPE_LABEL: Record<string, string> = {
 };
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
-const INTEREST_LABEL: Record<InterestKey, string> = {
-  REVIEW: "Por revisar",
-  MAYBE: "Preselecto",
-  ACCEPTED: "Entrevista",
-  REJECTED: "Descartado",
-};
 
-function getAppInterest(a: any): InterestKey {
-  const raw = (a?.recruiterInterest ?? "").toString().toUpperCase();
-  if (raw === "MAYBE" || raw === "ACCEPTED" || raw === "REJECTED") return raw;
-  return "REVIEW";
-}
+const LEGACY_RECRUITER_TABS = [
+  { bucket: "APPLIED", query: "REVIEW" },
+  { bucket: "PRESELECTED", query: "MAYBE" },
+  { bucket: "INTERVIEW", query: "ACCEPTED" },
+  { bucket: "REJECTED", query: "REJECTED" },
+] as const;
 
 type SortKey = "match" | "recent" | "name";
 type MatchFilter = "ALL" | "HIGH" | "MED" | "LOW";
@@ -111,12 +116,15 @@ export default async function JobApplicationsPage({
   params: { id: string };
   searchParams?: {
     interest?: InterestKey | "ALL";
+    pipeline?: RecruiterPipelineBucket;
     q?: string;
     sort?: SortKey | string;
     match?: MatchFilter | string;
     cv?: CvFilter | string;
   };
 }) {
+  const canonicalRecruiterReadsEnabled =
+    isCanonicalHiringProcessRecruiterReadsEnabled();
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) {
     return (
@@ -381,16 +389,22 @@ export default async function JobApplicationsPage({
 
   }
 
-  const counters: Record<InterestKey, number> = { REVIEW: 0, MAYBE: 0, ACCEPTED: 0, REJECTED: 0 };
-  for (const a of allApps) counters[getAppInterest(a)]++;
+  const recruiterRows = buildRecruiterApplicationReadRows(allApps, {
+    canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
+  });
+  const counters = countRecruiterPipelineBuckets(recruiterRows);
   const total = allApps.length;
 
   const interestParam = searchParams?.interest as string | undefined;
-  const chosenInterest: InterestKey | undefined = !interestParam
-    ? "REVIEW"
-    : interestParam === "ALL"
-      ? undefined
-      : (interestParam as InterestKey);
+  const pipelineParam = searchParams?.pipeline as string | undefined;
+  const chosenPipeline = resolveRecruiterPipelineFilter(
+    canonicalRecruiterReadsEnabled
+      ? { pipeline: pipelineParam, interest: interestParam }
+      : { interest: interestParam ?? "REVIEW" },
+  );
+  const allPipelineSelected = canonicalRecruiterReadsEnabled
+    ? chosenPipeline === undefined
+    : interestParam === "ALL";
 
   const qParam = (searchParams?.q ?? "").toString();
   const q = qParam.trim().toLowerCase();
@@ -401,7 +415,7 @@ export default async function JobApplicationsPage({
   const cvParam = (searchParams?.cv as string | undefined) ?? "ALL";
   const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
 
-  let enriched = allApps.map((a) => {
+  let enriched = recruiterRows.map((a) => {
     const candidateSkillsForEngine = buildCandidateSkillInputs(
       a.candidate?.candidateSkills ?? [],
       undefined,
@@ -453,8 +467,8 @@ export default async function JobApplicationsPage({
     };
   });
 
-  if (chosenInterest) {
-    enriched = enriched.filter((a) => getAppInterest(a) === chosenInterest);
+  if (chosenPipeline) {
+    enriched = filterRecruiterPipelineRows(enriched, chosenPipeline);
   }
 
   if (q) {
@@ -504,15 +518,27 @@ export default async function JobApplicationsPage({
     }
   }
 
-  function buildHref(overrides: { interest?: string; q?: string; sort?: string; match?: string; cv?: string }) {
+  function buildHref(overrides: { pipeline?: string; interest?: string; q?: string; sort?: string; match?: string; cv?: string }) {
     const usp = new URLSearchParams();
-    const i = "interest" in overrides ? overrides.interest : interestParam;
+    const stateFilter = canonicalRecruiterReadsEnabled
+      ? {
+          key: "pipeline",
+          value:
+            "pipeline" in overrides
+              ? overrides.pipeline
+              : chosenPipeline,
+        }
+      : {
+          key: "interest",
+          value:
+            "interest" in overrides ? overrides.interest : interestParam,
+        };
     const qv = "q" in overrides ? overrides.q : qParam;
     const sv = "sort" in overrides ? overrides.sort : sortKey;
     const mv = "match" in overrides ? overrides.match : matchFilter !== "ALL" ? matchFilter : undefined;
     const cv = "cv" in overrides ? overrides.cv : cvFilter !== "ALL" ? cvFilter : undefined;
 
-    if (i) usp.set("interest", i);
+    if (stateFilter.value) usp.set(stateFilter.key, stateFilter.value);
     if (qv) usp.set("q", qv);
     if (sv) usp.set("sort", sv);
     if (mv) usp.set("match", mv);
@@ -621,11 +647,35 @@ export default async function JobApplicationsPage({
 
         <section className="glass-card rounded-2xl border p-3 sm:p-4">
           <div className="flex flex-wrap gap-1.5 sm:gap-2">
-            <FilterPill active={interestParam === "ALL"} href={buildHref({ interest: "ALL" })} label={`Todos (${total})`} count={total} />
-            <FilterPill active={chosenInterest === "REVIEW"} href={buildHref({ interest: "REVIEW" })} label={`Por revisar (${counters.REVIEW})`} count={counters.REVIEW} />
-            <FilterPill active={chosenInterest === "MAYBE"} href={buildHref({ interest: "MAYBE" })} label={`Preselecto (${counters.MAYBE})`} count={counters.MAYBE} />
-            <FilterPill active={chosenInterest === "ACCEPTED"} href={buildHref({ interest: "ACCEPTED" })} label={`Entrevista (${counters.ACCEPTED})`} count={counters.ACCEPTED} />
-            <FilterPill active={chosenInterest === "REJECTED"} href={buildHref({ interest: "REJECTED" })} label={`Descartado (${counters.REJECTED})`} count={counters.REJECTED} />
+            <FilterPill
+              active={allPipelineSelected}
+              href={
+                canonicalRecruiterReadsEnabled
+                  ? buildHref({ pipeline: undefined })
+                  : buildHref({ interest: "ALL" })
+              }
+              label={`Todos (${total})`}
+              count={total}
+            />
+            {(canonicalRecruiterReadsEnabled
+              ? PRIMARY_RECRUITER_PIPELINE_BUCKETS.map((bucket) => ({
+                  bucket,
+                  query: bucket,
+                }))
+              : LEGACY_RECRUITER_TABS
+            ).map(({ bucket, query }) => (
+              <FilterPill
+                key={bucket}
+                active={!allPipelineSelected && chosenPipeline === bucket}
+                href={
+                  canonicalRecruiterReadsEnabled
+                    ? buildHref({ pipeline: query })
+                    : buildHref({ interest: query })
+                }
+                label={`${RECRUITER_PIPELINE_LABELS[bucket]} (${counters[bucket]})`}
+                count={counters[bucket]}
+              />
+            ))}
           </div>
         </section>
 
@@ -641,8 +691,8 @@ export default async function JobApplicationsPage({
                   ? "Ningún candidato coincide con los filtros."
                   : total === 0
                     ? "Aún no hay postulaciones."
-                    : chosenInterest
-                      ? `Sin candidatos en ${INTEREST_LABEL[chosenInterest]}.`
+                    : chosenPipeline
+                      ? `Sin candidatos en ${RECRUITER_PIPELINE_LABELS[chosenPipeline]}.`
                       : "Aún no hay postulaciones."}
               </p>
               {!activeFiltersCount && total === 0 && (
@@ -852,11 +902,12 @@ export default async function JobApplicationsPage({
                       <div className="min-w-0 max-w-[160px]">
                         <InterestSelect
                           applicationId={a.id}
-                          initial={getAppInterest(a)}
+                          initial={a.recruiterInterest as InterestKey}
                           initialStateVersion={a.stateVersion}
                           legacyStatus={a.status}
                           canonicalStage={a.stage}
                           canonicalDisposition={a.disposition}
+                          canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                         />
                       </div>
 
@@ -1154,11 +1205,12 @@ export default async function JobApplicationsPage({
                           <div className="inline-flex min-w-[130px] max-w-[150px]">
                             <InterestSelect
                               applicationId={a.id}
-                              initial={getAppInterest(a)}
+                              initial={a.recruiterInterest as InterestKey}
                               initialStateVersion={a.stateVersion}
                               legacyStatus={a.status}
                               canonicalStage={a.stage}
                               canonicalDisposition={a.disposition}
+                              canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                             />
                           </div>
                         </td>
