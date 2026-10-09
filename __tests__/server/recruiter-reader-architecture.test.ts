@@ -71,4 +71,16 @@ describe("recruiter reader architecture", () => {
     expect(page).toContain("isCanonicalHiringProcessRecruiterReadsEnabled");
     expect(page).toContain("?pipeline=APPLIED");
   });
+
+  it("keeps job aggregate pending counts on the centralized recruiter read model", () => {
+    const page = read("app", "dashboard", "jobs", "page.tsx");
+
+    expect(page).toContain("isCanonicalHiringProcessRecruiterReadsEnabled");
+    expect(page).toContain("getRecruiterApplicationReadModel");
+    expect(page).toContain(
+      'by: ["jobId", "stage", "disposition", "recruiterInterest"]',
+    );
+    expect(page).toContain('readModel.bucket !== "APPLIED"');
+    expect(page).toContain("?pipeline=APPLIED");
+  });
 });

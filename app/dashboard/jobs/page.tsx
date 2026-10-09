@@ -7,6 +7,8 @@ import JobsFilterBar from "@/components/dashboard/JobsFilterBar";
 import AssignTemplateModalTrigger from "@/components/dashboard/AssignTemplateModalTrigger";
 import AssessmentsBadge from "@/components/dashboard/AssessmentsBadge";
 import { Briefcase, Plus } from "lucide-react";
+import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
 
 export const metadata = { title: "Vacantes | Panel" };
 
@@ -59,6 +61,8 @@ function sortIndicator(sp: SearchParams, field: NonNullable<SearchParams["sort"]
 
 export default async function JobsPage({ searchParams }: { searchParams: SearchParams }) {
   const companyId = await getSessionCompanyId().catch(() => null);
+  const canonicalRecruiterReadsEnabled =
+    isCanonicalHiringProcessRecruiterReadsEnabled();
   if (!companyId) {
     return (
       <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -105,14 +109,10 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   if (createdAtGte) where.createdAt = { gte: createdAtGte };
 
   // ── Batch queries in parallel
-  let [totalApplications, totalPending, jobs] = await Promise.all([
+  let [totalApplications, jobs] = await Promise.all([
     // Count total applications across all company jobs
     allJobIds.length
       ? prisma.application.count({ where: { jobId: { in: allJobIds } } })
-      : Promise.resolve(0),
-    // Count pending applications across all company jobs
-    allJobIds.length
-      ? prisma.application.count({ where: { jobId: { in: allJobIds }, status: "SUBMITTED" } })
       : Promise.resolve(0),
     // Get filtered jobs list
     prisma.job.findMany({
@@ -127,14 +127,54 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     }),
   ]);
 
-  // Get pending counts per job
-  const byJobPending = await prisma.application.groupBy({
-    by: ["jobId"],
-    where: { jobId: { in: jobs.map(j => j.id) }, status: "SUBMITTED" },
-    _count: { _all: true },
-  });
+  // Get pending counts per job.
+  // Flag OFF preserves the legacy SUBMITTED behavior.
+  // Flag ON resolves each grouped application state through the canonical recruiter read model.
+  const jobIds = jobs.map((j) => j.id);
   const pendingMap = new Map<string, number>();
-  for (const row of byJobPending) pendingMap.set(row.jobId, row._count._all);
+  if (canonicalRecruiterReadsEnabled) {
+    const groupedApplicationStates = jobIds.length
+      ? await prisma.application.groupBy({
+          by: ["jobId", "stage", "disposition", "recruiterInterest"],
+          where: { jobId: { in: jobIds } },
+          _count: { _all: true },
+        })
+      : [];
+
+    for (const row of groupedApplicationStates) {
+      const readModel = getRecruiterApplicationReadModel(
+        {
+          stage: row.stage,
+          disposition: row.disposition,
+          recruiterInterest: row.recruiterInterest,
+          status: "",
+        },
+        { canonicalReadsEnabled: true },
+      );
+
+      if (readModel.bucket !== "APPLIED") continue;
+
+      pendingMap.set(
+        row.jobId,
+        (pendingMap.get(row.jobId) ?? 0) + row._count._all,
+      );
+    }
+  } else {
+    const byJobPending = jobIds.length
+      ? await prisma.application.groupBy({
+          by: ["jobId"],
+          where: {
+            jobId: { in: jobIds },
+            status: "SUBMITTED",
+          },
+          _count: { _all: true },
+        })
+      : [];
+
+    for (const row of byJobPending) {
+      pendingMap.set(row.jobId, row._count._all);
+    }
+  }
 
   if (sp.filter === "pending") {
     jobs = jobs.filter(j => (pendingMap.get(j.id) || 0) > 0);
@@ -367,7 +407,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                           <td className="py-3 px-4 text-center">
                             {pending > 0 ? (
                               <Link
-                                href={`/dashboard/jobs/${j.id}/applications?status=SUBMITTED`}
+                                href={
+                                  canonicalRecruiterReadsEnabled
+                                    ? `/dashboard/jobs/${j.id}/applications?pipeline=APPLIED`
+                                    : `/dashboard/jobs/${j.id}/applications?status=SUBMITTED`
+                                }
                                 className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 dark:border-amber-500/60 dark:bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-500/25 transition-colors"
                               >
                                 {pending} revisar
@@ -447,7 +491,11 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
                         </div>
                         {pending > 0 ? (
                           <Link
-                            href={`/dashboard/jobs/${j.id}/applications?status=SUBMITTED`}
+                            href={
+                              canonicalRecruiterReadsEnabled
+                                ? `/dashboard/jobs/${j.id}/applications?pipeline=APPLIED`
+                                : `/dashboard/jobs/${j.id}/applications?status=SUBMITTED`
+                            }
                             className="flex flex-col items-center rounded-xl py-2 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors"
                           >
                             <p className="text-lg font-black text-amber-600 dark:text-amber-400">{pending}</p>
