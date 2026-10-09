@@ -3,6 +3,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { ArrowRight, Users } from "lucide-react";
+import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import { filterPendingRecruiterApplications } from "@/lib/hiring-process/recruiter-read-model";
 
 export const metadata = { title: "Candidatos por revisar | Panel" };
 
@@ -18,12 +20,28 @@ export default async function PendingCandidatesPage() {
     );
   }
 
-  // Get pending applications (where recruiterInterest is not yet reviewed)
-  const pendingApps = await prisma.application.findMany({
-    where: {
-      job: { companyId },
-      recruiterInterest: { notIn: ["MAYBE", "ACCEPTED", "REJECTED"] },
-    },
+  const canonicalRecruiterReadsEnabled =
+    isCanonicalHiringProcessRecruiterReadsEnabled();
+
+  // Keep the legacy query exact while disabled. When enabled, load only the
+  // canonical APPLIED rows and plausible legacy-fallback rows, then let the
+  // centralized read model make the final pending decision.
+  const pendingCandidates = await prisma.application.findMany({
+    where: canonicalRecruiterReadsEnabled
+      ? {
+          job: { companyId },
+          OR: [
+            { stage: "APPLIED", disposition: "ACTIVE" },
+            {
+              recruiterInterest: "REVIEW",
+              OR: [{ stage: null }, { disposition: null }],
+            },
+          ],
+        }
+      : {
+          job: { companyId },
+          recruiterInterest: { notIn: ["MAYBE", "ACCEPTED", "REJECTED"] },
+        },
     include: {
       candidate: {
         select: {
@@ -42,6 +60,13 @@ export default async function PendingCandidatesPage() {
     },
     orderBy: { createdAt: "desc" },
   });
+  const pendingApps = filterPendingRecruiterApplications(pendingCandidates, {
+    canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
+  });
+  const applicationsHref = (jobId: string) =>
+    canonicalRecruiterReadsEnabled
+      ? `/dashboard/jobs/${jobId}/applications?pipeline=APPLIED`
+      : `/dashboard/jobs/${jobId}/applications`;
 
   return (
     <main className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
@@ -101,7 +126,7 @@ export default async function PendingCandidatesPage() {
                       </td>
                       <td className="py-3 px-4">
                         <Link
-                          href={`/dashboard/jobs/${app.job.id}/applications`}
+                          href={applicationsHref(app.job.id)}
                           className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
                         >
                           {app.job.title}
@@ -114,7 +139,7 @@ export default async function PendingCandidatesPage() {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <Link
-                          href={`/dashboard/jobs/${app.job.id}/applications`}
+                          href={applicationsHref(app.job.id)}
                           className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition"
                         >
                           Revisar
