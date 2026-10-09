@@ -11,6 +11,13 @@ import { ApplicationInterest } from "@prisma/client";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import { hasCanonicalApplicationOffer } from "@/lib/hiring-process/offer-footprint";
 import { hasApplicationHiredFootprint } from "@/lib/hiring-process/hired-footprint";
+import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import {
+  buildRecruiterApplicationReadRows,
+  PRIMARY_RECRUITER_PIPELINE_BUCKETS,
+  RECRUITER_PIPELINE_LABELS,
+  type RecruiterPipelineBucket,
+} from "@/lib/hiring-process/recruiter-read-model";
 import {
   computeMatchScore,
   applyPlanGate,
@@ -53,6 +60,9 @@ export default async function JobPipelinePage({ params }: PageProps) {
   if (!session) {
     redirect(`/signin?callbackUrl=/dashboard/jobs/${params.id}`);
   }
+
+  const canonicalRecruiterReadsEnabled =
+    isCanonicalHiringProcessRecruiterReadsEnabled();
 
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) {
@@ -248,7 +258,27 @@ export default async function JobPipelinePage({ params }: PageProps) {
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const appCards = applications.map((a, idx) => {
+  const recruiterRows = buildRecruiterApplicationReadRows(applications, {
+    canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
+  });
+
+  const supplementalCanonicalBuckets = (
+    ["HOLD", "CLOSED_OTHER"] as RecruiterPipelineBucket[]
+  ).filter((bucket) =>
+    recruiterRows.some(
+      (application) => application._recruiterRead.bucket === bucket,
+    ),
+  );
+
+  const kanbanStatuses = canonicalRecruiterReadsEnabled
+    ? [...PRIMARY_RECRUITER_PIPELINE_BUCKETS, ...supplementalCanonicalBuckets]
+    : INTEREST_STATUSES;
+
+  const kanbanStatusLabels = canonicalRecruiterReadsEnabled
+    ? RECRUITER_PIPELINE_LABELS
+    : INTEREST_LABEL;
+
+  const appCards = recruiterRows.map((a, idx) => {
     const candidateSkills: CandidateSkillInput[] = (a.candidate.candidateSkills ?? []).map((cs: any) => ({
       termId: cs.term.id,
       label: cs.term.label,
@@ -270,6 +300,9 @@ export default async function JobPipelinePage({ params }: PageProps) {
     return {
       id: a.id,
       status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
+      displayStatus: canonicalRecruiterReadsEnabled
+        ? a._recruiterRead.bucket
+        : (a.recruiterInterest ?? "REVIEW"),
       applicationStatus: a.status,
       stage: a.stage,
       disposition: a.disposition,
@@ -447,10 +480,11 @@ export default async function JobPipelinePage({ params }: PageProps) {
         {/* Kanban / Pipeline */}
         <Kanbanboard
           jobId={job.id}
-          statuses={INTEREST_STATUSES}
-          statusLabels={INTEREST_LABEL}
+          statuses={kanbanStatuses}
+          statusLabels={kanbanStatusLabels}
           applications={appCards}
           hasMatchSignals={hasMatchSignals}
+          canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
           moveAction={moveAction}
         />
       </div>

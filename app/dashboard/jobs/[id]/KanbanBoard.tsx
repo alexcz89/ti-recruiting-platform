@@ -34,6 +34,7 @@ type AssessmentMeta = {
 type AppCard = {
   id: string;
   status: string;
+  displayStatus: string;
   applicationStatus: string;
   stage: string | null;
   disposition: string | null;
@@ -78,12 +79,74 @@ const NEXT_STAGE_LABEL: Record<string, string> = {
   ACCEPTED: "Entrevista",
 };
 
+const CANONICAL_NEXT_STAGE: Record<string, string | null> = {
+  APPLIED: "PRESELECTED",
+  REVIEW: "PRESELECTED",
+  PRESELECTED: "INTERVIEW",
+  ASSESSMENT: null,
+  INTERVIEW: null,
+  OFFER: null,
+  REJECTED: null,
+  HIRED: null,
+  HOLD: null,
+  CLOSED_OTHER: null,
+};
+
+const CANONICAL_NEXT_STAGE_LABEL: Record<string, string> = {
+  PRESELECTED: "Preselecto",
+  INTERVIEW: "Entrevista",
+};
+
+const CANONICAL_REJECTION_SOURCES = new Set([
+  "APPLIED",
+  "REVIEW",
+  "PRESELECTED",
+  "ASSESSMENT",
+  "INTERVIEW",
+  "OFFER",
+]);
+
+function canonicalWriterStatusForMove(
+  fromStatus: string,
+  toStatus: string,
+): string | null {
+  if (toStatus === "REJECTED" && CANONICAL_REJECTION_SOURCES.has(fromStatus)) {
+    return "REJECTED";
+  }
+
+  if (
+    toStatus === "PRESELECTED" &&
+    (fromStatus === "APPLIED" || fromStatus === "REVIEW")
+  ) {
+    return "MAYBE";
+  }
+
+  if (fromStatus === "PRESELECTED" && toStatus === "REVIEW") {
+    return "REVIEW";
+  }
+
+  if (
+    toStatus === "INTERVIEW" &&
+    (fromStatus === "REVIEW" || fromStatus === "PRESELECTED")
+  ) {
+    return "ACCEPTED";
+  }
+
+  return null;
+}
+
+function isCanonicalDropSupported(fromStatus: string, toStatus: string) {
+  if (fromStatus === toStatus) return true;
+  return canonicalWriterStatusForMove(fromStatus, toStatus) !== null;
+}
+
 export default function Kanbanboard({
   jobId,
   statuses,
   statusLabels,
   applications,
   hasMatchSignals = false,
+  canonicalRecruiterReadsEnabled = false,
   moveAction,
 }: {
   jobId: string;
@@ -91,11 +154,13 @@ export default function Kanbanboard({
   statusLabels: Record<string, string>;
   applications: AppCard[];
   hasMatchSignals?: boolean;
+  canonicalRecruiterReadsEnabled?: boolean;
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<AppCard[]>(applications);
   const [isPending, startTransition] = useTransition();
+  const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null);
 
   useEffect(() => {
     setItems(applications);
@@ -104,13 +169,23 @@ export default function Kanbanboard({
   const grouped = useMemo(() => {
     const map: Record<string, AppCard[]> = {};
     for (const st of statuses) map[st] = [];
-    for (const a of items) (map[a.status] ||= []).push(a);
+    for (const a of items) {
+      const presentationStatus = canonicalRecruiterReadsEnabled
+        ? a.displayStatus
+        : a.status;
+      (map[presentationStatus] ||= []).push(a);
+    }
     return map;
-  }, [items, statuses]);
+  }, [items, statuses, canonicalRecruiterReadsEnabled]);
 
   // Ejecutar acción de mover (drag o quick action)
   const doMove = (appId: string, fromStatus: string, toStatus: string, fromIdx: number, toIdx: number) => {
-    if (fromStatus === "REJECTED") return;
+    const writerStatus = canonicalRecruiterReadsEnabled
+      ? canonicalWriterStatusForMove(fromStatus, toStatus)
+      : toStatus;
+
+    if (!writerStatus) return;
+    if (fromStatus === "REJECTED" || fromStatus === "HIRED") return;
     const prev = items;
 
     const cols: Record<string, AppCard[]> = {};
@@ -129,12 +204,13 @@ export default function Kanbanboard({
     if (
       moved.stage === "OFFER" &&
       moved.disposition === "ACTIVE" &&
-      toStatus !== "REJECTED"
+      writerStatus !== "REJECTED"
     ) {
       return;
     }
     const isPreselectCommand =
-      toStatus === "MAYBE" || (fromStatus === "MAYBE" && toStatus === "REVIEW");
+      writerStatus === "MAYBE" ||
+      (writerStatus === "REVIEW" && moved.status === "MAYBE");
     if (
       isPreselectCommand &&
       moved.stage !== null &&
@@ -147,7 +223,11 @@ export default function Kanbanboard({
     }
     sourceCol.splice(fromIdx, 1);
 
-    destCol.splice(toIdx, 0, { ...moved, status: toStatus });
+    destCol.splice(toIdx, 0, {
+      ...moved,
+      status: writerStatus,
+      displayStatus: canonicalRecruiterReadsEnabled ? toStatus : writerStatus,
+    });
     cols[fromStatus] = sourceCol;
     cols[toStatus] = destCol;
 
@@ -155,12 +235,12 @@ export default function Kanbanboard({
 
     const fd = new FormData();
     fd.set("appId", appId);
-    fd.set("newStatus", toStatus);
+    fd.set("newStatus", writerStatus);
     if (
-      toStatus === "ACCEPTED" ||
-      toStatus === "REJECTED" ||
-      toStatus === "MAYBE" ||
-      (fromStatus === "MAYBE" && toStatus === "REVIEW")
+      writerStatus === "ACCEPTED" ||
+      writerStatus === "REJECTED" ||
+      writerStatus === "MAYBE" ||
+      (writerStatus === "REVIEW" && moved.status === "MAYBE")
     ) {
       fd.set("expectedVersion", String(moved.stateVersion));
       fd.set("commandId", crypto.randomUUID());
@@ -185,26 +265,48 @@ export default function Kanbanboard({
   };
 
   const handleQuickMove = (card: AppCard, toStatus: string) => {
-    const fromCol = grouped[card.status] || [];
+    const fromStatus = canonicalRecruiterReadsEnabled
+      ? card.displayStatus
+      : card.status;
+    const fromCol = grouped[fromStatus] || [];
     const fromIdx = fromCol.findIndex((c) => c.id === card.id);
     if (fromIdx < 0) return;
     const toCol = grouped[toStatus] || [];
-    doMove(card.id, card.status, toStatus, fromIdx, toCol.length);
+    doMove(card.id, fromStatus, toStatus, fromIdx, toCol.length);
   };
 
   return (
     <section className="rounded-2xl border glass-card p-3 sm:p-4 overflow-x-auto">
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext
+        onDragStart={(start) => setDragSourceStatus(start.source.droppableId)}
+        onDragEnd={(result) => {
+          setDragSourceStatus(null);
+          handleDragEnd(result);
+        }}
+      >
         <div className="flex gap-3 lg:gap-4 min-w-[860px] pb-1">
           {statuses.map((st) => {
             const cards = grouped[st] || [];
             const accent = COLUMN_ACCENT[st] ?? COLUMN_ACCENT.REVIEW;
+            const nextStage = canonicalRecruiterReadsEnabled
+              ? CANONICAL_NEXT_STAGE[st] ?? null
+              : NEXT_STAGE[st] ?? null;
+            const nextStageLabel = nextStage
+              ? canonicalRecruiterReadsEnabled
+                ? CANONICAL_NEXT_STAGE_LABEL[nextStage]
+                : NEXT_STAGE_LABEL[nextStage]
+              : undefined;
 
             return (
               <Droppable
                 key={st}
                 droppableId={st}
                 type="APPLICATION"
+                isDropDisabled={
+                  canonicalRecruiterReadsEnabled &&
+                  dragSourceStatus !== null &&
+                  !isCanonicalDropSupported(dragSourceStatus, st)
+                }
                 renderClone={(provided, _snapshot, rubric) => {
                   const card = (grouped[rubric.source.droppableId] || [])[rubric.source.index];
                   if (!card) return null;
@@ -239,9 +341,9 @@ export default function Kanbanboard({
                               jobId={jobId}
                               dragging={draggableSnapshot.isDragging}
                               hasMatchSignals={hasMatchSignals}
-                              nextStatus={NEXT_STAGE[st] ?? null}
-                              nextStatusLabel={NEXT_STAGE[st] ? NEXT_STAGE_LABEL[NEXT_STAGE[st]!] : undefined}
-                              onMoveNext={() => NEXT_STAGE[st] && handleQuickMove(card, NEXT_STAGE[st]!)}
+                              nextStatus={nextStage}
+                              nextStatusLabel={nextStageLabel}
+                              onMoveNext={() => nextStage && handleQuickMove(card, nextStage)}
                             />
                           </div>
                         )}

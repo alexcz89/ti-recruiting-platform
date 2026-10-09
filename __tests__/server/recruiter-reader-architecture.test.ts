@@ -83,4 +83,30 @@ describe("recruiter reader architecture", () => {
     expect(page).toContain('readModel.bucket !== "APPLIED"');
     expect(page).toContain("?pipeline=APPLIED");
   });
+
+  it("keeps canonical Kanban presentation separate from existing writer commands", () => {
+    const page = read("app", "dashboard", "jobs", "[id]", "page.tsx");
+    const board = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
+
+    expect(page).toContain("buildRecruiterApplicationReadRows");
+    expect(page).toContain("displayStatus: canonicalRecruiterReadsEnabled");
+    expect(page).toContain("statuses={kanbanStatuses}");
+    expect(page).toContain("statusLabels={kanbanStatusLabels}");
+
+    expect(board).toContain("canonicalRecruiterReadsEnabled");
+    expect(board).toContain("a.displayStatus");
+    expect(board).toContain("canonicalWriterStatusForMove");
+    expect(board).toContain('APPLIED: "PRESELECTED"');
+    expect(board).toContain('PRESELECTED: "INTERVIEW"');
+    expect(board).toContain('OFFER: null');
+    expect(board).toContain('OFFER: null');
+    expect(board).toContain('HIRED: null');
+    expect(board).toContain('HOLD: null');
+    expect(board).toContain('CLOSED_OTHER: null');
+
+    expect(page).not.toContain('intent: "MOVE_TO_OFFER"');
+    expect(page).not.toContain('intent: "HIRE_CANDIDATE"');
+    expect(page).not.toContain('intent: "MOVE_BACKWARD"');
+    expect(page).not.toContain('intent: "REOPEN_REJECTED"');
+  });
 });
