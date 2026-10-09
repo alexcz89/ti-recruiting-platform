@@ -446,7 +446,7 @@ export default async function OverviewPage() {
             }
             metricLabel="Activo"
             metricValue={funnelTotal > 0 ? `${activePipelineShare}% del total` : "Sin datos"}
-            linkHref="/dashboard/jobs"
+            linkHref="/dashboard/overview#pipeline-candidatos"
             linkLabel="Abrir pipeline"
           />
           <KpiCard
@@ -462,13 +462,16 @@ export default async function OverviewPage() {
             }
             metricLabel="Ritmo"
             metricValue={apps7d > 0 ? `${nf(apps7d)} nuevas` : "Bajo"}
-            linkHref="/dashboard/jobs"
+            linkHref="/dashboard/overview#postulaciones-recientes"
             linkLabel="Ver recientes"
           />
         </section>
 
         <section className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-2">
-          <div className="glass-card rounded-xl p-4 sm:p-5">
+          <div
+            id="pipeline-candidatos"
+            className="glass-card scroll-mt-28 rounded-xl p-4 sm:p-5"
+          >
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-teal-500" />
@@ -628,7 +631,10 @@ export default async function OverviewPage() {
         </section>
 
         <section className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-12">
-          <div className="glass-card rounded-2xl p-3 sm:p-4 md:p-5 lg:col-span-7">
+          <div
+            id="postulaciones-recientes"
+            className="glass-card scroll-mt-28 rounded-2xl p-3 sm:p-4 md:p-5 lg:col-span-7"
+          >
             <div className="mb-3 flex items-center justify-between sm:mb-4">
               <h2 className="text-sm font-semibold text-default sm:text-base">
                 Postulaciones recientes
