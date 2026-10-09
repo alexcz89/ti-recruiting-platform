@@ -54,4 +54,21 @@ describe("recruiter reader architecture", () => {
     expect(helper).toContain('recruiterInterest === "MAYBE"');
     expect(serverPresentation).not.toContain('recruiterInterest === "MAYBE"');
   });
+
+  it("keeps overview aggregation and current labels on the centralized read model", () => {
+    const page = read("app", "dashboard", "overview", "page.tsx");
+
+    expect(page).toContain("countRecruiterPipelineGroupedRows");
+    expect(page).toContain("getRecruiterApplicationReadModel");
+    expect(page).toContain('by: ["stage", "disposition", "recruiterInterest"]');
+    expect(page).not.toContain("for (const row of funnelRaw)");
+  });
+
+  it("keeps the pending queue selection on the centralized read model", () => {
+    const page = read("app", "dashboard", "candidates", "pending", "page.tsx");
+
+    expect(page).toContain("filterPendingRecruiterApplications");
+    expect(page).toContain("isCanonicalHiringProcessRecruiterReadsEnabled");
+    expect(page).toContain("?pipeline=APPLIED");
+  });
 });

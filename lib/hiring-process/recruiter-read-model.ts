@@ -38,6 +38,15 @@ export type RecruiterApplicationReadRow<T> = T & {
   _recruiterRead: RecruiterApplicationReadModel;
 };
 
+export type RecruiterPipelineCounts = Record<RecruiterPipelineBucket, number>;
+
+export type RecruiterPipelineGroupedRow = Pick<
+  RecruiterApplicationReadInput,
+  "stage" | "disposition" | "recruiterInterest"
+> & {
+  _count: { _all: number };
+};
+
 export const RECRUITER_PIPELINE_LABELS: Record<
   RecruiterPipelineBucket,
   string
@@ -141,13 +150,72 @@ export function buildRecruiterApplicationReadRows<
 
 export function countRecruiterPipelineBuckets(
   rows: ReadonlyArray<{ _recruiterRead: RecruiterApplicationReadModel }>,
-): Record<RecruiterPipelineBucket, number> {
+): RecruiterPipelineCounts {
   const counts = Object.fromEntries(
     RECRUITER_PIPELINE_BUCKETS.map((bucket) => [bucket, 0]),
   ) as Record<RecruiterPipelineBucket, number>;
 
   for (const row of rows) counts[row._recruiterRead.bucket]++;
   return counts;
+}
+
+export function countRecruiterPipelineGroupedRows(
+  rows: readonly RecruiterPipelineGroupedRow[],
+  options: { canonicalReadsEnabled: boolean },
+): RecruiterPipelineCounts {
+  const counts = Object.fromEntries(
+    RECRUITER_PIPELINE_BUCKETS.map((bucket) => [bucket, 0]),
+  ) as RecruiterPipelineCounts;
+
+  for (const row of rows) {
+    const readModel = getRecruiterApplicationReadModel(
+      { ...row, status: "" },
+      options,
+    );
+    counts[readModel.bucket] += row._count._all;
+  }
+
+  return counts;
+}
+
+export function sumRecruiterPipelineCounts(
+  counts: RecruiterPipelineCounts,
+): number {
+  return RECRUITER_PIPELINE_BUCKETS.reduce(
+    (total, bucket) => total + counts[bucket],
+    0,
+  );
+}
+
+const ACTIVE_RECRUITER_PIPELINE_BUCKETS = [
+  "APPLIED",
+  "REVIEW",
+  "PRESELECTED",
+  "ASSESSMENT",
+  "INTERVIEW",
+  "OFFER",
+  "HOLD",
+] as const satisfies readonly RecruiterPipelineBucket[];
+
+export function countActiveRecruiterPipelineApplications(
+  counts: RecruiterPipelineCounts,
+): number {
+  return ACTIVE_RECRUITER_PIPELINE_BUCKETS.reduce(
+    (total, bucket) => total + counts[bucket],
+    0,
+  );
+}
+
+export function filterPendingRecruiterApplications<
+  T extends RecruiterApplicationReadInput,
+>(
+  applications: readonly T[],
+  options: { canonicalReadsEnabled: boolean },
+): T[] {
+  return applications.filter(
+    (application) =>
+      getRecruiterApplicationReadModel(application, options).bucket === "APPLIED",
+  );
 }
 
 export function filterRecruiterPipelineRows<T extends {
