@@ -39,6 +39,7 @@ type AppCard = {
   stage: string | null;
   disposition: string | null;
   stateVersion: number;
+  writerCompatibility: "CANONICAL" | "LEGACY" | "NONE";
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
   _score?: number | null;
@@ -147,6 +148,7 @@ export default function Kanbanboard({
   applications,
   hasMatchSignals = false,
   canonicalRecruiterReadsEnabled = false,
+  canonicalHiringProcessEnabled = false,
   moveAction,
 }: {
   jobId: string;
@@ -155,6 +157,7 @@ export default function Kanbanboard({
   applications: AppCard[];
   hasMatchSignals?: boolean;
   canonicalRecruiterReadsEnabled?: boolean;
+  canonicalHiringProcessEnabled?: boolean;
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 }) {
   const router = useRouter();
@@ -165,6 +168,11 @@ export default function Kanbanboard({
   useEffect(() => {
     setItems(applications);
   }, [applications]);
+
+  const isCardWritable = (card: AppCard) =>
+    canonicalHiringProcessEnabled
+      ? card.writerCompatibility === "CANONICAL"
+      : card.writerCompatibility === "LEGACY";
 
   const grouped = useMemo(() => {
     const map: Record<string, AppCard[]> = {};
@@ -195,6 +203,7 @@ export default function Kanbanboard({
     const destCol = cols[toStatus] || sourceCol;
     const moved = sourceCol[fromIdx];
     if (!moved) return;
+    if (!isCardWritable(moved)) return;
     if (
       moved.applicationStatus === "HIRED" ||
       (moved.stage === "CLOSED" && moved.disposition === "HIRED")
@@ -328,7 +337,12 @@ export default function Kanbanboard({
                     droppableProps={droppableProvided.droppableProps as any}
                   >
                     {cards.map((card, index) => (
-                      <Draggable key={card.id} draggableId={card.id} index={index}>
+                      <Draggable
+                        key={card.id}
+                        draggableId={card.id}
+                        index={index}
+                        isDragDisabled={!isCardWritable(card)}
+                      >
                         {(draggableProvided, draggableSnapshot) => (
                           <div
                             ref={draggableProvided.innerRef}
@@ -341,9 +355,13 @@ export default function Kanbanboard({
                               jobId={jobId}
                               dragging={draggableSnapshot.isDragging}
                               hasMatchSignals={hasMatchSignals}
-                              nextStatus={nextStage}
-                              nextStatusLabel={nextStageLabel}
-                              onMoveNext={() => nextStage && handleQuickMove(card, nextStage)}
+                              nextStatus={isCardWritable(card) ? nextStage : null}
+                              nextStatusLabel={isCardWritable(card) ? nextStageLabel : undefined}
+                              onMoveNext={
+                                isCardWritable(card) && nextStage
+                                  ? () => handleQuickMove(card, nextStage)
+                                  : undefined
+                              }
                             />
                           </div>
                         )}
