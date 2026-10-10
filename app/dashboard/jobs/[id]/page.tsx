@@ -12,6 +12,16 @@ import { executeApplicationIntent } from "@/lib/hiring-process/application-inten
 import { hasCanonicalApplicationOffer } from "@/lib/hiring-process/offer-footprint";
 import { hasApplicationHiredFootprint } from "@/lib/hiring-process/hired-footprint";
 import {
+  isCanonicalHiringProcessEnabled,
+  isCanonicalHiringProcessRecruiterReadsEnabled,
+} from "@/lib/hiring-process/feature-flags";
+import {
+  buildRecruiterApplicationReadRows,
+  PRIMARY_RECRUITER_PIPELINE_BUCKETS,
+  RECRUITER_PIPELINE_LABELS,
+  type RecruiterPipelineBucket,
+} from "@/lib/hiring-process/recruiter-read-model";
+import {
   computeMatchScore,
   applyPlanGate,
   scoreToTextColor,
@@ -53,6 +63,11 @@ export default async function JobPipelinePage({ params }: PageProps) {
   if (!session) {
     redirect(`/signin?callbackUrl=/dashboard/jobs/${params.id}`);
   }
+
+  const canonicalRecruiterReadsEnabled =
+    isCanonicalHiringProcessRecruiterReadsEnabled();
+  const canonicalHiringProcessEnabled =
+    isCanonicalHiringProcessEnabled();
 
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) {
@@ -248,7 +263,27 @@ export default async function JobPipelinePage({ params }: PageProps) {
   }
   // ─────────────────────────────────────────────────────────────────────────────
 
-  const appCards = applications.map((a, idx) => {
+  const recruiterRows = buildRecruiterApplicationReadRows(applications, {
+    canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
+  });
+
+  const supplementalCanonicalBuckets = (
+    ["HOLD", "CLOSED_OTHER"] as RecruiterPipelineBucket[]
+  ).filter((bucket) =>
+    recruiterRows.some(
+      (application) => application._recruiterRead.bucket === bucket,
+    ),
+  );
+
+  const kanbanStatuses = canonicalRecruiterReadsEnabled
+    ? [...PRIMARY_RECRUITER_PIPELINE_BUCKETS, ...supplementalCanonicalBuckets]
+    : INTEREST_STATUSES;
+
+  const kanbanStatusLabels = canonicalRecruiterReadsEnabled
+    ? RECRUITER_PIPELINE_LABELS
+    : INTEREST_LABEL;
+
+  const appCards = recruiterRows.map((a, idx) => {
     const candidateSkills: CandidateSkillInput[] = (a.candidate.candidateSkills ?? []).map((cs: any) => ({
       termId: cs.term.id,
       label: cs.term.label,
@@ -270,10 +305,21 @@ export default async function JobPipelinePage({ params }: PageProps) {
     return {
       id: a.id,
       status: (a.recruiterInterest ?? "REVIEW") as ApplicationInterest,
+      displayStatus: canonicalRecruiterReadsEnabled
+        ? a._recruiterRead.bucket
+        : (a.recruiterInterest ?? "REVIEW"),
       applicationStatus: a.status,
       stage: a.stage,
       disposition: a.disposition,
       stateVersion: a.stateVersion,
+      writerCompatibility:
+        a.stage !== null && a.disposition !== null
+          ? ("CANONICAL" as const)
+          : a.stage === null &&
+              a.disposition === null &&
+              a.stateVersion === 0
+            ? ("LEGACY" as const)
+            : ("NONE" as const),
       createdAt: a.createdAt,
       updatedAt: (a as any).updatedAt ?? a.createdAt,
       _score: gatedScore,
@@ -447,10 +493,12 @@ export default async function JobPipelinePage({ params }: PageProps) {
         {/* Kanban / Pipeline */}
         <Kanbanboard
           jobId={job.id}
-          statuses={INTEREST_STATUSES}
-          statusLabels={INTEREST_LABEL}
+          statuses={kanbanStatuses}
+          statusLabels={kanbanStatusLabels}
           applications={appCards}
           hasMatchSignals={hasMatchSignals}
+          canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
+          canonicalHiringProcessEnabled={canonicalHiringProcessEnabled}
           moveAction={moveAction}
         />
       </div>

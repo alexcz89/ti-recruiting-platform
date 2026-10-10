@@ -162,8 +162,8 @@ describe("canonical hiring process writer migration", () => {
     expect(interestSelect).not.toContain('/status`');
     expect(interestSelect).not.toMatch(/recruiterInterest:\s*next/);
     expect(candidateShell).not.toMatch(/canonicalIntent \? "intent" : "interest"/);
-    expect(kanban).toContain('toStatus === "MAYBE"');
-    expect(kanban).toContain('fromStatus === "MAYBE" && toStatus === "REVIEW"');
+    expect(kanban).toMatch(/toStatus === "PRESELECTED"[\s\S]*return "MAYBE"/);
+    expect(kanban).toContain('fromStatus === "PRESELECTED" && toStatus === "REVIEW"');
     expect(kanbanAction).not.toContain("prisma.application.updateMany({");
   });
 
@@ -213,7 +213,7 @@ describe("canonical hiring process writer migration", () => {
     );
     expect(candidateShell).toContain('? "REJECT_CANDIDATE"');
     expect(candidateShell).toContain('if (currentInterest === "REJECTED") return;');
-    expect(kanban).toContain('toStatus === "ACCEPTED"');
+    expect(kanban).toMatch(/toStatus === "INTERVIEW"[\s\S]*return "ACCEPTED"/);
     expect(kanban).toContain('toStatus === "REJECTED"');
     expect(jobPage).toContain('"REJECT_CANDIDATE"');
     expect(overviewButtons).toContain('commandId: crypto.randomUUID()');
