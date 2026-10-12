@@ -14,6 +14,10 @@ import type {
   CvImportAnalysis,
   CvImportSections,
 } from "@/lib/profile/cv-import";
+import type {
+  CandidateApplicationReadModel,
+  CandidateProcessBucket,
+} from "@/lib/hiring-process/candidate-read-model";
 import {
   Phone,
   Mail,
@@ -130,6 +134,7 @@ export type Application = {
   id: string;
   createdAt: string;
   status: string;
+  readModel: CandidateApplicationReadModel;
   jobId: string;
   jobSlug?: string | null;
   jobTitle: string;
@@ -185,6 +190,24 @@ const APPLICATION_STATUS_CONFIG: Record<
     className:
       "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
   },
+};
+
+const APPLICATION_PROCESS_CLASS_NAMES: Record<
+  CandidateProcessBucket,
+  string
+> = {
+  RECEIVED:
+    "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
+  REVIEWING:
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
+  ASSESSMENT:
+    "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300",
+  INTERVIEW:
+    "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300",
+  DECISION:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300",
+  CLOSED:
+    "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
 };
 
 const LANG_LEVEL_LABEL: Record<string, string> = {
@@ -2266,9 +2289,20 @@ export default function ProfileSummaryClient({
               ) : (
                 <ul className="space-y-2">
                   {applications.slice(0, 3).map((application) => {
-                    const status =
+                    const legacyStatus =
                       APPLICATION_STATUS_CONFIG[application.status] ??
                       APPLICATION_STATUS_CONFIG.SUBMITTED;
+
+                    const status =
+                      application.readModel.source === "CANONICAL"
+                        ? {
+                            label: application.readModel.label,
+                            className:
+                              APPLICATION_PROCESS_CLASS_NAMES[
+                                application.readModel.bucket
+                              ],
+                          }
+                        : legacyStatus;
 
                     return (
                       <li

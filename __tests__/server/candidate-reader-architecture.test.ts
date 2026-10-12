@@ -73,4 +73,36 @@ describe("candidate reader architecture", () => {
       "isCanonicalHiringProcessRecruiterReadsEnabled",
     );
   });
+  it("keeps profile summary application presentation on the candidate read model", () => {
+    const page = read("app", "profile", "summary", "page.tsx");
+    const client = read(
+      "app",
+      "profile",
+      "summary",
+      "ProfileSummaryClient.tsx",
+    );
+
+    expect(page).toContain("buildCandidateApplicationReadRows");
+    expect(page).toContain(
+      "isCanonicalHiringProcessCandidateReadsEnabled",
+    );
+    expect(page).toContain("candidateApplicationRows.map");
+    expect(page).toContain("readModel: a._candidateRead");
+
+    expect(client).toContain(
+      'application.readModel.source === "CANONICAL"',
+    );
+    expect(client).toContain("application.readModel.label");
+    expect(client).toContain("application.readModel.bucket");
+
+    // Legacy presentation remains available for flag-off/fallback rows.
+    expect(client).toContain(
+      "APPLICATION_STATUS_CONFIG[application.status]",
+    );
+    expect(client).toContain("legacyStatus");
+
+    // Canonical state interpretation stays on the server-side read model.
+    expect(client).not.toContain("application.stage");
+    expect(client).not.toContain("application.disposition");
+  });
 });
