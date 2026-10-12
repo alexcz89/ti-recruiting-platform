@@ -4,6 +4,8 @@ import { authOptions } from "@/lib/server/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/server/prisma";
 import { fromNow } from "@/lib/dates";
+import { buildCandidateApplicationReadRows } from "@/lib/hiring-process/candidate-read-model";
+import { isCanonicalHiringProcessCandidateReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/server/skills";
 import { LANGUAGES_FALLBACK } from "@/lib/shared/skills-data";
 import {
@@ -202,6 +204,13 @@ export default async function ProfileSummaryPage({
     },
   });
 
+  const canonicalCandidateReadsEnabled =
+    isCanonicalHiringProcessCandidateReadsEnabled();
+
+  const candidateApplicationRows = buildCandidateApplicationReadRows(myApps, {
+    canonicalReadsEnabled: canonicalCandidateReadsEnabled,
+  });
+
   // Language options for editing
   const allLangTerms = await prisma.taxonomyTerm.findMany({
     where: { kind: "LANGUAGE" },
@@ -317,10 +326,11 @@ export default async function ProfileSummaryPage({
       }))}
       skills={profileSkills}
       verifiedBadges={verifiedBadges}
-      applications={myApps.map((a) => ({
+      applications={candidateApplicationRows.map((a) => ({
         id: a.id,
         createdAt: a.createdAt.toISOString(),
         status: a.status,
+        readModel: a._candidateRead,
         jobId: a.job?.id ?? "",
         jobSlug: a.job?.slug ?? null,
         jobTitle: a.job?.title ?? "—",
