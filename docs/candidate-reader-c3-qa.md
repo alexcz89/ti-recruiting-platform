@@ -22,7 +22,7 @@ Production remains OFF/unset during Preview QA.
 
 ## Preview QA — Flag ON
 
-Status: pending
+Status: passed
 
 Validate:
 
@@ -42,13 +42,29 @@ Validate:
 
 ## Preview QA — Flag OFF
 
-Status: pending
+Status: passed
 
 Validate:
 
 - `/profile/applications` retains legacy labels and filters.
 - `/profile/summary` retains legacy application badge presentation.
 - No canonical candidate presentation appears while the flag is OFF.
+
+## QA evidence
+
+Manual Preview validation:
+
+- Flag ON:
+  - `/profile/applications` displayed `Proceso cerrado`.
+  - `/profile/summary` displayed `Proceso cerrado`.
+  - The same canonical terminal application was presented consistently on both surfaces.
+  - No internal canonical state was exposed to the candidate.
+- Flag OFF:
+  - `/profile/applications` returned to the legacy label `Rechazada`.
+  - `/profile/summary` returned to its historical legacy label `No seleccionado`.
+  - This confirms that each surface preserves its previous flag-off presentation.
+
+Automated coverage validates the remaining canonical mappings, fallback behavior, filter buckets, legacy URL compatibility, and canonical authority over stale legacy status.
 
 ## Production
 
