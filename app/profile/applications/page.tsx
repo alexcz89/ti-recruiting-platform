@@ -5,6 +5,16 @@ import { authOptions } from "@/lib/server/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/server/prisma";
 import { fromNow } from "@/lib/dates";
+import {
+  buildCandidateApplicationReadRows,
+  CANDIDATE_PROCESS_BUCKETS,
+  CANDIDATE_PROCESS_LABELS,
+  countCandidateProcessBuckets,
+  filterCandidateProcessRows,
+  resolveCandidateProcessFilter,
+  type CandidateProcessBucket,
+} from "@/lib/hiring-process/candidate-read-model";
+import { isCanonicalHiringProcessCandidateReadsEnabled } from "@/lib/hiring-process/feature-flags";
 
 export const metadata = { title: "Mis postulaciones | Bolsa TI" };
 
@@ -52,6 +62,21 @@ const STATUS_CONFIG: Record<AppStatus, { label: string; className: string }> = {
   },
 };
 
+const PROCESS_CLASS_NAMES: Record<CandidateProcessBucket, string> = {
+  RECEIVED:
+    "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300",
+  REVIEWING:
+    "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-700/50 dark:bg-sky-900/20 dark:text-sky-300",
+  ASSESSMENT:
+    "border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-700/50 dark:bg-violet-900/20 dark:text-violet-300",
+  INTERVIEW:
+    "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-700/50 dark:bg-indigo-900/20 dark:text-indigo-300",
+  DECISION:
+    "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-300",
+  CLOSED:
+    "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-300",
+};
+
 const EMPLOYMENT_LABEL: Record<string, string> = {
   FULL_TIME: "Tiempo completo",
   PART_TIME: "Medio tiempo",
@@ -70,7 +95,7 @@ const SENIORITY_LABEL: Record<string, string> = {
 export default async function MyApplicationsPage({
   searchParams,
 }: {
-  searchParams?: { status?: string; applied?: string };
+  searchParams?: { status?: string; process?: string; applied?: string };
 }) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -88,6 +113,16 @@ export default async function MyApplicationsPage({
   const rawStatus = (searchParams?.status || "").toUpperCase();
   const isValidStatus = (STATUSES as readonly string[]).includes(rawStatus);
   const status = (isValidStatus ? rawStatus : "") as AppStatus | "";
+
+  const canonicalCandidateReadsEnabled =
+    isCanonicalHiringProcessCandidateReadsEnabled();
+
+  const canonicalProcessFilter = canonicalCandidateReadsEnabled
+    ? resolveCandidateProcessFilter({
+        process: searchParams?.process,
+        status: searchParams?.status,
+      })
+    : undefined;
 
   const allApps = await prisma.application.findMany({
     where: {
@@ -111,20 +146,39 @@ export default async function MyApplicationsPage({
     take: 200,
   });
 
-  const apps = status
-    ? allApps.filter((a) => a.status === status)
-    : allApps;
+  const candidateRows = buildCandidateApplicationReadRows(allApps, {
+    canonicalReadsEnabled: canonicalCandidateReadsEnabled,
+  });
+
+  const apps = canonicalCandidateReadsEnabled
+    ? filterCandidateProcessRows(candidateRows, canonicalProcessFilter)
+    : status
+      ? candidateRows.filter((a) => a.status === status)
+      : candidateRows;
 
   const appliedFlag = searchParams?.applied;
 
-  const counters = allApps.reduce((acc, a) => {
+  const legacyCounters = allApps.reduce((acc, a) => {
     const s = (a.status as AppStatus) || "SUBMITTED";
     acc[s] = (acc[s] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
+  const processCounters = countCandidateProcessBuckets(candidateRows);
+
   const totalApps = allApps.length;
   const visibleApps = apps.length;
+  const hasActiveFilter = canonicalCandidateReadsEnabled
+    ? Boolean(canonicalProcessFilter)
+    : Boolean(status);
+
+  const activeFilterLabel = canonicalCandidateReadsEnabled
+    ? canonicalProcessFilter
+      ? CANDIDATE_PROCESS_LABELS[canonicalProcessFilter.bucket]
+      : null
+    : status
+      ? STATUS_CONFIG[status].label
+      : null;
 
   return (
     <main className="w-full pb-10">
@@ -149,7 +203,7 @@ export default async function MyApplicationsPage({
             <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
               Hola {me.name ?? "candidato/a"} · {totalApps} postulación
               {totalApps !== 1 ? "es" : ""}
-              {status ? ` · ${visibleApps} en esta vista` : ""}
+              {hasActiveFilter ? ` · ${visibleApps} en esta vista` : ""}
             </p>
           </div>
 
@@ -176,7 +230,7 @@ export default async function MyApplicationsPage({
               <Link
                 href="/profile/applications"
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                  !status
+                  !hasActiveFilter
                     ? "border-zinc-800 bg-zinc-800 text-white dark:border-zinc-200 dark:bg-zinc-200 dark:text-zinc-900"
                     : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
                 }`}
@@ -184,19 +238,35 @@ export default async function MyApplicationsPage({
                 Todas ({totalApps})
               </Link>
 
-              {STATUSES.filter((s) => counters[s]).map((s) => (
-                <Link
-                  key={s}
-                  href={`/profile/applications?status=${s}`}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    status === s
-                      ? "border-zinc-800 bg-zinc-800 text-white dark:border-zinc-200 dark:bg-zinc-200 dark:text-zinc-900"
-                      : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
-                  }`}
-                >
-                  {STATUS_CONFIG[s].label} ({counters[s]})
-                </Link>
-              ))}
+              {canonicalCandidateReadsEnabled
+                ? CANDIDATE_PROCESS_BUCKETS.filter(
+                    (bucket) => processCounters[bucket],
+                  ).map((bucket) => (
+                    <Link
+                      key={bucket}
+                      href={`/profile/applications?process=${bucket}`}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        canonicalProcessFilter?.bucket === bucket
+                          ? "border-zinc-800 bg-zinc-800 text-white dark:border-zinc-200 dark:bg-zinc-200 dark:text-zinc-900"
+                          : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      {CANDIDATE_PROCESS_LABELS[bucket]} ({processCounters[bucket]})
+                    </Link>
+                  ))
+                : STATUSES.filter((s) => legacyCounters[s]).map((s) => (
+                    <Link
+                      key={s}
+                      href={`/profile/applications?status=${s}`}
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        status === s
+                          ? "border-zinc-800 bg-zinc-800 text-white dark:border-zinc-200 dark:bg-zinc-200 dark:text-zinc-900"
+                          : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+                      }`}
+                    >
+                      {STATUS_CONFIG[s].label} ({legacyCounters[s]})
+                    </Link>
+                  ))}
             </div>
           </div>
         )}
@@ -204,8 +274,8 @@ export default async function MyApplicationsPage({
         {apps.length === 0 ? (
           <div className="glass-card rounded-2xl border border-dashed p-6 text-center sm:p-10">
             <p className="text-base font-medium text-zinc-700 dark:text-zinc-200">
-              {status
-                ? `Sin postulaciones con estado "${STATUS_CONFIG[status as AppStatus]?.label}"`
+              {activeFilterLabel
+                ? `Sin postulaciones con estado "${activeFilterLabel}"`
                 : "Aún no tienes postulaciones"}
             </p>
 
@@ -220,7 +290,16 @@ export default async function MyApplicationsPage({
           <div className="space-y-3">
             {apps.map((a) => {
               const st = (a.status as AppStatus) || "SUBMITTED";
-              const cfg = STATUS_CONFIG[st] || STATUS_CONFIG.SUBMITTED;
+              const legacyCfg =
+                STATUS_CONFIG[st] || STATUS_CONFIG.SUBMITTED;
+              const cfg =
+                a._candidateRead.source === "CANONICAL"
+                  ? {
+                      label: a._candidateRead.label,
+                      className:
+                        PROCESS_CLASS_NAMES[a._candidateRead.bucket],
+                    }
+                  : legacyCfg;
 
               return (
                 <div
