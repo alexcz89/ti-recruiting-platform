@@ -11,3 +11,10 @@ export function isCanonicalHiringProcessRecruiterReadsEnabled(
     environment.CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED === "true"
   );
 }
+export function isCanonicalHiringProcessCandidateReadsEnabled(
+  environment: NodeJS.ProcessEnv = process.env,
+) {
+  return (
+    environment.CANONICAL_HIRING_PROCESS_CANDIDATE_READS_ENABLED === "true"
+  );
+}
