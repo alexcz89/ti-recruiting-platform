@@ -4,6 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import type { Prisma } from "@prisma/client";
+import { isUntimedMcqTestAllowed } from "@/lib/server/assessmentTestMode";
 import { challengeAvailability } from "@/lib/contests/domain";
 import {
   ASSESSMENT_EXPIRED_CODE,
@@ -18,6 +19,7 @@ export const runtime = "nodejs";
 type SessionUser = {
   id?: string | null;
   role?: string | null;
+  email?: string | null;
 };
 
 type OptionLike = Record<string, unknown>;
@@ -420,6 +422,7 @@ export async function POST(
         allowRetry: true,
         maxAttempts: true,
         timeLimit: true,
+        type: true,
         shuffleQuestions: true,
         isBadgeExam: true,
         totalQuestions: true,
@@ -432,6 +435,15 @@ export async function POST(
     }
 
     const tmplTimeLimit = template.timeLimit ?? null;
+    // Only new diagnostic MCQ attempts can be untimed. Never relax an existing
+    // attempt deadline or the separate invitation expiry.
+    const untimedTest = isUntimedMcqTestAllowed({
+      email: user.email,
+      templateId: template.id,
+      templateType: template.type,
+      isBadgeExam: template.isBadgeExam,
+    });
+    const effectiveNewAttemptTimeLimit = untimedTest ? null : tmplTimeLimit;
     const tmplShuffleQuestions = true;
     // Exámenes de badge sortean totalQuestions del pool completo del template
     const tmplSampleSize =
@@ -611,7 +623,7 @@ export async function POST(
       applicationIdToUse: string | null;
     }) {
       const metaNew = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
-      const newExpiresAt = computeAttemptExpiresAt(now, tmplTimeLimit);
+      const newExpiresAt = computeAttemptExpiresAt(now, effectiveNewAttemptTimeLimit);
 
       const created = await prisma.$transaction(async (tx) => {
         if (invite) {
@@ -1015,7 +1027,7 @@ export async function POST(
       });
     }
 
-    const expiresAt = computeAttemptExpiresAt(now, tmplTimeLimit);
+    const expiresAt = computeAttemptExpiresAt(now, effectiveNewAttemptTimeLimit);
     const meta = await ensureMeta(params.templateId, tmplShuffleQuestions, tmplSampleSize, tmplSampleSections);
     const questions = buildQuestionsPayload(
       questionsRaw as unknown as QuestionRow[],
