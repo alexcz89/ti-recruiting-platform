@@ -5,7 +5,6 @@
  */
 type UntimedMcqTestArgs = {
   email?: string | null;
-  templateId: string;
   templateType: string;
   isBadgeExam: boolean;
 };
@@ -15,7 +14,6 @@ type TestEnvironment = {
   VERCEL_ENV?: string;
   ASSESSMENT_TEST_UNTIMED_ENABLED?: string;
   ASSESSMENT_TEST_UNTIMED_EMAILS?: string;
-  ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS?: string;
 };
 
 function allowedCsvValue(csv: string | undefined, expected: string) {
@@ -26,7 +24,7 @@ function allowedCsvValue(csv: string | undefined, expected: string) {
 }
 
 export function isUntimedMcqTestAllowed(
-  { email, templateId, templateType, isBadgeExam }: UntimedMcqTestArgs,
+  { email, templateType, isBadgeExam }: UntimedMcqTestArgs,
   env: TestEnvironment = process.env,
 ): boolean {
   const inPreview = env.VERCEL_ENV === "preview";
@@ -37,10 +35,6 @@ export function isUntimedMcqTestAllowed(
   if (templateType !== "MCQ" || isBadgeExam) return false;
 
   const normalizedEmail = String(email ?? "").trim().toLowerCase();
-  const normalizedTemplateId = templateId.trim().toLowerCase();
 
-  return (
-    allowedCsvValue(env.ASSESSMENT_TEST_UNTIMED_EMAILS, normalizedEmail) &&
-    allowedCsvValue(env.ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS, normalizedTemplateId)
-  );
+  return allowedCsvValue(env.ASSESSMENT_TEST_UNTIMED_EMAILS, normalizedEmail);
 }
