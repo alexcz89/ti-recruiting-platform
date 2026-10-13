@@ -47,7 +47,7 @@ function assessmentTopics(raw: unknown): string[] {
       (value): value is string => typeof value === "string" && value.trim().length > 0
     )?.trim();
 
-    if (!topic || /^(?:secci[oó]n|section)\\s*\\d+$/i.test(topic) || /^general$/i.test(topic)) continue;
+    if (!topic || /^(?:secci[oó]n|section)\s*\d+$/i.test(topic) || /^general$/i.test(topic)) continue;
 
     const key = topic.toLocaleLowerCase();
     if (seen.has(key)) continue;
