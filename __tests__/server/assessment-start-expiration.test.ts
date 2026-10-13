@@ -163,7 +163,6 @@ describe("assessment invite and attempt deadlines", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
-    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
     mocks.getServerSession.mockResolvedValue({
       user: { id: "candidate-a", role: "CANDIDATE", email: "qa@example.test" },
     });
@@ -180,7 +179,6 @@ describe("assessment invite and attempt deadlines", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
-    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
     mocks.getServerSession.mockResolvedValue({
       user: { id: "candidate-a", role: "CANDIDATE", email: "another@example.test" },
     });
@@ -195,7 +193,6 @@ describe("assessment invite and attempt deadlines", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
-    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
     mocks.getServerSession.mockResolvedValue({
       user: { id: "candidate-a", role: "CANDIDATE", email: "qa@example.test" },
     });
@@ -210,7 +207,6 @@ describe("assessment invite and attempt deadlines", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
     vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
-    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
     mocks.getServerSession.mockResolvedValue({
       user: { id: "candidate-a", role: "CANDIDATE", email: "qa@example.test" },
     });
