@@ -11,10 +11,8 @@ import { ApplicationInterest } from "@prisma/client";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import { hasCanonicalApplicationOffer } from "@/lib/hiring-process/offer-footprint";
 import { hasApplicationHiredFootprint } from "@/lib/hiring-process/hired-footprint";
-import {
-  isCanonicalHiringProcessEnabled,
-  isCanonicalHiringProcessRecruiterReadsEnabled,
-} from "@/lib/hiring-process/feature-flags";
+import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import { getApplicationWriterCompatibility } from "@/lib/hiring-process/writer-compatibility";
 import {
   buildRecruiterApplicationReadRows,
   PRIMARY_RECRUITER_PIPELINE_BUCKETS,
@@ -66,8 +64,6 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
   const canonicalRecruiterReadsEnabled =
     isCanonicalHiringProcessRecruiterReadsEnabled();
-  const canonicalHiringProcessEnabled =
-    isCanonicalHiringProcessEnabled();
 
   const companyId = await getSessionCompanyId().catch(() => null);
   if (!companyId) {
@@ -312,14 +308,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       stage: a.stage,
       disposition: a.disposition,
       stateVersion: a.stateVersion,
-      writerCompatibility:
-        a.stage !== null && a.disposition !== null
-          ? ("CANONICAL" as const)
-          : a.stage === null &&
-              a.disposition === null &&
-              a.stateVersion === 0
-            ? ("LEGACY" as const)
-            : ("NONE" as const),
+      writerCompatibility: getApplicationWriterCompatibility(a),
       createdAt: a.createdAt,
       updatedAt: (a as any).updatedAt ?? a.createdAt,
       _score: gatedScore,
@@ -498,7 +487,6 @@ export default async function JobPipelinePage({ params }: PageProps) {
           applications={appCards}
           hasMatchSignals={hasMatchSignals}
           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
-          canonicalHiringProcessEnabled={canonicalHiringProcessEnabled}
           moveAction={moveAction}
         />
       </div>

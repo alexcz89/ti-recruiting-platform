@@ -202,7 +202,12 @@ describeDatabase("canonical hiring process pilot writer", () => {
     vi.unstubAllEnvs();
   });
 
-  it("preserves the exact legacy REVIEWING write when the flag is off", async () => {
+  it("preserves the exact legacy REVIEWING write for a legacy-only row when the flag is off", async () => {
+    await prisma.application.update({
+      where: { id: ids.application },
+      data: { stage: null, disposition: null, stateVersion: 0 },
+    });
+
     const result = await updateApplicationStatus(ids.application, "REVIEWING");
     const stored = await storedApplication();
 
@@ -210,8 +215,8 @@ describeDatabase("canonical hiring process pilot writer", () => {
     expect(stored).toMatchObject({
       status: "REVIEWING",
       recruiterInterest: "ACCEPTED",
-      stage: "APPLIED",
-      disposition: "ACTIVE",
+      stage: null,
+      disposition: null,
       stateVersion: 0,
     });
     expect(stored.reviewingAt).toBeNull();

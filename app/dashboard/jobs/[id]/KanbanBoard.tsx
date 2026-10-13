@@ -148,7 +148,6 @@ export default function Kanbanboard({
   applications,
   hasMatchSignals = false,
   canonicalRecruiterReadsEnabled = false,
-  canonicalHiringProcessEnabled = false,
   moveAction,
 }: {
   jobId: string;
@@ -157,7 +156,6 @@ export default function Kanbanboard({
   applications: AppCard[];
   hasMatchSignals?: boolean;
   canonicalRecruiterReadsEnabled?: boolean;
-  canonicalHiringProcessEnabled?: boolean;
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
 }) {
   const router = useRouter();
@@ -170,9 +168,7 @@ export default function Kanbanboard({
   }, [applications]);
 
   const isCardWritable = (card: AppCard) =>
-    canonicalHiringProcessEnabled
-      ? card.writerCompatibility === "CANONICAL"
-      : card.writerCompatibility === "LEGACY";
+    card.writerCompatibility !== "NONE";
 
   const grouped = useMemo(() => {
     const map: Record<string, AppCard[]> = {};

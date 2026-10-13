@@ -7,8 +7,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { getSessionCompanyId } from "@/lib/server/session";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
-import { isCanonicalHiringProcessEnabled } from "@/lib/hiring-process/feature-flags";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
+import { getApplicationWriterCompatibility } from "@/lib/hiring-process/writer-compatibility";
 import { transitionApplication } from "@/lib/hiring-process/transition-application";
 import {
   APPLICATION_WITHOUT_CANONICAL_OFFER_WHERE,
@@ -111,10 +111,14 @@ export async function updateApplicationStatus(
       return { success: true };
     }
 
-    const canonicalPilotEnabled =
-      status === "REVIEWING" && isCanonicalHiringProcessEnabled();
+    const writerCompatibility =
+      getApplicationWriterCompatibility(application);
 
-    if (canonicalPilotEnabled) {
+    if (writerCompatibility === "NONE") {
+      return { success: false, error: "Estado de aplicación inconsistente" };
+    }
+
+    if (writerCompatibility === "CANONICAL") {
       const actorId = session.user.id ? String(session.user.id) : null;
       if (!actorId) {
         return { success: false, error: "No autorizado" };
@@ -147,9 +151,12 @@ export async function updateApplicationStatus(
         idempotencyKey: `overview-review:${application.id}:v${sourceVersion}`,
       });
     } else {
-      // Legacy behavior remains the authority while the pilot flag is off.
+      // Legacy-only rows remain on the legacy writer during the rollout.
       const updated = await prisma.application.updateMany({
         where: {
+          stage: null,
+          disposition: null,
+          stateVersion: 0,
           AND: [
             scopedWhere,
             APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE,

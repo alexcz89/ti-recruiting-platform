@@ -192,7 +192,7 @@ describe("canonical hiring process writer migration", () => {
     expect(intentRoute).not.toContain("prisma.application.findUnique");
   });
 
-  it("keeps the flag-off legacy write conditional on a fully non-canonical row", () => {
+  it("keeps legacy writes conditional on a fully non-canonical row", () => {
     const intents = read("lib", "hiring-process", "application-intents.ts");
     expect(intents).toMatch(
       /updateMany\(\{\s*where:\s*\{[^}]*stage:\s*null[^}]*disposition:\s*null[^}]*stateVersion:\s*0/s,
