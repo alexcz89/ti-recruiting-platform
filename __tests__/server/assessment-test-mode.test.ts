@@ -3,7 +3,6 @@ import { isUntimedMcqTestAllowed } from "@/lib/server/assessmentTestMode";
 
 const base = {
   email: "qa@example.test",
-  templateId: "template-a",
   templateType: "MCQ",
   isBadgeExam: false,
 };
@@ -13,13 +12,12 @@ const allowedEnv = {
   VERCEL_ENV: "preview",
   ASSESSMENT_TEST_UNTIMED_ENABLED: "true",
   ASSESSMENT_TEST_UNTIMED_EMAILS: "qa@example.test",
-  ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS: "template-a",
 };
 
 describe("untimed MCQ diagnostic guard", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("permits explicit account + template in preview", () => {
+  it("permits authorized account in preview", () => {
     expect(isUntimedMcqTestAllowed(base, allowedEnv)).toBe(true);
   });
 
@@ -28,10 +26,9 @@ describe("untimed MCQ diagnostic guard", () => {
     expect(isUntimedMcqTestAllowed(base, { ...allowedEnv, VERCEL_ENV: undefined })).toBe(false);
   });
 
-  it("requires explicit enablement and both allowlists", () => {
+  it("requires enablement and authorized email", () => {
     expect(isUntimedMcqTestAllowed(base, { ...allowedEnv, ASSESSMENT_TEST_UNTIMED_ENABLED: "false" })).toBe(false);
     expect(isUntimedMcqTestAllowed({ ...base, email: "other@example.test" }, allowedEnv)).toBe(false);
-    expect(isUntimedMcqTestAllowed({ ...base, templateId: "template-b" }, allowedEnv)).toBe(false);
   });
 
   it("rejects badge, mixed and coding assessments", () => {
