@@ -439,7 +439,6 @@ export async function POST(
     // attempt deadline or the separate invitation expiry.
     const untimedTest = isUntimedMcqTestAllowed({
       email: user.email,
-      templateId: template.id,
       templateType: template.type,
       isBadgeExam: template.isBadgeExam,
     });
