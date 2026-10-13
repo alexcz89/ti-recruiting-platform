@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   inviteExpiresAt: new Date(Date.now() + 60_000),
@@ -52,6 +52,7 @@ const prismaMock = {
       allowRetry: false,
       maxAttempts: 1,
       timeLimit: 30,
+      type: "MCQ",
       shuffleQuestions: true,
       isBadgeExam: false,
       totalQuestions: 1,
@@ -111,6 +112,10 @@ function request() {
 }
 
 describe("assessment invite and attempt deadlines", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     state.inviteExpiresAt = new Date(Date.now() + 60_000);
@@ -151,6 +156,79 @@ describe("assessment invite and attempt deadlines", () => {
       attemptId: "attempt-a",
       reused: true,
     });
+    expect(tx.assessmentAttempt.create).not.toHaveBeenCalled();
+  });
+
+  it("creates an untimed MCQ attempt for an allowlisted Preview test user", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
+    mocks.getServerSession.mockResolvedValue({
+      user: { id: "candidate-a", role: "CANDIDATE", email: "qa@example.test" },
+    });
+
+    const response = await POST(request(), { params: { templateId: "template-a" } });
+    expect(response.status).toBe(200);
+    expect(tx.assessmentAttempt.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ expiresAt: null }) }),
+    );
+    await expect(response.json()).resolves.toMatchObject({ expiresAt: null });
+  });
+
+  it("keeps timed attempts for candidates outside the test allowlist", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
+    mocks.getServerSession.mockResolvedValue({
+      user: { id: "candidate-a", role: "CANDIDATE", email: "another@example.test" },
+    });
+
+    const response = await POST(request(), { params: { templateId: "template-a" } });
+    expect(response.status).toBe(200);
+    const data = tx.assessmentAttempt.create.mock.calls[0][0].data;
+    expect(data.expiresAt).toBeInstanceOf(Date);
+  });
+
+  it("does not bypass expired invitations even for authorized testers", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
+    mocks.getServerSession.mockResolvedValue({
+      user: { id: "candidate-a", role: "CANDIDATE", email: "qa@example.test" },
+    });
+    state.inviteExpiresAt = new Date(0);
+
+    const response = await POST(request(), { params: { templateId: "template-a" } });
+    expect(response.status).toBe(410);
+    expect(tx.assessmentAttempt.create).not.toHaveBeenCalled();
+  });
+
+  it("does not remove deadlines from resumed attempts", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_ENABLED", "true");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_EMAILS", "qa@example.test");
+    vi.stubEnv("ASSESSMENT_TEST_UNTIMED_TEMPLATE_IDS", "template-a");
+    mocks.getServerSession.mockResolvedValue({
+      user: { id: "candidate-a", role: "CANDIDATE", email: "qa@example.test" },
+    });
+    const originalExpiresAt = new Date(Date.now() + 60_000);
+    state.attempt = {
+      id: "attempt-a",
+      status: "IN_PROGRESS",
+      applicationId: "application-a",
+      expiresAt: originalExpiresAt,
+      startedAt: new Date(),
+      flagsJson: { questionOrder: ["question-a"], optionOrderByQuestion: {} },
+      createdAt: new Date(),
+    };
+
+    const response = await POST(request(), { params: { templateId: "template-a" } });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(new Date(body.expiresAt).getTime()).toBe(originalExpiresAt.getTime());
     expect(tx.assessmentAttempt.create).not.toHaveBeenCalled();
   });
 
