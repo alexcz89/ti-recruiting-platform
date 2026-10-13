@@ -263,61 +263,47 @@ export async function POST(
       if (isCorrect) pointsEarned = 1;
       else if (attempt.template.penalizeWrong) pointsEarned = -0.25;
 
-      let created = false;
-      let answerId: string | null = null;
+      // Insert without raising a unique constraint violation.
+      const insertion = await tx.attemptAnswer.createMany({
+        data: [{
+          attemptId: params.attemptId,
+          questionId,
+          selectedOptions,
+          isCorrect,
+          pointsEarned,
+          timeSpent: timeSpent ?? undefined,
+          answeredAt: now,
+        }],
+        skipDuplicates: true,
+      });
 
-      try {
-        const row = await tx.attemptAnswer.create({
-          data: {
+      // Update the complete selection for this question.
+      const row = await tx.attemptAnswer.update({
+        where: {
+          attemptId_questionId: {
             attemptId: params.attemptId,
             questionId,
-            selectedOptions,
-            isCorrect,
-            pointsEarned,
-            timeSpent: timeSpent ?? undefined,
-            answeredAt: now,
           },
-          select: { id: true },
-        });
-        created = true;
-        answerId = row.id;
-      } catch (e: unknown) {
-        if (
-          typeof e !== "object" ||
-          e === null ||
-          !("code" in e) ||
-          String(e.code) !== "P2002"
-        ) {
-          throw e;
-        }
+        },
+        data: {
+          selectedOptions,
+          isCorrect,
+          pointsEarned,
+          timeSpent: timeSpent ?? undefined,
+          answeredAt: now,
+        },
+        select: { id: true },
+      });
 
-        const row = await tx.attemptAnswer.update({
-          where: {
-            attemptId_questionId: {
-              attemptId: params.attemptId,
-              questionId,
-            },
-          },
-          data: {
-            selectedOptions,
-            isCorrect,
-            pointsEarned,
-            timeSpent: timeSpent ?? undefined,
-            answeredAt: now,
-          },
-          select: { id: true },
-        });
-        answerId = row.id;
-      }
-
-      if (created) {
+      // Count usage only when a new answer was inserted.
+      if (insertion.count === 1) {
         await tx.assessmentQuestion.update({
           where: { id: questionId },
           data: { timesUsed: { increment: 1 } },
         });
       }
 
-      return { answerId, isCoding: false };
+      return { answerId: row.id, isCoding: false };
     });
 
     return jsonNoStore({ success: true, answerId: result.answerId });
