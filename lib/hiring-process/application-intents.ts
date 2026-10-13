@@ -5,8 +5,8 @@ import { z } from "zod";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
 import { prisma } from "@/lib/server/prisma";
 
-import { isCanonicalHiringProcessEnabled } from "./feature-flags";
 import { InvalidApplicationTransitionError } from "./rules";
+import { getApplicationWriterCompatibility } from "./writer-compatibility";
 import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
   hasApplicationRejectionFootprint,
@@ -213,7 +213,30 @@ export async function executeApplicationIntent(input: {
     throw new UnauthorizedApplicationTransitionError();
   }
 
-  if (isCanonicalHiringProcessEnabled()) {
+  const routingWhere = applicationWhereForActor(
+    { role: actor.type, companyId: actor.companyId ?? null },
+    { applicationId },
+  );
+  if (!routingWhere) throw new UnauthorizedApplicationTransitionError();
+
+  const routingApplication = await prisma.application.findFirst({
+    where: routingWhere,
+    select: {
+      stage: true,
+      disposition: true,
+      stateVersion: true,
+    },
+  });
+  if (!routingApplication) throw new ApplicationNotFoundError();
+
+  const writerCompatibility =
+    getApplicationWriterCompatibility(routingApplication);
+
+  if (writerCompatibility === "NONE") {
+    throw new CanonicalStateUnavailableError();
+  }
+
+  if (writerCompatibility === "CANONICAL") {
     if (
       command.intent === "MOVE_BACKWARD" ||
       command.intent === "REOPEN_REJECTED"

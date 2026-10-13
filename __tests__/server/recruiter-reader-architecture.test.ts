@@ -92,17 +92,14 @@ describe("recruiter reader architecture", () => {
     expect(page).toContain("displayStatus: canonicalRecruiterReadsEnabled");
     expect(page).toContain("statuses={kanbanStatuses}");
     expect(page).toContain("statusLabels={kanbanStatusLabels}");
-    expect(page).toContain("canonicalHiringProcessEnabled");
-    expect(page).toContain("writerCompatibility:");
-    expect(page).toContain("CANONICAL");
-    expect(page).toContain("LEGACY");
-    expect(page).toContain("NONE");
+    expect(page).toContain("getApplicationWriterCompatibility");
+    expect(page).toContain("writerCompatibility: getApplicationWriterCompatibility(a)");
+    expect(page).not.toContain("canonicalHiringProcessEnabled");
 
     expect(board).toContain("canonicalRecruiterReadsEnabled");
-    expect(board).toContain("canonicalHiringProcessEnabled");
     expect(board).toContain("isCardWritable");
-    expect(board).toContain('card.writerCompatibility === "CANONICAL"');
-    expect(board).toContain('card.writerCompatibility === "LEGACY"');
+    expect(board).toContain('card.writerCompatibility !== "NONE"');
+    expect(board).not.toContain("canonicalHiringProcessEnabled");
     expect(board).toContain("isDragDisabled={!isCardWritable(card)}");
     expect(board).toContain("a.displayStatus");
     expect(board).toContain("canonicalWriterStatusForMove");

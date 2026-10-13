@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CanonicalHiringProcessDisabledError,
+
   CanonicalStateUnavailableError,
   ConcurrentApplicationTransitionError,
   IdempotencyKeyConflictError,
@@ -109,25 +109,26 @@ describe("transitionApplication", () => {
     vi.unstubAllEnvs();
   });
 
-  it("defaults the feature flag to off", async () => {
+  it("keeps canonical transitions usable when the rollout flag is unset", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "");
     const store = new MemoryTransitionStore();
 
-    await expect(
-      transitionApplication(
-        {
-          applicationId: "application-1",
-          targetStage: "REVIEW",
-          expectedVersion: 0,
-          actor: recruiter,
-        },
-        { store },
-      ),
-    ).rejects.toBeInstanceOf(CanonicalHiringProcessDisabledError);
-    expect(store.transactionCount).toBe(0);
+    const result = await transitionApplication(
+      {
+        applicationId: "application-1",
+        targetStage: "REVIEW",
+        expectedVersion: 0,
+        actor: recruiter,
+      },
+      { store },
+    );
+
+    expect(result.state.stage).toBe("REVIEW");
+    expect(store.transactionCount).toBe(1);
+    expect(store.events).toHaveLength(1);
   });
 
-  it("enables the canonical transition path only when the flag is true", async () => {
+  it("executes the canonical transition path when the rollout flag is true", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
     const store = new MemoryTransitionStore();
 
@@ -145,25 +146,23 @@ describe("transitionApplication", () => {
     expect(store.events).toHaveLength(1);
   });
 
-  it("leaves legacy behavior untouched while the feature flag is off", async () => {
+  it("keeps canonical transitions usable after the rollout flag is turned off", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
     const store = new MemoryTransitionStore();
 
-    await expect(
-      transitionApplication(
-        {
-          applicationId: "application-1",
-          targetStage: "REVIEW",
-          expectedVersion: 0,
-          actor: recruiter,
-        },
-        { store },
-      ),
-    ).rejects.toBeInstanceOf(CanonicalHiringProcessDisabledError);
+    const result = await transitionApplication(
+      {
+        applicationId: "application-1",
+        targetStage: "REVIEW",
+        expectedVersion: 0,
+        actor: recruiter,
+      },
+      { store },
+    );
 
-    expect(store.transactionCount).toBe(0);
-    expect(store.current).toEqual(application());
-    expect(store.events).toEqual([]);
+    expect(result.state.stage).toBe("REVIEW");
+    expect(store.transactionCount).toBe(1);
+    expect(store.events).toHaveLength(1);
   });
 
   it("atomically updates canonical state, safe legacy projection, timestamps and event", async () => {

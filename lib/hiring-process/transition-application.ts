@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { applicationEventVisibility, eventTypeForTransition } from "./event-policy";
-import { isCanonicalHiringProcessEnabled } from "./feature-flags";
+
 import {
   projectCanonicalStateToLegacy,
   type LegacyApplicationInterest,
@@ -16,13 +16,6 @@ import type {
   ApplicationStageValue,
 } from "./types";
 
-export class CanonicalHiringProcessDisabledError extends Error {
-  readonly code = "CANONICAL_HIRING_PROCESS_DISABLED";
-  constructor() {
-    super("Canonical hiring process is disabled");
-    this.name = "CanonicalHiringProcessDisabledError";
-  }
-}
 
 export class ApplicationNotFoundError extends Error {
   readonly code = "APPLICATION_NOT_FOUND";
@@ -404,9 +397,6 @@ export async function transitionApplication(
     store?: ApplicationTransitionStore;
   } = {},
 ): Promise<TransitionApplicationResult> {
-  if (!isCanonicalHiringProcessEnabled()) {
-    throw new CanonicalHiringProcessDisabledError();
-  }
 
   const idempotencyKey = normalizeOptionalToken(input.idempotencyKey, 200);
   const reasonCode = normalizeOptionalToken(input.reasonCode, 80);

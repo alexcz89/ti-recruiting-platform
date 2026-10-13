@@ -199,6 +199,104 @@ describeDatabase("canonical hiring process writer migration", () => {
     expect(stored.events).toHaveLength(0);
   });
 
+  it("keeps an existing legacy-only application writable after the rollout flag is enabled", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
+
+    const result = await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "START_REVIEW",
+        expectedVersion: 0,
+        commandId: "qa-legacy-row-after-flag-on",
+      },
+      actor: recruiterActor,
+    });
+
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+    });
+
+    expect(result.state).toBeNull();
+    expect(result.legacyProjectionApplied).toBe(true);
+    expect(stored).toMatchObject({
+      stage: null,
+      disposition: null,
+      stateVersion: 0,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+    });
+    expect(
+      await prisma.applicationEvent.count({
+        where: { applicationId: application.id },
+      }),
+    ).toBe(0);
+  });
+
+  it("keeps an existing canonical application writable after the rollout flag is disabled", async () => {
+    const application = await createRolloutApplication();
+
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+
+    const result = await executeApplicationIntent({
+      applicationId: application.id,
+      command: {
+        intent: "START_REVIEW",
+        expectedVersion: 1,
+        commandId: "qa-canonical-row-after-flag-off",
+      },
+      actor: recruiterActor,
+    });
+
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id },
+      include: { events: true },
+    });
+
+    expect(result.state).toMatchObject({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 2,
+    });
+    expect(stored).toMatchObject({
+      stage: "REVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 2,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+    });
+    expect(stored.events).toHaveLength(2);
+  });
+
+  it("blocks partial canonical state regardless of the rollout flag", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+
+    await prisma.application.update({
+      where: { id: application.id },
+      data: {
+        stage: "APPLIED",
+        disposition: null,
+        stateVersion: 0,
+      },
+    });
+
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
+
+    await expect(
+      executeApplicationIntent({
+        applicationId: application.id,
+        command: {
+          intent: "START_REVIEW",
+          expectedVersion: 0,
+          commandId: "qa-partial-row-blocked",
+        },
+        actor: recruiterActor,
+      }),
+    ).rejects.toBeInstanceOf(CanonicalStateUnavailableError);
+  });
   it("executes START_REVIEW and MOVE_TO_INTERVIEW with their exact projections", async () => {
     const application = await createApplication();
     await executeApplicationIntent({
@@ -1338,7 +1436,7 @@ describeDatabase("canonical hiring process writer migration", () => {
         command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-cross-tenant" },
         actor: { type: "RECRUITER", id: ids.otherRecruiter, companyId: ids.otherCompany },
       }),
-    ).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+    ).rejects.toBeInstanceOf(ApplicationNotFoundError);
     await expect(
       executeApplicationIntent({
         applicationId: application.id,
@@ -1473,7 +1571,7 @@ describeDatabase("canonical hiring process writer migration", () => {
     expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
   });
 
-  it("fails closed for ambiguous flag-off MOVE_TO_OFFER states and canonical footprints", async () => {
+  it("fails closed for ambiguous flag-off MOVE_TO_OFFER legacy states while keeping canonical footprints writable", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
     const cases = [
       { status: "SUBMITTED", interest: "ACCEPTED" },
@@ -1522,13 +1620,31 @@ describeDatabase("canonical hiring process writer migration", () => {
         recruiterInterest: "ACCEPTED",
       },
     });
-    await expect(
-      executeApplicationIntent({
-        applicationId: canonical.id,
-        command: { intent: "MOVE_TO_OFFER", expectedVersion: 0, commandId: "qa-canonical-offer-flag-off" },
-        actor: recruiterActor,
-      }),
-    ).rejects.toBeInstanceOf(CanonicalStateUnavailableError);
+    const result = await executeApplicationIntent({
+      applicationId: canonical.id,
+      command: { intent: "MOVE_TO_OFFER", expectedVersion: 0, commandId: "qa-canonical-offer-flag-off" },
+      actor: recruiterActor,
+    });
+
+    expect(result.state).toMatchObject({
+      stage: "OFFER",
+      disposition: "ACTIVE",
+      stateVersion: 1,
+    });
+
+    expect(
+      await prisma.application.findUniqueOrThrow({ where: { id: canonical.id } }),
+    ).toMatchObject({
+      stage: "OFFER",
+      disposition: "ACTIVE",
+      stateVersion: 1,
+      status: "OFFER",
+      recruiterInterest: "ACCEPTED",
+    });
+
+    expect(
+      await prisma.applicationEvent.count({ where: { applicationId: canonical.id } }),
+    ).toBe(1);
   });
 
   it("applies flag-off rejection once and preserves its first rejectedAt on retry", async () => {
@@ -1687,25 +1803,33 @@ describeDatabase("canonical hiring process writer migration", () => {
     expect(await prisma.applicationEvent.count({ where: { applicationId: application.id } })).toBe(0);
   });
 
-  it("refuses flag-off legacy fallback for an already-canonical application", async () => {
+  it("keeps an already-canonical application on the canonical writer while the rollout flag is off", async () => {
     const application = await createApplication();
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
 
-    await expect(
-      executeApplicationIntent({
-        applicationId: application.id,
-        command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-unsafe-legacy-interview" },
-        actor: recruiterActor,
-      }),
-    ).rejects.toBeInstanceOf(CanonicalStateUnavailableError);
+    const result = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-canonical-interview-flag-off" },
+      actor: recruiterActor,
+    });
+
+    expect(result.state).toMatchObject({
+      stage: "INTERVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 2,
+    });
 
     expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
-      stage: "APPLIED",
+      stage: "INTERVIEW",
       disposition: "ACTIVE",
-      stateVersion: 1,
-      status: "SUBMITTED",
-      recruiterInterest: "REVIEW",
+      stateVersion: 2,
+      status: "INTERVIEW",
+      recruiterInterest: "ACCEPTED",
     });
+
+    expect(
+      await prisma.applicationEvent.count({ where: { applicationId: application.id } }),
+    ).toBe(2);
   });
 
   it("fails closed for a partial canonical snapshot while the flag is off", async () => {
