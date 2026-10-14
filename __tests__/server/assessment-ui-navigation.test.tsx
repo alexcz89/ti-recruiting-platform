@@ -100,6 +100,75 @@ describe("assessment candidate navigation", () => {
     expect(html).not.toContain("<button");
   });
 
+  it("shows NFQ topic titles without invented counts or times", () => {
+    const html = renderToStaticMarkup(
+      <AssessmentIntro
+        template={{
+          title: "NFQ - Java Junior",
+          totalQuestions: 34,
+          timeLimit: 30,
+          passingScore: 50,
+          sections: [
+            { title: "Fundamentos de Java" },
+            { title: "Java 8 / Streams / Lambdas" },
+            { title: "Git y HTTP básico" },
+          ],
+        }}
+        onStart={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Temas que se evaluarán");
+    expect(html).toContain("Fundamentos de Java");
+    expect(html).toContain("Java 8 / Streams / Lambdas");
+    expect(html).toContain("Git y HTTP básico");
+    expect(html).not.toContain("Sección 1");
+    expect(html).not.toContain("— preguntas");
+    expect(html).not.toContain("~—");
+  });
+
+  it("supports legacy name-based topics and omits generic, blank and duplicate labels", () => {
+    const html = renderToStaticMarkup(
+      <AssessmentIntro
+        template={{
+          title: "QA Assessment",
+          sections: [
+            { name: "Arrays y Objetos", questions: 5 },
+            { title: " ", name: "arrays y objetos" },
+            { name: "Sección 2" },
+            { title: "General" },
+            { title: "" },
+            { name: "ES6+ y Asincronía" },
+          ],
+        }}
+        onStart={() => undefined}
+      />,
+    );
+
+    expect(html).toContain("Temas que se evaluarán");
+    expect(html).toContain("Arrays y Objetos");
+    expect(html).toContain("ES6+ y Asincronía");
+    expect(html.match(/Arrays y Objetos/g)).toHaveLength(1);
+    expect(html).not.toContain("Sección 2");
+    expect(html).not.toContain("— preguntas");
+  });
+
+  it("hides topics entirely when no meaningful section titles exist", () => {
+    const html = renderToStaticMarkup(
+      <AssessmentIntro
+        template={{
+          title: "QA Assessment",
+          sections: [{ name: "Sección 1" }, { name: "General" }, {}, null],
+        }}
+        onStart={() => undefined}
+      />,
+    );
+
+    expect(html).not.toContain("Temas que se evaluarán");
+    expect(html).toContain("Instrucciones");
+    expect(html).toContain("Comenzar evaluación");
+  });
+
   it("renders continue on detail for a valid in-progress attempt", () => {
     const html = renderToStaticMarkup(
       <AssessmentIntro

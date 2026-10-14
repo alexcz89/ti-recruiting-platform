@@ -173,7 +173,10 @@ export async function POST(
       questionMaxPoints.map((question) => [question.id, question.maxPts])
     );
 
-    const sections = (attempt.template.sections as any[]) || [];
+    const sections = Array.isArray(attempt.template.sections)
+      ? attempt.template.sections
+      : [];
+
     const sectionScores: Record<string, number> = {};
     const sectionRequirementResults: Record<
       string,
@@ -181,49 +184,68 @@ export async function POST(
     > = {};
     let sectionRequirementsMet = true;
 
-    for (const section of sections) {
-      const sectionName = String(section?.name || "");
-      if (!sectionName) continue;
+    // Group by the real section assigned to each active question.
+    const sectionByQuestion = new Map<string, string>();
+    const maxPointsBySection = new Map<string, number>();
+    const earnedPointsBySection = new Map<string, number>();
 
-      const sectionAnswers = scoringAnswers.filter(
-        (answer) => answer.question.section === sectionName
+    for (const question of questionMaxPoints) {
+      const name = String(question.section ?? "").trim() || "Sin sección";
+      sectionByQuestion.set(question.id, name);
+      maxPointsBySection.set(
+        name,
+        (maxPointsBySection.get(name) ?? 0) + question.maxPts
       );
-
-      const sectionPoints = sectionAnswers.reduce(
-        (sum, answer) =>
-          sum +
-          Math.min(
-            maxPointsByQuestion.get(answer.questionId) ?? 0,
-            answer.pointsEarned || 0
-          ),
-        0
-      );
-
-      const sectionMaxPts = questionMaxPoints
-        .filter((question) => question.section === sectionName)
-        .reduce((sum, question) => sum + question.maxPts, 0);
-
-      sectionScores[sectionName] =
-        sectionMaxPts > 0
-          ? Math.max(
-              0,
-              Math.min(100, Math.round((sectionPoints / sectionMaxPts) * 100))
-            )
-          : 0;
-
-      const minimumCorrect = Number(section?.minimumCorrect ?? 0);
-      if (Number.isInteger(minimumCorrect) && minimumCorrect > 0) {
-        const correct = Math.round(sectionPoints);
-        const met = correct >= minimumCorrect;
-        sectionRequirementResults[sectionName] = {
-          minimumCorrect,
-          correct,
-          met,
-        };
-        if (!met) sectionRequirementsMet = false;
-      }
     }
 
+    for (const answer of scoringAnswers) {
+      const name = sectionByQuestion.get(answer.questionId);
+      if (!name) continue;
+
+      const earned = Math.min(
+        maxPointsByQuestion.get(answer.questionId) ?? 0,
+        answer.pointsEarned || 0
+      );
+
+      earnedPointsBySection.set(
+        name,
+        (earnedPointsBySection.get(name) ?? 0) + earned
+      );
+    }
+
+    for (const [name, maxPoints] of maxPointsBySection) {
+      const earned = earnedPointsBySection.get(name) ?? 0;
+      sectionScores[name] = maxPoints > 0
+        ? Math.max(0, Math.min(100, Math.round(earned / maxPoints * 100)))
+        : 0;
+    }
+
+    // Preserve configured minimum-correct requirements.
+    // Templates may identify sections using "title" or "name".
+    for (const section of sections) {
+      if (!section || typeof section !== "object" || Array.isArray(section)) {
+        continue;
+      }
+
+      const sectionData = section as Record<string, unknown>;
+      const name = String(sectionData.title || sectionData.name || "").trim();
+      const minimumCorrect = Number(sectionData.minimumCorrect ?? 0);
+
+      if (!name || !Number.isInteger(minimumCorrect) || minimumCorrect <= 0) {
+        continue;
+      }
+
+      const correct = Math.round(earnedPointsBySection.get(name) ?? 0);
+      const met = correct >= minimumCorrect;
+
+      sectionRequirementResults[name] = {
+        minimumCorrect,
+        correct,
+        met,
+      };
+
+      if (!met) sectionRequirementsMet = false;
+    }
     const recordedAnswerTime = attempt.answers.reduce(
       (sum, answer) => sum + (answer.timeSpent || 0),
       0
