@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { Clock, FileText, Award, AlertCircle } from "lucide-react";
+import { Clock, FileText, Award, AlertCircle, BookOpen } from "lucide-react";
 import type { AssessmentState } from "@/lib/assessments/expiration";
 
 type Props = {
@@ -23,6 +23,41 @@ function formatPercent(v: any) {
   return `${n}%`;
 }
 
+/**
+ * Older templates use { name }, while NFQ imports use { title }.
+ * Only surface actual subject names: never invent section labels, counts or times.
+ */
+function assessmentTopics(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+
+  const seen = new Set<string>();
+  const topics: string[] = [];
+
+  for (const section of raw) {
+    const candidates = typeof section === "string"
+      ? [section]
+      : section && typeof section === "object"
+        ? [
+            (section as Record<string, unknown>).title,
+            (section as Record<string, unknown>).name,
+          ]
+        : [];
+
+    const topic = candidates.find(
+      (value): value is string => typeof value === "string" && value.trim().length > 0
+    )?.trim();
+
+    if (!topic || /^(?:secci[oó]n|section)\s*\d+$/i.test(topic) || /^general$/i.test(topic)) continue;
+
+    const key = topic.toLocaleLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    topics.push(topic);
+  }
+
+  return topics;
+}
+
 export default function AssessmentIntro({ template, onStart, accessState }: Props) {
   const title = String(template?.title ?? "Evaluación");
   const description =
@@ -35,7 +70,7 @@ export default function AssessmentIntro({ template, onStart, accessState }: Prop
       ? template.totalQuestions
       : null;
 
-  const sections = Array.isArray(template?.sections) ? (template.sections as any[]) : [];
+  const topics = assessmentTopics(template?.sections);
 
   const allowRetry = Boolean(template?.allowRetry);
   const maxAttempts =
@@ -99,39 +134,24 @@ export default function AssessmentIntro({ template, onStart, accessState }: Prop
           </div>
         </div>
 
-        {/* Secciones (collapsed if empty) */}
-        {sections.length > 0 && (
-          <div className="mb-5 p-4 rounded-xl border glass-card">
-            <h2 className="text-sm font-semibold mb-3">📋 Secciones</h2>
-            <div className="space-y-2">
-              {sections.map((section: any, idx: number) => {
-                const name = String(section?.name ?? `Sección ${idx + 1}`);
-                const questions =
-                  typeof section?.questions === "number" && Number.isFinite(section.questions)
-                    ? section.questions
-                    : null;
-                const weight =
-                  typeof section?.weight === "number" && Number.isFinite(section.weight)
-                    ? section.weight
-                    : null;
-                const timeLimit = formatMinutes(section?.timeLimit);
-                return (
-                  <div
-                    key={`${name}-${idx}`}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-50 dark:bg-zinc-900"
-                  >
-                    <div>
-                      <p className="text-sm font-medium text-default">{name}</p>
-                      <p className="text-xs text-muted">
-                        {questions ?? "—"} preguntas{weight != null ? ` · ${weight}%` : ""}
-                      </p>
-                    </div>
-                    <span className="text-xs text-muted">~{timeLimit} min</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+        {/* Only real topic titles, no guessed counts or per-section deadlines. */}
+        {topics.length > 0 && (
+          <section className="mb-5" aria-label="Temas que se evaluarán">
+            <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-default">
+              <BookOpen className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+              Temas que se evaluarán
+            </h2>
+            <ul className="flex flex-wrap gap-2">
+              {topics.map((topic) => (
+                <li
+                  key={topic.toLocaleLowerCase()}
+                  className="max-w-full rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm leading-5 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200"
+                >
+                  {topic}
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
 
         {/* Instrucciones compactas */}
