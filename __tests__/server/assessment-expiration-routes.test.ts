@@ -29,8 +29,8 @@ const tx = {
     update: vi.fn(async () => ({})),
   },
   attemptAnswer: {
-    create: vi.fn(async () => ({ id: "answer-a" })),
-    update: vi.fn(),
+    createMany: vi.fn(async () => ({ count: 1 })),
+    update: vi.fn(async () => ({ id: "answer-a" })),
     upsert: vi.fn(),
   },
 };
@@ -68,7 +68,7 @@ describe("assessment answer expiration", () => {
   it("allows an answer for a legacy attempt with null expiresAt", async () => {
     const response = await POST(request(), { params: { attemptId: "attempt-a" } });
     expect(response.status).toBe(200);
-    expect(tx.attemptAnswer.create).toHaveBeenCalledOnce();
+    expect(tx.attemptAnswer.createMany).toHaveBeenCalledOnce();
   });
 
   it("rejects an answer at the exact deadline with 410 and no-store", async () => {
@@ -79,7 +79,7 @@ describe("assessment answer expiration", () => {
     await expect(response.json()).resolves.toMatchObject({
       code: "ASSESSMENT_EXPIRED",
     });
-    expect(tx.attemptAnswer.create).not.toHaveBeenCalled();
+    expect(tx.attemptAnswer.createMany).not.toHaveBeenCalled();
   });
 
   it("checks ownership before revealing expiration", async () => {
@@ -91,10 +91,10 @@ describe("assessment answer expiration", () => {
   });
 
   it("keeps one authoritative answer when the same question is saved again", async () => {
-    tx.attemptAnswer.create
-      .mockResolvedValueOnce({ id: "answer-a" })
-      .mockRejectedValueOnce({ code: "P2002" });
-    tx.attemptAnswer.update.mockResolvedValueOnce({ id: "answer-a" });
+    tx.attemptAnswer.createMany
+      .mockResolvedValueOnce({ count: 1 })
+      .mockResolvedValueOnce({ count: 0 });
+    tx.attemptAnswer.update.mockResolvedValue({ id: "answer-a" });
 
     const first = await POST(request(), { params: { attemptId: "attempt-a" } });
     const second = await POST(
