@@ -620,7 +620,8 @@ export async function executeApplicationIntent(input: {
     throw new ConcurrentApplicationTransitionError();
   }
 
-  // Temporary legacy exception: removed when the canonical flag becomes authoritative.
+  // Compatibility path for fully legacy rows, independent of the creation flag.
+  // Keep until explicit legacy retirement; cutover/rollback does not migrate rows.
   const projection = command.intent === "MOVE_BACKWARD"
     ? legacyProjectionForBackwardTarget(command.targetStage)
     : command.intent === "REOPEN_REJECTED"
