@@ -27,6 +27,8 @@ const ids = {
   company: "qa-writer-company",
   otherCompany: "qa-writer-other-company",
   candidate: "qa-writer-candidate",
+  canonicalCandidate: "qa-writer-canonical-candidate",
+  rollbackCandidate: "qa-writer-rollback-candidate",
   recruiter: "qa-writer-recruiter",
   otherRecruiter: "qa-writer-other-recruiter",
   admin: "qa-writer-admin",
@@ -49,7 +51,7 @@ async function cleanup() {
     where: { userId: { in: [ids.recruiter, ids.otherRecruiter] } },
   });
   await prisma.user.deleteMany({
-    where: { id: { in: [ids.candidate, ids.recruiter, ids.otherRecruiter, ids.admin] } },
+    where: { id: { in: [ids.candidate, ids.canonicalCandidate, ids.rollbackCandidate, ids.recruiter, ids.otherRecruiter, ids.admin] } },
   });
   await prisma.company.deleteMany({
     where: { id: { in: [ids.company, ids.otherCompany] } },
@@ -66,6 +68,8 @@ async function fixtures() {
   await prisma.user.createMany({
     data: [
       { id: ids.candidate, email: "qa-writer-candidate@example.invalid", role: "CANDIDATE" },
+      { id: ids.canonicalCandidate, email: "qa-writer-canonical@example.invalid", role: "CANDIDATE" },
+      { id: ids.rollbackCandidate, email: "qa-writer-rollback@example.invalid", role: "CANDIDATE" },
       { id: ids.recruiter, email: "qa-writer-recruiter@example.invalid", role: "RECRUITER" },
       { id: ids.otherRecruiter, email: "qa-writer-other@example.invalid", role: "RECRUITER" },
       { id: ids.admin, email: "qa-writer-admin@example.invalid", role: "ADMIN" },
@@ -149,6 +153,104 @@ describeDatabase("canonical hiring process writer migration", () => {
     await cleanup();
     await prisma.$disconnect();
     vi.unstubAllEnvs();
+  });
+
+  it("preserves coexisting cohorts and command replay throughout OFF -> ON -> OFF", async () => {
+    const create = (candidateId: string) =>
+      createApplicationForHiringProcessRollout({
+        jobId: ids.job,
+        candidateId,
+        coverLetter: "Cutover QA",
+        resumeUrl: null,
+      });
+    const review = {
+      intent: "START_REVIEW" as const,
+      expectedVersion: 1,
+      commandId: "cutover-review",
+    };
+
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const legacy = await create(ids.candidate);
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
+    const canonical = await create(ids.canonicalCandidate);
+    await executeApplicationIntent({
+      applicationId: legacy.id,
+      actor: recruiterActor,
+      command: {
+        ...review,
+        expectedVersion: 0,
+        commandId: "cutover-legacy-review",
+      },
+    });
+    await executeApplicationIntent({
+      applicationId: canonical.id,
+      actor: recruiterActor,
+      command: review,
+    });
+    const before = await prisma.application.findUniqueOrThrow({
+      where: { id: canonical.id },
+      include: { events: true },
+    });
+
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const rollback = await create(ids.rollbackCandidate);
+    await executeApplicationIntent({
+      applicationId: canonical.id,
+      actor: recruiterActor,
+      command: review,
+    });
+    const replayed = await prisma.application.findUniqueOrThrow({
+      where: { id: canonical.id },
+      include: { events: true },
+    });
+    expect(replayed).toEqual(before);
+
+    for (const [applicationId, expectedVersion] of [
+      [legacy.id, 0],
+      [canonical.id, 2],
+      [rollback.id, 0],
+    ] as const) {
+      await executeApplicationIntent({
+        applicationId,
+        actor: recruiterActor,
+        command: {
+          intent: "MOVE_TO_INTERVIEW",
+          expectedVersion,
+          commandId: `cutover-interview:${applicationId}`,
+        },
+      });
+    }
+
+    for (const applicationId of [legacy.id, rollback.id]) {
+      const row = await prisma.application.findUniqueOrThrow({
+        where: { id: applicationId },
+        include: { events: true },
+      });
+      expect(row).toMatchObject({
+        stage: null,
+        disposition: null,
+        stateVersion: 0,
+        status: "INTERVIEW",
+        recruiterInterest: "ACCEPTED",
+        events: [],
+      });
+    }
+    const row = await prisma.application.findUniqueOrThrow({
+      where: { id: canonical.id },
+      include: { events: true },
+    });
+    expect(row).toMatchObject({
+      stage: "INTERVIEW",
+      disposition: "ACTIVE",
+      stateVersion: 3,
+      status: "INTERVIEW",
+      recruiterInterest: "ACCEPTED",
+      reviewingAt: before.reviewingAt,
+    });
+    expect(row.events).toHaveLength(3);
+    expect(
+      row.events.filter((event) => event.type === "APPLICATION_CREATED"),
+    ).toHaveLength(1);
   });
 
   it("creates the canonical snapshot, legacy projection, and APPLICATION_CREATED exactly once when the flag is on", async () => {

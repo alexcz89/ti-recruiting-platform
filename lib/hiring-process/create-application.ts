@@ -72,7 +72,8 @@ export async function createCanonicalApplication(
 }
 
 /**
- * Keeps new applications fully legacy until the canonical process is authoritative.
+ * The flag selects representation only at creation. Persisted applications route
+ * by representation even after the flag changes (including rollback).
  * Notifications remain outside this helper so both paths share the same side effects.
  */
 export async function createApplicationForHiringProcessRollout(
