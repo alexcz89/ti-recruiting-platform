@@ -1,10 +1,17 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 const read = (...segments: string[]) =>
   readFileSync(join(process.cwd(), ...segments), "utf8");
+
+function sources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory() ? sources(path) : /\.tsx?$/.test(path) ? [path] : [];
+  });
+}
 
 describe("recruiter reader architecture", () => {
   it("keeps job application presentation on the centralized read model", () => {
@@ -115,5 +122,62 @@ describe("recruiter reader architecture", () => {
     expect(page).not.toContain('intent: "HIRE_CANDIDATE"');
     expect(page).not.toContain('intent: "MOVE_BACKWARD"');
     expect(page).not.toContain('intent: "REOPEN_REJECTED"');
+  });
+
+  it("limits the recruiter reader environment flag to approved read surfaces", () => {
+    const root = process.cwd();
+    const consumers = ["app", "lib", "components"]
+      .flatMap((directory) => sources(join(root, directory)))
+      .filter((file) =>
+        /\b(?:isCanonicalHiringProcessRecruiterReadsEnabled|CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED)\b/.test(
+          readFileSync(file, "utf8"),
+        ),
+      )
+      .map((file) => relative(root, file).replaceAll("\\", "/"))
+      .sort();
+
+    expect(consumers).toEqual([
+      "app/dashboard/candidates/[id]/page.tsx",
+      "app/dashboard/candidates/pending/page.tsx",
+      "app/dashboard/jobs/[id]/applications/page.tsx",
+      "app/dashboard/jobs/[id]/page.tsx",
+      "app/dashboard/jobs/page.tsx",
+      "app/dashboard/overview/page.tsx",
+      "lib/hiring-process/feature-flags.ts",
+    ]);
+  });
+
+  it("keeps the mixed Kanban server action independent from the reader flag", () => {
+    const page = read("app", "dashboard", "jobs", "[id]", "page.tsx");
+    const actionStart = page.indexOf("async function moveAction(");
+    const actionEnd = page.indexOf("\n  return (", actionStart);
+    const moveAction = page.slice(actionStart, actionEnd);
+
+    expect(actionStart).toBeGreaterThan(-1);
+    expect(actionEnd).toBeGreaterThan(actionStart);
+    expect(moveAction).toContain("executeApplicationIntent({");
+    expect(moveAction).not.toContain("canonicalRecruiterReadsEnabled");
+    expect(moveAction).not.toContain("isCanonicalHiringProcessRecruiterReadsEnabled");
+  });
+
+  it("keeps the centralized recruiter reader free of writer side effects", () => {
+    const helper = read("lib", "hiring-process", "recruiter-read-model.ts");
+
+    for (const forbidden of [
+      "@/lib/server/prisma",
+      "executeApplicationIntent",
+      "transitionApplication",
+      "applicationEvent",
+      "ApplicationEvent",
+      ".update(",
+      ".updateMany(",
+      ".create(",
+      "reconcile",
+      "backfill",
+      "expectedVersion",
+      "idempotency",
+    ]) {
+      expect(helper).not.toContain(forbidden);
+    }
   });
 });
