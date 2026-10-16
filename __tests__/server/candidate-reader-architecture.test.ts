@@ -1,10 +1,21 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
+import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 const read = (...segments: string[]) =>
   readFileSync(join(process.cwd(), ...segments), "utf8");
+
+function sources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name);
+    return entry.isDirectory()
+      ? sources(path)
+      : /\.tsx?$/.test(path)
+        ? [path]
+        : [];
+  });
+}
 
 describe("candidate reader architecture", () => {
   it("keeps candidate applications on the centralized read model", () => {
@@ -104,5 +115,63 @@ describe("candidate reader architecture", () => {
     // Canonical state interpretation stays on the server-side read model.
     expect(client).not.toContain("application.stage");
     expect(client).not.toContain("application.disposition");
+  });
+
+  it("limits the candidate reader flag to its definition and candidate read surfaces", () => {
+    const root = process.cwd();
+    const consumers = ["app", "lib", "components"]
+      .flatMap((directory) => sources(join(root, directory)))
+      .filter((file) =>
+        /\b(?:isCanonicalHiringProcessCandidateReadsEnabled|CANONICAL_HIRING_PROCESS_CANDIDATE_READS_ENABLED)\b/.test(
+          readFileSync(file, "utf8"),
+        ),
+      )
+      .map((file) => relative(root, file).replaceAll("\\", "/"))
+      .sort();
+
+    expect(consumers).toEqual([
+      "app/profile/applications/page.tsx",
+      "app/profile/summary/page.tsx",
+      "lib/hiring-process/feature-flags.ts",
+    ]);
+  });
+
+  it("keeps the candidate read model free of writer and persistence concerns", () => {
+    const helper = read("lib", "hiring-process", "candidate-read-model.ts");
+
+    for (const forbidden of [
+      "@/lib/server/prisma",
+      "executeApplicationIntent",
+      "transitionApplication",
+      "getApplicationWriterCompatibility",
+      "applicationEvent",
+      "ApplicationEvent",
+      ".update(",
+      ".updateMany(",
+      ".create(",
+      "reconcile",
+      "backfill",
+      "expectedVersion",
+      "stateVersion",
+      "idempotency",
+      "recruiterInterest",
+    ]) {
+      expect(helper).not.toContain(forbidden);
+    }
+  });
+
+  it("keeps recruiter read semantics independent from the candidate reader flag", () => {
+    const recruiterHelper = read(
+      "lib",
+      "hiring-process",
+      "recruiter-read-model.ts",
+    );
+
+    expect(recruiterHelper).not.toContain(
+      "isCanonicalHiringProcessCandidateReadsEnabled",
+    );
+    expect(recruiterHelper).not.toContain(
+      "CANONICAL_HIRING_PROCESS_CANDIDATE_READS_ENABLED",
+    );
   });
 });
