@@ -213,6 +213,7 @@ GROUP BY 1, 2
 ORDER BY 1, 2;
 
 -- Reader activation must not itself create events or update Applications.
+-- recordedAt is persistence time; happenedAt is the logical business time.
 -- Replace this sample timestamp with the recorded activation boundary and
 -- correlate any natural hiring actions before drawing a conclusion.
 WITH params AS (
@@ -220,7 +221,7 @@ WITH params AS (
 )
 SELECT
   (SELECT count(*) FROM "ApplicationEvent", params
-   WHERE "createdAt" >= params.activated_at) AS events_since_activation,
+   WHERE "recordedAt" >= params.activated_at) AS events_since_activation,
   (SELECT count(*) FROM "Application", params
    WHERE "updatedAt" >= params.activated_at) AS applications_updated_since_activation;
 
