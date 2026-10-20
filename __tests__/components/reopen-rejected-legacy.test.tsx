@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import CandidateReviewShell, { type AppState, type ShellProps } from "@/components/dashboard/CandidateReviewShell";
@@ -29,8 +29,8 @@ it.each([legacy, { ...legacy, stage: "CLOSED", disposition: "REJECTED", stateVer
   "offers reopen for exact rejected representation %#", (app) => {
     render(<CandidateReviewShell {...props(app)} />);
     expect(screen.getByRole("button", { name: "Reabrir proceso" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Preselecto" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Entrevista" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Preselecto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Entrevista" })).not.toBeInTheDocument();
   },
 );
 it.each([
@@ -71,7 +71,7 @@ it.each([409, 422])("keeps rejection and explains HTTP %s", async (status) => {
   render(<CandidateReviewShell {...props(legacy)} />);
   confirm();
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(status === 409 ? /cambió/ : /estado actual/));
-  expect(screen.getByRole("button", { name: "Preselecto" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Preselecto" })).not.toBeInTheDocument();
   expect(mocks.refresh).not.toHaveBeenCalled();
 });
 it("resets application, notes and dialog when navigating to another candidate", () => {
@@ -97,7 +97,7 @@ it("isolates a pending reopen response from the next candidate", async () => {
   } })));
   await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
   expect(screen.getByRole("button", { name: "Reabrir proceso" })).toBeEnabled();
-  expect(screen.getByRole("button", { name: "Preselecto" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Preselecto" })).not.toBeInTheDocument();
   expect(screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")).toHaveValue("Notas B");
 });
 
@@ -106,6 +106,58 @@ it("preserves rejected state on network failure", async () => {
   render(<CandidateReviewShell {...props(legacy)} />);
   confirm();
   await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("No se pudo actualizar"));
-  expect(screen.getByRole("button", { name: "Preselecto" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Preselecto" })).not.toBeInTheDocument();
   expect(mocks.refresh).not.toHaveBeenCalled();
+});
+
+it.each([375, 768, 1024, 1366, 1440, 1920])(
+  "keeps identity and wrapping actions in separate rows at %ipx",
+  (width) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    const active = {
+      ...legacy,
+      status: "REVIEWING",
+      recruiterInterest: "REVIEW",
+      rejectedAt: null,
+    };
+    const shellProps = {
+      ...props(active),
+      candidateName: "Nombre de candidato extraordinariamente largo para validar el encabezado",
+      candidateLocation: "San Nicolás de los Garza, Nuevo León, México",
+      waHref: "https://wa.me/5215555555555",
+      resumeUrl: "https://example.com/cv.pdf",
+    };
+    render(<CandidateReviewShell {...shellProps} />);
+
+    const layout = screen.getByTestId("candidate-header-layout");
+    const actions = screen.getByTestId("candidate-header-actions");
+    expect(layout).toHaveClass("flex-col", "min-w-0");
+    expect(layout).not.toHaveClass("sm:flex-row");
+    expect(actions).toHaveClass("w-full", "min-w-0", "flex-wrap");
+    expect(actions).not.toHaveClass("shrink-0");
+    expect(within(actions).getByRole("button", { name: "Preselecto" })).toBeEnabled();
+    expect(within(actions).getByRole("button", { name: "Entrevista" })).toBeEnabled();
+    expect(within(actions).getByRole("button", { name: "Descartar" })).toBeEnabled();
+    expect(within(actions).getByRole("link", { name: "WA" })).toBeVisible();
+    expect(within(actions).getByRole("link", { name: "CV" })).toBeVisible();
+    expect(within(actions).getByRole("link", { name: "Pipeline" })).toBeVisible();
+    cleanup();
+  },
+);
+
+it("renders only rejected workflow controls while preserving utilities", () => {
+  render(<CandidateReviewShell {...{
+    ...props(legacy),
+    waHref: "https://wa.me/5215555555555",
+    resumeUrl: "https://example.com/cv.pdf",
+  }} />);
+  const actions = screen.getByTestId("candidate-header-actions");
+  expect(within(actions).getByText("Descartado")).toBeVisible();
+  expect(within(actions).getByRole("button", { name: "Reabrir proceso" })).toBeEnabled();
+  expect(within(actions).queryByRole("button", { name: "Preselecto" })).not.toBeInTheDocument();
+  expect(within(actions).queryByRole("button", { name: "Entrevista" })).not.toBeInTheDocument();
+  expect(within(actions).queryByRole("button", { name: "Descartar" })).not.toBeInTheDocument();
+  expect(within(actions).getByRole("link", { name: "WA" })).toBeVisible();
+  expect(within(actions).getByRole("link", { name: "CV" })).toBeVisible();
+  expect(within(actions).getByRole("link", { name: "Pipeline" })).toBeVisible();
 });
