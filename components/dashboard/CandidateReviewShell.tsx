@@ -590,16 +590,16 @@ function CandidateReviewSession({
 
         {/* Sticky header */}
         <div className="sticky top-12 z-20 border-b border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-sm px-4 sm:px-6 py-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 flex-col gap-3" data-testid="candidate-header-layout">
 
             {/* Left: avatar + name + meta */}
-            <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex w-full min-w-0 items-start gap-2.5">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-emerald-600/90 text-xs font-bold text-white">
                 {initials}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 truncate">
+                  <span className="min-w-0 break-words text-sm font-semibold text-zinc-900 [overflow-wrap:anywhere] dark:text-zinc-50">
                     {candidateName ?? "Candidato"}
                   </span>
                   {candidateSeniority && (
@@ -619,15 +619,15 @@ function CandidateReviewSession({
 
                 </div>
                 {candidateLocation && (
-                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">{candidateLocation}</p>
+                  <p className="mt-0.5 break-words text-[11px] text-zinc-500 [overflow-wrap:anywhere] dark:text-zinc-400">{candidateLocation}</p>
                 )}
               </div>
             </div>
 
             {/* Right: quick actions + nav */}
-            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-2" data-testid="candidate-header-actions">
               {/* Interest buttons */}
-              {(["MAYBE", "ACCEPTED", "REJECTED"] as const).map((key) => {
+              {!rejected && (["MAYBE", "ACCEPTED", "REJECTED"] as const).map((key) => {
                 const m = INTEREST_MAP[key];
                 const isSelected = currentInterest === key;
                 const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
@@ -640,7 +640,7 @@ function CandidateReviewSession({
                       if (key === "REJECTED" && isSelected) return;
                       patchInterest(isSelected ? "REVIEW" : key);
                     }}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                    className={`inline-flex h-11 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium transition-colors disabled:opacity-50 ${
                       isSelected ? m.activeColor : m.color
                     }`}
                   >
@@ -717,7 +717,11 @@ function CandidateReviewSession({
                 </>
               )}
 
-              {rejected && <span className="text-sm font-medium text-red-700 dark:text-red-300">Postulación descartada</span>}
+              {rejected && (
+                <span className="inline-flex h-11 items-center rounded-lg bg-red-50 px-3 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  Descartado
+                </span>
+              )}
               {canReopen && (
                 <button
                   type="button"
@@ -734,7 +738,7 @@ function CandidateReviewSession({
               )}
 
               {/* Divider */}
-              <span className="hidden sm:block h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+              <span className="hidden h-5 w-px bg-zinc-200 dark:bg-zinc-700 sm:block" />
 
               {/* Utility buttons */}
               {waHref && (
@@ -742,7 +746,7 @@ function CandidateReviewSession({
                   href={waHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-300"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-300"
                 >
                   <MessageCircle className="h-3.5 w-3.5" />
                   WA
@@ -753,7 +757,7 @@ function CandidateReviewSession({
                   href={resumeUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   <Download className="h-3.5 w-3.5" />
                   CV
@@ -763,7 +767,7 @@ function CandidateReviewSession({
               {fromJobId && (
                 <Link
                   href={`/dashboard/jobs/${fromJobId}`}
-                  className="hidden sm:inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-lg border border-zinc-200 px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
                 >
                   <GitBranch className="h-3.5 w-3.5" />
                   Pipeline
@@ -772,13 +776,13 @@ function CandidateReviewSession({
 
               {/* Prev / next */}
               {navList.length > 1 && (
-                <div className="inline-flex items-center rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900">
+                <div className="inline-flex h-11 items-center rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
                   {prevNav ? (
-                    <Link href={navUrl(prevNav, fromJobId)} className="inline-flex h-8 w-8 items-center justify-center rounded-l-lg text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    <Link href={navUrl(prevNav, fromJobId)} aria-label="Candidato anterior" className="inline-flex h-11 w-11 items-center justify-center rounded-l-lg text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">
                       <ChevronLeft className="h-4 w-4" />
                     </Link>
                   ) : (
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-l-lg text-zinc-300 dark:text-zinc-700">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-l-lg text-zinc-300 dark:text-zinc-700">
                       <ChevronLeft className="h-4 w-4" />
                     </span>
                   )}
@@ -786,11 +790,11 @@ function CandidateReviewSession({
                     {navIndex + 1}/{navList.length}
                   </span>
                   {nextNav ? (
-                    <Link href={navUrl(nextNav, fromJobId)} className="inline-flex h-8 w-8 items-center justify-center rounded-r-lg text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">
+                    <Link href={navUrl(nextNav, fromJobId)} aria-label="Candidato siguiente" className="inline-flex h-11 w-11 items-center justify-center rounded-r-lg text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800">
                       <ChevronRight className="h-4 w-4" />
                     </Link>
                   ) : (
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-r-lg text-zinc-300 dark:text-zinc-700">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-r-lg text-zinc-300 dark:text-zinc-700">
                       <ChevronRight className="h-4 w-4" />
                     </span>
                   )}

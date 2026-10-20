@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -250,7 +250,7 @@ describe("canonical rejection surfaces", () => {
     });
   });
 
-  it("does not toggle a terminal CandidateReviewShell rejection back to REVIEW", () => {
+  it("does not expose ordinary interest controls for a terminal rejection", () => {
     render(
       <CandidateReviewShell
         candidateId="candidate-1"
@@ -276,7 +276,11 @@ describe("canonical rejection surfaces", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Descartar/ }));
+    expect(screen.queryByRole("button", { name: "Preselecto" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Entrevista" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Descartar/ })).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("candidate-header-actions")).getByText("Descartado")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reabrir proceso" })).toBeEnabled();
     expect(fetch).not.toHaveBeenCalled();
   });
 
