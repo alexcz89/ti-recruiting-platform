@@ -31,6 +31,7 @@ import {
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
 import type { NavEntry } from "@/components/dashboard/CandidateReviewShell";
+import { buildRecruiterWhatsappHref } from "@/lib/whatsapp/recruiter-contact";
 
 export const metadata = { title: "Candidato | Panel" };
 
@@ -124,7 +125,7 @@ export default async function CandidateDetailPage({
   const company = companyId
     ? await prisma.company.findUnique({
         where: { id: companyId },
-        select: { billingPlan: true, name: true },
+        select: { billingPlan: true },
       })
     : null;
 
@@ -434,6 +435,13 @@ export default async function CandidateDetailPage({
           rejectedAt: true,
           lastViewedAt: true,
           viewCount: true,
+          job: {
+            select: {
+              title: true,
+              companyConfidential: true,
+              company: { select: { name: true } },
+            },
+          },
         },
       })
     : null;
@@ -457,31 +465,14 @@ export default async function CandidateDetailPage({
       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">{emptyLabel}</p>
     );
 
-  const candidateFirstName =
-    candidate.name?.trim().split(/\s+/)[0] || "hola";
-
-  const recruiterName =
-    me.name?.trim().split(/\s+/)[0] || "Reclutamiento";
-
-  const companyName =
-    company?.name?.trim() || "la empresa";
-
-  const jobTitle = jobForMatch?.title || "la vacante";
-
-  // Normalización consistente con ActionsMenu: asegurar formato 52XXXXXXXXXX
-  const rawPhone = candidate.phone || "";
-  let whatsappPhone = rawPhone.replace(/\D/g, "");
-  if (whatsappPhone.length === 10) whatsappPhone = `52${whatsappPhone}`;
-  if (whatsappPhone.length === 13 && whatsappPhone.startsWith("521")) whatsappPhone = `52${whatsappPhone.slice(3)}`;
-
-  const whatsappMessage =
-    `Hola ${candidateFirstName}, soy ${recruiterName} de ${companyName}. ` +
-    `Te contacto porque aplicaste a la vacante de ${jobTitle}. ` +
-    `¿Tienes disponibilidad para platicar?`;
-
-  const waHref = whatsappPhone
-    ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(whatsappMessage)}`
-    : null;
+  const waHref = buildRecruiterWhatsappHref({
+    phone: candidate.phone,
+    candidateName: candidate.name,
+    recruiterName: me.name,
+    // Fail closed when there is no explicitly selected application.
+    job: currentApplication?.job ?? null,
+  });
+  const jobTitle = currentApplication?.job.title ?? jobForMatch?.title ?? "la vacante";
 
   const pdfSrc = candidate.resumeUrl
     ? `${candidate.resumeUrl}${candidate.resumeUrl.includes("#") ? "" : "#toolbar=1&navpanes=0&scrollbar=1"}`
