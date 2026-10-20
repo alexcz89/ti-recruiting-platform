@@ -186,7 +186,12 @@ function fmtDate(iso: string | null | undefined) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CandidateReviewShell({
+export default function CandidateReviewShell(props: ShellProps) {
+  // Reset all application-local state (including notes/dialogs) on navigation.
+  return <CandidateReviewSession key={`${props.candidateId}:${props.applicationId}`} {...props} />;
+}
+
+function CandidateReviewSession({
   candidateId,
   candidateName,
   candidateSeniority,
@@ -227,6 +232,14 @@ export default function CandidateReviewShell({
   const terminalHired =
     app?.status === "HIRED" ||
     (app?.stage === "CLOSED" && app.disposition === "HIRED");
+  const rejected = app?.status === "REJECTED" ||
+    app?.recruiterInterest === "REJECTED" ||
+    (app?.stage === "CLOSED" && app.disposition === "REJECTED");
+  const canReopen = !!app && app.status === "REJECTED" &&
+    app.recruiterInterest === "REJECTED" && (
+      (app.stage === "CLOSED" && app.disposition === "REJECTED") ||
+      (app.stage === null && app.disposition === null && app.stateVersion === 0)
+    );
   const preselectAllowed =
     !app?.stage ||
     (app.disposition === "ACTIVE" &&
@@ -246,6 +259,7 @@ export default function CandidateReviewShell({
   const patchInterest = useCallback((recruiterInterest: string) => {
     if (!applicationId) return;
     if (terminalHired) return;
+    if (rejected) return;
     if (currentInterest === "REJECTED") return;
     if (canonicalOffer && recruiterInterest !== "REJECTED") return;
     // Actualización optimista inmediata — el botón responde al instante
@@ -294,7 +308,7 @@ export default function CandidateReviewShell({
         setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
       }
     });
-  }, [applicationId, app?.recruiterInterest, app?.stateVersion, canonicalOffer, currentInterest, terminalHired]);
+  }, [applicationId, app?.recruiterInterest, app?.stateVersion, canonicalOffer, currentInterest, terminalHired, rejected]);
 
   const moveToOffer = useCallback(() => {
     if (
@@ -437,7 +451,11 @@ export default function CandidateReviewShell({
           }),
         });
         if (!res.ok) {
-          setExceptionError("No se pudo actualizar el proceso. Intenta de nuevo.");
+          setExceptionError(res.status === 409
+            ? "La postulación cambió mientras la revisabas. Actualiza la página antes de volver a intentarlo."
+            : res.status === 422
+              ? "El estado actual de la postulación no permite esta transición. Actualiza la página para revisarlo."
+              : "No se pudo actualizar el proceso. Intenta de nuevo.");
           return;
         }
 
@@ -617,7 +635,7 @@ export default function CandidateReviewShell({
                   <button
                     key={key}
                     type="button"
-                    disabled={isPending || blockedByCanonicalOffer || terminalHired || (key === "MAYBE" && !preselectAllowed)}
+                    disabled={isPending || blockedByCanonicalOffer || terminalHired || rejected || (key === "MAYBE" && !preselectAllowed)}
                     onClick={() => {
                       if (key === "REJECTED" && isSelected) return;
                       patchInterest(isSelected ? "REVIEW" : key);
@@ -699,7 +717,8 @@ export default function CandidateReviewShell({
                 </>
               )}
 
-              {app?.stage === "CLOSED" && app.disposition === "REJECTED" && (
+              {rejected && <span className="text-sm font-medium text-red-700 dark:text-red-300">Postulación descartada</span>}
+              {canReopen && (
                 <button
                   type="button"
                   disabled={isPending}
