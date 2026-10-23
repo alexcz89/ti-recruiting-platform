@@ -4,6 +4,7 @@ import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { getSessionCompanyId } from '@/lib/server/session';
+import { getAssessmentTemplateVisibilityWhere } from '@/lib/assessments/access';
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +34,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const sessionCompanyId = await getSessionCompanyId().catch(() => null);
     if (!sessionCompanyId && !isAdmin) return noStoreJson({ error: "Sin empresa asociada" }, 403);
 
+    const visibilityWhere = getAssessmentTemplateVisibilityWhere({
+      role: user?.role,
+      companyId: sessionCompanyId,
+    });
+    if (!visibilityWhere) return noStoreJson({ error: "No autorizado" }, 403);
+
     const body = await request.json().catch(() => ({}));
 
     const templateId = String(body?.templateId || "");
@@ -59,8 +66,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }
     }
 
-    const template = await prisma.assessmentTemplate.findUnique({
-      where: { id: templateId },
+    const template = await prisma.assessmentTemplate.findFirst({
+      where: { id: templateId, ...visibilityWhere },
       select: { id: true, isActive: true },
     });
 
@@ -126,6 +133,12 @@ export async function GET(_request: Request, { params }: { params: { id: string 
     const sessionCompanyId = await getSessionCompanyId().catch(() => null);
     if (!sessionCompanyId && !isAdmin) return noStoreJson({ error: "Sin empresa asociada" }, 403);
 
+    const visibilityWhere = getAssessmentTemplateVisibilityWhere({
+      role: user?.role,
+      companyId: sessionCompanyId,
+    });
+    if (!visibilityWhere) return noStoreJson({ error: "No autorizado" }, 403);
+
     const job = await prisma.job.findUnique({
       where: { id: params.id },
       select: { id: true, companyId: true },
@@ -141,7 +154,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
 
     // 🆕 Incluir todos los campos necesarios
     const jobAssessments = await prisma.jobAssessment.findMany({
-      where: { jobId: params.id },
+      where: { jobId: params.id, template: visibilityWhere },
       include: {
         template: {
           select: {

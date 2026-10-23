@@ -38,6 +38,7 @@ import {
   resolveRecruiterPipelineFilter,
   type RecruiterPipelineBucket,
 } from "@/lib/hiring-process/recruiter-read-model";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
   NATIVE: "Nativo",
@@ -138,6 +139,11 @@ export default async function JobApplicationsPage({
       </main>
     );
   }
+  const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+    role: "RECRUITER",
+    companyId,
+  });
+  if (!templateVisibilityWhere) notFound();
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -169,6 +175,7 @@ export default async function JobApplicationsPage({
         },
       },
       assessments: {
+        where: { template: templateVisibilityWhere },
         orderBy: { createdAt: "asc" },
         select: { templateId: true, template: { select: { title: true } } },
       },

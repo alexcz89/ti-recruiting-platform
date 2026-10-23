@@ -3,6 +3,12 @@ import { NextResponse, NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyId } from "@/lib/server/session";
+import {
+  getAssessmentTemplateVisibilityWhere,
+  isAssessmentTemplateAccessRole,
+} from "@/lib/assessments/access";
+import type { AssessmentType, Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -24,29 +30,34 @@ export async function GET(req: NextRequest) {
     if (!session?.user) return json(401, { error: "No autorizado" });
 
     const role = String((session.user as any).role ?? "").toUpperCase();
-    if (role !== "RECRUITER" && role !== "ADMIN") {
+    if (!isAssessmentTemplateAccessRole(role)) {
       return json(403, { error: "Sin permisos" });
     }
 
-    const companyId = (session.user as any).companyId as string | undefined;
+    const companyId =
+      role === "RECRUITER"
+        ? await getSessionCompanyId().catch(() => null)
+        : ((session.user as any).companyId as string | undefined) ?? null;
+    const visibilityWhere = getAssessmentTemplateVisibilityWhere({ role, companyId });
+    if (!visibilityWhere) return json(403, { error: "Sin permisos" });
 
     const { searchParams } = new URL(req.url);
     const typeFilter  = searchParams.get("type");
     const langFilter  = searchParams.get("language");
     const scopeFilter = searchParams.get("scope");
 
-    const where: any = {
+    const where: Prisma.AssessmentTemplateWhereInput = {
       isActive: true,
-      OR: [
-        { isGlobal: true },
-        ...(companyId ? [{ companyId }] : []),
-      ],
+      ...visibilityWhere,
     };
 
-    if (typeFilter)  where.type     = typeFilter;
+    if (typeFilter)  where.type     = typeFilter as AssessmentType;
     if (langFilter)  where.language = langFilter;
     if (scopeFilter === "global") where.isGlobal = true;
-    if (scopeFilter === "custom") { where.isGlobal = false; where.companyId = companyId; }
+    if (scopeFilter === "custom") {
+      where.isGlobal = false;
+      if (role === "RECRUITER") where.companyId = companyId;
+    }
 
     const templates = await prisma.assessmentTemplate.findMany({
       where,
@@ -76,11 +87,14 @@ export async function POST(req: NextRequest) {
     if (!session?.user) return json(401, { error: "No autorizado" });
 
     const role = String((session.user as any).role ?? "").toUpperCase();
-    if (role !== "RECRUITER" && role !== "ADMIN") {
+    if (!isAssessmentTemplateAccessRole(role)) {
       return json(403, { error: "Sin permisos" });
     }
 
-    const companyId = (session.user as any).companyId as string | undefined;
+    const companyId =
+      role === "RECRUITER"
+        ? await getSessionCompanyId().catch(() => null)
+        : ((session.user as any).companyId as string | undefined) ?? null;
     if (!companyId) return json(400, { error: "Sin empresa asociada" });
 
     const body = await req.json();

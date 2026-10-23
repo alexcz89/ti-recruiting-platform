@@ -16,6 +16,7 @@ import {
   Prisma,
 } from "@prisma/client";
 import { z } from "zod";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 type JobSkillInput = {
   name?: string;
@@ -231,7 +232,13 @@ export async function GET(
     if (role !== "RECRUITER" && role !== "ADMIN") {
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
-
+    const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+      role,
+      companyId,
+    });
+    if (!templateVisibilityWhere) {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
     const job = await prisma.job.findFirst({
       where: {
         id: params.id,
@@ -270,6 +277,7 @@ export async function GET(
         updatedAt: true,
         companyConfidential: true,
         assessments: {
+          where: { template: templateVisibilityWhere },
           select: {
             templateId: true,
             isRequired: true,
@@ -326,6 +334,13 @@ export async function PUT(
 
     const role = session.user?.role;
     if (role !== "RECRUITER" && role !== "ADMIN") {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
+    const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+      role,
+      companyId,
+    });
+    if (!templateVisibilityWhere) {
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
@@ -487,7 +502,7 @@ export async function PUT(
 
     if (assessmentTemplateIds.length > 0) {
       const existingTemplates = await prisma.assessmentTemplate.findMany({
-        where: { id: { in: assessmentTemplateIds } },
+        where: { id: { in: assessmentTemplateIds }, ...templateVisibilityWhere },
         select: { id: true },
       });
 

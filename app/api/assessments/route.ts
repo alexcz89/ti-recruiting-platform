@@ -3,6 +3,11 @@ import { NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
+import {
+  getAssessmentTemplateVisibilityWhere,
+  isAssessmentTemplateAccessRole,
+} from "@/lib/assessments/access";
+import { getSessionCompanyId } from "@/lib/server/session";
 // ✅ NUEVO: Sistema de créditos
 import { getAssessmentCost } from '@/lib/assessments/pricing';
 
@@ -24,12 +29,22 @@ export async function GET(_request: Request) {
     const session = await getServerSession(authOptions);
     if (!session?.user) return jsonNoStore({ error: "No autorizado" }, 401);
 
-    // Si quieres limitar por rol, descomenta:
-    // const role = String((session.user as any)?.role ?? "").toUpperCase();
-    // if (!["RECRUITER", "ADMIN"].includes(role)) return jsonNoStore({ error: "Forbidden" }, 403);
+    const role = String((session.user as any)?.role ?? "").toUpperCase();
+    if (!isAssessmentTemplateAccessRole(role)) {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
+
+    const companyId =
+      role === "RECRUITER"
+        ? await getSessionCompanyId().catch(() => null)
+        : null;
+    const visibilityWhere = getAssessmentTemplateVisibilityWhere({ role, companyId });
+    if (!visibilityWhere) {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
 
     const templates = await prisma.assessmentTemplate.findMany({
-      where: { isActive: true },
+      where: { isActive: true, ...visibilityWhere },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

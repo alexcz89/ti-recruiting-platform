@@ -7,6 +7,8 @@ import { prisma } from '@/lib/server/prisma';
 import JobWizard from "../../new/JobWizard";
 import { getSkillsFromDB, getCertificationsFromDB } from "@/lib/server/skills";
 import { geocodeCityToPoint } from "@/lib/geo";
+import { getSessionCompanyId } from "@/lib/server/session";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -25,7 +27,14 @@ export default async function EditJobPage({ params }: PageProps) {
   if (role !== "RECRUITER" && role !== "ADMIN") redirect("/");
 
   const sessionUser = session.user as any;
-  const sessionCompanyId = sessionUser?.companyId as string | undefined;
+  const sessionCompanyId =
+    role === "RECRUITER"
+      ? await getSessionCompanyId().catch(() => null)
+      : ((sessionUser?.companyId as string | undefined) ?? null);
+  const pageTemplateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+    role,
+    companyId: sessionCompanyId,
+  });
 
   const [skillsOptions, certOptions] = await Promise.all([
     getSkillsFromDB(),
@@ -36,6 +45,9 @@ export default async function EditJobPage({ params }: PageProps) {
   const jobInclude = {
     company: true,
     assessments: {
+      where: pageTemplateVisibilityWhere
+        ? { template: pageTemplateVisibilityWhere }
+        : { id: { in: [] } },
       select: { templateId: true },
       orderBy: { createdAt: "asc" as const },
     },
@@ -43,10 +55,12 @@ export default async function EditJobPage({ params }: PageProps) {
 
   const job =
     role === "RECRUITER"
-      ? await prisma.job.findFirst({
-          where: { id: params.id, companyId: sessionCompanyId ?? undefined },
-          include: jobInclude,
-        })
+      ? sessionCompanyId
+        ? await prisma.job.findFirst({
+            where: { id: params.id, companyId: sessionCompanyId },
+            include: jobInclude,
+          })
+        : null
       : await prisma.job.findUnique({
           where: { id: params.id },
           include: jobInclude,
@@ -230,6 +244,18 @@ export default async function EditJobPage({ params }: PageProps) {
       return { error: "No autenticado o sin permisos." };
     }
 
+    const approvedCompanyId =
+      currentRole === "RECRUITER"
+        ? await getSessionCompanyId().catch(() => null)
+        : (((s.user as any)?.companyId as string | undefined) ?? null);
+    const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+      role: currentRole,
+      companyId: approvedCompanyId,
+    });
+    if (!templateVisibilityWhere) {
+      return { error: "No autenticado o sin permisos." };
+    }
+
     const jobIdFromForm = (fd.get("jobId") || "").toString();
     const jobId = jobIdFromForm || params.id;
     if (jobIdFromForm && jobIdFromForm !== params.id) {
@@ -238,7 +264,7 @@ export default async function EditJobPage({ params }: PageProps) {
 
     if (currentRole === "RECRUITER") {
       const canEdit = await prisma.job.findFirst({
-        where: { id: jobId, companyId: (s.user as any)?.companyId ?? undefined },
+        where: { id: jobId, companyId: approvedCompanyId! },
         select: { id: true },
       });
       if (!canEdit) return { error: "No tienes acceso a esta vacante." };
@@ -297,6 +323,20 @@ export default async function EditJobPage({ params }: PageProps) {
       assessmentTemplateIds = [singleAssessment];
     }
     assessmentTemplateIds = Array.from(new Set(assessmentTemplateIds));
+
+    if (assessmentTemplateIds.length > 0) {
+      const visibleTemplates = await prisma.assessmentTemplate.findMany({
+        where: {
+          id: { in: assessmentTemplateIds },
+          ...templateVisibilityWhere,
+        },
+        select: { id: true },
+      });
+      const visibleIds = new Set(visibleTemplates.map((template) => template.id));
+      if (assessmentTemplateIds.some((id) => !visibleIds.has(id))) {
+        return { error: "Uno o más assessment templates no existen." };
+      }
+    }
 
     if (!title || !description)
       return { error: "Faltan campos obligatorios (título y descripción)." };
@@ -358,7 +398,7 @@ export default async function EditJobPage({ params }: PageProps) {
     }
 
     let companyConnect: { connect: { id: string } } | undefined = undefined;
-    const sessCompanyId = (s.user as any)?.companyId as string | undefined;
+    const sessCompanyId = approvedCompanyId ?? undefined;
     if (companyMode === "own") {
       if (!sessCompanyId) return { error: "Tu perfil no tiene una empresa asociada." };
       companyConnect = { connect: { id: sessCompanyId } };

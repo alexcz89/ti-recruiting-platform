@@ -7,6 +7,7 @@ import { PLANS, type PlanId } from "@/config/plans";
 import { generateJobSlug } from "@/lib/utils/slugify";
 import { getApiVersion, transformByVersion } from "@/lib/api/versioning";
 import { cleanObject, jsonResponse, listResponse } from "@/lib/api/response-utils";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 import {
   EmploymentType,
   JobStatus,
@@ -426,6 +427,13 @@ export async function POST(req: NextRequest) {
 
     const companyId = await getSessionCompanyId();
     if (!companyId) return jsonNoStore({ error: "Unauthorized" }, 401);
+    const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+      role,
+      companyId,
+    });
+    if (!templateVisibilityWhere) {
+      return jsonNoStore({ error: "Forbidden" }, 403);
+    }
 
     const userId = session.user?.id;
     if (!userId) return jsonNoStore({ error: "Unauthorized" }, 401);
@@ -564,7 +572,7 @@ export async function POST(req: NextRequest) {
 
     if (assessmentTemplateIds.length > 0) {
       const existingTemplates = await prisma.assessmentTemplate.findMany({
-        where: { id: { in: assessmentTemplateIds } },
+        where: { id: { in: assessmentTemplateIds }, ...templateVisibilityWhere },
         select: { id: true, title: true },
       });
 

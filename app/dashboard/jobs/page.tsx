@@ -9,6 +9,7 @@ import AssessmentsBadge from "@/components/dashboard/AssessmentsBadge";
 import { Briefcase, Plus } from "lucide-react";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 export const metadata = { title: "Vacantes | Panel" };
 
@@ -72,6 +73,10 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
       </main>
     );
   }
+  const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+    role: "RECRUITER",
+    companyId,
+  })!;
 
   const sp = {
     title:          (searchParams.title || "").trim(),
@@ -122,7 +127,10 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
         id: true, title: true, location: true, remote: true,
         createdAt: true, status: true,
         _count: { select: { applications: true } },
-        assessments: { select: { templateId: true, template: { select: { title: true } } } },
+        assessments: {
+          where: { template: templateVisibilityWhere },
+          select: { templateId: true, template: { select: { title: true } } },
+        },
       },
     }),
   ]);
@@ -204,7 +212,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   // ── Modal data
   const allTemplates = sp.assignTemplate
     ? await prisma.assessmentTemplate.findMany({
-        where: { isActive: true },
+        where: { isActive: true, ...templateVisibilityWhere },
         select: { id:true, title:true, description:true, difficulty:true, type:true, totalQuestions:true, timeLimit:true, passingScore:true },
         orderBy: { title: "asc" },
       }) : [];
