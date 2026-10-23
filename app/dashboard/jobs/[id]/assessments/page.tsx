@@ -9,6 +9,7 @@ import AssignAssessmentForm from "./AssignAssessmentForm";
 // ✅ NUEVO: Info de créditos
 import { getCreditBalance } from '@/lib/assessments/credits';
 import { formatCredits } from '@/lib/assessments/pricing';
+import { getAssessmentTemplateVisibilityWhere } from '@/lib/assessments/access';
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,10 +36,9 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
   if (!isAdmin && !isRecruiter) notFound();
 
   // companyId real del scope multi-empresa
-  const scopedCompanyId =
-    (await getSessionCompanyId().catch(() => null)) ??
-    (user?.companyId as string | undefined) ??
-    null;
+  const scopedCompanyId = isRecruiter
+    ? await getSessionCompanyId().catch(() => null)
+    : null;
 
   // Admin: ve cualquier job
   // Recruiter: SIEMPRE scope por companyId (si no hay companyId, no debe entrar)
@@ -70,8 +70,14 @@ export default async function JobAssessmentsPage({ params }: PageProps) {
 
   if (!job) notFound();
 
+  const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+    role,
+    companyId: scopedCompanyId,
+  });
+  if (!templateVisibilityWhere) notFound();
+
   const existingAssessments = await prisma.jobAssessment.findMany({
-    where: { jobId: job.id },
+    where: { jobId: job.id, template: templateVisibilityWhere },
     orderBy: { createdAt: "asc" },
     include: {
       template: {

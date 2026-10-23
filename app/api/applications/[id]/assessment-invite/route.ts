@@ -18,6 +18,7 @@ import {
   assessmentInviteEmailDedupeKey,
   resolveAssessmentResendOperation,
 } from "@/lib/assessments/resend-operation";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -101,6 +102,13 @@ export async function POST(
     if (!sessionCompanyId && !isAdmin) {
       return json(403, { error: "Sin empresa asociada" });
     }
+    const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+      role: user.role,
+      companyId: sessionCompanyId,
+    });
+    if (!templateVisibilityWhere) {
+      return json(403, { error: "No autorizado" });
+    }
 
     let body: {
       templateId?: unknown;
@@ -165,6 +173,7 @@ export async function POST(
               },
             },
             assessments: {
+              where: { template: templateVisibilityWhere },
               orderBy: { createdAt: "asc" },
               select: {
                 id: true,
@@ -217,8 +226,8 @@ export async function POST(
       });
     }
 
-    const template = await prisma.assessmentTemplate.findUnique({
-      where: { id: chosenTemplateId },
+    const template = await prisma.assessmentTemplate.findFirst({
+      where: { id: chosenTemplateId, ...templateVisibilityWhere },
       select: {
         id: true,
         title: true,

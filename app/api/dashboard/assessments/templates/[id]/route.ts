@@ -3,6 +3,12 @@ import { NextResponse, NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { getSessionCompanyId } from "@/lib/server/session";
+import {
+  getAssessmentTemplateManagementWhere,
+  getAssessmentTemplateVisibilityWhere,
+  isAssessmentTemplateAccessRole,
+} from "@/lib/assessments/access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,11 +24,20 @@ function json(status: number, body: any) {
 
 async function getAuthContext() {
   const session = await getServerSession(authOptions);
-  if (!session?.user) return null;
+  if (!session?.user) return { ok: false as const, status: 401 };
   const user = session.user as any;
   const role = String(user.role ?? "").toUpperCase();
-  if (role !== "RECRUITER" && role !== "ADMIN") return null;
-  return { user, role, companyId: user.companyId as string | undefined };
+  if (!isAssessmentTemplateAccessRole(role)) {
+    return { ok: false as const, status: 403 };
+  }
+  const companyId =
+    role === "RECRUITER"
+      ? await getSessionCompanyId().catch(() => null)
+      : (user.companyId as string | undefined) ?? null;
+  if (role === "RECRUITER" && !companyId) {
+    return { ok: false as const, status: 403 };
+  }
+  return { ok: true as const, user, role, companyId };
 }
 
 // ── GET /api/dashboard/assessments/templates/[id] ──
@@ -33,22 +48,17 @@ export async function GET(
 ) {
   try {
     const auth = await getAuthContext();
-    if (!auth) return json(401, { error: "No autorizado" });
+    if (!auth.ok) return json(auth.status, { error: "No autorizado" });
 
     const { companyId, role } = auth;
+    const visibilityWhere = getAssessmentTemplateVisibilityWhere({ role, companyId });
+    if (!visibilityWhere) return json(403, { error: "No autorizado" });
 
     const template = await prisma.assessmentTemplate.findFirst({
       where: {
         id: params.id,
         isActive: true,
-        ...(role !== "ADMIN"
-          ? {
-              OR: [
-                { isGlobal: true },
-                ...(companyId ? [{ companyId }] : []),
-              ],
-            }
-          : {}),
+        ...visibilityWhere,
       },
       select: {
         id: true,
@@ -111,15 +121,17 @@ export async function PUT(
 ) {
   try {
     const auth = await getAuthContext();
-    if (!auth) return json(401, { error: "No autorizado" });
+    if (!auth.ok) return json(auth.status, { error: "No autorizado" });
 
     const { companyId, role } = auth;
+    const managementWhere = getAssessmentTemplateManagementWhere({ role, companyId });
+    if (!managementWhere) return json(403, { error: "No autorizado" });
 
     const existing = await prisma.assessmentTemplate.findFirst({
       where: {
         id: params.id,
         isActive: true,
-        ...(role !== "ADMIN" && companyId ? { companyId } : {}),
+        ...managementWhere,
       },
       select: { id: true, companyId: true, isGlobal: true },
     });
@@ -233,15 +245,17 @@ export async function DELETE(
 ) {
   try {
     const auth = await getAuthContext();
-    if (!auth) return json(401, { error: "No autorizado" });
+    if (!auth.ok) return json(auth.status, { error: "No autorizado" });
 
     const { companyId, role } = auth;
+    const managementWhere = getAssessmentTemplateManagementWhere({ role, companyId });
+    if (!managementWhere) return json(403, { error: "No autorizado" });
 
     const existing = await prisma.assessmentTemplate.findFirst({
       where: {
         id: params.id,
         isActive: true,
-        ...(role !== "ADMIN" && companyId ? { companyId, isGlobal: false } : {}),
+        ...managementWhere,
       },
       select: { id: true },
     });

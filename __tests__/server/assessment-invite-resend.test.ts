@@ -68,7 +68,7 @@ const prismaMock = {
     })),
   },
   assessmentTemplate: {
-    findUnique: vi.fn(async () => ({
+    findFirst: vi.fn(async () => ({
       id: "template-a",
       title: "Assessment",
       timeLimit: 30,
@@ -143,6 +143,19 @@ describe("assessment invite resend", () => {
     expect(firstKey).toBeTruthy();
     expect(secondKey).toBeTruthy();
     expect(secondKey).not.toBe(firstKey);
+    expect(prismaMock.assessmentTemplate.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: "template-a",
+        OR: [{ isGlobal: true }, { companyId: "company-a" }],
+      },
+      select: {
+        id: true,
+        title: true,
+        timeLimit: true,
+        type: true,
+        difficulty: true,
+      },
+    });
   });
 
   it("keeps the provider idempotency key stable when retrying one resend operation", async () => {

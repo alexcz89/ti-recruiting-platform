@@ -32,6 +32,7 @@ import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-proc
 import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
 import type { NavEntry } from "@/components/dashboard/CandidateReviewShell";
 import { buildRecruiterWhatsappHref } from "@/lib/whatsapp/recruiter-contact";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 export const metadata = { title: "Candidato | Panel" };
 
@@ -103,6 +104,8 @@ export default async function CandidateDetailPage({
     ? await getSessionCompanyId().catch(() => null)
     : null;
   const actor = { role: me.role, companyId };
+  const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere(actor);
+  if (!templateVisibilityWhere) notFound();
   const candidateWhere = candidateWhereForActor(actor, params.id);
   if (!candidateWhere) notFound();
 
@@ -240,6 +243,7 @@ export default async function CandidateDetailPage({
           },
         },
         assessments: {
+          where: { template: templateVisibilityWhere },
           orderBy: { createdAt: "asc" },
           select: {
             templateId: true,

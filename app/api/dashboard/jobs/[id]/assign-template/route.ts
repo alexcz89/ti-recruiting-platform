@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
+import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -34,6 +35,8 @@ export async function POST(
     if (!companyId && role !== "ADMIN") {
       return json(403, { error: "Sin empresa asociada" });
     }
+    const visibilityWhere = getAssessmentTemplateVisibilityWhere({ role, companyId });
+    if (!visibilityWhere) return json(403, { error: "Sin permisos" });
 
     let body: any = {};
     try {
@@ -65,8 +68,8 @@ export async function POST(
     if (!job) return json(404, { error: "Vacante no encontrada" });
 
     // Verificar que el template existe
-    const template = await prisma.assessmentTemplate.findUnique({
-      where: { id: templateId },
+    const template = await prisma.assessmentTemplate.findFirst({
+      where: { id: templateId, ...visibilityWhere },
       select: { id: true, title: true, isActive: true },
     });
 
@@ -117,6 +120,9 @@ export async function POST(
       template: { id: template.id, title: template.title },
     });
   } catch (e: any) {
+    if (String(e?.code || "") === "P2002") {
+      return json(409, { error: "El template ya está asignado a la vacante" });
+    }
     console.error("[POST /api/dashboard/jobs/[id]/assign-template]", e);
     return json(500, { error: "Error interno" });
   }
