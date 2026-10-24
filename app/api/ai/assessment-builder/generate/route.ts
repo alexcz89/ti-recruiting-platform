@@ -1,155 +1,77 @@
-// app/api/ai/assessment-builder/generate/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
-import { getOpenAI } from "@/lib/ai/openai";
-import { AI_MODEL_SMART } from "@/lib/ai/config";
+import { getSessionCompanyId } from "@/lib/server/session";
+import { isAssessmentTemplateAccessRole } from "@/lib/assessments/access";
+import { checkActionRateLimit } from "@/lib/server/rate-limit";
+import {
+  GenerationInputSchema,
+  MAX_GENERATION_BODY_BYTES,
+} from "@/lib/ai/assessment-builder-contract";
+import { AssessmentGenerationError, generateAssessmentQuestions } from "@/lib/ai/assessment-generation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function json(data: unknown, status = 200) {
-  return NextResponse.json(data, {
-    status,
-    headers: { "Cache-Control": "no-store" },
-  });
+function json(data: unknown, status = 200, headers: Record<string, string> = {}) {
+  return NextResponse.json(data, { status, headers: { ...headers, "Cache-Control": "no-store" } });
+}
+
+async function readBoundedJson(req: Request) {
+  if (Number(req.headers.get("content-length")) > MAX_GENERATION_BODY_BYTES) return { oversized: true as const };
+  const reader = req.body?.getReader();
+  if (!reader) return { value: null };
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_GENERATION_BODY_BYTES) {
+        await reader.cancel();
+        return { oversized: true as const };
+      }
+      chunks.push(value);
+    }
+    return { value: JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown };
+  } finally { reader.releaseLock(); }
 }
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user) return json({ error: "No autorizado" }, 401);
+    if (!session?.user?.id) return json({ error: "No autorizado" }, 401);
+    const role = session.user.role;
+    if (!isAssessmentTemplateAccessRole(role)) return json({ error: "Sin permisos" }, 403);
+    const companyId = role === "RECRUITER" ? await getSessionCompanyId() : null;
+    if (role === "RECRUITER" && !companyId) return json({ error: "Requiere una empresa aprobada" }, 403);
 
-    const role = (session.user as any)?.role;
-    if (role !== "RECRUITER" && role !== "ADMIN")
-      return json({ error: "Forbidden" }, 403);
+    let body;
+    try { body = await readBoundedJson(req); } catch { return json({ error: "JSON inválido" }, 400); }
+    if (body.oversized) return json({ error: "La solicitud excede el tamaño permitido" }, 413);
+    const input = GenerationInputSchema.safeParse(body.value);
+    if (!input.success) return json({ error: "Parámetros de generación inválidos" }, 400);
 
-    const body = await req.json();
-    const { prompt, questionType, language, difficulty, count = 1 } = body;
-
-    if (!prompt || !questionType)
-      return json({ error: "Faltan campos: prompt y questionType" }, 400);
-
-    const clampedCount = Math.min(Math.max(Number(count) || 1, 1), 5);
-    const isCoding = questionType === "CODING";
-
-    const difficultyLabel =
-      difficulty === "JUNIOR" ? "Junior (básico)"
-      : difficulty === "SENIOR" ? "Senior (avanzado)"
-      : "Mid Level (intermedio)";
-
-    // Generar N items de ejemplo en el schema para que el modelo entienda cuántos debe generar
-    const schemaCodingItem = (i: number) => `    {
-      "questionText": "enunciado del problema ${i} — diferente a los demás",
-      "section": "sección temática relevante",
-      "difficulty": "${difficulty || "MID"}",
-      "explanation": "explicación detallada con la solución completa en ${language || "python"}",
-      "codeSnippet": "esqueleto de la función que el candidato debe completar",
-      "allowedLanguages": ["${language || "python"}"],
-      "testCases": [
-        { "input": "input visible 1", "expectedOutput": "output exacto 1", "isHidden": false },
-        { "input": "input visible 2", "expectedOutput": "output exacto 2", "isHidden": false },
-        { "input": "edge case oculto", "expectedOutput": "resultado exacto", "isHidden": true },
-        { "input": "caso difícil oculto", "expectedOutput": "resultado exacto", "isHidden": true }
-      ]
-    }`;
-
-    const schemaMCQItem = (i: number) => `    {
-      "questionText": "pregunta técnica ${i} — diferente a las demás",
-      "section": "sección temática relevante",
-      "difficulty": "${difficulty || "MID"}",
-      "explanation": "por qué cada opción es correcta o incorrecta",
-      "options": [
-        { "text": "opción correcta", "isCorrect": true },
-        { "text": "distractor plausible A", "isCorrect": false },
-        { "text": "distractor plausible B", "isCorrect": false },
-        { "text": "distractor plausible C", "isCorrect": false }
-      ]
-    }`;
-
-    const schemaItems = Array.from({ length: clampedCount }, (_, i) =>
-      isCoding ? schemaCodingItem(i + 1) : schemaMCQItem(i + 1)
-    ).join(",\n");
-
-    const schema = `{
-  "questions": [
-${schemaItems}
-  ]
-}`;
-
-    const systemContent = `Eres un experto en evaluaciones técnicas de reclutamiento IT especializado en México y Latinoamérica.
-Generas preguntas técnicas de alta calidad para assessments de candidatos.
-REGLAS ESTRICTAS:
-1. Responde ÚNICAMENTE con JSON válido. Sin texto adicional, sin markdown, sin backticks.
-2. El array "questions" debe contener EXACTAMENTE ${clampedCount} elemento(s) — ni más ni menos.
-3. Sigue el schema exactamente como se muestra.`;
-
-    const userContent = isCoding
-      ? `Genera EXACTAMENTE ${clampedCount} pregunta(s) DISTINTAS de código en ${language || "python"}, nivel ${difficultyLabel}.
-
-Descripción del tema: "${prompt}"
-
-REQUISITOS OBLIGATORIOS:
-- Devuelve EXACTAMENTE ${clampedCount} objeto(s) en el array "questions"
-- Cada pregunta debe ser DIFERENTE — distintos contextos, funciones y test cases
-- El enunciado debe describir un problema real con contexto de negocio
-- El codeSnippet debe ser el esqueleto de la función (sin implementar)
-- Los inputs/outputs deben ser valores exactos que Ruby pueda comparar directamente
-- IMPORTANTE: Los inputs para ${language || "python"} deben ser valores que el programa lee de STDIN (no como argumentos)
-- La explanation debe incluir la solución completa funcional
-
-Schema con ${clampedCount} pregunta(s):
-${schema}`
-      : `Genera EXACTAMENTE ${clampedCount} pregunta(s) DISTINTAS de opción múltiple, nivel ${difficultyLabel}${language ? ` sobre ${language}` : ""}.
-
-Descripción del tema: "${prompt}"
-
-REQUISITOS OBLIGATORIOS:
-- Devuelve EXACTAMENTE ${clampedCount} objeto(s) en el array "questions"
-- Cada pregunta debe ser DIFERENTE — distintos conceptos y escenarios
-- Exactamente 4 opciones por pregunta, exactamente 1 correcta
-- Los distractores deben ser técnicamente plausibles (no obviamente incorrectos)
-
-Schema con ${clampedCount} pregunta(s):
-${schema}`;
-
-    const openai = getOpenAI();
-    const completion = await openai.chat.completions.create({
-      model: AI_MODEL_SMART,
-      temperature: 0.7,
-      max_tokens: Math.min(1000 + clampedCount * 1500, 8000),
-      messages: [
-        { role: "system", content: systemContent },
-        { role: "user", content: userContent },
-      ],
+    // Best-effort local throttling only; persistent tenant budgets belong to Phase 4.
+    const limit = checkActionRateLimit("assessment-generation", companyId ? `company:${companyId}` : `admin:${session.user.id}`, {
+      maxAttempts: 10,
+      windowMs: 60_000,
+    });
+    if (!limit.allowed) return json({ error: "Demasiadas solicitudes. Intenta más tarde." }, 429, {
+      "Retry-After": String(limit.retryAfter ?? 60),
     });
 
-    const rawText = completion.choices[0]?.message?.content ?? "";
-
-    // Limpiar posible markdown accidental
-    const cleaned = rawText
-      .replace(/^```(?:json)?\s*/i, "")
-      .replace(/\s*```\s*$/i, "")
-      .trim();
-
-    let parsed: any;
-    try {
-      parsed = JSON.parse(cleaned);
-    } catch {
-      console.error("[AI Builder] JSON inválido:", cleaned.slice(0, 300));
-      return json({ error: "El AI generó una respuesta inválida. Intenta de nuevo." }, 500);
+    const questions = await generateAssessmentQuestions(input.data);
+    return json({ ok: true, questions });
+  } catch (error) {
+    if (error instanceof AssessmentGenerationError) {
+      if (error.kind === "unavailable") return json({ error: "Servicio de IA no configurado" }, 503);
+      if (error.kind === "invalid_output") return json({ error: "La IA no generó preguntas válidas. Intenta de nuevo." }, 502);
+      return json({ error: "El proveedor de IA no está disponible. Intenta más tarde." }, 502);
     }
-
-    if (!Array.isArray(parsed?.questions) || parsed.questions.length === 0) {
-      return json({ error: "No se generaron preguntas. Intenta con una descripción más detallada." }, 500);
-    }
-
-    return json({ ok: true, questions: parsed.questions });
-  } catch (err: any) {
-    if (err instanceof Error && err.message === "OPENAI_API_KEY no esta definida") {
-      return json({ error: "Servicio de IA no configurado" }, 503);
-    }
-    console.error("[AI Builder] Error:", err);
-    return json({ error: "Error al generar preguntas con AI" }, 500);
+    // Do not log provider errors, prompts or generated solutions.
+    console.error("[AI Builder] Generation failed");
+    return json({ error: "Error al generar preguntas con IA" }, 500);
   }
 }

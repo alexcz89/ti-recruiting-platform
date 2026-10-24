@@ -9,6 +9,7 @@ import {
   getAssessmentTemplateVisibilityWhere,
   isAssessmentTemplateAccessRole,
 } from "@/lib/assessments/access";
+import { getTemplateCodingLanguageError, parseQuestionLanguages } from "@/lib/assessments/template-coding-language";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -133,7 +134,13 @@ export async function PUT(
         isActive: true,
         ...managementWhere,
       },
-      select: { id: true, companyId: true, isGlobal: true },
+      select: {
+        id: true, companyId: true, isGlobal: true, language: true,
+        questions: {
+          where: { type: "CODING", isActive: true },
+          select: { type: true, language: true, allowedLanguages: true },
+        },
+      },
     });
 
     if (!existing) return json(404, { error: "Template no encontrado o sin permisos" });
@@ -158,6 +165,12 @@ export async function PUT(
       return json(400, { error: "El puntaje mínimo debe ser entre 1 y 100" });
     if (!timeLimit || timeLimit < 5 || timeLimit > 180)
       return json(400, { error: "El tiempo debe ser entre 5 y 180 minutos" });
+
+    if (!Array.isArray(questions) || questions.some(q => !q || typeof q !== "object")) {
+      return json(400, { error: "Preguntas inválidas" });
+    }
+    const languageError = getTemplateCodingLanguageError(language, questions, existing);
+    if (languageError) return json(400, { error: languageError });
 
     // Recalcular secciones
     const sectionMap: Record<string, number> = {};
@@ -195,6 +208,7 @@ export async function PUT(
       for (const q of questions) {
         const isCoding = q.type === "CODING";
         const testCasesRaw: any[] = Array.isArray(q.testCases) ? q.testCases : [];
+        const questionLanguages = parseQuestionLanguages(q.allowedLanguages);
 
         await tx.assessmentQuestion.create({
           data: {
@@ -211,7 +225,9 @@ export async function PUT(
             isActive: true,
             // ✅ Propaga language del template a cada pregunta CODING
             language: isCoding ? (language || null) : null,
-            allowedLanguages: isCoding && language ? JSON.stringify([language]) : null,
+            allowedLanguages: isCoding && language
+              ? JSON.stringify(questionLanguages?.length ? questionLanguages : [language])
+              : null,
             ...(isCoding && testCasesRaw.length > 0
               ? {
                   testCases: {
