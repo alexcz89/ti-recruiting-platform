@@ -118,26 +118,21 @@ function sanitizeOptions(raw: unknown) {
 
 function sanitizeTestCases(raw: unknown) {
   const arr = Array.isArray(raw) ? raw : [];
-  return arr.map((tc) => {
-    if (!tc || typeof tc !== "object" || Array.isArray(tc)) return tc;
-
-    const t = tc as Record<string, unknown>;
-    const isHidden = Boolean(t.isHidden);
-
-    return {
-      id: typeof t.id === "string" ? t.id : "",
-      input: typeof t.input === "string" ? t.input : "",
+  return arr
+    .filter(
+      (tc): tc is Record<string, unknown> =>
+        Boolean(tc) &&
+        typeof tc === "object" &&
+        !Array.isArray(tc) &&
+        tc.isHidden === false
+    )
+    .map((tc) => ({
+      id: typeof tc.id === "string" ? tc.id : "",
+      input: typeof tc.input === "string" ? tc.input : "",
       expectedOutput:
-        isHidden
-          ? null
-          : typeof t.expectedOutput === "string"
-            ? t.expectedOutput
-            : null,
-      isHidden,
-      points: typeof t.points === "number" ? t.points : null,
-      orderIndex: typeof t.orderIndex === "number" ? t.orderIndex : 0,
-    };
-  });
+        typeof tc.expectedOutput === "string" ? tc.expectedOutput : null,
+      isHidden: false,
+    }));
 }
 
 function normalizeAllowedLanguages(value: unknown): string | null {
@@ -156,22 +151,28 @@ function buildQuestionsPayload(questionsRaw: QuestionRow[], meta: FlagsMeta) {
     const type = String(q?.type ?? "MULTIPLE_CHOICE").toUpperCase();
 
     const base = {
-      ...q,
+      id: q.id,
+      section: q.section,
+      difficulty: q.difficulty,
+      questionText: q.questionText,
+      codeSnippet: q.codeSnippet,
+      options: sanitizeOptions(q.options),
+      allowMultiple: q.allowMultiple,
+      type: q.type,
+      language: q.language,
       allowedLanguages: normalizeAllowedLanguages(q.allowedLanguages),
+      starterCode: q.starterCode,
+      timesUsed: q.timesUsed,
     };
 
     if (type === "CODING") {
       return {
         ...base,
-        options: sanitizeOptions(q.options),
         testCases: sanitizeTestCases(q.testCases),
       };
     }
 
-    return {
-      ...base,
-      options: sanitizeOptions(q.options),
-    };
+    return { ...base, testCases: [] };
   });
 
   const questionOrder = Array.isArray(meta?.questionOrder)

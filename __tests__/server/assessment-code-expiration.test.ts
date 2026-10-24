@@ -121,6 +121,19 @@ describe("scored code persistence deadline", () => {
   it("persists a scored answer for a legacy attempt without a deadline", async () => {
     const response = await POST(request());
     expect(response.status).toBe(200);
+    expect(mocks.executeCode).toHaveBeenCalledWith({
+      code: "console.log('ok')",
+      language: "javascript",
+      testCases: [
+        {
+          id: "test-a",
+          input: "",
+          expectedOutput: "ok",
+          timeoutMs: 1000,
+          memoryLimitMb: 128,
+        },
+      ],
+    });
     expect(tx.attemptAnswer.upsert).toHaveBeenCalledOnce();
   });
 

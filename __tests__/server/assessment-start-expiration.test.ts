@@ -19,16 +19,35 @@ const question = {
   id: "question-a",
   section: "General",
   difficulty: "EASY",
-  questionText: "Q",
+  questionText: "Implementa una suma",
   codeSnippet: null,
-  options: [{ id: "a" }],
+  options: [],
   allowMultiple: false,
-  type: "MULTIPLE_CHOICE",
-  language: null,
-  allowedLanguages: null,
-  starterCode: null,
+  type: "CODING",
+  language: "javascript",
+  allowedLanguages: ["javascript"],
+  starterCode: "function add(a, b) {}",
   timesUsed: 0,
-  testCases: [],
+  testCases: [
+    {
+      id: "visible-case",
+      input: "1 2",
+      expectedOutput: "3",
+      isHidden: false,
+      points: 2,
+      orderIndex: 0,
+      executionSecret: "must-not-leak",
+    },
+    {
+      id: "hidden-case",
+      input: "999 1",
+      expectedOutput: "1000",
+      isHidden: true,
+      points: 8,
+      orderIndex: 1,
+      executionSecret: "must-not-leak",
+    },
+  ],
 };
 
 const tx = {
@@ -110,6 +129,25 @@ function request() {
   });
 }
 
+function expectSanitizedCodingQuestion(body: Record<string, unknown>) {
+  const questions = body.questions as Array<Record<string, unknown>>;
+  expect(questions).toHaveLength(1);
+  expect(questions[0]).not.toHaveProperty("solutionCode");
+  expect(questions[0]).not.toHaveProperty("codingConfig");
+  expect(questions[0]?.testCases).toEqual([
+    {
+      id: "visible-case",
+      input: "1 2",
+      expectedOutput: "3",
+      isHidden: false,
+    },
+  ]);
+  expect(JSON.stringify(questions)).not.toContain("hidden-case");
+  expect(JSON.stringify(questions)).not.toContain("999 1");
+  expect(JSON.stringify(questions)).not.toContain("1000");
+  expect(JSON.stringify(questions)).not.toContain("must-not-leak");
+}
+
 describe("assessment invite and attempt deadlines", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -123,6 +161,7 @@ describe("assessment invite and attempt deadlines", () => {
   it("allows a new attempt before invite expiry", async () => {
     const response = await POST(request(), { params: { templateId: "template-a" } });
     expect(response.status).toBe(200);
+    expectSanitizedCodingQuestion(await response.json());
     expect(tx.assessmentAttempt.create).toHaveBeenCalledOnce();
   });
 
@@ -147,11 +186,36 @@ describe("assessment invite and attempt deadlines", () => {
     };
     const response = await POST(request(), { params: { templateId: "template-a" } });
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
+    const body = await response.json();
+    expect(body).toMatchObject({
       attemptId: "attempt-a",
       reused: true,
     });
+    expectSanitizedCodingQuestion(body);
     expect(tx.assessmentAttempt.create).not.toHaveBeenCalled();
+  });
+
+  it("does not expose hidden cases when resuming an expired attempt", async () => {
+    state.inviteExpiresAt = new Date(0);
+    state.attempt = {
+      id: "attempt-expired",
+      status: "IN_PROGRESS",
+      applicationId: "application-a",
+      expiresAt: new Date(0),
+      startedAt: new Date(0),
+      flagsJson: { questionOrder: ["question-a"], optionOrderByQuestion: {} },
+      createdAt: new Date(0),
+    };
+
+    const response = await POST(request(), { params: { templateId: "template-a" } });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({
+      attemptId: "attempt-expired",
+      reused: true,
+      expired: true,
+    });
+    expectSanitizedCodingQuestion(body);
   });
 
   it("resumes a legacy attempt with null expiresAt", async () => {
