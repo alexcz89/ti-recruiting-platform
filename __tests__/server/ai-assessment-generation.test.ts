@@ -5,6 +5,8 @@ import { resetActionRateLimit } from "@/lib/server/rate-limit";
 import { AI_MODEL_SMART } from "@/lib/ai/config";
 import { GenerationInputSchema } from "@/lib/ai/assessment-builder-contract";
 import { buildGenerationMessages, parseGeneratedQuestions } from "@/lib/ai/assessment-generation";
+import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
+import { JUDGE0_LANGUAGE_IDS, type CodingLanguage } from "@/lib/code-execution/languages";
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(), profile: vi.fn(), create: vi.fn(), openai: vi.fn(), write: vi.fn(),
@@ -32,11 +34,11 @@ function mcq() {
   };
 }
 
-function coding(language = "javascript") {
+function coding(language: CodingLanguage = "javascript") {
   return {
     type: "CODING", questionText: "Suma dos enteros. Entrada: dos números; salida: su suma.",
     section: "Algoritmos", difficulty: "MID", explanation: "La solución suma los enteros.",
-    codeSnippet: "function solution(a, b) { /* implementar */ }",
+    codeSnippet: getAssessmentCodingStarter(language),
     allowedLanguages: [language],
     testCases: [
       { input: "console.log(JSON.stringify(solution(...[1,2])));", expectedOutput: "3", isHidden: false },
@@ -204,11 +206,64 @@ describe("validated generation and builder response compatibility", () => {
 });
 
 describe("coding formats match the Judge0 contract", () => {
-  it.each(["javascript", "typescript"])("accepts constrained JSON-argument runners for %s", async (language) => {
+  it("rejects the complete Python solution observed in Preview as candidate starter", async () => {
+    const q = coding("python");
+    q.codeSnippet = "import sys\na = int(sys.stdin.readline())\nb = int(sys.stdin.readline())\nresultado = a + b\nprint(resultado)";
+    q.testCases = [
+      { input: "3\n5\n", expectedOutput: "8\n", isHidden: false },
+      { input: "-2\n10\n", expectedOutput: "8\n", isHidden: true },
+    ];
+    mocks.create.mockResolvedValue(completion([q]));
+    expect((await request({ ...baseRequest, questionType: "CODING", language: "python" })).status).toBe(502);
+  });
+
+  it.each(["javascript", "typescript"] as const)("accepts constrained JSON-argument runners for %s", async (language) => {
     mocks.create.mockResolvedValue(completion([coding(language)]));
     const response = await request({ ...baseRequest, questionType: "CODING", language });
     expect(response.status).toBe(200);
-    expect((await response.json()).questions[0]).toMatchObject({ codeSnippet: coding().codeSnippet, allowedLanguages: [language], testCases: coding().testCases });
+    expect((await response.json()).questions[0]).toMatchObject({ codeSnippet: coding(language).codeSnippet, allowedLanguages: [language], testCases: coding().testCases });
+  });
+  it.each([
+    "resultado = a + b\nprint(resultado)",
+    "# TODO: revisar\nimport sys\na, b = map(int, sys.stdin.read().split())\nprint(a+b)",
+    `${getAssessmentCodingStarter("python")}\nprint(8)`,
+  ])("rejects solved, TODO-disguised and appended Python implementations: %s", async (codeSnippet) => {
+    mocks.create.mockResolvedValue(completion([{ ...coding("python"), codeSnippet }]));
+    expect((await request({ ...baseRequest, questionType: "CODING", language: "python" })).status).toBe(502);
+  });
+  it.each(["questionText", "section"])("rejects solution code blocks in candidate-visible %s", async (field) => {
+    mocks.create.mockResolvedValue(completion([{ ...coding(), [field]: "```python\nprint(a + b)\n```" }]));
+    expect((await request({ ...baseRequest, questionType: "CODING", language: "javascript" })).status).toBe(502);
+  });
+  it("returns an incomplete Python starter with unchanged visible/hidden stdin and binds the provider schema", async () => {
+    const q = coding("python");
+    q.testCases = [
+      { input: "3\n5\n", expectedOutput: "8\n", isHidden: false },
+      { input: "-2\n10\n", expectedOutput: "8\n", isHidden: true },
+    ];
+    mocks.create.mockResolvedValue(completion([q]));
+    const response = await request({ ...baseRequest, questionType: "CODING", language: "python" });
+    expect(response.status).toBe(200);
+    expect((await response.json()).questions).toEqual([q]);
+    expect(q.codeSnippet).toContain('raise NotImplementedError("TODO")');
+    expect(q.codeSnippet).toContain("sys.stdout.write(solution(sys.stdin.read()))");
+    expect(q.codeSnippet).not.toContain("a + b");
+    const schema = mocks.create.mock.calls[0][0].response_format.json_schema.schema;
+    expect(schema.properties.questions.items.properties.codeSnippet.enum).toEqual([q.codeSnippet]);
+    const instructions = mocks.create.mock.calls[0][0].messages[0].content;
+    expect(instructions).toContain("ÚNICO campo");
+    expect(instructions).toContain(q.codeSnippet);
+  });
+  it.each(Object.keys(JUDGE0_LANGUAGE_IDS) as CodingLanguage[])("requires the controlled incomplete scaffold for %s", (language) => {
+    const input = GenerationInputSchema.parse({ ...baseRequest, questionType: "CODING", language });
+    const q = coding(language);
+    if (language === "sql") {
+      q.testCases = q.testCases.map((tc, i) => ({ ...tc, input: `CREATE TABLE items(n); INSERT INTO items VALUES (${i});` }));
+    } else if (language !== "javascript" && language !== "typescript") {
+      q.testCases = q.testCases.map((tc, i) => ({ ...tc, input: `${i} 2\n` }));
+    }
+    expect(parseGeneratedQuestions({ questions: [q] }, input)).toEqual([q]);
+    expect(() => parseGeneratedQuestions({ questions: [{ ...q, codeSnippet: q.codeSnippet + "\n// extra" }] }, input)).toThrow("invalid_output");
   });
   it.each(["[1,2]", "console.log(solution(...[1,2]));", "console.log(JSON.stringify(solution(...[process.env])));", "console.log(JSON.stringify(solution(...[1,2]))); process.exit();"])(
     "rejects malformed or arbitrary JS runners: %s", async (input) => {
@@ -239,7 +294,7 @@ describe("coding formats match the Judge0 contract", () => {
   });
   it("accepts SQLite datasets, rejects queries or dangerous setup commands", () => {
     const input = GenerationInputSchema.parse({ ...baseRequest, questionType: "CODING", language: "sql" });
-    const q = coding("sql"); q.codeSnippet = "SELECT ...;";
+    const q = coding("sql");
     q.testCases = q.testCases.map((tc, i) => ({ ...tc, input: `CREATE TABLE items (n INTEGER); INSERT INTO items VALUES (${i});` }));
     expect(parseGeneratedQuestions({ questions: [q] }, input)).toHaveLength(1);
     for (const sql of ["SELECT 1;", "DROP TABLE items;", ".read /etc/passwd", "CREATE TABLE items(n); ATTACH 'x' AS external;"]) {

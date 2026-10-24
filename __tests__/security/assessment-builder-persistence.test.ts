@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/dashboard/assessments/templates/route";
 import { PUT } from "@/app/api/dashboard/assessments/templates/[id]/route";
+import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(), company: vi.fn(), template: vi.fn(), createTemplate: vi.fn(), updateTemplate: vi.fn(),
@@ -52,6 +53,11 @@ function expectNoWrites() {
 }
 
 describe.each(["POST", "PUT"] as const)("%s builder coding language consistency", (method) => {
+  it("persists the controlled AI starter verbatim on explicit recruiter save", async () => {
+    const codeSnippet = getAssessmentCodingStarter("python");
+    expect((await save(method, { ...body(), questions: [{ ...question(), codeSnippet }] })).status).toBe(method === "POST" ? 201 : 200);
+    expect(mocks.createQuestion).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ codeSnippet }) }));
+  });
   it.each(["CODING", "MIXED"])("rejects Python questions relabeled as JavaScript in a %s template before writing", async (type) => {
     const response = await save(method, { ...body(), type, language: "javascript" });
     expect(response.status).toBe(400);

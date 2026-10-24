@@ -9,6 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import Builder from "@/app/dashboard/assessments/builder/page";
+import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
 
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -32,8 +33,7 @@ const codingQuestion = (language = "python") => ({
   section: "Algoritmos",
   difficulty: "JUNIOR",
   explanation: "Sumar ambos valores y mostrar el resultado.",
-  codeSnippet:
-    "import sys\ndef solution(data):\n    pass\nprint(solution(sys.stdin.read()))",
+  codeSnippet: getAssessmentCodingStarter("python"),
   allowedLanguages: [language],
   testCases: [
     {

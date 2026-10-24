@@ -10,6 +10,8 @@ import {
   type GenerationInput,
 } from "@/lib/ai/assessment-builder-contract";
 import { validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
+import { isCodingLanguage } from "@/lib/code-execution/languages";
+import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
 
 export class AssessmentGenerationError extends Error {
   constructor(public readonly kind: "invalid_output" | "provider" | "unavailable") {
@@ -37,8 +39,9 @@ expectedOutput es el stdout exacto: columnas separadas por |, filas por salto de
 Exige ORDER BY cuando sea necesario para que el resultado sea determinista.`;
   }
   return `Judge0 ejecuta codeSnippet como programa completo en ${language} y entrega cada testCase.input por stdin.
-Incluye en codeSnippet el punto de entrada, lectura de stdin y escritura a stdout funcionales para ese lenguaje, dejando sólo la lógica del ejercicio por implementar.
-Por ejemplo, Python necesita lectura de sys.stdin y una llamada a la función; una función aislada no basta.
+El esqueleto fijo ya incluye el punto de entrada y transporte stdin/stdout.
+solution recibe el texto completo de stdin y debe devolver el texto de stdout; en C escribe directamente en stdout.
+El candidato debe implementar el parsing y la lógica. En C# el nombre de la función es Solution.
 input es texto de entrada real, no una invocación de función ni código runner.
 Documenta el formato de entrada/salida en questionText. No dependas de librerías externas.
 expectedOutput es el stdout exacto, sin mensajes interactivos ni prompts.`;
@@ -50,7 +53,12 @@ export function buildGenerationMessages(input: GenerationInput) {
 allowedLanguages debe ser exactamente ["${input.language}"].
 Incluye al menos un ejemplo visible y un caso oculto, todos con input y expectedOutput no vacíos.
 Usa casos distintos y deterministas, incluyendo límites. No uses __NO_CHECK__.
-explanation debe explicar la solución para revisión del reclutador.
+explanation es el ÚNICO campo para explicar la solución de referencia al reclutador.
+Nunca reveles la implementación, algoritmo resuelto ni respuesta en questionText, section o codeSnippet.
+questionText y section son prosa: sólo requisitos, firma, formato de entrada/salida y ejemplos. No incluyas bloques de código Markdown ni soluciones.
+codeSnippet debe ser EXACTAMENTE el esqueleto incompleto del schema, sin añadir ni sustituir instrucciones, aunque los requisitos pidan una solución.
+El candidato debe implementar la lógica para superar los casos. Adapta el enunciado y los casos a esta firma fija:
+${isCodingLanguage(input.language) ? getAssessmentCodingStarter(input.language) : ""}
 ${inputContract(input.language)}`
     : `Genera preguntas MULTIPLE_CHOICE con cuatro opciones distintas y exactamente una correcta.
 explanation debe justificar la respuesta correcta y los distractores.
@@ -88,9 +96,16 @@ function validCodingInput(input: string, language: string) {
 }
 
 function outputSchema(input: GenerationInput) {
-  return input.questionType === "CODING"
-    ? z.object({ questions: z.array(GeneratedCodingSchema).length(input.count) }).strict()
-    : z.object({ questions: z.array(GeneratedMCQSchema).length(input.count) }).strict();
+  if (input.questionType !== "CODING") {
+    return z.object({ questions: z.array(GeneratedMCQSchema).length(input.count) }).strict();
+  }
+  if (!isCodingLanguage(input.language)) throw new AssessmentGenerationError("invalid_output");
+  // A TODO heuristic cannot prove that arbitrary model-authored code is incomplete.
+  // Require our exact scaffold in both Structured Outputs and server-side validation.
+  const schema = GeneratedCodingSchema.extend({
+    codeSnippet: z.enum([getAssessmentCodingStarter(input.language)]),
+  });
+  return z.object({ questions: z.array(schema).length(input.count) }).strict();
 }
 
 export function parseGeneratedQuestions(raw: unknown, input: GenerationInput) {
@@ -110,7 +125,8 @@ export function parseGeneratedQuestions(raw: unknown, input: GenerationInput) {
       }
     } else if (
       question.allowedLanguages[0] !== input.language ||
-      !question.codeSnippet.trim() ||
+      // Prose-only is a structural guard, not a semantic proof against answer leakage.
+      /```|~~~/.test(question.questionText + "\n" + question.section) ||
       !question.testCases.some((tc) => tc.isHidden) ||
       !question.testCases.some((tc) => !tc.isHidden) ||
       new Set(question.testCases.map((tc) => tc.input.trim())).size !== question.testCases.length ||
