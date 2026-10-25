@@ -9,6 +9,7 @@
  */
 
 import { buildSqliteSubmission } from './sql-service';
+import { JUDGE0_LANGUAGE_IDS } from './languages';
 
 interface ExecutionResult {
   success: boolean;
@@ -43,22 +44,7 @@ interface CodeSubmission {
 }
 
 // Language ID mapping for Judge0
-const LANGUAGE_IDS: Record<string, number> = {
-  javascript: 63,   // Node.js
-  typescript: 74,   // TypeScript
-  python: 71,       // Python 3
-  java: 62,         // Java
-  cpp: 54,          // C++ (GCC 9.2.0)
-  c: 50,            // C (GCC 9.2.0)
-  csharp: 51,       // C#
-  go: 60,           // Go
-  rust: 73,         // Rust
-  ruby: 72,         // Ruby
-  php: 68,          // PHP
-  swift: 83,        // Swift
-  kotlin: 78,       // Kotlin
-  sql: 82,          // SQL (SQLite)
-};
+const LANGUAGE_IDS: Readonly<Record<string, number>> = JUDGE0_LANGUAGE_IDS;
 
 export class Judge0Service {
   private apiUrl: string;

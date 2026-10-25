@@ -2,9 +2,11 @@
 
 // app/dashboard/assessments/builder/page.tsx
 import { useState, useCallback, useEffect, Suspense } from "react";
-import AIQuestionGenerator from "@/components/dashboard/assessments/AIQuestionGenerator";
+import AIQuestionGenerator, { type GeneratedQuestion } from "@/components/dashboard/assessments/AIQuestionGenerator";
 import AssessmentPreviewModal from "@/components/dashboard/assessments/AssessmentPreviewModal";
 import { useRouter, useSearchParams } from "next/navigation";
+import { isCodingLanguage } from "@/lib/code-execution/languages";
+import { getTemplateCodingLanguageError, parseQuestionLanguages } from "@/lib/assessments/template-coding-language";
 import {
   Plus, Trash2, ChevronDown, ChevronUp, Save,
   Code2, CheckCircle2, GripVertical, AlertCircle,
@@ -77,6 +79,8 @@ type Question = {
   allowMultiple: boolean;
   // CODING
   codeSnippet: string; // starter code
+  language?: string;
+  allowedLanguages?: string[];
   testCases: { input: string; expectedOutput: string; isHidden: boolean }[];
 };
 
@@ -200,6 +204,8 @@ function BuilderInner() {
             : [],
           allowMultiple: Boolean(q.allowMultiple),
           codeSnippet: q.codeSnippet ?? q.starterCode ?? "",
+          language: q.language ?? undefined,
+          allowedLanguages: parseQuestionLanguages(q.allowedLanguages) ?? undefined,
           testCases: (q.testCases ?? []).map((tc: any) => ({
             input: tc.input ?? "",
             expectedOutput: tc.expectedOutput ?? "",
@@ -214,6 +220,13 @@ function BuilderInner() {
 
   // ── form helpers ──
   const setField = (k: keyof TemplateForm, v: any) => {
+    if (k === "language") {
+      const languageError = getTemplateCodingLanguageError(v, questions, {
+        language: form.language,
+        questions: questions.filter(q => q.type === "CODING"),
+      });
+      if (languageError) { setErrors([languageError]); return; }
+    }
     setForm(f => ({ ...f, [k]: v }));
     if (k === "type") {
       if (v === "MCQ") setQuestions(qs => qs.filter(q => q.type === "MULTIPLE_CHOICE"));
@@ -225,8 +238,18 @@ function BuilderInner() {
     setExpanded(e => ({ ...e, [id]: !e[id] }));
 
   // ── question helpers ──
-  const addQuestionsFromAI = (generated: any[]) => {
-    for (const q of generated) {
+  const addQuestionsFromAI = (generated: GeneratedQuestion[]) => {
+    const remaining = MAX_QUESTIONS - questions.length;
+    if (generated.length > remaining) {
+      return `Puedes agregar ${Math.max(remaining, 0)} preguntas más (máximo ${MAX_QUESTIONS}). Ajusta tu selección.`;
+    }
+    const codingLanguage = generated.find(q => q.testCases)?.allowedLanguages?.[0];
+    // Persistence uses the template language for every coding question.
+    if (codingLanguage && codingLanguage !== form.language && questions.some(q => q.type === "CODING")) {
+      return false;
+    }
+    if (codingLanguage) setForm(prev => ({ ...prev, language: codingLanguage }));
+    const additions = generated.map(q => {
       const isCoding = Array.isArray(q.testCases);
       const uid = () => Math.random().toString(36).slice(2);
       const base = {
@@ -239,15 +262,22 @@ function BuilderInner() {
         options: (isCoding ? [] : (q.options ?? []).map((o: any) => ({ id: uid(), text: o.text ?? "", isCorrect: Boolean(o.isCorrect) }))) as { id: string; text: string; isCorrect: boolean }[],
         allowMultiple: false,
         codeSnippet: isCoding ? (q.codeSnippet ?? "") : "",
+        language: isCoding ? codingLanguage : undefined,
+        allowedLanguages: isCoding ? q.allowedLanguages : undefined,
         testCases: (isCoding ? (q.testCases ?? []).map((tc: any) => ({ input: tc.input ?? "", expectedOutput: tc.expectedOutput ?? "", isHidden: Boolean(tc.isHidden) })) : []) as { input: string; expectedOutput: string; isHidden: boolean }[],
       };
-      setQuestions(prev => [...prev, base]);
-    }
+      return base;
+    });
+    setQuestions(prev => [...prev, ...additions]);
+    return true;
   };
 
   const addQuestion = (type: QuestionType) => {
     if (questions.length >= MAX_QUESTIONS) return;
-    const q = type === "MULTIPLE_CHOICE" ? emptyMCQ() : emptyCoding();
+    const q = type === "MULTIPLE_CHOICE" ? emptyMCQ() : {
+      ...emptyCoding(), language: form.language || undefined,
+      allowedLanguages: form.language ? [form.language] : undefined,
+    };
     setQuestions(qs => [...qs, q]);
     setExpanded(e => ({ ...e, [q.id]: true }));
   };
@@ -324,6 +354,9 @@ function BuilderInner() {
     if (form.passingScore < 1 || form.passingScore > 100) errs.push("El puntaje mínimo debe ser entre 1 y 100");
     if (form.timeLimit < 5 || form.timeLimit > 180) errs.push("El tiempo debe ser entre 5 y 180 minutos");
     if (!questions.length) errs.push("Agrega al menos una pregunta");
+    if (questions.length > MAX_QUESTIONS) errs.push(`Máximo ${MAX_QUESTIONS} preguntas`);
+    const languageError = getTemplateCodingLanguageError(form.language, questions);
+    if (languageError) errs.push(languageError);
 
     questions.forEach((q, i) => {
       const n = i + 1;
@@ -489,12 +522,18 @@ function BuilderInner() {
                 <p className="mb-1 text-[11px] font-medium text-amber-600 dark:text-amber-400">⚠️ Selecciona el lenguaje — obligatorio para assessments de código</p>
               )}
               <select
+                aria-label="Lenguaje del template"
                 value={form.language}
+                disabled={questions.some(q => q.type === "CODING") && isCodingLanguage(form.language)}
                 onChange={e => setField("language", e.target.value)}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
-                {LANGUAGES.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
+                {LANGUAGES.filter(l => (form.type !== "CODING" && !questions.some(q => q.type === "CODING")) || l.value === "" || isCodingLanguage(l.value))
+                  .map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
               </select>
+              {questions.some(q => q.type === "CODING") && isCodingLanguage(form.language) && (
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">El lenguaje queda fijo mientras haya preguntas de código.</p>
+              )}
             </div>
 
             {/* Puntaje mínimo */}

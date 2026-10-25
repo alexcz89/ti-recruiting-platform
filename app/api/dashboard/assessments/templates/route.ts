@@ -9,6 +9,7 @@ import {
   isAssessmentTemplateAccessRole,
 } from "@/lib/assessments/access";
 import type { AssessmentType, Prisma } from "@prisma/client";
+import { getTemplateCodingLanguageError, parseQuestionLanguages } from "@/lib/assessments/template-coding-language";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -111,6 +112,12 @@ export async function POST(req: NextRequest) {
     if (!timeLimit || timeLimit < 5 || timeLimit > 180)
       return json(400, { error: "El tiempo debe ser entre 5 y 180 minutos" });
 
+    if (!Array.isArray(questions) || questions.some(q => !q || typeof q !== "object")) {
+      return json(400, { error: "Preguntas inválidas" });
+    }
+    const languageError = getTemplateCodingLanguageError(language, questions);
+    if (languageError) return json(400, { error: languageError });
+
     // Slug único
     const slugBase = title.toLowerCase()
       .replace(/[^a-z0-9\s-]/g, "")
@@ -152,6 +159,7 @@ export async function POST(req: NextRequest) {
     for (const q of questions) {
       const isCoding = q.type === "CODING";
       const testCasesRaw: any[] = Array.isArray(q.testCases) ? q.testCases : [];
+      const questionLanguages = parseQuestionLanguages(q.allowedLanguages);
 
       await prisma.assessmentQuestion.create({
         data: {
@@ -169,7 +177,9 @@ export async function POST(req: NextRequest) {
           // ✅ FIX Bug #6: propagar language del template a cada pregunta CODING
           // Sin esto, allowedLanguages queda null y Judge0 recibe javascript por default
           language: isCoding ? (language || null) : null,
-          allowedLanguages: isCoding && language ? JSON.stringify([language]) : null,
+          allowedLanguages: isCoding && language
+            ? JSON.stringify(questionLanguages?.length ? questionLanguages : [language])
+            : null,
           ...(isCoding && testCasesRaw.length > 0
             ? {
                 testCases: {

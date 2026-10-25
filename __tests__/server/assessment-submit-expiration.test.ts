@@ -12,9 +12,9 @@ const attempt = () => ({
   status: "IN_PROGRESS",
   startedAt: new Date(Date.now() - 60_000),
   expiresAt: state.expiresAt,
-  totalScore: null,
+  totalScore: null as number | null,
   sectionScores: null,
-  passed: null,
+  passed: null as boolean | null,
   timeSpent: 0,
   flagsJson: {},
   severity: "NORMAL",
@@ -99,5 +99,29 @@ describe("assessment submission expiration", () => {
       expired: true,
     });
     expect(tx.assessmentAttempt.updateMany).toHaveBeenCalledOnce();
+  });
+  it("performs the final state transition only through the guarded submit handler and treats a retry idempotently", async () => {
+    const first = await POST(new Request("http://localhost"), { params: { attemptId: "attempt-a" } });
+    expect(first.status).toBe(200);
+    expect(tx.assessmentAttempt.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "attempt-a", candidateId: "candidate-a", status: "IN_PROGRESS" },
+      data: expect.objectContaining({ status: "SUBMITTED", totalScore: 100 }),
+    }));
+    prismaMock.assessmentAttempt.findUnique.mockResolvedValueOnce({ ...attempt(), status: "SUBMITTED", totalScore: 100, passed: true });
+    const retried = await POST(new Request("http://localhost"), { params: { attemptId: "attempt-a" } });
+    expect(retried.status).toBe(200);
+    expect(await retried.json()).toMatchObject({ alreadySubmitted: true, totalScore: 100 });
+    expect(tx.assessmentAttempt.updateMany).toHaveBeenCalledOnce();
+  });
+  it("does not complete a second concurrent finalization when the atomic state claim loses", async () => {
+    tx.assessmentAttempt.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    const responses = await Promise.all([
+      POST(new Request("http://localhost"), { params: { attemptId: "attempt-a" } }),
+      POST(new Request("http://localhost"), { params: { attemptId: "attempt-a" } }),
+    ]);
+    expect(responses.map(response => response.status).sort()).toEqual([200, 400]);
+    for (const invocation of [1, 2]) {
+      expect(tx.assessmentAttempt.updateMany).toHaveBeenNthCalledWith(invocation, expect.objectContaining({ where: { id: "attempt-a", candidateId: "candidate-a", status: "IN_PROGRESS" } }));
+    }
   });
 });

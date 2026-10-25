@@ -585,12 +585,7 @@ export default function AssessmentPage() {
     if (currentIndex > 0) setCurrentIndex((i) => i - 1);
   };
 
-  type SubmitOptions = {
-    answeredQuestionId?: string;
-    skipConfirmation?: boolean;
-  };
-
-  const handleSubmit = async (options: SubmitOptions = {}) => {
+  const handleSubmit = async () => {
     if (!attemptId || submitting) return;
 
     if (!expired && requiresAnswerPersistence && !answerPersistenceReady) {
@@ -605,11 +600,10 @@ export default function AssessmentPage() {
 
     if (!expired) {
       const unansweredQuestions = questions.filter(
-        (question) =>
-          question.id !== options.answeredQuestionId && !isAnsweredId(question.id)
+        (question) => !isAnsweredId(question.id)
       );
 
-      if (!options.skipConfirmation && unansweredQuestions.length > 0) {
+      if (unansweredQuestions.length > 0) {
         const unsubmittedCoding = unansweredQuestions.filter(
           (question) => question.type === 'CODING'
         );
@@ -680,18 +674,6 @@ export default function AssessmentPage() {
     }
 
     const isLastQuestion = currentIndex === total - 1;
-    const allAnsweredAfterThis = questions.every(
-      (question) => question.id === qid || isAnsweredId(question.id)
-    );
-
-    if (isLastQuestion && allAnsweredAfterThis) {
-      await handleSubmit({
-        answeredQuestionId: qid,
-        skipConfirmation: true,
-      });
-      return;
-    }
-
     toastSuccess(
       isLastQuestion
         ? 'Solución enviada. Revisa las preguntas pendientes antes de finalizar.'
@@ -1056,7 +1038,7 @@ export default function AssessmentPage() {
               </li>
               <li className="flex items-start gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-100 font-bold text-blue-700 dark:bg-blue-900 dark:text-blue-200">3</span>
-                <span>Si los tests pasan, se envía automáticamente; también puedes enviarla manualmente.</span>
+                <span>Pulsa Enviar solución para guardarla y Finalizar para terminar la evaluación.</span>
               </li>
             </ol>
           </details>
@@ -1068,7 +1050,7 @@ export default function AssessmentPage() {
             <p className="font-semibold">
               {currentIndex === total - 1
                 ? submitting
-                  ? 'Solución correcta. Finalizando evaluación...'
+                  ? 'Finalizando evaluación...'
                   : 'Solución enviada correctamente. Finaliza la evaluación.'
                 : 'Solución enviada correctamente. Puedes continuar con la siguiente pregunta.'}
             </p>

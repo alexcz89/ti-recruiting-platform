@@ -287,48 +287,12 @@ export default function CodeEditor({
 
       const results = (data as any)?.result?.testResults;
       setTestResults(Array.isArray(results) ? results : []);
-      setHasRunTests(true); // ✅ marcar que ejecutó tests
-
-      // ✅ AUTO-SUBMIT: si todos los tests públicos pasaron, enviar automáticamente
-      if (Array.isArray(results)) {
-        const publicResults = results.filter((r: any) => !r.hidden);
-        const allPublicPassed = publicResults.length > 0 && publicResults.every((r: any) => r.passed);
-        if (allPublicPassed && !solutionSubmitted) {
-          await handleAutoSubmit(code, selectedLanguage);
-        }
-      }
+      setHasRunTests(true);
     } catch (err) {
       console.error('Error running tests:', err);
       setError('Error de conexión. Intenta de nuevo.');
     } finally {
       setIsRunning(false);
-    }
-  };
-
-  // ✅ NUEVO: auto-submit silencioso cuando todos los tests públicos pasan
-  const handleAutoSubmit = async (currentCode: string, currentLanguage: string) => {
-    if (isSubmitting || solutionSubmitted) return;
-    setIsSubmitting(true);
-    try {
-      const response = await fetch('/api/assessments/code/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          attemptId,
-          questionId,
-          code: currentCode,
-          language: currentLanguage,
-          isSubmission: true,
-        }),
-      });
-      if (response.ok) {
-        setSolutionSubmitted(true);
-        onSubmit?.(currentCode, currentLanguage);
-      }
-    } catch (err) {
-      console.error('Error auto-submitting:', err);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -363,7 +327,7 @@ export default function CodeEditor({
   const handleSubmit = async () => {
     if (isSubmitting || isRunning || readOnly) return;
     if (!code.trim()) return;
-    if (solutionSubmitted) return; // ya fue enviada automáticamente
+    if (solutionSubmitted) return;
     setIsSubmitting(true);
     setError(null);
     setTestResults(null);

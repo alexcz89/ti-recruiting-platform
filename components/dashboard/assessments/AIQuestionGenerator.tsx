@@ -3,11 +3,13 @@
 
 import { useState } from "react";
 import { Sparkles, X, Loader2, Plus, AlertCircle, Wand2 } from "lucide-react";
+import { GenerationInputSchema, MAX_GENERATION_PROMPT_LENGTH } from "@/lib/ai/assessment-builder-contract";
+import { isCodingLanguage } from "@/lib/code-execution/languages";
 
 type GeneratedMCQOption = { text: string; isCorrect: boolean };
 type GeneratedTestCase = { input: string; expectedOutput: string; isHidden: boolean };
 
-type GeneratedQuestion = {
+export type GeneratedQuestion = {
   questionText: string;
   section: string;
   difficulty: "JUNIOR" | "MID" | "SENIOR";
@@ -19,7 +21,7 @@ type GeneratedQuestion = {
 };
 
 type Props = {
-  onAddQuestions: (questions: GeneratedQuestion[]) => void;
+  onAddQuestions: (questions: GeneratedQuestion[]) => boolean | string | void;
   currentLanguage?: string;
   currentDifficulty?: string;
   currentType?: "MCQ" | "CODING" | "MIXED";
@@ -430,12 +432,14 @@ export default function AIQuestionGenerator({
 
   const handleGenerate = async () => {
     if (!prompt.trim()) { setError("Describe qué tipo de preguntas quieres generar"); return; }
+    const input = GenerationInputSchema.safeParse({ prompt, questionType, language, difficulty, count });
+    if (!input.success) { setError("Revisa el tema, lenguaje, dificultad y cantidad de preguntas (1 a 5)."); return; }
     setError(""); setLoading(true); setPreview([]); setSelected(new Set());
     try {
       const res = await fetch("/api/ai/assessment-builder/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, questionType, language, difficulty, count }),
+        body: JSON.stringify(input.data),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) { setError(data.error || "Error al generar"); return; }
@@ -448,7 +452,11 @@ export default function AIQuestionGenerator({
   const handleAdd = () => {
     const toAdd = preview.filter((_, i) => selected.has(i));
     if (!toAdd.length) return;
-    onAddQuestions(toAdd);
+    const result = onAddQuestions(toAdd);
+    if (result === false || typeof result === "string") {
+      setError(typeof result === "string" ? result : "El lenguaje debe coincidir con las preguntas de código que ya están en el builder.");
+      return;
+    }
     setPreview([]); setPrompt(""); setSelected(new Set()); setOpen(false);
   };
 
@@ -462,7 +470,11 @@ export default function AIQuestionGenerator({
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setQuestionType(currentType === "CODING" ? "CODING" : "MULTIPLE_CHOICE");
+          setLanguage(currentLanguage || "python");
+          setOpen(true);
+        }}
         className="inline-flex items-center gap-2 rounded-xl border-2 border-dashed border-teal-300 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-700 transition-all hover:border-teal-500 hover:bg-teal-100 dark:border-teal-700 dark:bg-teal-950/20 dark:text-teal-300 dark:hover:bg-teal-900/30"
       >
         <Sparkles className="h-4 w-4" />
@@ -526,7 +538,7 @@ export default function AIQuestionGenerator({
                     <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Lenguaje</label>
                     <select value={language} onChange={e => setLanguage(e.target.value)}
                       className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 px-2.5 py-2 text-xs text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-teal-500">
-                      {Object.entries(LANGUAGE_LABELS).map(([val, label]) => (
+                      {Object.entries(LANGUAGE_LABELS).filter(([val]) => isCodingLanguage(val)).map(([val, label]) => (
                         <option key={val} value={val}>{label}</option>
                       ))}
                     </select>
@@ -555,7 +567,9 @@ export default function AIQuestionGenerator({
               <div>
                 <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-400 mb-1">Describe qué quieres evaluar *</label>
                 <textarea
+                  aria-label="Describe qué quieres evaluar"
                   value={prompt}
+                  maxLength={MAX_GENERATION_PROMPT_LENGTH}
                   onChange={e => { setPrompt(e.target.value); setError(""); }}
                   placeholder={isCoding
                     ? `Ej: ${examples[0] ?? "Función que resuelve un problema específico"}...`
