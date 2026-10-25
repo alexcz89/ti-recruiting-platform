@@ -84,7 +84,7 @@ Sin desplegar desde esta tarea, cuando el responsable actualice Preview con esto
 2. Revisar el borrador: `codeSnippet` debe coincidir con el esqueleto Python, con `raise NotImplementedError("TODO")`, lectura de `sys.stdin` y escritura a `sys.stdout`, sin suma implementada. La solución sólo puede estar en la explicación del reclutador. Revisar enunciado y casos visibles/ocultos manualmente.
 3. Añadir y guardar explícitamente; comprobar que el editor del builder conserva el starter. Invitar al candidato sintético a un intento nuevo. No reutilizar un template antiguo que contenga la solución, porque no se reescriben datos existentes.
 4. Antes de ejecutar o enviar: el editor candidato debe contener el mismo starter y el indicador de la pregunta debe ser **Pendiente**. No confundirlo con la leyenda. El payload candidato no debe incluir explicación, solución ni casos ocultos.
-5. Ejecutar el starter sin completarlo: debe fallar, no superar los ejemplos. Implementar dentro de `solution(input_data)` la lectura de enteros y devolver la suma como texto. Ejecutar/enviar y verificar stdout, puntuación e indicador **Respondida**. El flujo existente puede enviar automáticamente tras superar todos los casos públicos al pulsar Ejecutar; no ocurre al cargar la página.
+5. Ejecutar el starter sin completarlo: debe fallar, no superar los ejemplos. Implementar dentro de `solution(input_data)` la lectura de enteros y devolver la suma como texto. Ejecutar debe mostrar resultados sin enviar la respuesta ni finalizar. Pulsar **Enviar solución** debe guardar y marcar **Respondida**; sólo **Finalizar** cierra la evaluación, salvo la política de expiración existente.
 6. Recargar/reanudar y comprobar que conserva únicamente respuestas realmente guardadas. Repetir generación/revisión con JS/TS (runner JSON de argumentos) y SQL (dataset SQLite + consulta), sin alterar evaluaciones activas.
 
 ## Incidente 502 tras exigir el starter literal (HEAD base 2a00e62e)
@@ -126,3 +126,68 @@ Los comandos de Vitest son los mismos listados en la validación anterior, inclu
 ### Verificación posterior en Preview
 
 Cuando el responsable publique estos cambios en Preview (esta tarea no lo hace), verificar que el despliegue contiene la corrección y registrar el modelo configurado, sin copiar variables sensibles. Con un reclutador y empresa sintéticos, generar una nueva pregunta CODING Python de suma por stdin. Comprobar HTTP 200, starter canónico con `NotImplementedError`, casos visibles/ocultos y ausencia de solución en campos candidatos. Añadir, revisar y guardar explícitamente; ejecutar los pasos de candidato anteriores en un intento nuevo. Comprobar también MCQ y JS/TS/SQL. Si vuelve a fallar, correlacionar la categoría interna y el request ID: `provider_request` indica un rechazo de la llamada, mientras que `completion`, `json_parse` y `output_validation` indican una respuesta recibida que no se aceptó. No copiar prompts, soluciones ni payloads completos a logs o incidencias.
+
+## P1: finalización inesperada al ejecutar tests (base 72c48429)
+
+### Causa reproducida
+
+La prueba local de la página candidata real, `AssessmentQuestion`, `CodeEditor`, `AssessmentTimer`, `useAnswerPersistence` y su cola reprodujo esta secuencia con una pregunta, plazo vigente y estado inicial `IN_PROGRESS`:
+
+```text
+Clic en Ejecutar pruebas
+  -> POST /api/assessments/code/execute (isSubmission: false, casos públicos aprobados)
+  -> handleAutoSubmit -> POST /api/assessments/code/execute (isSubmission: true)
+  -> onSubmit -> handleCodeSubmitted -> POST /attempts/:id/answer
+  -> última pregunta y todas respondidas -> handleSubmit(skipConfirmation: true)
+  -> POST /attempts/:id/submit -> router.push(.../results)
+```
+
+La regresión falló antes del cambio: esperaba únicamente `execute:run`, pero recibió `execute:run`, `execute:submit`, `answer`, `submit`. No fue necesario pulsar Enviar solución ni Finalizar. La rama real `/submit` calcula el puntaje y usa `updateMany` con candidato, id y estado `IN_PROGRESS` para pasar a `SUBMITTED`. En una pregunta correcta de un intento no concurso, un puntaje de 100 es coherente con esa calificación; no es el panel de resultados quien calcula o dispara la transición.
+
+No hay formulario contenedor: los botones de ejecución y envío ya eran `type="button"`. No se observó propagación de eventos hacia una acción de cierre. La regla de una sola pregunta no es especial: satisface inmediatamente «última pregunta y todas respondidas». También podía ocurrir al enviar la última pregunta CODING de una evaluación mayor con las demás respondidas. El autoguardado de MCQ sólo llama `/answer`, y la expiración tiene un camino separado que no se modificó.
+
+### Corrección mínima
+
+- Se elimina el envío automático desde `handleRunTests` y su helper `handleAutoSubmit`. Ejecutar conserva únicamente `isSubmission: false`, muestra resultados y permite editar y repetir, conforme al límite existente de 20 ejecuciones por minuto.
+- Se elimina el cierre automático desde `handleCodeSubmitted`, incluso cuando todas las preguntas estén respondidas. Enviar solución mantiene el envío explícito y el guardado del código/tiempo, sin navegar a resultados.
+- Se retira la opción interna de omitir confirmación usada por ese cierre automático y se corrigen las instrucciones visibles. Finalizar / Enviar evaluación siguen siendo acciones explícitas; las preguntas pendientes conservan su confirmación.
+- No cambia código de servidor, Judge0, generador, Structured Outputs, schema Prisma, autorizaciones, scoring, escrituras de Application, billing ni datos existentes.
+- Las rutas reales de ejecución se prueban con Prisma/Judge0 simulados: el run sólo consulta casos públicos, crea su registro de ejecución y no guarda `AttemptAnswer`, puntaje definitivo ni estado final. El envío explícito conserva datos completos de ejecución sólo en servidor, sin devolver inputs/outputs ocultos. Se comprueban autenticación, rol, candidato propietario, template, estado, expiración y límites sin modificar esas reglas.
+- El submit conserva la transición condicional atómica y el manejo existente de reintentos: una solicitud posterior ve `alreadySubmitted`; si dos solicitudes compiten por el estado, sólo una puede realizar la transición y la otra recibe el 400 existente. No se cambia esa política de concurrencia.
+
+### Cobertura y límites de la evidencia
+
+La suite de ciclo candidato usa red sintética con estado y trazado, Monaco simulado y anti-cheat desactivado para aislar el caso. No sustituye el editor, el callback de envío, la página, el cronómetro ni el autoguardado. El cierre observado en este arnés es simulado en la frontera HTTP; por separado se ejecutan los handlers reales de ejecución y submit contra dobles de Prisma, comprobando sus escrituras. No son pruebas contra PostgreSQL/Judge0 reales ni una repetición remota de Preview.
+
+- Dirigidas: 5 suites, **48 pruebas aprobadas**.
+- Regresión ampliada: 29 suites, **347 pruebas aprobadas**, incluidas las dirigidas.
+- `npm run type-check -- --incremental false`: aprobado.
+- `git diff --check`: sin errores.
+
+```text
+npx vitest run --exclude ".claude/worktrees/**" --reporter=dot --silent=true __tests__/components/coding-assessment-lifecycle.test.tsx __tests__/components/coding-candidate-initialization.test.tsx __tests__/server/assessment-code-expiration.test.ts __tests__/server/assessment-submit-expiration.test.ts __tests__/server/assessment-answer-persistence.test.ts
+
+npx vitest run --exclude ".claude/worktrees/**" --reporter=dot --silent=true __tests__/server/assessment __tests__/server/ai-assessment-generation.test.ts __tests__/server/judge0-language-contract.test.ts __tests__/server/sql-service.test.ts __tests__/server/contests.test.ts __tests__/server/badges-linkedin.test.ts __tests__/security/assessment-builder-persistence.test.ts __tests__/security/assessment-template-tenant-isolation.test.ts __tests__/security/job-edit-assessment-tenant-isolation.test.tsx __tests__/security/assessment-expiration-tenant.test.ts __tests__/security/coding-question-access.test.ts __tests__/security/custom-run-reservation.test.ts __tests__/components/ai-assessment-builder.test.tsx __tests__/components/coding-candidate-initialization.test.tsx __tests__/components/coding-assessment-lifecycle.test.tsx __tests__/server/writer-cutover-architecture.test.ts
+```
+
+### P2 UX/UI para un PR posterior
+
+La captura confirma un panel de salida estrecho y desplazamientos anidados. `CodeEditor` representa por separado `actualOutput` y `error`; si el servicio contiene el mismo traceback en ambos, se muestra dos veces. Es presentación sin relación causal con el cierre: la finalización provenía de las llamadas explícitas del handler, no del renderizado. El error del starter `NotImplementedError("TODO")` es esperado hasta que el candidato implemente la lógica.
+
+Propuesta pendiente: jerarquizar resumen/causa/detalle técnico, deduplicar traceback, envolver líneas largas y revisar anchos y scroll en móvil/escritorio. Los avisos de estilo preexistentes del hook (bordes de citas/alertas y texto gris en paneles coloreados) no fueron introducidos por este cambio funcional: se mantienen los acentos semánticos y se deja la revisión de contraste con este P2, sin suprimir reglas ni rediseñar el editor aquí. La leyenda estática «Respondida / Pendiente» sigue siendo distinta del indicador real de cada pregunta.
+
+### QA manual pendiente en Preview
+
+No se desplegó ni se usó la invitación de las capturas. Cuando el responsable actualice el Preview, usar únicamente empresa/candidato sintéticos y una invitación nueva; no alterar intentos previos ni producción.
+
+1. Crear una evaluación Python de una pregunta con starter incompleto y al menos un caso visible y otro oculto. Abrir el intento con tiempo suficiente y comprobar `IN_PROGRESS`.
+2. Conservar el registro de red localmente sin exportar cookies, tokens de invitación, código ni payloads completos. Pulsar Ejecutar pruebas sin editar: debe aparecer el fallo y sólo una petición a `/code/execute` con `isSubmission: false`; ninguna a `/answer` ni `/submit`. No debe navegar ni marcar la pregunta respondida.
+3. Completar la solución y pulsar sólo Ejecutar pruebas: deben aprobarse los públicos, continuar el mismo intento/URL y mantenerse habilitados edición y ejecución. Revisar que no haya campos de casos ocultos ni puntaje final en esa respuesta.
+4. Editar y ejecutar varias veces sin exceder el límite existente. Confirmar que no se guardan entregas ni cambia el estado del intento.
+5. Pulsar Enviar solución: debe enviar `isSubmission: true`, persistir el código y guardar el marcador de respuesta. Debe permanecer en la evaluación, sin llamar `/submit` ni navegar a resultados, incluso siendo la única o última pregunta.
+6. Pulsar Finalizar: debe llamar `/submit`, pasar a `SUBMITTED` y navegar a resultados. Una repetición posterior no debe duplicar la finalización; un competidor simultáneo puede recibir el conflicto 400 existente.
+7. Repetir con dos preguntas CODING y con MIXED cuya última pregunta sea CODING y las anteriores estén respondidas. Confirmar que el mapa y la navegación permiten continuar; el cierre sigue siendo explícito.
+8. En MCQ/MIXED, seleccionar opciones, esperar el autoguardado y comprobar que no finaliza; sólo Finalizar / Enviar evaluación debe cerrar.
+9. Probar aparte un intento sintético de corta duración: la expiración debe conservar su cierre legítimo y bloquear ejecuciones nuevas. Repetir el smoke test de badge/concurso si forman parte del piloto; su validación remota sigue pendiente.
+
+No hay garantías nuevas de ejecución ilimitada ni persistencia de borradores CODING: continúan los límites y la semántica de guardado explícito existentes. La corrección queda validada localmente y pendiente de QA funcional en el Preview actualizado.
