@@ -8,7 +8,7 @@ El generador existente (`POST /api/ai/assessment-builder/generate`) entrega borr
 - Solicitud: hasta 24 000 bytes, prompt hasta 6 000 caracteres, de 1 a 5 preguntas, tipo y dificultad enumerados.
 - Salida: Structured Outputs con el modelo configurado y validación Zod en servidor. Los modelos legacy contemplados usan modo JSON con la misma validación. Una salida incompleta, rechazada o inválida se descarta completa, sin aceptar preguntas parciales.
 - MCQ: cuatro opciones distintas, una correcta, texto no vacío y cantidad exacta.
-- CODING: esqueleto incompleto fijo por lenguaje, exigido mediante un enum de un solo valor en Structured Outputs y validado de nuevo en servidor. No se acepta código arbitrario del modelo, ni siquiera si incluye TODO. Lenguaje solicitado y casos distintos, al menos uno visible y uno oculto. Se rechazan entradas vacías, metadatos malformados y el sentinel `__NO_CHECK__`.
+- CODING: esqueleto incompleto fijo por lenguaje, asignado exclusivamente por el servidor después de validar el borrador. El schema enviado a OpenAI omite `codeSnippet`; su objeto estricto rechaza ese campo, `starterCode`, `solutionCode` y cualquier otro campo no previsto. La respuesta pública conserva `codeSnippet` para el builder. No se acepta código arbitrario del modelo, ni siquiera si incluye TODO. Lenguaje solicitado y casos distintos, al menos uno visible y uno oculto. Se rechazan entradas vacías, metadatos malformados y el sentinel `__NO_CHECK__`.
 - JavaScript/TypeScript: runner `console.log(JSON.stringify(solution(...[ARGUMENTOS_JSON])));`, concatenado al código dentro de Judge0. Se analizan los argumentos como JSON; no se evalúa código generado en Next.js.
 - Otros lenguajes: entrada de texto completo por stdin; el esqueleto incluye lectura y escritura, incluida la llamada a la función. El candidato implementa parsing y lógica. SQL usa datasets SQLite validados, seguidos de la consulta incompleta que el candidato debe terminar, sin stdin.
 - El builder conserva el lenguaje de las preguntas. Su selector principal queda bloqueado cuando hay CODING, incluso en MIXED. POST y PUT comprueban metadatos de pregunta y, en PUT, también los datos persistidos antes de escribir. Se admite metadata legacy ausente heredando el lenguaje de la plantilla, y allowedLanguages en array o JSON válido.
@@ -61,7 +61,7 @@ El prompt reserva la solución de referencia a `explanation`, ya existente y no 
 
 La prueba del componente candidato usa la página, `AssessmentQuestion` y `CodeEditor` reales, con Monaco, red y persistencia simulados. Tanto el nuevo starter como una pregunta legacy cargan como **Pendiente**, y editar no envía respuestas. Un envío explícito exitoso marca **Respondida**; una respuesta previamente enviada conserva ese estado al reanudar. No se reprodujo el segundo síntoma como consecuencia del código precargado. Hay una leyenda estática «Respondida / Pendiente» en la vista ancha; no representa el estado individual de la pregunta. No se modifica la lógica de estados sin evidencia de un defecto.
 
-### Validación de esta corrección
+### Validación inicial de la corrección del starter (antes del incidente 502)
 
 - Focalizadas: **5 suites, 164 pruebas aprobadas**. Generación, rechazo del caso observado y variantes con TODO, los 14 esqueletos, stdin visible/oculto sin alteraciones, runner JS/TS, datasets SQL, builder, guardado POST/PUT y estado del candidato.
 - Regresión ampliada: **28 suites, 316 pruebas aprobadas**, incluidas las anteriores. MCQ, límite de 50 preguntas, permisos, expiración, invitaciones, intentos, badges, concursos, Judge0 y guardas del proceso canónico.
@@ -86,3 +86,43 @@ Sin desplegar desde esta tarea, cuando el responsable actualice Preview con esto
 4. Antes de ejecutar o enviar: el editor candidato debe contener el mismo starter y el indicador de la pregunta debe ser **Pendiente**. No confundirlo con la leyenda. El payload candidato no debe incluir explicación, solución ni casos ocultos.
 5. Ejecutar el starter sin completarlo: debe fallar, no superar los ejemplos. Implementar dentro de `solution(input_data)` la lectura de enteros y devolver la suma como texto. Ejecutar/enviar y verificar stdout, puntuación e indicador **Respondida**. El flujo existente puede enviar automáticamente tras superar todos los casos públicos al pulsar Ejecutar; no ocurre al cargar la página.
 6. Recargar/reanudar y comprobar que conserva únicamente respuestas realmente guardadas. Repetir generación/revisión con JS/TS (runner JSON de argumentos) y SQL (dataset SQLite + consulta), sin alterar evaluaciones activas.
+
+## Incidente 502 tras exigir el starter literal (HEAD base 2a00e62e)
+
+### Evidencia real y alcance de la conclusión
+
+La respuesta pública «El proveedor de IA no está disponible. Intenta más tarde.» corresponde exclusivamente al `AssessmentGenerationError` de tipo `provider` que se produce al fallar `chat.completions.create`. No corresponde al análisis JSON ni a la validación del contenido; esas ramas devuelven otro mensaje público.
+
+Se reprodujo contra `api.openai.com/v1/chat/completions`, con el SDK instalado, el modelo local configurado `gpt-4o` y requisitos sintéticos, sin acceso a bases de datos:
+
+| Comprobación | Resultado | Request ID |
+| --- | --- | --- |
+| Schema original, con el starter Python multilínea como enum; máximo 1 token | HTTP 400, tipo `invalid_request_error`, código `null` | `req_132bffe1e29d4af1b7e682a745d63b48` |
+| Misma solicitud cambiando únicamente ese campo a string acotado | HTTP 200, `finish_reason=length` por el límite diagnóstico de 1 token | `req_e3d414ac309f43ac94c80e0e5cd5b8fd` |
+| Schema corregido sin starter generado por el modelo, generación completa e instrucciones finales | HTTP 200, `finish_reason=stop`; validación aprobada, 1 pregunta, starter canónico y casos visibles/ocultos | `req_57bd1b0c63ec45d4a1753d6f0c609e48` |
+
+La comparación aísla la restricción literal de `codeSnippet` como desencadenante del rechazo en esta configuración. No prueba qué detalle interno del literal rechaza el proveedor, ni que todos los enums o todos los modelos sean incompatibles. La [documentación oficial de Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=chat) admite enums en general. No se inspeccionaron los logs privados ni las variables remotas de Preview; la reproducción usa la configuración local verificada.
+
+Dos generaciones intermedias con el schema ya aceptado recibieron HTTP 200 pero fueron rechazadas posteriormente por bloques Markdown en el enunciado. No se relajó ese control: se aclaró el prompt para que los ejemplos estén exclusivamente en `testCases` y el enunciado sea un párrafo de prosa. La última generación real pasó también la validación posterior. Esto no garantiza que todas las futuras respuestas del modelo sean semánticamente válidas: las salidas inválidas siguen fallando de forma segura.
+
+### Cambio y diagnóstico seguro
+
+- Se mantienen Structured Outputs, el modelo configurado, límites, timeout, ausencia de reintentos y revisión explícita del reclutador.
+- El proveedor sólo genera enunciado, sección, dificultad, explicación, lenguajes y casos. El servidor agrega el starter existente e inmutable del lenguaje solicitado. No se modifica el catálogo de starters, el contrato público del builder, los templates guardados, Prisma ni Judge0.
+- Si el modelo intenta devolver un `codeSnippet` completo, con TODO o incluso idéntico al canónico, se rechaza como campo no autorizado. El único starter devuelto procede del servidor.
+- Los registros internos sólo contienen categoría (`provider_request`, `configuration`, `completion`, `json_parse` u `output_validation`), estado HTTP del proveedor, código/tipo e identificador de solicitud cuando existen y tienen formato acotado. Se descartan mensajes, cuerpos, cabeceras, stack, causas, prompts, respuestas, soluciones, claves y datos personales. El navegador conserva los errores genéricos existentes y `Cache-Control: no-store`.
+
+### Regresión y validación final
+
+La nueva prueba usa el SDK OpenAI real con transporte HTTP local simulado: reproduce el rechazo 400 del esquema anterior y comprueba el schema serializado sin `codeSnippet`, `strict: true`, `additionalProperties: false` y la asignación posterior del starter. Falló antes de la corrección (HTTP 502 en vez de 200). La evidencia de compatibilidad no depende sólo de esta simulación: incluye la comparación real y la generación completa indicadas arriba. CI no usa claves ni llamadas pagadas.
+
+- Focalizadas: **5 suites, 170 pruebas aprobadas**.
+- Regresión ampliada: **28 suites, 322 pruebas aprobadas**, incluidas las focalizadas.
+- `npm run type-check -- --incremental false`: aprobado.
+- `git diff --check`: sin errores; avisos de conversión LF/CRLF de Git.
+
+Los comandos de Vitest son los mismos listados en la validación anterior, incluyendo `coding-candidate-initialization.test.tsx`. No se ejecutó Judge0 real ni se escribieron datos de candidatos. No hubo commit, push, PR ni deploy desde esta tarea.
+
+### Verificación posterior en Preview
+
+Cuando el responsable publique estos cambios en Preview (esta tarea no lo hace), verificar que el despliegue contiene la corrección y registrar el modelo configurado, sin copiar variables sensibles. Con un reclutador y empresa sintéticos, generar una nueva pregunta CODING Python de suma por stdin. Comprobar HTTP 200, starter canónico con `NotImplementedError`, casos visibles/ocultos y ausencia de solución en campos candidatos. Añadir, revisar y guardar explícitamente; ejecutar los pasos de candidato anteriores en un intento nuevo. Comprobar también MCQ y JS/TS/SQL. Si vuelve a fallar, correlacionar la categoría interna y el request ID: `provider_request` indica un rechazo de la llamada, mientras que `completion`, `json_parse` y `output_validation` indican una respuesta recibida que no se aceptó. No copiar prompts, soluciones ni payloads completos a logs o incidencias.

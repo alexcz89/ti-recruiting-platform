@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/ai/assessment-builder/generate/route";
 import { resetActionRateLimit } from "@/lib/server/rate-limit";
@@ -7,6 +7,7 @@ import { GenerationInputSchema } from "@/lib/ai/assessment-builder-contract";
 import { buildGenerationMessages, parseGeneratedQuestions } from "@/lib/ai/assessment-generation";
 import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
 import { JUDGE0_LANGUAGE_IDS, type CodingLanguage } from "@/lib/code-execution/languages";
+import OpenAI from "openai";
 
 const mocks = vi.hoisted(() => ({
   session: vi.fn(), profile: vi.fn(), create: vi.fn(), openai: vi.fn(), write: vi.fn(),
@@ -38,7 +39,6 @@ function coding(language: CodingLanguage = "javascript") {
   return {
     type: "CODING", questionText: "Suma dos enteros. Entrada: dos números; salida: su suma.",
     section: "Algoritmos", difficulty: "MID", explanation: "La solución suma los enteros.",
-    codeSnippet: getAssessmentCodingStarter(language),
     allowedLanguages: [language],
     testCases: [
       { input: "console.log(JSON.stringify(solution(...[1,2])));", expectedOutput: "3", isHidden: false },
@@ -71,6 +71,8 @@ beforeEach(() => {
   mocks.openai.mockReturnValue({ chat: { completions: { create: mocks.create } } });
   mocks.create.mockResolvedValue(completion([mcq()]));
 });
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("AI assessment generator authorization and bounded requests", () => {
   it.each([null, { user: {} }])("rejects unauthenticated or incomplete sessions: %j", async (session) => {
@@ -194,7 +196,8 @@ describe("validated generation and builder response compatibility", () => {
     const response = await request({ ...baseRequest, prompt: "private-job-requirements" });
     expect(response.status).toBe(502);
     expect(await response.text()).not.toMatch(/sk-secret|candidate@example|official-solution|private-job/);
-    expect(log).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalledExactlyOnceWith("[AI Builder] Generation failed", { category: "provider_request" });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/sk-secret|candidate@example|official-solution|private-job/);
     log.mockRestore();
   });
   it("returns 503 for an unconfigured provider without exposing configuration", async () => {
@@ -203,12 +206,79 @@ describe("validated generation and builder response compatibility", () => {
     expect(response.status).toBe(503);
     expect(await response.text()).not.toContain("OPENAI_API_KEY");
   });
+  it("logs only allow-listed provider metadata and keeps the public provider error generic", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.create.mockRejectedValue(new OpenAI.BadRequestError(400, {
+      message: "sk-secret candidate@example.com private-job official-solution",
+      code: "invalid_json_schema", type: "invalid_request_error",
+    }, undefined, new Headers({ "x-request-id": "req_provider_failure", "authorization": "Bearer sk-secret" })));
+    const response = await request();
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ error: "El proveedor de IA no está disponible. Intenta más tarde." });
+    expect(log).toHaveBeenCalledExactlyOnceWith("[AI Builder] Generation failed", {
+      category: "provider_request", providerStatus: 400, providerCode: "invalid_json_schema",
+      providerType: "invalid_request_error", requestId: "req_provider_failure",
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/sk-secret|candidate@example|official-solution|private-job|authorization|message|stack/);
+  });
+  it("drops malformed diagnostic identifiers rather than logging arbitrary provider strings", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.create.mockRejectedValue(new OpenAI.BadRequestError(400, {
+      code: "sk-secret", type: "candidate@example.com",
+    }, undefined, new Headers({ "x-request-id": "private-job" })));
+    await request();
+    expect(log).toHaveBeenCalledExactlyOnceWith("[AI Builder] Generation failed", {
+      category: "provider_request", providerStatus: 400,
+      providerCode: undefined, providerType: undefined, requestId: undefined,
+    });
+  });
+  it.each([
+    ["completion", { choices: [{ finish_reason: "length", message: { content: "private-response" } }] }],
+    ["json_parse", { choices: [{ finish_reason: "stop", message: { content: "private-invalid-json" } }] }],
+    ["output_validation", completion([{ ...mcq(), questionText: "" }])],
+  ])("distinguishes %s from a provider request failure without logging response contents", async (category, result) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.create.mockResolvedValue({ ...result, _request_id: "req_output_failure" });
+    expect((await request()).status).toBe(502);
+    expect(log).toHaveBeenCalledExactlyOnceWith("[AI Builder] Generation failed", { category, requestId: "req_output_failure" });
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/private-response|private-invalid-json|content|choices/);
+  });
 });
 
 describe("coding formats match the Judge0 contract", () => {
+  it("serializes a provider-compatible schema through the real SDK and assigns the starter on the server", async () => {
+    // Live differential on gpt-4o: original multiline enum => HTTP 400;
+    // same request with only that constraint removed => HTTP 200. No live calls in CI.
+    const draft = coding("python");
+    draft.testCases = [
+      { input: "3\n5\n", expectedOutput: "8\n", isHidden: false },
+      { input: "-2\n10\n", expectedOutput: "8\n", isHidden: true },
+    ];
+    const transport = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const schema = body.response_format.json_schema.schema;
+      if (schema.properties.questions.items.properties.codeSnippet?.enum) {
+        return new Response(JSON.stringify({ error: {
+          message: "Invalid schema for response_format in properties.questions.items.properties.codeSnippet",
+          type: "invalid_request_error", code: null,
+        } }), { status: 400, headers: { "x-request-id": "req_schema_regression" } });
+      }
+      return new Response(JSON.stringify(completion([draft])), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    mocks.openai.mockReturnValue(new OpenAI({ apiKey: "test-only", fetch: transport }));
+    const response = await request({ ...baseRequest, questionType: "CODING", language: "python" });
+    expect(response.status).toBe(200);
+    expect((await response.json()).questions).toEqual([{ ...draft, codeSnippet: getAssessmentCodingStarter("python") }]);
+    const body = JSON.parse(String(transport.mock.calls[0][1]?.body));
+    expect(body.response_format).toMatchObject({ type: "json_schema", json_schema: { strict: true } });
+    const questionSchema = body.response_format.json_schema.schema.properties.questions.items;
+    expect(questionSchema.properties).not.toHaveProperty("codeSnippet");
+    expect(questionSchema.required).not.toContain("codeSnippet");
+    expect(questionSchema.additionalProperties).toBe(false);
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
   it("rejects the complete Python solution observed in Preview as candidate starter", async () => {
-    const q = coding("python");
-    q.codeSnippet = "import sys\na = int(sys.stdin.readline())\nb = int(sys.stdin.readline())\nresultado = a + b\nprint(resultado)";
+    const q = { ...coding("python"), codeSnippet: "import sys\na = int(sys.stdin.readline())\nb = int(sys.stdin.readline())\nresultado = a + b\nprint(resultado)" };
     q.testCases = [
       { input: "3\n5\n", expectedOutput: "8\n", isHidden: false },
       { input: "-2\n10\n", expectedOutput: "8\n", isHidden: true },
@@ -221,7 +291,7 @@ describe("coding formats match the Judge0 contract", () => {
     mocks.create.mockResolvedValue(completion([coding(language)]));
     const response = await request({ ...baseRequest, questionType: "CODING", language });
     expect(response.status).toBe(200);
-    expect((await response.json()).questions[0]).toMatchObject({ codeSnippet: coding(language).codeSnippet, allowedLanguages: [language], testCases: coding().testCases });
+    expect((await response.json()).questions[0]).toMatchObject({ codeSnippet: getAssessmentCodingStarter(language), allowedLanguages: [language], testCases: coding().testCases });
   });
   it.each([
     "resultado = a + b\nprint(resultado)",
@@ -235,7 +305,7 @@ describe("coding formats match the Judge0 contract", () => {
     mocks.create.mockResolvedValue(completion([{ ...coding(), [field]: "```python\nprint(a + b)\n```" }]));
     expect((await request({ ...baseRequest, questionType: "CODING", language: "javascript" })).status).toBe(502);
   });
-  it("returns an incomplete Python starter with unchanged visible/hidden stdin and binds the provider schema", async () => {
+  it("assigns an incomplete Python starter with unchanged visible/hidden stdin and no provider code field", async () => {
     const q = coding("python");
     q.testCases = [
       { input: "3\n5\n", expectedOutput: "8\n", isHidden: false },
@@ -244,15 +314,16 @@ describe("coding formats match the Judge0 contract", () => {
     mocks.create.mockResolvedValue(completion([q]));
     const response = await request({ ...baseRequest, questionType: "CODING", language: "python" });
     expect(response.status).toBe(200);
-    expect((await response.json()).questions).toEqual([q]);
-    expect(q.codeSnippet).toContain('raise NotImplementedError("TODO")');
-    expect(q.codeSnippet).toContain("sys.stdout.write(solution(sys.stdin.read()))");
-    expect(q.codeSnippet).not.toContain("a + b");
+    const questions = (await response.json()).questions;
+    expect(questions).toEqual([{ ...q, codeSnippet: getAssessmentCodingStarter("python") }]);
+    expect(questions[0].codeSnippet).toContain('raise NotImplementedError("TODO")');
+    expect(questions[0].codeSnippet).toContain("sys.stdout.write(solution(sys.stdin.read()))");
+    expect(questions[0].codeSnippet).not.toContain("a + b");
     const schema = mocks.create.mock.calls[0][0].response_format.json_schema.schema;
-    expect(schema.properties.questions.items.properties.codeSnippet.enum).toEqual([q.codeSnippet]);
+    expect(schema.properties.questions.items.properties).not.toHaveProperty("codeSnippet");
     const instructions = mocks.create.mock.calls[0][0].messages[0].content;
     expect(instructions).toContain("ÚNICO campo");
-    expect(instructions).toContain(q.codeSnippet);
+    expect(instructions).toContain(getAssessmentCodingStarter("python"));
   });
   it.each(Object.keys(JUDGE0_LANGUAGE_IDS) as CodingLanguage[])("requires the controlled incomplete scaffold for %s", (language) => {
     const input = GenerationInputSchema.parse({ ...baseRequest, questionType: "CODING", language });
@@ -262,8 +333,8 @@ describe("coding formats match the Judge0 contract", () => {
     } else if (language !== "javascript" && language !== "typescript") {
       q.testCases = q.testCases.map((tc, i) => ({ ...tc, input: `${i} 2\n` }));
     }
-    expect(parseGeneratedQuestions({ questions: [q] }, input)).toEqual([q]);
-    expect(() => parseGeneratedQuestions({ questions: [{ ...q, codeSnippet: q.codeSnippet + "\n// extra" }] }, input)).toThrow("invalid_output");
+    expect(parseGeneratedQuestions({ questions: [q] }, input)).toEqual([{ ...q, codeSnippet: getAssessmentCodingStarter(language) }]);
+    expect(() => parseGeneratedQuestions({ questions: [{ ...q, codeSnippet: getAssessmentCodingStarter(language) + "\n// extra" }] }, input)).toThrow("invalid_output");
   });
   it.each(["[1,2]", "console.log(solution(...[1,2]));", "console.log(JSON.stringify(solution(...[process.env])));", "console.log(JSON.stringify(solution(...[1,2]))); process.exit();"])(
     "rejects malformed or arbitrary JS runners: %s", async (input) => {
@@ -289,7 +360,7 @@ describe("coding formats match the Judge0 contract", () => {
     const input = GenerationInputSchema.parse({ ...baseRequest, questionType: "CODING", language: "python" });
     const q = coding("python");
     q.testCases = q.testCases.map((tc, i) => ({ ...tc, input: i ? "9 1\n" : "1 2\n" }));
-    expect(parseGeneratedQuestions({ questions: [q] }, input)[0]).toEqual(q);
+    expect(parseGeneratedQuestions({ questions: [q] }, input)[0]).toEqual({ ...q, codeSnippet: getAssessmentCodingStarter("python") });
     expect(buildGenerationMessages(input)[0].content).toContain("sys.stdin");
   });
   it("accepts SQLite datasets, rejects queries or dangerous setup commands", () => {

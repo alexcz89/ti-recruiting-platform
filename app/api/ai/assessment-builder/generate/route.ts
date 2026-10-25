@@ -66,11 +66,12 @@ export async function POST(req: NextRequest) {
     return json({ ok: true, questions });
   } catch (error) {
     if (error instanceof AssessmentGenerationError) {
+      console.error("[AI Builder] Generation failed", error.diagnostics);
       if (error.kind === "unavailable") return json({ error: "Servicio de IA no configurado" }, 503);
       if (error.kind === "invalid_output") return json({ error: "La IA no generó preguntas válidas. Intenta de nuevo." }, 502);
       return json({ error: "El proveedor de IA no está disponible. Intenta más tarde." }, 502);
     }
-    // Do not log provider errors, prompts or generated solutions.
+    // Unknown exceptions must not expose internal details either.
     console.error("[AI Builder] Generation failed");
     return json({ error: "Error al generar preguntas con IA" }, 500);
   }

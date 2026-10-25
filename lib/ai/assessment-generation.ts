@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 import { zodResponseFormat } from "openai/helpers/zod";
+import { APIError } from "openai";
 import { getOpenAI } from "@/lib/ai/openai";
 import { AI_MODEL_SMART } from "@/lib/ai/config";
 import {
@@ -13,10 +14,41 @@ import { validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
 import { isCodingLanguage } from "@/lib/code-execution/languages";
 import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
 
+type GenerationDiagnostics = {
+  category: "provider_request" | "configuration" | "completion" | "json_parse" | "output_validation";
+  providerStatus?: number;
+  providerCode?: string;
+  providerType?: string;
+  requestId?: string;
+};
+
 export class AssessmentGenerationError extends Error {
-  constructor(public readonly kind: "invalid_output" | "provider" | "unavailable") {
+  constructor(
+    public readonly kind: "invalid_output" | "provider" | "unavailable",
+    public readonly diagnostics: GenerationDiagnostics = { category: "output_validation" },
+  ) {
     super(kind);
   }
+}
+
+function safeIdentifier(value: unknown): string | undefined {
+  return typeof value === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(value) ? value : undefined;
+}
+
+function safeRequestId(value: unknown): string | undefined {
+  return typeof value === "string" && /^req_[a-zA-Z0-9_-]{1,128}$/.test(value) ? value : undefined;
+}
+
+function providerDiagnostics(error: unknown): GenerationDiagnostics {
+  // Never retain message, body, headers, cause, stack, prompts or model content.
+  if (!(error instanceof APIError)) return { category: "provider_request" };
+  return {
+    category: "provider_request",
+    providerStatus: typeof error.status === "number" && Number.isInteger(error.status) && error.status >= 100 && error.status <= 599 ? error.status : undefined,
+    providerCode: safeIdentifier(error.code),
+    providerType: safeIdentifier(error.type),
+    requestId: safeRequestId(error.requestID),
+  };
 }
 
 function inputContract(language: string) {
@@ -55,8 +87,9 @@ Incluye al menos un ejemplo visible y un caso oculto, todos con input y expected
 Usa casos distintos y deterministas, incluyendo límites. No uses __NO_CHECK__.
 explanation es el ÚNICO campo para explicar la solución de referencia al reclutador.
 Nunca reveles la implementación, algoritmo resuelto ni respuesta en questionText, section o codeSnippet.
-questionText y section son prosa: sólo requisitos, firma, formato de entrada/salida y ejemplos. No incluyas bloques de código Markdown ni soluciones.
-codeSnippet debe ser EXACTAMENTE el esqueleto incompleto del schema, sin añadir ni sustituir instrucciones, aunque los requisitos pidan una solución.
+questionText debe ser un párrafo de prosa sin formato Markdown: sólo requisitos, firma y formato de entrada/salida. section es una etiqueta breve.
+Los ejemplos van exclusivamente en testCases; no los repitas en el enunciado. Nunca uses bloques Markdown, triples backticks, tildes de bloque ni soluciones en questionText o section.
+El servidor asigna el esqueleto incompleto: NO devuelvas codeSnippet, starterCode ni solutionCode.
 El candidato debe implementar la lógica para superar los casos. Adapta el enunciado y los casos a esta firma fija:
 ${isCodingLanguage(input.language) ? getAssessmentCodingStarter(input.language) : ""}
 ${inputContract(input.language)}`
@@ -100,11 +133,9 @@ function outputSchema(input: GenerationInput) {
     return z.object({ questions: z.array(GeneratedMCQSchema).length(input.count) }).strict();
   }
   if (!isCodingLanguage(input.language)) throw new AssessmentGenerationError("invalid_output");
-  // A TODO heuristic cannot prove that arbitrary model-authored code is incomplete.
-  // Require our exact scaffold in both Structured Outputs and server-side validation.
-  const schema = GeneratedCodingSchema.extend({
-    codeSnippet: z.enum([getAssessmentCodingStarter(input.language)]),
-  });
+  // The provider rejected the multiline starter enum. Keep Structured Outputs,
+  // but do not ask the model to generate code that the server already owns.
+  const schema = GeneratedCodingSchema.omit({ codeSnippet: true });
   return z.object({ questions: z.array(schema).length(input.count) }).strict();
 }
 
@@ -136,7 +167,11 @@ export function parseGeneratedQuestions(raw: unknown, input: GenerationInput) {
       throw new AssessmentGenerationError("invalid_output");
     }
   }
-  return questions;
+  return questions.map(question => {
+    if (question.type !== "CODING") return question;
+    if (!isCodingLanguage(input.language)) throw new AssessmentGenerationError("invalid_output");
+    return { ...question, codeSnippet: getAssessmentCodingStarter(input.language) };
+  });
 }
 
 export async function generateAssessmentQuestions(input: GenerationInput) {
@@ -159,15 +194,25 @@ export async function generateAssessmentQuestions(input: GenerationInput) {
     }, { timeout: 45_000, maxRetries: 0 });
   } catch (error) {
     const missingKey = error instanceof Error && error.message === "OPENAI_API_KEY no esta definida";
-    throw new AssessmentGenerationError(missingKey ? "unavailable" : "provider");
+    throw new AssessmentGenerationError(missingKey ? "unavailable" : "provider", missingKey
+      ? { category: "configuration" }
+      : providerDiagnostics(error));
   }
 
   const choice = completion.choices[0];
   const content = choice?.message.content;
+  const requestId = safeRequestId(completion._request_id);
   if (choice?.finish_reason !== "stop" || choice.message.refusal || !content || content.length > 128_000) {
-    throw new AssessmentGenerationError("invalid_output");
+    throw new AssessmentGenerationError("invalid_output", { category: "completion", requestId });
   }
   let raw: unknown;
-  try { raw = JSON.parse(content); } catch { throw new AssessmentGenerationError("invalid_output"); }
-  return parseGeneratedQuestions(raw, input);
+  try { raw = JSON.parse(content); } catch {
+    throw new AssessmentGenerationError("invalid_output", { category: "json_parse", requestId });
+  }
+  try { return parseGeneratedQuestions(raw, input); } catch (error) {
+    if (error instanceof AssessmentGenerationError) {
+      throw new AssessmentGenerationError(error.kind, { category: "output_validation", requestId });
+    }
+    throw error;
+  }
 }
