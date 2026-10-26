@@ -81,7 +81,7 @@ export async function POST(request: Request) {
       // PostgreSQL transaction-scoped lock serializes the count+reservation for
       // this candidate/attempt/question without holding a lock during Judge0.
       const lockKey = `custom-run:${user.id}:${attemptId}:${questionId}`;
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
       const attempt = await tx.assessmentAttempt.findUnique({
         where: { id: attemptId },
