@@ -51,6 +51,8 @@ const question = {
 };
 
 const tx = {
+  $queryRaw: vi.fn(async () => [{ id: "template-a" }]),
+  assessmentQuestion: { findMany: vi.fn(async () => [{ id: "question-a" }]) },
   assessmentInvite: {
     findFirst: vi.fn(async () =>
       state.inviteExpiresAt.getTime() > Date.now() ? { id: "invite-a" } : null
@@ -163,6 +165,17 @@ describe("assessment invite and attempt deadlines", () => {
     expect(response.status).toBe(200);
     expectSanitizedCodingQuestion(await response.json());
     expect(tx.assessmentAttempt.create).toHaveBeenCalledOnce();
+  });
+  it("returns a safe retryable conflict instead of persisting an obsolete question order", async () => {
+    tx.assessmentQuestion.findMany.mockResolvedValueOnce([{ id: "replacement-question" }]);
+    const response = await POST(request(), { params: { templateId: "template-a" } });
+    expect(response.status).toBe(409);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toEqual({
+      error: "La evaluación cambió. Vuelve a iniciarla para cargar las preguntas actuales.", code: "ASSESSMENT_TEMPLATE_CHANGED",
+    });
+    expect(tx.assessmentAttempt.create).not.toHaveBeenCalled();
+    expect(tx.assessmentInvite.updateMany).not.toHaveBeenCalled();
   });
 
   it("rejects a new attempt after invite expiry", async () => {

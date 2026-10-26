@@ -10,6 +10,7 @@ import {
   isAssessmentTemplateAccessRole,
 } from "@/lib/assessments/access";
 import { getTemplateCodingLanguageError, parseQuestionLanguages } from "@/lib/assessments/template-coding-language";
+import { AssessmentTemplateMutationError, assertAssessmentTemplateEditableTx } from "@/lib/assessments/template-integrity";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -181,6 +182,7 @@ export async function PUT(
     const sections = Object.entries(sectionMap).map(([name, count]) => ({ name, questions: count }));
 
     await prisma.$transaction(async (tx) => {
+      await assertAssessmentTemplateEditableTx(tx, params.id, managementWhere);
       // 1) Actualizar template
       await tx.assessmentTemplate.update({
         where: { id: params.id },
@@ -244,10 +246,13 @@ export async function PUT(
           },
         });
       }
-    });
+    }, { isolationLevel: "ReadCommitted" });
 
     return json(200, { ok: true, id: params.id });
   } catch (e: any) {
+    if (e instanceof AssessmentTemplateMutationError) {
+      return json(e.status, { error: e.message, code: e.code });
+    }
     console.error("[PUT /api/dashboard/assessments/templates/[id]]", e);
     return json(500, { error: "Error interno" });
   }
@@ -278,13 +283,19 @@ export async function DELETE(
 
     if (!existing) return json(404, { error: "Template no encontrado o sin permisos" });
 
-    await prisma.assessmentTemplate.update({
-      where: { id: params.id },
-      data: { isActive: false },
-    });
+    await prisma.$transaction(async tx => {
+      await assertAssessmentTemplateEditableTx(tx, params.id, managementWhere);
+      await tx.assessmentTemplate.update({
+        where: { id: params.id },
+        data: { isActive: false },
+      });
+    }, { isolationLevel: "ReadCommitted" });
 
     return json(200, { ok: true });
   } catch (e: any) {
+    if (e instanceof AssessmentTemplateMutationError) {
+      return json(e.status, { error: e.message, code: e.code });
+    }
     console.error("[DELETE /api/dashboard/assessments/templates/[id]]", e);
     return json(500, { error: "Error interno" });
   }

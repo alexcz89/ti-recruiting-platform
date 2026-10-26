@@ -211,4 +211,22 @@ describe("focused assessment authoring workspace", () => {
     expect((statement() as HTMLTextAreaElement).value).toBe("Cambio no guardado");
     expect(mocks.push).not.toHaveBeenCalled();
   });
+  it("shows the protected-template 409 without clearing edits or the unsaved-work warning", async () => {
+    await load();
+    fireEvent.change(statement(), { target: { value: "Edición local conservada" } });
+    const error = "Esta evaluación ya tiene invitaciones o intentos asociados. Para proteger los resultados históricos, no puedes modificar sus preguntas.";
+    mocks.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ code: "ASSESSMENT_TEMPLATE_IN_USE", error }), { status: 409 }));
+    fireEvent.click(screen.getByRole("button", { name: "Actualizar template" }));
+    await screen.findByRole("button", { name: error });
+    expect((statement() as HTMLTextAreaElement).value).toBe("Edición local conservada");
+    expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
+    expect(mocks.push).not.toHaveBeenCalled();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    const leaving = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(leaving);
+    expect(leaving.defaultPrevented).toBe(true);
+    navigate("Problema Python");
+    navigate("Edición local conservada");
+    expect((statement() as HTMLTextAreaElement).value).toBe("Edición local conservada");
+  });
 });
