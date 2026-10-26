@@ -1,7 +1,8 @@
 // components/dashboard/assessments/AIQuestionGenerator.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles, X, Loader2, Plus, AlertCircle, Wand2 } from "lucide-react";
 import { GenerationInputSchema, MAX_GENERATION_PROMPT_LENGTH } from "@/lib/ai/assessment-builder-contract";
 import { isCodingLanguage } from "@/lib/code-execution/languages";
@@ -421,6 +422,29 @@ export default function AIQuestionGenerator({
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<GeneratedQuestion[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector<HTMLTextAreaElement>("textarea")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); setOpen(false); return; }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]') ?? []).filter(element => element.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first && last) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last && first) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [open]);
 
   const isCoding = questionType === "CODING";
   const langKey = language || "default";
@@ -481,8 +505,8 @@ export default function AIQuestionGenerator({
         Generar con AI
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center p-4">
+      {open && createPortal(
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="ai-builder-dialog-title" className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 backdrop-blur-sm sm:items-center p-4">
           <div className="flex w-full max-w-2xl flex-col rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-950 max-h-[90vh]">
 
             {/* Header */}
@@ -492,11 +516,11 @@ export default function AIQuestionGenerator({
                   <Wand2 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Generador de preguntas con AI</h2>
+                  <h2 id="ai-builder-dialog-title" className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Generador de preguntas con AI</h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">Describe lo que necesitas y el AI crea las preguntas</p>
                 </div>
               </div>
-              <button onClick={() => setOpen(false)} className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800">
+              <button type="button" aria-label="Cerrar generador" onClick={() => setOpen(false)} className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 focus-ring dark:text-zinc-300 dark:hover:bg-zinc-800">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -687,7 +711,8 @@ export default function AIQuestionGenerator({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

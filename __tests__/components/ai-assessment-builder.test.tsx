@@ -55,6 +55,11 @@ function typeSelect() {
     .closest("select")!;
 }
 
+function openSettings() {
+  const button = screen.getByRole("button", { name: "Configuración" });
+  if (button.getAttribute("aria-expanded") === "false") fireEvent.click(button);
+}
+
 async function generate(questions: unknown[]) {
   mocks.fetch.mockResolvedValueOnce(
     new Response(JSON.stringify({ ok: true, questions }))
@@ -127,7 +132,7 @@ describe("existing recruiter review and persistence flow", () => {
     expect(screen.queryByText("Pregunta dos")).toBeNull();
     expect(mocks.fetch).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByText("Pregunta uno"));
+    fireEvent.click(screen.getByRole("button", { name: /Pregunta uno/ }));
 
     fireEvent.change(
       screen.getByDisplayValue("Pregunta uno"),
@@ -136,6 +141,7 @@ describe("existing recruiter review and persistence flow", () => {
       }
     );
 
+    openSettings();
     fireEvent.change(
       screen.getByPlaceholderText(
         "Ej: React Senior — Evaluación técnica"
@@ -210,10 +216,10 @@ describe("existing recruiter review and persistence flow", () => {
 
     // Verify that the generated question is present.
     expect(
-      screen.getByText(codingQuestion().questionText)
+      screen.getByRole("button", { name: new RegExp(codingQuestion().questionText) })
     ).toBeTruthy();
 
-    fireEvent.click(screen.getByText(codingQuestion().questionText));
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(codingQuestion().questionText) }));
     const editor = screen.getByPlaceholderText("// Código base que verá el candidato (opcional)") as HTMLTextAreaElement;
     expect(editor.value).toBe(codingQuestion().codeSnippet);
     // getByDisplayValue normalizes whitespace unless an identity normalizer is supplied.
@@ -222,6 +228,7 @@ describe("existing recruiter review and persistence flow", () => {
     const revisedCode = `${codingQuestion().codeSnippet}\n# Revisado por el reclutador`;
     fireEvent.change(editor, { target: { value: revisedCode } });
 
+    openSettings();
     fireEvent.change(
       screen.getByPlaceholderText(
         "Ej: React Senior — Evaluación técnica"
@@ -309,12 +316,13 @@ describe("existing recruiter review and persistence flow", () => {
       await generate([codingQuestion()]);
     }
     fireEvent.click(screen.getByRole("button", { name: "Agregar (1)" }));
+    openSettings();
     const language = screen.getByRole("combobox", { name: "Lenguaje del template" }) as HTMLSelectElement;
     expect(language.disabled).toBe(true);
     fireEvent.change(language, { target: { value: "javascript" } });
     expect(language.value).toBe("python");
-    expect(screen.getByText(codingQuestion().questionText)).toBeTruthy();
-    fireEvent.click(screen.getByText(codingQuestion().questionText));
+    expect(screen.getByRole("button", { name: new RegExp(codingQuestion().questionText) })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(codingQuestion().questionText) }));
     expect((screen.getByPlaceholderText("// Código base que verá el candidato (opcional)") as HTMLTextAreaElement).value).toBe(codingQuestion().codeSnippet);
   });
 
@@ -346,8 +354,8 @@ describe("existing recruiter review and persistence flow", () => {
     for (let i = 2; i < 5; i++) fireEvent.click(screen.getByRole("button", { name: new RegExp(`Generada ${i}`) }));
     fireEvent.click(screen.getByRole("button", { name: "Agregar (2)" }));
     expect(screen.getByText("50/50 preguntas")).toBeTruthy();
-    expect(screen.getByText("Generada 0")).toBeTruthy();
-    expect(screen.getByText("Generada 1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Generada 0/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Generada 1/ })).toBeTruthy();
     expect(screen.queryByText("Generada 2")).toBeNull();
     expect(mocks.fetch).toHaveBeenCalledTimes(2); // Load and generate, no implicit save.
   });
