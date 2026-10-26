@@ -7,6 +7,7 @@ import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters"
 const mocks = vi.hoisted(() => ({
   session: vi.fn(), company: vi.fn(), template: vi.fn(), createTemplate: vi.fn(), updateTemplate: vi.fn(),
   createQuestion: vi.fn(), deleteQuestions: vi.fn(), transaction: vi.fn(),
+  lockedTemplate: vi.fn(), lock: vi.fn(),
 }));
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }));
 vi.mock("@/lib/server/auth", () => ({ authOptions: {} }));
@@ -33,8 +34,14 @@ beforeEach(() => {
     questions: [{ type: "CODING", language: "python", allowedLanguages: '["python"]' }],
   });
   mocks.createTemplate.mockResolvedValue({ id: "template-a", slug: "python-junior" });
+  mocks.lock.mockResolvedValue([{ id: "template-a" }]);
+  mocks.lockedTemplate.mockResolvedValue({
+    id: "template-a", isBadgeExam: false,
+    _count: { invites: 0, attempts: 0, jobAssessments: 0, contestTracks: 0 }, questions: [], codingChallenges: [],
+  });
   mocks.transaction.mockImplementation(async callback => callback({
-    assessmentTemplate: { update: mocks.updateTemplate },
+    $queryRaw: mocks.lock,
+    assessmentTemplate: { findFirst: mocks.lockedTemplate, update: mocks.updateTemplate },
     assessmentQuestion: { create: mocks.createQuestion, deleteMany: mocks.deleteQuestions },
   }));
 });

@@ -8,9 +8,27 @@ import Link from "next/link";
 import { BookOpen, ArrowLeft, Plus, Award } from "lucide-react";
 import { TemplateActionsClient } from "./TemplateActionsClient";
 import { BADGE_LEVELS, badgeLevelLabel } from "@/lib/badges";
+import type { Prisma } from "@prisma/client";
+import { AssessmentTemplateMutationError, assertAssessmentTemplateEditableTx } from "@/lib/assessments/template-integrity";
 
 export const metadata = { title: "Admin · Templates" };
 export const dynamic = "force-dynamic";
+
+// Called only after the explicit ADMIN check in each action below.
+async function updateEditableTemplate(templateId: string, data: Pick<Prisma.AssessmentTemplateUncheckedUpdateInput,
+  "isGlobal" | "companyId" | "isActive" | "isBadgeExam" | "badgeTermId" | "badgeLevel">,
+  where: Prisma.AssessmentTemplateWhereInput = {}) {
+  try {
+    await prisma.$transaction(async tx => {
+      await assertAssessmentTemplateEditableTx(tx, templateId, where);
+      await tx.assessmentTemplate.update({ where: { id: templateId }, data });
+    }, { isolationLevel: "ReadCommitted" });
+    return { ok: true as const };
+  } catch (error) {
+    if (error instanceof AssessmentTemplateMutationError) return { error: error.message, code: error.code };
+    throw error;
+  }
+}
 
 export default async function AdminTemplatesPage() {
   const session = await getServerSession(authOptions);
@@ -47,14 +65,12 @@ export default async function AdminTemplatesPage() {
     const templateId = String(fd.get("templateId") || "");
     const isGlobal = fd.get("isGlobal") === "true";
 
-    await prisma.assessmentTemplate.update({
-      where: { id: templateId },
-      data: {
-        isGlobal,
-        // Si se hace global, quitar el companyId
-        companyId: isGlobal ? null : undefined,
-      },
+    const result = await updateEditableTemplate(templateId, {
+      isGlobal,
+      // Si se hace global, quitar el companyId
+      companyId: isGlobal ? null : undefined,
     });
+    if ("error" in result) return result;
 
     revalidatePath("/dashboard/admin/templates");
     revalidatePath("/dashboard/assessments/templates");
@@ -68,10 +84,8 @@ export default async function AdminTemplatesPage() {
     if (!s?.user || (s.user as any)?.role !== "ADMIN") return { error: "Sin permisos" };
 
     const templateId = String(fd.get("templateId") || "");
-    await prisma.assessmentTemplate.update({
-      where: { id: templateId },
-      data: { isActive: false },
-    });
+    const result = await updateEditableTemplate(templateId, { isActive: false });
+    if ("error" in result) return result;
 
     revalidatePath("/dashboard/admin/templates");
     return { ok: true };
@@ -91,10 +105,8 @@ export default async function AdminTemplatesPage() {
     if (!templateId) return { error: "Template inválido" };
 
     if (remove) {
-      await prisma.assessmentTemplate.update({
-        where: { id: templateId },
-        data: { isBadgeExam: false, badgeTermId: null, badgeLevel: null },
-      });
+      const result = await updateEditableTemplate(templateId, { isBadgeExam: false, badgeTermId: null, badgeLevel: null });
+      if ("error" in result) return result;
     } else {
       if (!badgeTermId || !Number.isInteger(badgeLevel) || badgeLevel < 1) {
         return { error: "Skill y nivel requeridos" };
@@ -106,10 +118,8 @@ export default async function AdminTemplatesPage() {
       });
       if (!tpl?.isGlobal) return { error: "Solo templates globales" };
 
-      await prisma.assessmentTemplate.update({
-        where: { id: templateId },
-        data: { isBadgeExam: true, badgeTermId, badgeLevel },
-      });
+      const result = await updateEditableTemplate(templateId, { isBadgeExam: true, badgeTermId, badgeLevel }, { isGlobal: true });
+      if ("error" in result) return result;
     }
 
     revalidatePath("/dashboard/admin/templates");

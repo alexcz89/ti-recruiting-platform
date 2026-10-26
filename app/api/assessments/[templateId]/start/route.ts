@@ -4,6 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import type { Prisma } from "@prisma/client";
+import { assertAssessmentQuestionSnapshotTx } from "@/lib/assessments/template-integrity";
 import { challengeAvailability } from "@/lib/contests/domain";
 import {
   ASSESSMENT_EXPIRED_CODE,
@@ -615,6 +616,7 @@ export async function POST(
       const newExpiresAt = computeAttemptExpiresAt(now, tmplTimeLimit);
 
       const created = await prisma.$transaction(async (tx) => {
+        await assertAssessmentQuestionSnapshotTx(tx, params.templateId, questionsRaw.map(question => question.id));
         if (invite) {
           await assertInviteMayStartTx(tx, {
             inviteId: invite.id,
@@ -1024,6 +1026,7 @@ export async function POST(
     );
 
     const created = await prisma.$transaction(async (tx) => {
+      await assertAssessmentQuestionSnapshotTx(tx, params.templateId, questionsRaw.map(question => question.id));
       if (invite) {
         await assertInviteMayStartTx(tx, {
           inviteId: invite.id,
@@ -1075,6 +1078,9 @@ export async function POST(
       typeof error === "object" && error !== null && "code" in error
         ? String(error.code)
         : "";
+    if (code === "ASSESSMENT_TEMPLATE_CHANGED") {
+      return jsonNoStore({ error: "La evaluación cambió. Vuelve a iniciarla para cargar las preguntas actuales.", code }, 409);
+    }
     if (code === ASSESSMENT_EXPIRED_CODE) {
       return jsonNoStore(
         { error: "Invitación expirada", code: ASSESSMENT_EXPIRED_CODE },
