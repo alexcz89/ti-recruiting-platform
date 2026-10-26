@@ -11,23 +11,28 @@
 import { buildSqliteSubmission } from './sql-service';
 import { JUDGE0_LANGUAGE_IDS } from './languages';
 
-interface ExecutionResult {
+type ExecutionErrorSource = 'program' | 'status' | 'provider';
+
+export interface ExecutionResult {
   success: boolean;
   output?: string;
   error?: string;
+  errorSource?: ExecutionErrorSource;
   status: 'SUCCESS' | 'ERROR' | 'TIMEOUT' | 'COMPILATION_ERROR' | 'RUNTIME_ERROR' | 'MEMORY_LIMIT';
   executionTimeMs?: number;
   memoryUsedMb?: number;
   testResults?: TestResult[];
 }
 
-interface TestResult {
+export interface TestResult {
   testCaseId: string;
   passed: boolean;
   input: string;
   expectedOutput: string;
   actualOutput?: string;
   error?: string;
+  errorSource?: ExecutionErrorSource;
+  statusId?: number;
   executionTimeMs?: number;
 }
 
@@ -99,6 +104,8 @@ export class Judge0Service {
           expectedOutput: testCase.expectedOutput,
           actualOutput: result.output,
           error: result.error,
+          errorSource: result.errorSource,
+          statusId: result.statusId,
           executionTimeMs: result.executionTimeMs,
         });
 
@@ -132,6 +139,7 @@ export class Judge0Service {
         success: false,
         status: 'ERROR',
         error: error instanceof Error ? error.message : 'Unknown error',
+        errorSource: 'provider',
       };
     }
   }
@@ -161,6 +169,8 @@ export class Judge0Service {
     passed: boolean;
     output?: string;
     error?: string;
+    errorSource?: ExecutionErrorSource;
+    statusId?: number;
     executionTimeMs?: number;
     memoryUsedMb?: number;
   }> {
@@ -197,6 +207,9 @@ export class Judge0Service {
 
       // Poll for result
       const result = await this.pollSubmissionResult(token);
+      // Judge0 statuses 3–12 describe program execution; 13 is a provider internal error.
+      const statusId = result.status.id;
+      const isProgramStatus = Number.isInteger(statusId) && statusId >= 3 && statusId <= 12;
       
       return {
         passed: result.status.id === 3,
@@ -208,6 +221,8 @@ export class Judge0Service {
           : (result.stderr
             ? Buffer.from(result.stderr, 'base64').toString('utf-8')
             : (result.status.id !== 3 ? result.status.description : undefined)),
+        errorSource: !isProgramStatus ? 'provider' : result.compile_output || result.stderr ? 'program' : 'status',
+        statusId,
         executionTimeMs: result.time ? parseFloat(result.time) * 1000 : undefined,
         memoryUsedMb: result.memory ? result.memory / 1024 : undefined,
       };
@@ -217,6 +232,7 @@ export class Judge0Service {
       return {
         passed: false,
         error: error instanceof Error ? error.message : 'Execution failed',
+        errorSource: 'provider',
       };
     }
   }

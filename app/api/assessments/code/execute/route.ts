@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
+import { candidateExecutionResult } from "@/lib/code-execution/public-result";
 import { checkPlagiarism } from "@/lib/code-execution/plagiarism";
 import { validateReadOnlySqlQuery } from "@/lib/code-execution/sql-service";
 import {
@@ -34,16 +35,7 @@ type DbTestCase = {
   orderIndex: number;
 };
 
-type SafeExecutionTestResult = {
-  testCaseId: string;
-  passed: boolean;
-  hidden: boolean;
-  input?: string;
-  expectedOutput?: string;
-  actualOutput?: string;
-  error?: string;
-  executionTimeMs?: number | null;
-};
+class CodeExecutionRateLimitError extends Error {}
 
 function jsonNoStore(data: unknown, status = 200) {
   return NextResponse.json(data, {
@@ -137,12 +129,12 @@ async function enforceRateLimit(args: {
 
     if (count >= limits.max) {
       const seconds = Math.ceil(limits.windowMs / 1000);
-      throw new Error(`Rate limit: demasiadas ejecuciones. Intenta de nuevo en ${seconds}s.`);
+      throw new CodeExecutionRateLimitError(`Rate limit: demasiadas ejecuciones. Intenta de nuevo en ${seconds}s.`);
     }
   } catch (error: any) {
     const message = String(error?.message ?? "");
 
-    if (message.toLowerCase().includes("rate limit")) {
+    if (error instanceof CodeExecutionRateLimitError) {
       throw error;
     }
 
@@ -311,7 +303,6 @@ export async function POST(request: Request) {
       JSON.stringify(testResults)
     ) as Prisma.InputJsonValue;
 
-    const testCaseById = new Map(dbTestCases.map((testCase) => [testCase.id, testCase]));
     const pointsEarned = executionResult.success ? 1 : 0;
 
     let executionId: string | null = null;
@@ -431,53 +422,11 @@ export async function POST(request: Request) {
       }).catch(() => {});
     }
 
-    const responseTestResults: SafeExecutionTestResult[] = testResults.map((testResult) => {
-      const matchedTestCase = testCaseById.get(testResult.testCaseId);
-      const isHidden = Boolean(matchedTestCase?.isHidden);
-
-      if (isHidden) {
-        return {
-          testCaseId: testResult.testCaseId,
-          passed: testResult.passed,
-          hidden: true,
-          error: truncateText(testResult.error, 2000),
-          executionTimeMs: testResult.executionTimeMs,
-        };
-      }
-
-      if (isSubmission) {
-        return {
-          testCaseId: testResult.testCaseId,
-          passed: testResult.passed,
-          hidden: false,
-          error: truncateText(testResult.error, 2000),
-          executionTimeMs: testResult.executionTimeMs,
-        };
-      }
-
-      return {
-        testCaseId: testResult.testCaseId,
-        passed: testResult.passed,
-        hidden: false,
-        input: truncateText(testResult.input, 2000),
-        expectedOutput: truncateText(testResult.expectedOutput, 2000),
-        actualOutput: truncateText(testResult.actualOutput, 2000),
-        error: truncateText(testResult.error, 2000),
-        executionTimeMs: testResult.executionTimeMs,
-      };
-    });
-
     return jsonNoStore({
       success: true,
       executionId,
       result: {
-        success: Boolean(executionResult.success),
-        status: executionResult.status,
-        output: truncateText(executionResult.output, 8000),
-        error: truncateText(executionResult.error, 8000),
-        executionTimeMs: executionResult.executionTimeMs,
-        memoryUsedMb: executionResult.memoryUsedMb,
-        testResults: responseTestResults,
+        ...candidateExecutionResult(executionResult, dbTestCases, isSubmission),
         pointsEarned: isSubmission ? pointsEarned : undefined,
         passedTests,
         totalTests,
@@ -486,15 +435,13 @@ export async function POST(request: Request) {
   } catch (error: any) {
     console.error("[POST /api/assessments/code/execute] Error:", error);
 
-    const message = String(error?.message ?? "Unknown error");
-    if (message.toLowerCase().includes("rate limit")) {
-      return jsonNoStore({ error: message }, 429);
+    if (error instanceof CodeExecutionRateLimitError) {
+      return jsonNoStore({ error: error.message }, 429);
     }
 
     return jsonNoStore(
       {
         error: "Error al ejecutar el código",
-        details: message,
       },
       500
     );

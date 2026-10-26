@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import CandidateAssessment from "@/app/assessments/[templateId]/page";
 import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
+import { candidateExecutionResult } from "@/lib/code-execution/public-result";
 
 const mocks = vi.hoisted(() => {
   const push = vi.fn();
@@ -100,6 +101,37 @@ async function openEditor() {
 }
 
 describe("coding run, answer persistence and explicit assessment finalization", () => {
+  it("renders sanitized hidden outcomes without diagnostics or timing and retains explicit finalization", async () => {
+    const originalFetch = mocks.fetch.getMockImplementation()!;
+    const safeResult = candidateExecutionResult({
+      success: false, status: "RUNTIME_ERROR", output: "SECRET_HIDDEN_OUTPUT",
+      executionTimeMs: 400, memoryUsedMb: 64,
+      testResults: [
+        { testCaseId: "public-a", passed: true, input: "3 5", expectedOutput: "8", actualOutput: "8" },
+        { testCaseId: "hidden-a", passed: false, input: "SECRET_INPUT", expectedOutput: "SECRET_EXPECTED", error: "SECRET_STACK", executionTimeMs: 399 },
+      ],
+    }, [
+      { id: "public-a", input: "3 5", expectedOutput: "8", isHidden: false },
+      { id: "hidden-a", input: "SECRET_INPUT", expectedOutput: "SECRET_EXPECTED", isHidden: true },
+    ], true);
+    mocks.fetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url !== "/api/assessments/code/execute") return originalFetch(url, init);
+      mocks.trace.push("execute:submit");
+      return Promise.resolve(json({ success: true, result: { ...safeResult, pointsEarned: 0, passedTests: 1, totalTests: 2 } }));
+    });
+    await openEditor();
+    await act(async () => { fireEvent.click(screen.getAllByRole("button", { name: "Enviar solución" })[0]); });
+    expect(await screen.findByText("Algunos tests fallaron")).toBeTruthy();
+    expect(screen.getByText(/Test 2 Falló/)).toBeTruthy();
+    expect(screen.getByText("(Oculto)")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("SECRET_");
+    expect(mocks.trace).toEqual(["execute:submit", "answer"]);
+    expect(mocks.status).toBe("IN_PROGRESS");
+    expect(mocks.push).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getAllByRole("button", { name: "Finalizar" })[0]); });
+    expect(mocks.trace).toEqual(["execute:submit", "answer", "submit"]);
+  });
+
   it.each(["single", "multi", "mixed"])("keeps a %s attempt active after running a correct solution", async (layout) => {
     mocks.layout = layout;
     const editor = await openEditor();

@@ -7,6 +7,7 @@ import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
+import { candidateCustomRunResult } from "@/lib/code-execution/public-result";
 import { validateReadOnlySqlQuery, validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
 import {
   ASSESSMENT_EXPIRED_CODE,
@@ -193,10 +194,7 @@ export async function POST(request: Request) {
 
       return jsonNoStore({
         success: true,
-        output: truncate(output),
-        error: truncate(error),
-        executionTimeMs: result.executionTimeMs,
-        status: result.status,
+        ...candidateCustomRunResult(result),
       });
     } catch (providerError) {
       const details = truncate(

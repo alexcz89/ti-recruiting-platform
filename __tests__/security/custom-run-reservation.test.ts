@@ -114,7 +114,7 @@ describe("custom-run reservation", () => {
         output: "hello",
         error: "",
         executionTimeMs: 12,
-        testResults: [{ actualOutput: "hello" }],
+        testResults: [{ testCaseId: "custom", actualOutput: "hello" }],
       };
     });
   });
@@ -146,6 +146,37 @@ describe("custom-run reservation", () => {
     expect(state.updates[state.updates.length - 1]).toMatchObject({
       data: { status: "CUSTOM_ERROR", error: "Judge0 unavailable" },
     });
+  });
+
+  it("keeps resolved provider errors private while retaining their internal diagnostics", async () => {
+    mocks.executeCode.mockResolvedValueOnce({
+      success: false, status: "RUNTIME_ERROR", output: "SECRET_AGGREGATE", error: "SECRET_PROVIDER_BODY",
+      testResults: [{ testCaseId: "custom", passed: false, error: "SECRET_PROVIDER_BODY", errorSource: "provider" }],
+    });
+    const response = await POST(request());
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(JSON.stringify(payload)).not.toContain("SECRET_");
+    expect(payload).toMatchObject({ output: "", error: "No se pudo ejecutar el código. Intenta de nuevo." });
+    expect(state.updates[state.updates.length - 1]).toMatchObject({ data: { error: "SECRET_PROVIDER_BODY" } });
+  });
+
+  it("preserves candidate stdout and program diagnostics without returning unknown fields", async () => {
+    mocks.executeCode.mockResolvedValueOnce({
+      success: false, status: "RUNTIME_ERROR", output: "unused aggregate", error: "unused internal error",
+      testResults: [{ testCaseId: "custom", passed: false, actualOutput: "candidate stdout", error: "ValueError: candidate input", errorSource: "program", extra: "SECRET_INTERNAL_FIELD" }],
+    });
+    const response = await POST(request());
+    const payload = await response.json();
+    expect(payload).toMatchObject({ output: "candidate stdout", error: "ValueError: candidate input" });
+    expect(JSON.stringify(payload)).not.toContain("SECRET_");
+  });
+
+  it("never returns thrown provider exceptions", async () => {
+    mocks.executeCode.mockRejectedValueOnce(new Error("SECRET_EXCEPTION\nSECRET_SERVER_STACK"));
+    const response = await POST(request());
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(await response.json())).not.toContain("SECRET_");
   });
 
   it("allows a legacy attempt with no deadline", async () => {
