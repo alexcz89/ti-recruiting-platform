@@ -201,7 +201,7 @@ describe("scored code persistence deadline", () => {
     const payload = await response.json();
     expect(response.status).toBe(200);
     expect(JSON.stringify(payload)).not.toMatch(/secret-input|secret-expected|secret-actual/);
-    expect(payload.result.testResults).toEqual([{ testCaseId: "test-a", passed: true, hidden: true }]);
+    expect(payload.result.testResults).toEqual([{ testCaseId: "hidden-1", passed: true, hidden: true }]);
     expect(tx.attemptAnswer.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ codeSubmission: "console.log('ok')", selectedOptions: ["__CODE_SUBMITTED__"], executionResults: [expect.objectContaining({ input: "secret-input" })] }) }));
     expect(state.status).toBe("IN_PROGRESS");
   });
