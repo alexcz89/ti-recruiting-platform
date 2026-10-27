@@ -80,6 +80,8 @@ export async function GET(
     const user = session.user as SessionUser;
     const role = String(user.role ?? "").toUpperCase();
     const userId = String(user.id ?? "");
+    if (!userId) return jsonNoStore({ error: "No autorizado" }, 401);
+    if (!["CANDIDATE", "RECRUITER", "ADMIN"].includes(role)) return jsonNoStore({ error: "No autorizado" }, 403);
 
     const attemptBase = await prisma.assessmentAttempt.findUnique({
       where: { id: params.attemptId },
@@ -172,13 +174,6 @@ export async function GET(
       return jsonNoStore({ error: "Intento no encontrado" }, 404);
     }
 
-    if (!isAttemptFinal(attemptBase.status)) {
-      return jsonNoStore(
-        { error: "La evaluación aún no ha sido completada" },
-        400
-      );
-    }
-
     const isOwner = String(attemptBase.candidateId) === userId;
     const isAdmin = role === "ADMIN";
     const isRecruiter = role === "RECRUITER";
@@ -196,9 +191,10 @@ export async function GET(
     }
 
     if (!isOwner && !isAdmin && !recruiterCanView) {
-      return isRecruiter
-        ? jsonNoStore({ error: "Intento no encontrado" }, 404)
-        : jsonNoStore({ error: "No autorizado" }, 403);
+      return jsonNoStore({ error: "Intento no encontrado" }, 404);
+    }
+    if (!isAttemptFinal(attemptBase.status)) {
+      return jsonNoStore({ error: "La evaluación aún no ha sido completada" }, 400);
     }
 
     const canSeeSolutions = isAdmin || recruiterCanView;

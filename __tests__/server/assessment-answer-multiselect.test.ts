@@ -46,6 +46,7 @@ describe("MCQ answer persistence regression", () => {
     mocks.transaction.mockImplementation(async (
       callback: (tx: any) => Promise<any>
     ) => callback({
+      $queryRaw: vi.fn(async () => []),
       assessmentAttempt: {
         findUnique: async () => ({
           id: "attempt-a",

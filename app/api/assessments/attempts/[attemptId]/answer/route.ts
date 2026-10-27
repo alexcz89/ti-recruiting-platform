@@ -1,6 +1,8 @@
 // app/api/assessments/attempts/[attemptId]/answer/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
+import { assessmentAttemptContextSelect, isAssessmentAttemptContextOpen, isAssessmentQuestionAuthorized } from "@/lib/assessments/access";
+import { lockAssessmentAttemptTx } from "@/lib/assessments/mutation-locks";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import {
@@ -20,10 +22,6 @@ type AnswerBody = {
   selectedOptions?: unknown;
   timeSpent?: unknown;
 };
-
-type AttemptFlags = {
-  questionOrder?: string[];
-} | null;
 
 type OptionShape = Record<string, unknown>;
 
@@ -103,9 +101,10 @@ export async function POST(
       return badRequest("Debes seleccionar al menos una opción");
     }
 
-    const now = new Date();
-
     const result = await prisma.$transaction(async (tx) => {
+      // Match /execute: keep the status check and answer write serialized with finalization.
+      const lockedInvite = await lockAssessmentAttemptTx(tx, params.attemptId);
+      const now = new Date();
       const attempt = await tx.assessmentAttempt.findUnique({
         where: { id: params.attemptId },
         select: {
@@ -115,7 +114,8 @@ export async function POST(
           status: true,
           expiresAt: true,
           flagsJson: true,
-          template: { select: { penalizeWrong: true } },
+          template: { select: { penalizeWrong: true, isBadgeExam: true } },
+          ...assessmentAttemptContextSelect,
         },
       });
 
@@ -126,6 +126,9 @@ export async function POST(
       }
       if (attempt.candidateId !== user.id) {
         throw Object.assign(new Error("FORBIDDEN"), { code: "FORBIDDEN" });
+      }
+      if (lockedInvite?.status === "CANCELLED" || !isAssessmentAttemptContextOpen(attempt)) {
+        throw Object.assign(new Error("El intento no está disponible"), { code: "ASSESSMENT_ACCESS_CLOSED" });
       }
 
       const st = String(attempt.status ?? "").toUpperCase();
@@ -139,12 +142,7 @@ export async function POST(
         throw Object.assign(new Error("EXPIRED"), { code: "EXPIRED" });
       }
 
-      const meta = (attempt.flagsJson as AttemptFlags) || null;
-      const order: string[] = Array.isArray(meta?.questionOrder)
-        ? meta.questionOrder
-        : [];
-
-      if (order.length && !order.includes(questionId)) {
+      if (!isAssessmentQuestionAuthorized(attempt.flagsJson, Boolean(attempt.template?.isBadgeExam), questionId)) {
         throw Object.assign(new Error("QUESTION_NOT_IN_ATTEMPT"), {
           code: "QUESTION_NOT_IN_ATTEMPT",
         });
@@ -316,6 +314,7 @@ export async function POST(
     if (code === "ATTEMPT_NOT_FOUND") {
       return jsonNoStore({ error: "Intento no encontrado" }, 404);
     }
+    if (code === "ASSESSMENT_ACCESS_CLOSED") return jsonNoStore({ error: "El intento no está disponible" }, 403);
     if (code === "FORBIDDEN") {
       return jsonNoStore({ error: "No autorizado" }, 403);
     }

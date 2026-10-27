@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/server/prisma";
-import type { AssessmentType, AssessmentDifficulty } from "@prisma/client";
+import type { AssessmentType, AssessmentDifficulty, Prisma } from "@prisma/client";
+import { lockAssessmentInviteTx } from "./mutation-locks";
+import { isFinalAttemptStatus } from "./expiration";
 import {
   getAssessmentCost,
   getCurrentBillingCycle,
@@ -59,19 +61,22 @@ export async function reserveCredits(
   }
 
   try {
-    await prisma.$transaction([
+    await prisma.$transaction(async tx => {
+      await lockAssessmentInviteTx(tx, inviteId);
+      const invite = await tx.assessmentInvite.findUnique({ where: { id: inviteId }, select: { status: true } });
+      if (!invite || invite.status === "CANCELLED" || isFinalAttemptStatus(invite.status)) throw new Error("INVITE_NOT_RESERVABLE");
       // 1. Reservar créditos
-      prisma.company.update({
+      await tx.company.update({
         where: { id: companyId },
         data: {
           assessmentCreditsReserved: {
             increment: pricing.reserve,
           },
         },
-      }),
+      });
 
       // 2. Crear registro en ledger
-      prisma.assessmentInviteChargeLedger.create({
+      await tx.assessmentInviteChargeLedger.create({
         data: {
           inviteId,
           companyId,
@@ -90,8 +95,8 @@ export async function reserveCredits(
             })
           ),
         },
-      }),
-    ]);
+      });
+    }, { isolationLevel: "ReadCommitted" });
 
     return { success: true };
   } catch (error) {
@@ -115,42 +120,43 @@ export async function reserveCredits(
 export async function chargeCompletionCredits(
   inviteId: string
 ): Promise<{ success: boolean; message?: string }> {
-  // Buscar el registro de reserva
-  const ledger = await prisma.assessmentInviteChargeLedger.findFirst({
-    where: {
-      inviteId,
-      status: "RESERVED",
-    },
-    include: {
-      invite: {
+  try {
+    return await prisma.$transaction(async tx => {
+      await lockAssessmentInviteTx(tx, inviteId);
+      // Buscar el registro de reserva
+      const ledger = await tx.assessmentInviteChargeLedger.findFirst({
+        where: {
+          inviteId,
+          status: "RESERVED",
+        },
         include: {
-          template: {
-            select: {
-              type: true,
-              difficulty: true,
+          invite: {
+            include: {
+              template: {
+                select: {
+                  type: true,
+                  difficulty: true,
+                },
+              },
             },
           },
         },
-      },
-    },
-  });
+      });
 
-  if (!ledger || !ledger.assessmentType || !ledger.difficulty) {
-    return {
-      success: false,
-      message: "No se encontró la reserva de créditos",
-    };
-  }
+      if (!ledger || !ledger.assessmentType || !ledger.difficulty || ledger.invite.status === "CANCELLED") {
+        return {
+          success: false,
+          message: "No se encontró la reserva de créditos",
+        };
+      }
 
-  const pricing = getAssessmentCost(
-    ledger.assessmentType,
-    ledger.difficulty
-  );
+      const pricing = getAssessmentCost(
+        ledger.assessmentType,
+        ledger.difficulty
+      );
 
-  try {
-    await prisma.$transaction([
       // 1. Liberar reserva y cobrar total
-      prisma.company.update({
+      await tx.company.update({
         where: { id: ledger.companyId },
         data: {
           assessmentCreditsReserved: {
@@ -163,10 +169,10 @@ export async function chargeCompletionCredits(
             increment: pricing.total,
           },
         },
-      }),
+      });
 
       // 2. Actualizar ledger a CHARGED
-      prisma.assessmentInviteChargeLedger.update({
+      await tx.assessmentInviteChargeLedger.update({
         where: { id: ledger.id },
         data: {
           status: "CHARGED",
@@ -181,10 +187,9 @@ export async function chargeCompletionCredits(
             })
           ),
         },
-      }),
-    ]);
-
-    return { success: true };
+      });
+      return { success: true };
+    }, { isolationLevel: "ReadCommitted" });
   } catch (error) {
     console.error("[CREDITS] Failed to charge completion:", error);
     return {
@@ -201,118 +206,150 @@ export async function chargeCompletionCredits(
  * - Cron job diario para invites no completadas en 7 días
  * - Cancelación manual de invitación
  */
+async function refundReservedCreditsTx(tx: Prisma.TransactionClient, inviteId: string, reason: string) {
+  const ledger = await tx.assessmentInviteChargeLedger.findFirst({
+    where: {
+      inviteId,
+      kind: "ASSESSMENT_INVITE",
+      status: "RESERVED",
+    },
+    select: {
+      id: true,
+      companyId: true,
+      status: true,
+      reservedAmount: true,
+      meta: true,
+      kind: true,
+      cycle: true,
+    },
+  });
+
+  if (!ledger || !ledger.reservedAmount) {
+    return {
+      success: false,
+      message: "No se encontró la reserva de créditos",
+    };
+  }
+
+  const updated = await tx.assessmentInviteChargeLedger.updateMany({
+    where: {
+      inviteId,
+      kind: "ASSESSMENT_INVITE",
+      cycle: ledger.cycle,
+      status: "RESERVED",
+    },
+    data: {
+      status: "REFUNDED",
+      refundedAmount: ledger.reservedAmount,
+      amount: 0,
+      meta: JSON.parse(
+        JSON.stringify({
+          ...(ledger.meta as object),
+          refundedAt: new Date().toISOString(),
+          reason,
+          type: "REFUND",
+        })
+      ),
+    },
+  });
+
+  if (updated.count === 0) {
+    return {
+      success: false,
+      message: "No se pudo reembolsar; el ledger ya cambió de estado",
+    };
+  }
+
+  await tx.company.update({
+    where: { id: ledger.companyId },
+    data: {
+      assessmentCreditsReserved: {
+        decrement: Number(ledger.reservedAmount),
+      },
+    },
+  });
+
+  return { success: true };
+}
+
+// Cancellation deliberately does not lock attempts: all active writers hold
+// this invite lock before changing evidence, state or its ledger.
+async function refundableInviteTx(tx: Prisma.TransactionClient, inviteId: string) {
+  await lockAssessmentInviteTx(tx, inviteId);
+  const invite = await tx.assessmentInvite.findUnique({
+    where: { id: inviteId },
+    select: { id: true, status: true, applicationId: true, candidateId: true, templateId: true, updatedAt: true },
+  });
+  if (!invite || isFinalAttemptStatus(invite.status)) return null;
+  const completed = await tx.assessmentAttempt.findFirst({
+    where: {
+      status: { in: ["SUBMITTED", "EVALUATED", "COMPLETED"] },
+      OR: [
+        { inviteId },
+        { inviteId: null, applicationId: invite.applicationId, candidateId: invite.candidateId,
+          templateId: invite.templateId, createdAt: { gte: invite.updatedAt } },
+      ],
+    },
+    select: { id: true },
+  });
+  return completed ? null : invite;
+}
+
 export async function refundReservedCredits(
   inviteId: string,
   reason: string = "No completada en 7 días"
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const ledger = await tx.assessmentInviteChargeLedger.findFirst({
+    return await prisma.$transaction(async tx => {
+      const invite = await refundableInviteTx(tx, inviteId);
+      if (!invite) return { success: false, message: "La invitación no admite reembolso" };
+      // An expired IN_PROGRESS attempt can still submit evidence saved in time.
+      // Keep its reservation, including legacy attempts protected by the same
+      // effective-invite tuple as mutation-locks. Do not lock attempts here.
+      const pendingAttempt = await tx.assessmentAttempt.findFirst({
         where: {
-          inviteId,
-          kind: "ASSESSMENT_INVITE",
-          status: "RESERVED",
+          status: "IN_PROGRESS",
+          OR: [
+            { inviteId },
+            { inviteId: null, applicationId: invite.applicationId,
+              candidateId: invite.candidateId, templateId: invite.templateId },
+          ],
         },
-        select: {
-          id: true,
-          companyId: true,
-          status: true,
-          reservedAmount: true,
-          meta: true,
-          kind: true,
-          cycle: true,
-        },
+        select: { id: true },
       });
-
-      if (!ledger || !ledger.reservedAmount) {
-        return {
-          success: false,
-          message: "No se encontró la reserva de créditos",
-        };
-      }
-
-      const updated = await tx.assessmentInviteChargeLedger.updateMany({
-        where: {
-          inviteId,
-          kind: "ASSESSMENT_INVITE",
-          cycle: ledger.cycle,
-          status: "RESERVED",
-        },
-        data: {
-          status: "REFUNDED",
-          refundedAmount: ledger.reservedAmount,
-          amount: 0,
-          meta: JSON.parse(
-            JSON.stringify({
-              ...(ledger.meta as object),
-              refundedAt: new Date().toISOString(),
-              reason,
-              type: "REFUND",
-            })
-          ),
-        },
+      if (pendingAttempt) return { success: false, message: "El intento iniciado conserva su reserva hasta finalizar" };
+      const refund = await refundReservedCreditsTx(tx, inviteId, reason);
+      if (!refund.success) return refund;
+      // Refunding an unused invitation permanently closes this access cycle;
+      // a later start must not consume the already released reservation.
+      await tx.assessmentInvite.update({
+        where: { id: inviteId }, data: { status: "CANCELLED", cancelledAt: new Date() },
       });
-
-      if (updated.count === 0) {
-        return {
-          success: false,
-          message: "No se pudo reembolsar; el ledger ya cambió de estado",
-        };
-      }
-
-      await tx.company.update({
-        where: { id: ledger.companyId },
-        data: {
-          assessmentCreditsReserved: {
-            decrement: Number(ledger.reservedAmount),
-          },
-        },
-      });
-
       return { success: true };
-    });
+    }, { isolationLevel: "ReadCommitted" });
   } catch (error) {
     console.error("[CREDITS] Failed to refund credits:", error);
-    return {
-      success: false,
-      message: "Error al reembolsar créditos",
-    };
+    return { success: false, message: "Error al reembolsar créditos" };
   }
 }
 
-/**
- * Cancelar una invitación y reembolsar créditos
- *
- * Usado cuando el reclutador cancela manualmente una invitación
- */
-export async function cancelInviteAndRefund(
-  inviteId: string
-): Promise<{ success: boolean; message?: string }> {
+/** Refund and cancellation are one atomic operation; completed invites cannot be cancelled/refunded. */
+export async function cancelInviteAndRefund(inviteId: string): Promise<{ success: boolean; message?: string }> {
   try {
-    const refundResult = await refundReservedCredits(
-      inviteId,
-      "Cancelada por el reclutador"
-    );
-
-    if (!refundResult.success) {
-      return refundResult;
-    }
-
-    await prisma.assessmentInvite.update({
-      where: { id: inviteId },
-      data: {
-        status: "CANCELLED",
-        cancelledAt: new Date(),
-      },
-    });
-
-    return { success: true };
+    return await prisma.$transaction(async tx => {
+      const invite = await refundableInviteTx(tx, inviteId);
+      if (!invite) return { success: false, message: "La invitación no admite cancelación" };
+      if (invite.status === "CANCELLED") return { success: true };
+      const refund = await refundReservedCreditsTx(tx, inviteId, "Cancelada por el reclutador");
+      if (!refund.success) return refund;
+      await tx.assessmentInvite.update({
+        where: { id: inviteId }, data: { status: "CANCELLED", cancelledAt: new Date() },
+      });
+      return { success: true };
+    }, { isolationLevel: "ReadCommitted" });
   } catch (error) {
     console.error("[CREDITS] Failed to cancel invite:", error);
-    return {
-      success: false,
-      message: "Error al cancelar la invitación",
-    };
+    return { success: false, message: "Error al cancelar la invitación" };
   }
 }
 

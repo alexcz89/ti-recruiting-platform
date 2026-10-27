@@ -8,6 +8,7 @@ const state = vi.hoisted(() => ({
 const mocks = vi.hoisted(() => ({ getServerSession: vi.fn() }));
 
 const tx = {
+  $queryRaw: vi.fn(async () => []),
   assessmentAttempt: {
     findUnique: vi.fn(async () => ({
       id: "attempt-a",

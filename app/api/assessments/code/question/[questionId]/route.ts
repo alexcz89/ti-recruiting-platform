@@ -6,7 +6,7 @@ import { prisma } from '@/lib/server/prisma';
 import { judge0Service } from '@/lib/code-execution/judge0-service';
 import type { Prisma } from '@prisma/client';
 import { getSessionCompanyId } from '@/lib/server/session';
-import { getAssessmentTemplateVisibilityWhere, isAssessmentTemplateAccessRole } from '@/lib/assessments/access';
+import { getAssessmentTemplateVisibilityWhere, isAssessmentTemplateAccessRole, isAssessmentQuestionAuthorized } from '@/lib/assessments/access';
 import { ASSESSMENT_EXPIRED_CODE, isAssessmentExpired } from '@/lib/assessments/expiration';
 import { challengeAvailability } from '@/lib/contests/domain';
 
@@ -102,15 +102,7 @@ export async function GET(
         return jsonNoStore({ error: 'El intento no está disponible' }, 403);
       }
 
-      const flags = attempt.flagsJson;
-      if (flags !== null && (typeof flags !== 'object' || Array.isArray(flags))) {
-        return jsonNoStore({ error: 'Pregunta no encontrada' }, 404);
-      }
-      const order = flags?.questionOrder;
-      // Legacy unsampled attempts may lack an order; badge pools must never fall back to the full template.
-      if (order !== undefined
-        ? !Array.isArray(order) || !order.every(id => typeof id === 'string') || !order.includes(questionId)
-        : attempt.template.isBadgeExam || flags?.sampled === true) {
+      if (!isAssessmentQuestionAuthorized(attempt.flagsJson, attempt.template.isBadgeExam, questionId)) {
         return jsonNoStore({ error: 'Pregunta no encontrada' }, 404);
       }
       where.templateId = attempt.templateId;

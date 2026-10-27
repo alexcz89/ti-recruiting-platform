@@ -40,6 +40,7 @@ const prismaMock = {
       id: "question-a",
       templateId: "template-a",
       type: "CODING",
+      isActive: true,
       allowedLanguages: ["javascript"],
     })),
   },
@@ -227,8 +228,8 @@ describe("scored code persistence deadline", () => {
     expect(tx.attemptAnswer.upsert).not.toHaveBeenCalled();
   });
   it("rejects another template's question on a public run", async () => {
-    prismaMock.assessmentQuestion.findUnique.mockResolvedValueOnce({ id: "private-question", templateId: "template-b", type: "CODING", allowedLanguages: ["javascript"] });
-    expect((await POST(request(false))).status).toBe(400);
+    prismaMock.assessmentQuestion.findUnique.mockResolvedValueOnce({ id: "private-question", templateId: "template-b", type: "CODING", isActive: true, allowedLanguages: ["javascript"] });
+    expect((await POST(request(false))).status).toBe(404);
     expect(mocks.executeCode).not.toHaveBeenCalled();
   });
   it("retains the existing public execution rate limit", async () => {

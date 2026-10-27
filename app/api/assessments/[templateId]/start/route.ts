@@ -5,6 +5,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import type { Prisma } from "@prisma/client";
 import { assertAssessmentQuestionSnapshotTx } from "@/lib/assessments/template-integrity";
+import { lockAssessmentInviteTx } from "@/lib/assessments/mutation-locks";
 import { challengeAvailability } from "@/lib/contests/domain";
 import {
   ASSESSMENT_EXPIRED_CODE,
@@ -316,6 +317,12 @@ async function ensureMeta(
 type DbClient = Prisma.TransactionClient;
 
 async function markInviteStartedTx(tx: DbClient, inviteId: string, now: Date) {
+  // Attempt inserts/updates precede this lock. Cancellation never locks attempts.
+  await lockAssessmentInviteTx(tx, inviteId);
+  const invite = await tx.assessmentInvite.findUnique({ where: { id: inviteId }, select: { status: true } });
+  if (!invite || invite.status === "CANCELLED") {
+    throw Object.assign(new Error("El intento no está disponible"), { code: "ASSESSMENT_INVITE_CANCELLED" });
+  }
   await tx.assessmentInvite.updateMany({
     where: { id: inviteId, status: "SENT" },
     data: { status: "STARTED", startedAt: now },
@@ -420,6 +427,8 @@ export async function POST(
         id: true,
         isActive: true,
         allowRetry: true,
+        isGlobal: true,
+        companyId: true,
         maxAttempts: true,
         timeLimit: true,
         shuffleQuestions: true,
@@ -485,6 +494,16 @@ export async function POST(
           updatedAt: Date;
         }
       | null = null;
+
+    // Legacy application links must not bypass an existing invitation's state,
+    // expiry or retry cycle. Resolve only the authenticated candidate's tuple.
+    if (!token && applicationId) {
+      const assignedInvite = await prisma.assessmentInvite.findFirst({
+        where: { applicationId, candidateId: user.id, templateId: params.templateId },
+        select: { token: true },
+      });
+      token = assignedInvite?.token ?? null;
+    }
 
     if (token) {
       invite = await prisma.assessmentInvite.findUnique({
@@ -554,6 +573,7 @@ export async function POST(
           job: {
             select: {
               id: true,
+              companyId: true,
               assessments: {
                 where: { templateId: params.templateId },
                 select: { id: true },
@@ -564,6 +584,9 @@ export async function POST(
       });
 
       if (!app) return jsonNoStore({ error: "applicationId inválido" }, 400);
+      if (!invite && !template.isGlobal && template.companyId !== app.job.companyId) {
+        return jsonNoStore({ error: "Template no encontrado" }, 404);
+      }
 
       if (!app.job.assessments.length) {
         return jsonNoStore(
@@ -860,6 +883,7 @@ export async function POST(
           templateId: true,
           applicationId: true,
           inviteId: true,
+          invite: { select: { status: true } },
           status: true,
           expiresAt: true,
           startedAt: true,
@@ -895,6 +919,9 @@ export async function POST(
         });
       }
 
+      if (attempt.invite?.status === "CANCELLED") {
+        return jsonNoStore({ error: "El intento no está disponible" }, 403);
+      }
       if (attempt.contestRegistration) {
         const availability = challengeAvailability(attempt.contestRegistration.contest, now);
         if (!availability.open) {
@@ -1081,6 +1108,7 @@ export async function POST(
     if (code === "ASSESSMENT_TEMPLATE_CHANGED") {
       return jsonNoStore({ error: "La evaluación cambió. Vuelve a iniciarla para cargar las preguntas actuales.", code }, 409);
     }
+    if (code === "ASSESSMENT_INVITE_CANCELLED") return jsonNoStore({ error: "El intento no está disponible", code }, 403);
     if (code === ASSESSMENT_EXPIRED_CODE) {
       return jsonNoStore(
         { error: "Invitación expirada", code: ASSESSMENT_EXPIRED_CODE },
