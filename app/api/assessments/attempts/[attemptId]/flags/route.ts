@@ -1,6 +1,8 @@
 // app/api/assessments/attempts/[attemptId]/flags/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from '@/lib/server/prisma';
+import { assessmentAttemptContextSelect, isAssessmentAttemptContextOpen } from '@/lib/assessments/access';
+import { lockAssessmentAttemptTx } from '@/lib/assessments/mutation-locks';
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { isAntiCheatBypassed } from '@/lib/server/assessmentAntiCheat';
@@ -148,14 +150,8 @@ export async function PATCH(
     if (!session?.user) return noStoreJson({ error: "No autorizado" }, 401);
 
     const user = session.user as any;
-
-    if (isAntiCheatBypassed(user.email)) {
-      return noStoreJson({
-        success: true,
-        bypassed: true,
-        received: 0,
-      });
-    }
+    if (!user.id) return noStoreJson({ error: "No autorizado" }, 401);
+    if (String(user.role ?? "").toUpperCase() !== "CANDIDATE") return noStoreJson({ error: "Forbidden" }, 403);
 
     const body = await readBody(request);
     const incoming = normalizeEvents(body);
@@ -197,11 +193,13 @@ export async function PATCH(
         multiSession: true,
         severityScore: true,
         severity: true,
+        ...assessmentAttemptContextSelect,
       },
     });
 
     if (!attempt) return noStoreJson({ error: "Intento no encontrado" }, 404);
     if (attempt.candidateId !== user.id) return noStoreJson({ error: "No autorizado" }, 403);
+    if (!isAssessmentAttemptContextOpen(attempt)) return noStoreJson({ error: "El intento no está disponible" }, 403);
     if (attempt.status !== "IN_PROGRESS") return noStoreJson({ error: "El intento no está en progreso" }, 400);
     if (isAssessmentExpired(attempt.expiresAt)) {
       return noStoreJson(
@@ -209,6 +207,9 @@ export async function PATCH(
         410
       );
     }
+
+    // QA bypass changes anti-cheat behavior only after resource authorization.
+    if (isAntiCheatBypassed(user.email)) return noStoreJson({ success: true, bypassed: true, received: 0 });
 
     const inc = {
       tabSwitches: 0,
@@ -230,9 +231,6 @@ export async function PATCH(
       if (e.type === "PAGEHIDE") inc.pageHides++;
     }
 
-    const firstSig = attempt.firstClientSig || clientSig;
-    const multiSession = firstSig !== clientSig;
-
     const toInsert = events.map((e) => ({
       attemptId: attempt.id,
       candidateId: attempt.candidateId,
@@ -250,6 +248,18 @@ export async function PATCH(
     }));
 
     const updated = await prisma.$transaction(async (tx) => {
+      const lockedInvite = await lockAssessmentAttemptTx(tx, attempt.id);
+      const current = await tx.assessmentAttempt.findUnique({
+        where: { id: attempt.id },
+        select: { candidateId: true, status: true, expiresAt: true, firstClientSig: true, ...assessmentAttemptContextSelect },
+      });
+      if (!current || current.candidateId !== user.id || lockedInvite?.status === "CANCELLED" || !isAssessmentAttemptContextOpen(current)) {
+        throw Object.assign(new Error("El intento no está disponible"), { code: "ASSESSMENT_ACCESS_CLOSED" });
+      }
+      if (current.status !== "IN_PROGRESS") throw Object.assign(new Error("El intento no está en progreso"), { code: "ATTEMPT_CLOSED" });
+      if (isAssessmentExpired(current.expiresAt)) throw Object.assign(new Error("El tiempo ha expirado"), { code: ASSESSMENT_EXPIRED_CODE });
+      const firstSig = current.firstClientSig || clientSig;
+      const multiSession = firstSig !== clientSig;
       await tx.assessmentAttemptEvent.createMany({
         data: toInsert,
         skipDuplicates: true,
@@ -265,7 +275,7 @@ export async function PATCH(
           rightClicks: inc.rightClicks ? { increment: inc.rightClicks } : undefined,
           focusLoss: inc.focusLoss ? { increment: inc.focusLoss } : undefined,
           pageHides: inc.pageHides ? { increment: inc.pageHides } : undefined,
-          firstClientSig: attempt.firstClientSig ? undefined : firstSig,
+          firstClientSig: current.firstClientSig ? undefined : firstSig,
           lastClientSig: clientSig,
           multiSession: multiSession ? true : undefined,
         },
@@ -336,6 +346,10 @@ export async function PATCH(
       received: events.length,
     });
   } catch (error) {
+    const code = error && typeof error === "object" && "code" in error ? String(error.code) : "";
+    if (code === "ASSESSMENT_ACCESS_CLOSED") return noStoreJson({ error: "El intento no está disponible" }, 403);
+    if (code === "ATTEMPT_CLOSED") return noStoreJson({ error: "El intento no está en progreso" }, 400);
+    if (code === ASSESSMENT_EXPIRED_CODE) return noStoreJson({ error: "El tiempo ha expirado", code }, 410);
     console.error("Error updating flags:", error);
     return noStoreJson({ error: "Error al actualizar flags" }, 500);
   }

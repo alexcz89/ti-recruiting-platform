@@ -6,6 +6,8 @@ import { getServerSession } from "next-auth";
 import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { assessmentAttemptContextSelect, isAssessmentAttemptContextOpen, isAssessmentQuestionAuthorized } from "@/lib/assessments/access";
+import { lockAssessmentAttemptTx } from "@/lib/assessments/mutation-locks";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
 import { candidateCustomRunResult } from "@/lib/code-execution/public-result";
 import { validateReadOnlySqlQuery, validateSqlDatasetSetup } from "@/lib/code-execution/sql-service";
@@ -82,6 +84,7 @@ export async function POST(request: Request) {
       // this candidate/attempt/question without holding a lock during Judge0.
       const lockKey = `custom-run:${user.id}:${attemptId}:${questionId}`;
       await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${lockKey}))`;
+      const lockedInvite = await lockAssessmentAttemptTx(tx, attemptId);
 
       const attempt = await tx.assessmentAttempt.findUnique({
         where: { id: attemptId },
@@ -91,12 +94,16 @@ export async function POST(request: Request) {
           templateId: true,
           status: true,
           expiresAt: true,
+          flagsJson: true,
+          template: { select: { isBadgeExam: true } },
+          ...assessmentAttemptContextSelect,
         },
       });
       if (!attempt) return { error: "Intento no encontrado", status: 404 } as const;
       if (attempt.candidateId !== user.id) {
         return { error: "No autorizado", status: 403 } as const;
       }
+      if (lockedInvite?.status === "CANCELLED" || !isAssessmentAttemptContextOpen(attempt)) return { error: "El intento no está disponible", status: 403 } as const;
       if (String(attempt.status).toUpperCase() !== "IN_PROGRESS") {
         return { error: "El intento no está en progreso", status: 400 } as const;
       }
@@ -108,6 +115,9 @@ export async function POST(request: Request) {
         } as const;
       }
 
+      if (!isAssessmentQuestionAuthorized(attempt.flagsJson, Boolean(attempt.template?.isBadgeExam), questionId)) {
+        return { error: "Pregunta no válida", status: 404 } as const;
+      }
       const question = await tx.assessmentQuestion.findFirst({
         where: {
           id: questionId,

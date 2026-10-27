@@ -54,6 +54,7 @@ const tx = {
   $queryRaw: vi.fn(async () => [{ id: "template-a" }]),
   assessmentQuestion: { findMany: vi.fn(async () => [{ id: "question-a" }]) },
   assessmentInvite: {
+    findUnique: vi.fn(async () => ({ status: "STARTED" })),
     findFirst: vi.fn(async () =>
       state.inviteExpiresAt.getTime() > Date.now() ? { id: "invite-a" } : null
     ),

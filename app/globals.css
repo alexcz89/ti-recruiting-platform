@@ -648,6 +648,13 @@ p {
 
 .landing-button-primary { background: #10b981; color: #062b27 !important; }
 .landing-button-primary:hover { background: #34d399; text-decoration: none; }
+/* Header CTA only: emerald-700/800 in light mode, emerald-500/400 in dark. */
+.landing-button-primary.landing-header-demo { background: #047857; color: #ffffff !important; }
+.landing-button-primary.landing-header-demo:hover { background: #065f46; }
+.landing-button-primary.landing-header-demo:focus-visible { outline-color: #047857; }
+.dark .landing-button-primary.landing-header-demo { background: #10b981; color: #020617 !important; }
+.dark .landing-button-primary.landing-header-demo:hover { background: #34d399; }
+.dark .landing-button-primary.landing-header-demo:focus-visible { outline-color: #10b981; }
 .landing-button-secondary { border: 1px solid #d4d4d8; background: white; color: #18181b; }
 .landing-button-secondary:hover { border-color: #a1a1aa; background: #fafafa; text-decoration: none; }
 .landing-button-inverse { background: #082b33; color: #ffffff !important; }

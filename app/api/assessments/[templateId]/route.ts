@@ -57,6 +57,9 @@ export async function GET(
         allowRetry: true,
         maxAttempts: true,
         isActive: true,
+        isGlobal: true,
+        isBadgeExam: true,
+        companyId: true,
         sections: true,
         createdAt: true,
         updatedAt: true,
@@ -133,6 +136,21 @@ export async function GET(
         : Promise.resolve(null),
     ]);
 
+    // An explicit invalid credential must not fall back to unrelated access.
+    if ((token && !inviteAccess) || (!token && attemptId && !attemptAccess)) {
+      return jsonNoStore({ error: "Template no encontrado" }, 404);
+    }
+    if (!token && !attemptId && !lastAttempt && !(template.isGlobal && template.isBadgeExam)) {
+      const application = await prisma.application.findFirst({
+        where: { candidateId: userId, job: {
+          ...(!template.isGlobal ? { companyId: template.companyId ?? "" } : {}),
+          assessments: { some: { templateId: params.templateId } },
+        } },
+        select: { id: true },
+      });
+      if (!application) return jsonNoStore({ error: "Template no encontrado" }, 404);
+    }
+
     const canRetry = Boolean(template.allowRetry);
     const maxAttempts = template.maxAttempts ?? 1;
     const canStart = canRetry ? attemptsUsed < maxAttempts : attemptsUsed === 0;
@@ -141,10 +159,11 @@ export async function GET(
       : attemptAccess
         ? assessmentState(null, attemptAccess, new Date())
         : null;
+    const { companyId: _companyId, isGlobal: _isGlobal, isBadgeExam: _isBadgeExam, ...publicTemplate } = template;
 
     return jsonNoStore({
       template: {
-        ...template,
+        ...publicTemplate,
         totalQuestions: normalizedTotalQuestions,
         sections: normalizedSections,
       },

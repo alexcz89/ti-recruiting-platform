@@ -37,7 +37,9 @@ const attempt = () => ({
 });
 
 const tx = {
-  assessmentAttempt: { updateMany: vi.fn(async () => ({ count: 1 })) },
+  $queryRaw: vi.fn(async () => []),
+  assessmentAttempt: { findUnique: vi.fn(async () => attempt()), updateMany: vi.fn(async () => ({ count: 1 })) },
+  assessmentQuestion: { findMany: vi.fn(async () => [{ id: "question-a", section: null, type: "MULTIPLE_CHOICE", testCases: [] }]) },
   candidateBadge: { deleteMany: vi.fn() },
   assessmentInvite: { updateMany: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
   assessmentInviteChargeLedger: { updateMany: vi.fn(async () => ({ count: 0 })) },
@@ -46,7 +48,7 @@ const tx = {
 };
 
 const prismaMock = {
-  assessmentAttempt: { findUnique: vi.fn(async () => attempt()) },
+  assessmentAttempt: { findUnique: tx.assessmentAttempt.findUnique },
   assessmentQuestion: {
     findMany: vi.fn(async () => [{
       id: "question-a",

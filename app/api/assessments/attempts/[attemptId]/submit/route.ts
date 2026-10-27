@@ -9,6 +9,7 @@ import { getCurrentBillingCycle } from "@/lib/assessments/pricing";
 import { badgeLevelToSkillLevel } from "@/lib/badges";
 import { calculateAssessmentScore } from "@/lib/assessments/scoring";
 import { isAssessmentExpired } from "@/lib/assessments/expiration";
+import { lockAssessmentAttemptTx } from "@/lib/assessments/mutation-locks";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,461 +37,456 @@ export async function POST(
       return jsonNoStore({ error: "Forbidden" }, 403);
     }
 
-    const attempt = await prisma.assessmentAttempt.findUnique({
-      where: { id: params.attemptId },
-      include: {
-        template: {
-          select: {
-            passingScore: true,
-            sections: true,
-            isBadgeExam: true,
-            badgeTermId: true,
-            badgeLevel: true,
-          },
-        },
-        answers: {
-          include: {
-            question: {
-              select: {
-                section: true,
-              },
+    if (!user.id) return jsonNoStore({ error: "No autorizado" }, 401);
+
+    const submission = await prisma.$transaction(async tx => {
+      const lockedInvite = await lockAssessmentAttemptTx(tx, params.attemptId);
+      const attempt = await tx.assessmentAttempt.findUnique({
+        where: { id: params.attemptId },
+        include: {
+          template: {
+            select: {
+              passingScore: true,
+              sections: true,
+              isBadgeExam: true,
+              badgeTermId: true,
+              badgeLevel: true,
             },
           },
-        },
-        invite: {
-          select: {
-            id: true,
-            job: {
-              select: {
-                id: true,
-                title: true,
-                recruiterId: true,
-              },
-            },
-          },
-        },
-        candidate: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        contestRegistration: {
-          select: {
-            id: true,
-            qualityScore: true,
-            efficiencyScore: true,
-            explanationScore: true,
-          },
-        },
-      },
-    });
-
-    if (!attempt) {
-      return jsonNoStore({ error: "Intento no encontrado" }, 404);
-    }
-
-    if (attempt.candidateId !== user.id) {
-      return jsonNoStore({ error: "No autorizado" }, 403);
-    }
-
-    const currentStatus = String(attempt.status ?? "").toUpperCase();
-
-    if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(currentStatus)) {
-      return jsonNoStore({
-        success: true,
-        alreadySubmitted: true,
-        totalScore: attempt.totalScore ?? 0,
-        sectionScores: attempt.sectionScores ?? {},
-        passed: Boolean(attempt.passed),
-        timeSpent: attempt.timeSpent ?? 0,
-      });
-    }
-
-    if (currentStatus !== "IN_PROGRESS") {
-      return jsonNoStore({ error: "El intento no está en progreso" }, 400);
-    }
-
-    const now = new Date();
-
-    // Answers and code execution are already blocked after expiresAt. Submission
-    // remains available so the server can grade only what was saved in time.
-    const expiredAtSubmission = isAssessmentExpired(attempt.expiresAt, now);
-
-    if (!attempt.startedAt) {
-      return jsonNoStore(
-        { error: "El intento no ha sido iniciado correctamente" },
-        400
-      );
-    }
-
-    let activeQuestions = await prisma.assessmentQuestion.findMany({
-      where: {
-        templateId: attempt.templateId,
-        isActive: true,
-      },
-      select: {
-        id: true,
-        section: true,
-        type: true,
-        testCases: { select: { points: true } },
-      },
-    });
-
-    // Exámenes de badge con pool muestreado: el examen del candidato es el
-    // subset sorteado en flagsJson.questionOrder — el score se calcula sobre
-    // esas N preguntas, no sobre el pool completo del template.
-    const attemptMeta = attempt.flagsJson as {
-      sampled?: boolean;
-      questionOrder?: string[];
-    } | null;
-    if (
-      attemptMeta?.sampled &&
-      Array.isArray(attemptMeta.questionOrder) &&
-      attemptMeta.questionOrder.length > 0
-    ) {
-      const sampledIds = new Set(attemptMeta.questionOrder);
-      activeQuestions = activeQuestions.filter((q) => sampledIds.has(q.id));
-    }
-
-    // Guard: template must have active questions
-    if (activeQuestions.length === 0) {
-      return jsonNoStore({ error: "El template no tiene preguntas activas" }, 400);
-    }
-
-    const activeQuestionIds = new Set(activeQuestions.map((question) => question.id));
-    const scoringAnswers = attempt.answers.filter((answer) =>
-      activeQuestionIds.has(answer.questionId)
-    );
-    const answeredCount = scoringAnswers.length;
-    const { questionMaxPoints, totalPoints, totalScore } = calculateAssessmentScore(
-      activeQuestions,
-      scoringAnswers,
-      { codingByTestCases: Boolean(attempt.contestRegistration) }
-    );
-    const maxPointsByQuestion = new Map(
-      questionMaxPoints.map((question) => [question.id, question.maxPts])
-    );
-
-    const sections = Array.isArray(attempt.template.sections)
-      ? attempt.template.sections
-      : [];
-
-    const sectionScores: Record<string, number> = {};
-    const sectionRequirementResults: Record<
-      string,
-      { minimumCorrect: number; correct: number; met: boolean }
-    > = {};
-    let sectionRequirementsMet = true;
-
-    // Group by the real section assigned to each active question.
-    const sectionByQuestion = new Map<string, string>();
-    const maxPointsBySection = new Map<string, number>();
-    const earnedPointsBySection = new Map<string, number>();
-
-    for (const question of questionMaxPoints) {
-      const name = String(question.section ?? "").trim() || "Sin sección";
-      sectionByQuestion.set(question.id, name);
-      maxPointsBySection.set(
-        name,
-        (maxPointsBySection.get(name) ?? 0) + question.maxPts
-      );
-    }
-
-    for (const answer of scoringAnswers) {
-      const name = sectionByQuestion.get(answer.questionId);
-      if (!name) continue;
-
-      const earned = Math.min(
-        maxPointsByQuestion.get(answer.questionId) ?? 0,
-        answer.pointsEarned || 0
-      );
-
-      earnedPointsBySection.set(
-        name,
-        (earnedPointsBySection.get(name) ?? 0) + earned
-      );
-    }
-
-    for (const [name, maxPoints] of maxPointsBySection) {
-      const earned = earnedPointsBySection.get(name) ?? 0;
-      sectionScores[name] = maxPoints > 0
-        ? Math.max(0, Math.min(100, Math.round(earned / maxPoints * 100)))
-        : 0;
-    }
-
-    // Preserve configured minimum-correct requirements.
-    // Templates may identify sections using "title" or "name".
-    for (const section of sections) {
-      if (!section || typeof section !== "object" || Array.isArray(section)) {
-        continue;
-      }
-
-      const sectionData = section as Record<string, unknown>;
-      const name = String(sectionData.title || sectionData.name || "").trim();
-      const minimumCorrect = Number(sectionData.minimumCorrect ?? 0);
-
-      if (!name || !Number.isInteger(minimumCorrect) || minimumCorrect <= 0) {
-        continue;
-      }
-
-      const correct = Math.round(earnedPointsBySection.get(name) ?? 0);
-      const met = correct >= minimumCorrect;
-
-      sectionRequirementResults[name] = {
-        minimumCorrect,
-        correct,
-        met,
-      };
-
-      if (!met) sectionRequirementsMet = false;
-    }
-    const recordedAnswerTime = attempt.answers.reduce(
-      (sum, answer) => sum + (answer.timeSpent || 0),
-      0
-    );
-    const elapsedAttemptTime = Math.max(
-      0,
-      Math.round((now.getTime() - attempt.startedAt.getTime()) / 1000)
-    );
-    const timeSpent = recordedAnswerTime > 0 ? recordedAnswerTime : elapsedAttemptTime;
-
-    const flags: any =
-      attempt.flagsJson && typeof attempt.flagsJson === "object"
-        ? { ...(attempt.flagsJson as any) }
-        : {};
-
-    if (expiredAtSubmission && attempt.expiresAt) {
-      flags.expiredAt = attempt.expiresAt.toISOString();
-    }
-    if (Object.keys(sectionRequirementResults).length > 0) {
-      flags.sectionRequirements = sectionRequirementResults;
-    }
-
-    if (answeredCount > 0) {
-      const avgTimePerQuestion = timeSpent / answeredCount;
-      if (avgTimePerQuestion < 5) {
-        flags.tooFast = true;
-      }
-    }
-
-    const scoreToPersist = attempt.contestRegistration
-      ? Math.max(0, Math.min(75, Math.round(totalPoints)))
-      : totalScore;
-    const passingScore = Number((attempt.template as any)?.passingScore ?? 0);
-    // Solo una severidad CRITICAL invalida el resultado. SUSPICIOUS sigue
-    // visible para revisión, pero no castiga automáticamente al candidato.
-    const integrityInvalidated =
-      String(attempt.severity ?? "NORMAL").toUpperCase() === "CRITICAL";
-    const scoreForPassing = attempt.contestRegistration ? scoreToPersist : totalScore;
-    const passed =
-      !integrityInvalidated &&
-      scoreForPassing >= passingScore &&
-      sectionRequirementsMet;
-
-    try {
-      await prisma.$transaction(async (tx) => {
-        const updatedAttempt = await tx.assessmentAttempt.updateMany({
-          where: {
-            id: params.attemptId,
-            candidateId: user.id,
-            status: "IN_PROGRESS" as any,
-          },
-          data: {
-            status: "SUBMITTED" as any,
-            submittedAt: now,
-            totalScore: scoreToPersist,
-            sectionScores,
-            passed,
-            timeSpent,
-            flagsJson: flags,
-          },
-        });
-
-        if (updatedAttempt.count === 0) {
-          throw new Error("STATE_INVALID_OR_ALREADY_SUBMITTED");
-        }
-
-        // El concurso usa 75 puntos automáticos (60 funcionales + 15 de
-        // casos límite); los 25 restantes se agregan durante la revisión.
-        if (attempt.contestRegistration) {
-          const automatedScore = scoreToPersist;
-          const manualScore =
-            attempt.contestRegistration.qualityScore +
-            attempt.contestRegistration.efficiencyScore +
-            attempt.contestRegistration.explanationScore;
-          await tx.contestRegistration.update({
-            where: { id: attempt.contestRegistration.id },
-            data: {
-              status: "QUALIFIER_SUBMITTED",
-              automatedScore,
-              finalScore: automatedScore + manualScore,
-            },
-          });
-        }
-
-        // Badge de skill verificado: attempts candidato-iniciados (sin invite
-        // ni application) de un examen de badge otorgan el badge al aprobar.
-        // upsert = idempotente si ya existe el badge de ese skill+nivel.
-        const tpl = attempt.template as {
-          isBadgeExam?: boolean;
-          badgeTermId?: string | null;
-          badgeLevel?: number | null;
-        };
-        if (integrityInvalidated) {
-          // Protección idempotente ante reintentos o estados heredados: este
-          // intento nunca puede respaldar una credencial verificada.
-          await tx.candidateBadge.deleteMany({
-            where: { attemptId: params.attemptId },
-          });
-        }
-
-        if (
-          passed &&
-          tpl?.isBadgeExam &&
-          tpl.badgeTermId &&
-          tpl.badgeLevel != null &&
-          !attempt.inviteId &&
-          !attempt.applicationId
-        ) {
-          await tx.candidateBadge.upsert({
-            where: {
-              candidateId_termId_level: {
-                candidateId: user.id,
-                termId: tpl.badgeTermId,
-                level: tpl.badgeLevel,
-              },
-            },
-            create: {
-              candidateId: user.id,
-              termId: tpl.badgeTermId,
-              level: tpl.badgeLevel,
-              attemptId: params.attemptId,
-              earnedAt: now,
-            },
-            // Renovación de una credencial vencida: conserva su URL pública,
-            // pero la enlaza al intento y fecha vigentes.
-            update: {
-              attemptId: params.attemptId,
-              earnedAt: now,
-              isPublic: true,
-            },
-          });
-
-          // Una certificacion verificada tambien debe existir como skill
-          // estructurado. Nunca reducimos un nivel declarado previamente.
-          const verifiedSkillLevel = badgeLevelToSkillLevel(tpl.badgeLevel);
-          const existingSkill = await tx.candidateSkill.findUnique({
-            where: {
-              userId_termId: {
-                userId: user.id,
-                termId: tpl.badgeTermId,
-              },
-            },
-            select: { id: true, level: true },
-          });
-
-          if (!existingSkill) {
-            await tx.candidateSkill.create({
-              data: {
-                userId: user.id,
-                termId: tpl.badgeTermId,
-                level: verifiedSkillLevel,
-              },
-            });
-          } else if ((existingSkill.level ?? 0) < verifiedSkillLevel) {
-            await tx.candidateSkill.update({
-              where: { id: existingSkill.id },
-              data: { level: verifiedSkillLevel },
-            });
-          }
-        }
-
-        let inviteIdForLedger: string | null = attempt.inviteId ?? null;
-
-        if (attempt.inviteId) {
-          await tx.assessmentInvite.updateMany({
-            where: {
-              id: attempt.inviteId,
-              status: { in: ["SENT", "STARTED"] as any },
-            },
-            data: {
-              status: "SUBMITTED" as any,
-              submittedAt: now,
-            },
-          });
-        } else if (attempt.applicationId) {
-          const inviteUpdateResult = await tx.assessmentInvite.updateMany({
-            where: {
-              candidateId: user.id,
-              templateId: attempt.templateId,
-              applicationId: attempt.applicationId,
-              status: { in: ["SENT", "STARTED"] as any },
-            },
-            data: {
-              status: "SUBMITTED" as any,
-              submittedAt: now,
-            },
-          });
-
-          if (inviteUpdateResult.count > 0) {
-            const linkedInvite = await tx.assessmentInvite.findFirst({
-              where: {
-                candidateId: user.id,
-                templateId: attempt.templateId,
-                applicationId: attempt.applicationId,
-                status: "SUBMITTED" as any,
-              },
-              select: { id: true },
-              orderBy: { createdAt: "desc" },
-            });
-
-            inviteIdForLedger = linkedInvite?.id ?? null;
-          }
-        }
-
-        if (inviteIdForLedger) {
-          const chargedLedger = await tx.assessmentInviteChargeLedger.updateMany({
-            where: {
-              inviteId: inviteIdForLedger,
-              kind: "ASSESSMENT_INVITE" as any,
-              cycle: getCurrentBillingCycle(),
-              status: "RESERVED" as any,
-            },
-            data: {
-              status: "CHARGED" as any,
-              chargedAmount: ONE_CREDIT,
-            },
-          });
-
-          if (chargedLedger.count > 0) {
-            await tx.assessmentInvite.update({
-              where: { id: inviteIdForLedger },
-              data: {
-                chargedAt: now,
-                chargeCount: {
-                  increment: 1,
+          answers: {
+            include: {
+              question: {
+                select: {
+                  section: true,
                 },
               },
-            });
-          }
-        }
+            },
+          },
+          invite: {
+            select: {
+              id: true,
+              status: true,
+              job: {
+                select: {
+                  id: true,
+                  title: true,
+                  recruiterId: true,
+                },
+              },
+            },
+          },
+          candidate: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          contestRegistration: {
+            select: {
+              id: true,
+              qualityScore: true,
+              efficiencyScore: true,
+              explanationScore: true,
+            },
+          },
+        },
       });
-    } catch (error: any) {
-      if (
-        String(error?.message || "").includes(
-          "STATE_INVALID_OR_ALREADY_SUBMITTED"
-        )
-      ) {
+
+      if (!attempt) {
+        return jsonNoStore({ error: "Intento no encontrado" }, 404);
+      }
+
+      if (attempt.candidateId !== user.id) {
+        return jsonNoStore({ error: "No autorizado" }, 403);
+      }
+
+      const currentStatus = String(attempt.status ?? "").toUpperCase();
+
+      if (["SUBMITTED", "EVALUATED", "COMPLETED"].includes(currentStatus)) {
+        return jsonNoStore({
+          success: true,
+          alreadySubmitted: true,
+          totalScore: attempt.totalScore ?? 0,
+          sectionScores: attempt.sectionScores ?? {},
+          passed: Boolean(attempt.passed),
+          timeSpent: attempt.timeSpent ?? 0,
+        });
+      }
+
+      if (currentStatus !== "IN_PROGRESS") {
+        return jsonNoStore({ error: "El intento no está en progreso" }, 400);
+      }
+      if (lockedInvite?.status === "CANCELLED" || attempt.invite?.status === "CANCELLED") return jsonNoStore({ error: "El intento no está disponible" }, 403);
+
+      const now = new Date();
+
+      // Answers and code execution are already blocked after expiresAt. Submission
+      // remains available so the server can grade only what was saved in time.
+      const expiredAtSubmission = isAssessmentExpired(attempt.expiresAt, now);
+
+      if (!attempt.startedAt) {
         return jsonNoStore(
-          { error: "No se pudo enviar (estado inválido o ya enviado)" },
+          { error: "El intento no ha sido iniciado correctamente" },
           400
         );
       }
 
-      throw error;
-    }
+      let activeQuestions = await tx.assessmentQuestion.findMany({
+        where: {
+          templateId: attempt.templateId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          section: true,
+          type: true,
+          testCases: { select: { points: true } },
+        },
+      });
+
+      // Exámenes de badge con pool muestreado: el examen del candidato es el
+      // subset sorteado en flagsJson.questionOrder — el score se calcula sobre
+      // esas N preguntas, no sobre el pool completo del template.
+      const attemptMeta = attempt.flagsJson as {
+        sampled?: boolean;
+        questionOrder?: string[];
+      } | null;
+      if (
+        attemptMeta?.sampled &&
+        Array.isArray(attemptMeta.questionOrder) &&
+        attemptMeta.questionOrder.length > 0
+      ) {
+        const sampledIds = new Set(attemptMeta.questionOrder);
+        activeQuestions = activeQuestions.filter((q) => sampledIds.has(q.id));
+      }
+
+      // Guard: template must have active questions
+      if (activeQuestions.length === 0) {
+        return jsonNoStore({ error: "El template no tiene preguntas activas" }, 400);
+      }
+
+      const activeQuestionIds = new Set(activeQuestions.map((question) => question.id));
+      const scoringAnswers = attempt.answers.filter((answer) =>
+        activeQuestionIds.has(answer.questionId)
+      );
+      const answeredCount = scoringAnswers.length;
+      const { questionMaxPoints, totalPoints, totalScore } = calculateAssessmentScore(
+        activeQuestions,
+        scoringAnswers,
+        { codingByTestCases: Boolean(attempt.contestRegistration) }
+      );
+      const maxPointsByQuestion = new Map(
+        questionMaxPoints.map((question) => [question.id, question.maxPts])
+      );
+
+      const sections = Array.isArray(attempt.template.sections)
+        ? attempt.template.sections
+        : [];
+
+      const sectionScores: Record<string, number> = {};
+      const sectionRequirementResults: Record<
+        string,
+        { minimumCorrect: number; correct: number; met: boolean }
+      > = {};
+      let sectionRequirementsMet = true;
+
+      // Group by the real section assigned to each active question.
+      const sectionByQuestion = new Map<string, string>();
+      const maxPointsBySection = new Map<string, number>();
+      const earnedPointsBySection = new Map<string, number>();
+
+      for (const question of questionMaxPoints) {
+        const name = String(question.section ?? "").trim() || "Sin sección";
+        sectionByQuestion.set(question.id, name);
+        maxPointsBySection.set(
+          name,
+          (maxPointsBySection.get(name) ?? 0) + question.maxPts
+        );
+      }
+
+      for (const answer of scoringAnswers) {
+        const name = sectionByQuestion.get(answer.questionId);
+        if (!name) continue;
+
+        const earned = Math.min(
+          maxPointsByQuestion.get(answer.questionId) ?? 0,
+          answer.pointsEarned || 0
+        );
+
+        earnedPointsBySection.set(
+          name,
+          (earnedPointsBySection.get(name) ?? 0) + earned
+        );
+      }
+
+      for (const [name, maxPoints] of maxPointsBySection) {
+        const earned = earnedPointsBySection.get(name) ?? 0;
+        sectionScores[name] = maxPoints > 0
+          ? Math.max(0, Math.min(100, Math.round(earned / maxPoints * 100)))
+          : 0;
+      }
+
+      // Preserve configured minimum-correct requirements.
+      // Templates may identify sections using "title" or "name".
+      for (const section of sections) {
+        if (!section || typeof section !== "object" || Array.isArray(section)) {
+          continue;
+        }
+
+        const sectionData = section as Record<string, unknown>;
+        const name = String(sectionData.title || sectionData.name || "").trim();
+        const minimumCorrect = Number(sectionData.minimumCorrect ?? 0);
+
+        if (!name || !Number.isInteger(minimumCorrect) || minimumCorrect <= 0) {
+          continue;
+        }
+
+        const correct = Math.round(earnedPointsBySection.get(name) ?? 0);
+        const met = correct >= minimumCorrect;
+
+        sectionRequirementResults[name] = {
+          minimumCorrect,
+          correct,
+          met,
+        };
+
+        if (!met) sectionRequirementsMet = false;
+      }
+      const recordedAnswerTime = attempt.answers.reduce(
+        (sum, answer) => sum + (answer.timeSpent || 0),
+        0
+      );
+      const elapsedAttemptTime = Math.max(
+        0,
+        Math.round((now.getTime() - attempt.startedAt.getTime()) / 1000)
+      );
+      const timeSpent = recordedAnswerTime > 0 ? recordedAnswerTime : elapsedAttemptTime;
+
+      const flags: any =
+        attempt.flagsJson && typeof attempt.flagsJson === "object"
+          ? { ...(attempt.flagsJson as any) }
+          : {};
+
+      if (expiredAtSubmission && attempt.expiresAt) {
+        flags.expiredAt = attempt.expiresAt.toISOString();
+      }
+      if (Object.keys(sectionRequirementResults).length > 0) {
+        flags.sectionRequirements = sectionRequirementResults;
+      }
+
+      if (answeredCount > 0) {
+        const avgTimePerQuestion = timeSpent / answeredCount;
+        if (avgTimePerQuestion < 5) {
+          flags.tooFast = true;
+        }
+      }
+
+      const scoreToPersist = attempt.contestRegistration
+        ? Math.max(0, Math.min(75, Math.round(totalPoints)))
+        : totalScore;
+      const passingScore = Number((attempt.template as any)?.passingScore ?? 0);
+      // Solo una severidad CRITICAL invalida el resultado. SUSPICIOUS sigue
+      // visible para revisión, pero no castiga automáticamente al candidato.
+      const integrityInvalidated =
+        String(attempt.severity ?? "NORMAL").toUpperCase() === "CRITICAL";
+      const scoreForPassing = attempt.contestRegistration ? scoreToPersist : totalScore;
+      const passed =
+        !integrityInvalidated &&
+        scoreForPassing >= passingScore &&
+        sectionRequirementsMet;
+
+
+      const updatedAttempt = await tx.assessmentAttempt.updateMany({
+        where: {
+          id: params.attemptId,
+          candidateId: user.id,
+          status: "IN_PROGRESS" as any,
+        },
+        data: {
+          status: "SUBMITTED" as any,
+          submittedAt: now,
+          totalScore: scoreToPersist,
+          sectionScores,
+          passed,
+          timeSpent,
+          flagsJson: flags,
+        },
+      });
+
+      if (updatedAttempt.count === 0) {
+        throw new Error("STATE_INVALID_OR_ALREADY_SUBMITTED");
+      }
+
+      // El concurso usa 75 puntos automáticos (60 funcionales + 15 de
+      // casos límite); los 25 restantes se agregan durante la revisión.
+      if (attempt.contestRegistration) {
+        const automatedScore = scoreToPersist;
+        const manualScore =
+          attempt.contestRegistration.qualityScore +
+          attempt.contestRegistration.efficiencyScore +
+          attempt.contestRegistration.explanationScore;
+        await tx.contestRegistration.update({
+          where: { id: attempt.contestRegistration.id },
+          data: {
+            status: "QUALIFIER_SUBMITTED",
+            automatedScore,
+            finalScore: automatedScore + manualScore,
+          },
+        });
+      }
+
+      // Badge de skill verificado: attempts candidato-iniciados (sin invite
+      // ni application) de un examen de badge otorgan el badge al aprobar.
+      // upsert = idempotente si ya existe el badge de ese skill+nivel.
+      const tpl = attempt.template as {
+        isBadgeExam?: boolean;
+        badgeTermId?: string | null;
+        badgeLevel?: number | null;
+      };
+      if (integrityInvalidated) {
+        // Protección idempotente ante reintentos o estados heredados: este
+        // intento nunca puede respaldar una credencial verificada.
+        await tx.candidateBadge.deleteMany({
+          where: { attemptId: params.attemptId },
+        });
+      }
+
+      if (
+        passed &&
+        tpl?.isBadgeExam &&
+        tpl.badgeTermId &&
+        tpl.badgeLevel != null &&
+        !attempt.inviteId &&
+        !attempt.applicationId
+      ) {
+        await tx.candidateBadge.upsert({
+          where: {
+            candidateId_termId_level: {
+              candidateId: user.id,
+              termId: tpl.badgeTermId,
+              level: tpl.badgeLevel,
+            },
+          },
+          create: {
+            candidateId: user.id,
+            termId: tpl.badgeTermId,
+            level: tpl.badgeLevel,
+            attemptId: params.attemptId,
+            earnedAt: now,
+          },
+          // Renovación de una credencial vencida: conserva su URL pública,
+          // pero la enlaza al intento y fecha vigentes.
+          update: {
+            attemptId: params.attemptId,
+            earnedAt: now,
+            isPublic: true,
+          },
+        });
+
+        // Una certificacion verificada tambien debe existir como skill
+        // estructurado. Nunca reducimos un nivel declarado previamente.
+        const verifiedSkillLevel = badgeLevelToSkillLevel(tpl.badgeLevel);
+        const existingSkill = await tx.candidateSkill.findUnique({
+          where: {
+            userId_termId: {
+              userId: user.id,
+              termId: tpl.badgeTermId,
+            },
+          },
+          select: { id: true, level: true },
+        });
+
+        if (!existingSkill) {
+          await tx.candidateSkill.create({
+            data: {
+              userId: user.id,
+              termId: tpl.badgeTermId,
+              level: verifiedSkillLevel,
+            },
+          });
+        } else if ((existingSkill.level ?? 0) < verifiedSkillLevel) {
+          await tx.candidateSkill.update({
+            where: { id: existingSkill.id },
+            data: { level: verifiedSkillLevel },
+          });
+        }
+      }
+
+      let inviteIdForLedger: string | null = attempt.inviteId ?? null;
+
+      if (attempt.inviteId) {
+        await tx.assessmentInvite.updateMany({
+          where: {
+            id: attempt.inviteId,
+            status: { in: ["SENT", "STARTED"] as any },
+          },
+          data: {
+            status: "SUBMITTED" as any,
+            submittedAt: now,
+          },
+        });
+      } else if (attempt.applicationId) {
+        const inviteUpdateResult = await tx.assessmentInvite.updateMany({
+          where: {
+            candidateId: user.id,
+            templateId: attempt.templateId,
+            applicationId: attempt.applicationId,
+            status: { in: ["SENT", "STARTED"] as any },
+          },
+          data: {
+            status: "SUBMITTED" as any,
+            submittedAt: now,
+          },
+        });
+
+        if (inviteUpdateResult.count > 0) {
+          const linkedInvite = await tx.assessmentInvite.findFirst({
+            where: {
+              candidateId: user.id,
+              templateId: attempt.templateId,
+              applicationId: attempt.applicationId,
+              status: "SUBMITTED" as any,
+            },
+            select: { id: true },
+            orderBy: { createdAt: "desc" },
+          });
+
+          inviteIdForLedger = linkedInvite?.id ?? null;
+        }
+      }
+
+      if (inviteIdForLedger) {
+        const chargedLedger = await tx.assessmentInviteChargeLedger.updateMany({
+          where: {
+            inviteId: inviteIdForLedger,
+            kind: "ASSESSMENT_INVITE" as any,
+            cycle: getCurrentBillingCycle(),
+            status: "RESERVED" as any,
+          },
+          data: {
+            status: "CHARGED" as any,
+            chargedAmount: ONE_CREDIT,
+          },
+        });
+
+        if (chargedLedger.count > 0) {
+          await tx.assessmentInvite.update({
+            where: { id: inviteIdForLedger },
+            data: {
+              chargedAt: now,
+              chargeCount: {
+                increment: 1,
+              },
+            },
+          });
+        }
+      }
+      return { attempt, totalScore: scoreToPersist, sectionScores, passed, timeSpent, expiredAtSubmission };
+    }, { isolationLevel: "ReadCommitted" });
+
+    if (submission instanceof Response) return submission;
+    const { attempt, totalScore: scoreToPersist, sectionScores, passed, timeSpent, expiredAtSubmission } = submission;
 
     (async () => {
       try {
@@ -536,6 +532,9 @@ export async function POST(
       timeSpent,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "STATE_INVALID_OR_ALREADY_SUBMITTED") {
+      return jsonNoStore({ error: "No se pudo enviar (estado inválido o ya enviado)" }, 400);
+    }
     console.error("Error submitting assessment:", error);
     return jsonNoStore({ error: "Error al enviar evaluación" }, 500);
   }

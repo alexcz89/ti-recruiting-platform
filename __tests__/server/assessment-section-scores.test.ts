@@ -21,7 +21,9 @@ vi.mock("@/lib/server/prisma", () => ({
     assessmentQuestion: { findMany: mocks.findQuestions },
     $transaction: async (callback: (tx: any) => Promise<any>) =>
       callback({
-        assessmentAttempt: { updateMany: mocks.updateAttempt },
+        $queryRaw: vi.fn(async () => []),
+        assessmentAttempt: { findUnique: mocks.findAttempt, updateMany: mocks.updateAttempt },
+        assessmentQuestion: { findMany: mocks.findQuestions },
       }),
   },
 }));

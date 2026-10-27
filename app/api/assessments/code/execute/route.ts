@@ -4,6 +4,8 @@ import { getServerSession } from "next-auth";
 import { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
+import { assessmentAttemptContextSelect, isAssessmentAttemptContextOpen, isAssessmentQuestionAuthorized } from "@/lib/assessments/access";
+import { lockAssessmentAttemptTx } from "@/lib/assessments/mutation-locks";
 import { judge0Service } from "@/lib/code-execution/judge0-service";
 import { candidateExecutionResult } from "@/lib/code-execution/public-result";
 import { checkPlagiarism } from "@/lib/code-execution/plagiarism";
@@ -183,6 +185,9 @@ export async function POST(request: Request) {
         status: true,
         expiresAt: true,
         templateId: true,
+        flagsJson: true,
+        template: { select: { isBadgeExam: true } },
+        ...assessmentAttemptContextSelect,
       },
     });
 
@@ -195,6 +200,9 @@ export async function POST(request: Request) {
     }
 
     const attemptStatus = String(attempt.status ?? "").toUpperCase();
+    if (!isAssessmentAttemptContextOpen(attempt)) {
+      return jsonNoStore({ error: "El intento no está disponible" }, 403);
+    }
     if (attemptStatus !== "IN_PROGRESS") {
       return jsonNoStore({ error: "El intento no está en progreso" }, 400);
     }
@@ -206,6 +214,9 @@ export async function POST(request: Request) {
       );
     }
 
+    if (!isAssessmentQuestionAuthorized(attempt.flagsJson, Boolean(attempt.template?.isBadgeExam), questionId)) {
+      return jsonNoStore({ error: "Pregunta no encontrada" }, 404);
+    }
     if (!judge0Service.isLanguageSupported(language)) {
       return jsonNoStore(
         {
@@ -229,6 +240,7 @@ export async function POST(request: Request) {
         id: true,
         templateId: true,
         type: true,
+        isActive: true,
         allowedLanguages: true,
       },
     });
@@ -236,13 +248,12 @@ export async function POST(request: Request) {
     if (!question) {
       return jsonNoStore({ error: "Pregunta no encontrada" }, 404);
     }
+    if (!question.isActive || question.templateId !== attempt.templateId) {
+      return jsonNoStore({ error: "Pregunta no encontrada" }, 404);
+    }
 
     if (String(question.type ?? "").toUpperCase() !== "CODING") {
       return jsonNoStore({ error: "Esta pregunta no es de tipo CODING" }, 400);
-    }
-
-    if (question.templateId !== attempt.templateId) {
-      return jsonNoStore({ error: "La pregunta no pertenece a este template" }, 400);
     }
 
     const allowedLanguages = parseStringArrayLoose(question.allowedLanguages);
@@ -341,21 +352,17 @@ export async function POST(request: Request) {
         // Judge0 has already returned. Serialize only this short persistence
         // window with assessment submission, then re-read the authoritative
         // status/deadline while holding the transaction-scoped lock.
-        await tx.$queryRaw`
-          SELECT id
-          FROM "AssessmentAttempt"
-          WHERE id = ${attemptId}
-          FOR UPDATE
-        `;
+        const lockedInvite = await lockAssessmentAttemptTx(tx, attemptId);
 
         const currentAttempt = await tx.assessmentAttempt.findUnique({
           where: { id: attemptId },
-          select: { candidateId: true, status: true, expiresAt: true },
+          select: { candidateId: true, status: true, expiresAt: true, ...assessmentAttemptContextSelect },
         });
 
         if (!currentAttempt || currentAttempt.candidateId !== user.id) {
           return { status: "INVALID" } as const;
         }
+        if (lockedInvite?.status === "CANCELLED" || !isAssessmentAttemptContextOpen(currentAttempt)) return { status: "CLOSED" } as const;
         if (String(currentAttempt.status).toUpperCase() !== "IN_PROGRESS") {
           return { status: "CLOSED" } as const;
         }

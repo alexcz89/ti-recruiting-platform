@@ -21,7 +21,7 @@ vi.mock("@/lib/server/prisma", () => {
   };
   return { prisma: {
     ...tx,
-    assessmentQuestion: { findUnique: vi.fn(async () => ({ id: "question-a", templateId: "template-a", type: "CODING", allowedLanguages: ["python"] })) },
+    assessmentQuestion: { findUnique: vi.fn(async () => ({ id: "question-a", templateId: "template-a", type: "CODING", isActive: true, allowedLanguages: ["python"] })) },
     codeTestCase: { findMany: vi.fn(async ({ where }) => where.isHidden === false ? cases.filter(test => !test.isHidden) : cases) },
     codeExecution: { count: vi.fn(async () => 0), create: mocks.executions },
     $transaction: vi.fn(async (work) => work(tx)),
