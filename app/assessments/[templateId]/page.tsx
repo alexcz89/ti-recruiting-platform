@@ -1,6 +1,9 @@
 // app/assessments/[templateId]/page.tsx
 'use client';
 
+import { refreshAssessmentInbox } from "../actions";
+import { ASSESSMENTS_UPDATED_EVENT } from "@/lib/client/assessment-updates";
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -174,6 +177,14 @@ export default function AssessmentPage() {
     },
   });
 
+  async function updateInboxAfterCompletion() {
+    window.dispatchEvent(new Event(ASSESSMENTS_UPDATED_EVENT));
+    try { await refreshAssessmentInbox(); }
+    catch {
+      // The inbox refreshes on entry; this best-effort invalidation must not block completion.
+    }
+  }
+
   async function finalizeExpiredAttempt(targetAttemptId: string) {
     const tracked = expirationAttemptRef.current;
     if (tracked?.id === targetAttemptId) return;
@@ -202,6 +213,7 @@ export default function AssessmentPage() {
         throw new Error(data?.error || 'No se pudo cerrar la evaluación vencida');
       }
 
+      void updateInboxAfterCompletion();
       expirationAttemptRef.current = { id: targetAttemptId, state: 'finalized' };
       setExpirationState('finalized');
       clearPending();
@@ -644,6 +656,7 @@ export default function AssessmentPage() {
       }
 
       const result = await res.json();
+      void updateInboxAfterCompletion();
 
       toastSuccess(
         result.passed
@@ -653,7 +666,7 @@ export default function AssessmentPage() {
 
       clearPending();
       localStorage.removeItem(`assessment:${attemptId}:currentIndex`);
-      router.push(`/assessments/attempts/${attemptId}/results`);
+      router.replace(`/assessments/attempts/${attemptId}/results`);
     } catch (error: any) {
       console.error(error);
       toastError(error?.message || 'Error al enviar evaluación');

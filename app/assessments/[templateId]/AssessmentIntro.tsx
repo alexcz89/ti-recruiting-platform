@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { Clock, FileText, Award, AlertCircle, BookOpen } from "lucide-react";
+import { Clock, FileText, Award, ShieldCheck, BookOpen } from "lucide-react";
 import type { AssessmentState } from "@/lib/assessments/expiration";
 
 type Props = {
@@ -79,129 +79,60 @@ export default function AssessmentIntro({ template, onStart, accessState }: Prop
       : 1;
 
   const penalizeWrong = Boolean(template?.penalizeWrong);
-  const isExpired = accessState === "EXPIRED";
+  const isUnavailable = accessState === "EXPIRED" || accessState === "CANCELLED";
   const actionLabel = accessState === "IN_PROGRESS"
-    ? "Continuar evaluación →"
-    : "Comenzar evaluación →";
+    ? "Continuar evaluación"
+    : "Comenzar evaluación";
 
-  return (
-    <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[760px] px-4 py-6 md:px-8 md:py-8">
-
-        {/* Title + CTA in a compact top row on desktop */}
-        <div className="mb-5 flex flex-col items-center gap-3 text-center md:flex-row md:items-start md:justify-between md:text-left">
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold text-default md:text-3xl">{title}</h1>
-            <p className="mt-1 text-sm text-muted md:text-base">{description}</p>
-          </div>
-          <div className="flex flex-col items-center gap-1 md:items-end">
-            {isExpired ? (
-              <div className="max-w-xs rounded-xl border border-zinc-200 bg-zinc-100 px-4 py-3 text-left dark:border-zinc-700 dark:bg-zinc-900">
-                <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-                  Invitación expirada
-                </p>
-                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-                  Si aún deseas completarla, pide al reclutador que te envíe un nuevo link.
-                </p>
-              </div>
-            ) : (
-              <>
-                <button onClick={onStart} className="btn btn-primary px-7 py-3 text-base md:text-lg whitespace-nowrap">
-                  {actionLabel}
-                </button>
-                <p className="text-xs text-muted">El cronómetro inicia al hacer clic</p>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <div className="p-4 rounded-xl border glass-card text-center">
-            <FileText className="h-6 w-6 text-emerald-600 mx-auto mb-1" />
-            <p className="text-xl font-bold text-default">{totalQuestions ?? "—"}</p>
-            <p className="text-xs text-muted">Preguntas</p>
-          </div>
-          <div className="p-4 rounded-xl border glass-card text-center">
-            <Clock className="h-6 w-6 text-blue-600 mx-auto mb-1" />
-            <p className="text-xl font-bold text-default">{formatMinutes(template?.timeLimit)}</p>
-            <p className="text-xs text-muted">Minutos</p>
-          </div>
-          <div className="p-4 rounded-xl border glass-card text-center">
-            <Award className="h-6 w-6 text-teal-600 mx-auto mb-1" />
-            <p className="text-xl font-bold text-default">{formatPercent(template?.passingScore)}</p>
-            <p className="text-xs text-muted">Para aprobar</p>
-          </div>
-        </div>
-
-        {/* Only real topic titles, no guessed counts or per-section deadlines. */}
-        {topics.length > 0 && (
-          <section className="mb-5" aria-label="Temas que se evaluarán">
-            <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-default">
-              <BookOpen className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-              Temas que se evaluarán
-            </h2>
-            <ul className="flex flex-wrap gap-2">
-              {topics.map((topic) => (
-                <li
-                  key={topic.toLocaleLowerCase()}
-                  className="max-w-full rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-sm leading-5 text-zinc-700 dark:border-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200"
-                >
-                  {topic}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
-        {/* Instrucciones compactas */}
-        <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-900/20">
-          <div className="flex items-start gap-2.5">
-            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1.5">
-                Instrucciones
-              </h3>
-              <ul className="space-y-1 text-xs text-amber-800 dark:text-amber-200">
-                <li>• El tiempo corre automáticamente al iniciar</li>
-                <li>• Puedes navegar entre preguntas libremente</li>
-                <li>• Tus respuestas se guardan automáticamente</li>
-                <li>• {allowRetry ? `Puedes intentar hasta ${maxAttempts} veces` : "Solo tienes 1 intento"}</li>
-                {penalizeWrong && <li>• Las respuestas incorrectas restan puntos (-0.25)</li>}
-                <li>• No cambies de ventana durante la evaluación</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Aviso anti-AI / integridad ──────────────────────────────────── */}
-        <div className="mt-4 p-4 rounded-xl border border-red-200 dark:border-red-700/40 bg-red-50 dark:bg-red-900/20">
-          <div className="flex items-start gap-2.5">
-            <span className="text-lg shrink-0 mt-0.5">🛡️</span>
-            <div>
-              <h3 className="text-sm font-semibold text-red-900 dark:text-red-200 mb-1.5">
-                Evaluación con monitoreo de integridad
-              </h3>
-              <ul className="space-y-1 text-xs text-red-800 dark:text-red-300">
-                <li>• <strong>Se registra cada cambio de pestaña</strong> o pérdida de foco de la ventana</li>
-                <li>• Se detectan intentos de copiar y pegar texto</li>
-                <li>• El tiempo por pregunta queda registrado</li>
-                <li>• El reclutador recibe un reporte completo de actividad sospechosa</li>
-                <li>• <strong>El uso de IA, buscadores u otras herramientas externas está prohibido</strong> y puede resultar en descalificación</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-
-        {/* Mobile CTA (visible only on mobile since top one is hidden there) */}
-        {!isExpired && (
-          <div className="mt-5 text-center md:hidden">
-            <button onClick={onStart} className="btn btn-primary w-full py-3 text-base">
-              {actionLabel}
-            </button>
-            <p className="mt-2 text-xs text-muted">El cronómetro inicia al hacer clic</p>
-          </div>
-        )}
+return (
+    <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-4">
+      <header className="mb-4">
+        <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-teal-700 dark:text-teal-300">Antes de comenzar</p>
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
+        <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{description}</p>
+      </header>
+      <dl className="mb-4 grid grid-cols-3 overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        {[
+          { label: "Preguntas", value: totalQuestions ?? "—", Icon: FileText },
+          { label: "Minutos", value: formatMinutes(template?.timeLimit), Icon: Clock },
+          { label: "Para aprobar", value: formatPercent(template?.passingScore), Icon: Award },
+        ].map(({ label, value, Icon }) => <div key={label} className="flex flex-col items-center p-3 text-center sm:flex-row sm:justify-center sm:gap-3 sm:text-left">
+          <Icon className="mb-1 h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300 sm:mb-0" aria-hidden="true" />
+          <div><dt className="text-xs text-zinc-600 dark:text-zinc-300">{label}</dt><dd className="mt-1 text-xl font-semibold sm:text-2xl">{value}</dd></div>
+        </div>)}
+      </dl>
+      {topics.length > 0 && <section className="mb-4" aria-label="Temas que se evaluarán">
+        <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold"><BookOpen className="h-4 w-4" aria-hidden="true" />Temas que se evaluarán</h2>
+        <ul className="flex flex-wrap gap-2">{topics.map(topic => <li key={topic.toLocaleLowerCase()} className="max-w-full break-words rounded-lg bg-zinc-100 px-3 py-1.5 text-sm dark:bg-zinc-800">{topic}</li>)}</ul>
+      </section>}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section aria-labelledby="assessment-instructions" className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+          <h2 id="assessment-instructions" className="mb-3 text-base font-semibold">Instrucciones</h2>
+          <ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            <li>El tiempo corre automáticamente al iniciar. Puedes navegar entre preguntas libremente.</li>
+            <li>Tus respuestas se guardan automáticamente.</li>
+            <li>{allowRetry ? `Puedes intentar hasta ${maxAttempts} veces.` : "Solo tienes 1 intento."}</li>
+            {penalizeWrong && <li>Las respuestas incorrectas restan puntos (-0.25).</li>}
+          </ul>
+        </section>
+        <section aria-labelledby="assessment-integrity" className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <h2 id="assessment-integrity" className="mb-3 flex items-center gap-2 text-base font-semibold"><ShieldCheck className="h-5 w-5 text-teal-700 dark:text-teal-300" aria-hidden="true" />Evaluación con monitoreo de integridad</h2>
+          <ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-zinc-600 dark:text-zinc-300">
+            <li>Se registran los cambios de pestaña y las pérdidas de foco de la ventana.</li>
+            <li>Se detectan intentos de copiar y pegar texto, y se registra el tiempo por pregunta.</li>
+            <li>El reclutador recibe un reporte de estas señales de actividad.</li>
+            <li>El uso de IA, buscadores u otras herramientas externas está prohibido y puede resultar en descalificación.</li>
+          </ul>
+        </section>
+      </div>
+      <div className="mt-5">
+        {isUnavailable ? <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900" role="status">
+          <p className="font-semibold">{accessState === "CANCELLED" ? "Invitación cancelada" : "Invitación expirada"}</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Si aún deseas completarla, pide al reclutador que te envíe un nuevo link.</p>
+        </div> : <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">{accessState === "IN_PROGRESS" ? "El tiempo disponible de tu intento se mantiene al continuar." : "El cronómetro inicia únicamente cuando presionas Comenzar evaluación."}</p>
+          <button type="button" onClick={onStart} className="btn btn-primary bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 min-h-11 w-full px-6 py-3 text-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 dark:focus-visible:outline-teal-300 sm:w-auto">{actionLabel}</button>
+        </div>}
       </div>
     </main>
   );

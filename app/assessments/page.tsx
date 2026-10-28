@@ -1,7 +1,9 @@
 // app/assessments/page.tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import type { ReactNode } from "react";
+import { ClipboardList } from "lucide-react";
+import { AssessmentInboxRefresh } from "./AssessmentInboxRefresh";
+import { AssessmentDateTime } from "./AssessmentDateTime";
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
@@ -27,14 +29,6 @@ function statusTone(state: UiState) {
   if (state === "EXPIRED" || state === "CANCELLED")
     return "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900/40 dark:text-zinc-300 dark:border-zinc-800";
   return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/20 dark:text-teal-200 dark:border-teal-800/60";
-}
-
-function fmtDate(d: any) {
-  try {
-    return new Date(d).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
-  } catch {
-    return "";
-  }
 }
 
 function buildKey(inv: any) {
@@ -68,6 +62,7 @@ export default async function CandidateAssessmentsPage() {
       applicationId: true,
       updatedAt: true,
       createdAt: true,
+      sentAt: true,
       template: { select: { id: true, title: true, timeLimit: true } },
       application: {
         select: {
@@ -231,236 +226,107 @@ export default async function CandidateAssessmentsPage() {
   const inProgressCount = inProgress.length;
   const badgeCount = pendingCount + inProgressCount;
 
-  return (
-    <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[1100px] space-y-6 px-6 py-10 lg:px-10">
-        <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-bold leading-tight">Evaluaciones</h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Aquí verás las evaluaciones que te han asignado los reclutadores (y también te llegan por correo).
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href="/certificaciones"
-              className="inline-flex items-center rounded-full bg-teal-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-teal-700"
-            >
-              Certificaciones gratis
-            </Link>
-            <Link
-              href="/mis-evaluaciones"
-              className="inline-flex items-center rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
-            >
-              Ver historial
-            </Link>
-            <Link
-              href="/jobs"
-              className="inline-flex items-center rounded-full bg-zinc-900 px-4 py-2 text-xs font-medium text-white shadow-sm hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100"
-            >
-              Ver vacantes
-            </Link>
-          </div>
-        </header>
-
-        {/* ✅ Banner */}
-        {badgeCount > 0 && (
-          <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4 dark:border-teal-500/30 dark:bg-teal-900/20">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                  {pendingCount > 0
-                    ? `Tienes ${pendingCount} evaluación${pendingCount === 1 ? "" : "es"} pendiente${
-                        pendingCount === 1 ? "" : "s"
-                      }.`
-                    : `Tienes ${inProgressCount} evaluación${inProgressCount === 1 ? "" : "es"} en progreso.`}
-                </p>
-                <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                  Completa tus evaluaciones para avanzar en tus postulaciones.
-                </p>
-              </div>
-
-              <a
-                href={pendingCount > 0 ? "#pendientes" : "#en-progreso"}
-                className="inline-flex items-center justify-center rounded-full bg-teal-600 px-4 py-2 text-xs font-medium text-white hover:bg-teal-700"
-              >
-                {pendingCount > 0 ? "Ir a pendientes" : "Ir a en progreso"}
-              </a>
-            </div>
-          </div>
-        )}
-
-        {rows.length === 0 ? (
-          <div className="glass-card rounded-2xl border border-dashed p-6 text-center">
-            <p className="text-base font-medium text-zinc-800 dark:text-zinc-100">
-              No tienes evaluaciones asignadas por el momento.
-            </p>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Si te asignan una, aparecerá aquí y también te llegará por correo.
-            </p>
-            <div className="mt-4">
-              <Link
-                href="/jobs"
-                className="inline-flex items-center rounded-full border border-zinc-200 bg-white/80 px-5 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
-              >
-                Ir a vacantes
-              </Link>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {/* Pendientes */}
-            <Section
-              id="pendientes"
-              title="Pendientes"
-              count={pending.length}
-              emptyText="No tienes evaluaciones pendientes."
-              rows={pending}
-              renderAction={(r) => <CandidateAssessmentAction {...r} />}
-            />
-
-            {/* En progreso */}
-            <Section
-              id="en-progreso"
-              title="En progreso"
-              count={inProgress.length}
-              emptyText="No tienes evaluaciones en progreso."
-              rows={inProgress}
-              renderAction={(r) => <CandidateAssessmentAction {...r} />}
-            />
-
-            {/* Completadas */}
-            <Section
-              title="Completadas"
-              count={completed.length}
-              emptyText="Aún no completas evaluaciones."
-              rows={completed}
-              renderExtra={(r) => {
-                const score = r.attempt?.totalScore ?? null;
-                return score != null ? (
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                    Score: <span className="font-semibold text-zinc-700 dark:text-zinc-200">{score}%</span>
-                  </span>
-                ) : null;
-              }}
-              renderAction={(r) =>
-                r.resultsUrl ? (
-                  <Link
-                    href={r.resultsUrl}
-                    className="inline-flex items-center rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                  >
-                    Ver resultados
-                  </Link>
-                ) : null
-              }
-            />
-
-            {/* Inactivas */}
-            {inactive.length > 0 && (
-              <Section
-                title="Expiradas / Canceladas"
-                count={inactive.length}
-                rows={inactive}
-                muted
-                renderAction={(r) => <CandidateAssessmentAction {...r} />}
-                renderFooter={() => (
-                  <p className="mt-2 text-[12px] text-zinc-500 dark:text-zinc-400">
-                    Si aún deseas completarla, pide al reclutador que te reenvíe el link.
-                  </p>
-                )}
-              />
-            )}
-          </div>
-        )}
-      </div>
+return (
+    <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      <AssessmentInboxRefresh />
+      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-teal-700 dark:text-teal-300">Tu proceso de selección</p>
+          <h1 className="text-3xl font-bold tracking-tight">Mis evaluaciones</h1>
+          <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">Consulta tus invitaciones, retoma una evaluación o revisa tus resultados.</p>
+        </div>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300" aria-live="polite"><strong className="text-2xl font-semibold text-zinc-950 dark:text-white">{badgeCount}</strong>{" "}{badgeCount === 1 ? "evaluación por completar" : "evaluaciones por completar"}</p>
+      </header>
+      {rows.length === 0 ? (
+        <section className="rounded-2xl border border-dashed border-zinc-300 px-6 py-12 text-center dark:border-zinc-700">
+          <ClipboardList className="mx-auto mb-4 h-9 w-9 text-teal-700 dark:text-teal-300" aria-hidden="true" />
+          <h2 className="text-lg font-semibold">Aún no tienes evaluaciones asignadas</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-300">Cuando recibas una invitación, podrás consultarla aquí. También puedes revisar tus postulaciones.</p>
+          <Link href="/profile/summary" className={secondaryAction + " mt-5"}>Ver mis postulaciones</Link>
+        </section>
+      ) : (
+        <div className="space-y-8">
+          {badgeCount === 0 ? <section aria-labelledby="assessment-up-to-date" className="rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <h2 id="assessment-up-to-date" className="text-sm font-semibold">Estás al día</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">No tienes evaluaciones en progreso ni pendientes.</p>
+            <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+              <div className="flex gap-1"><dt>En progreso:</dt><dd>0</dd></div>
+              <div className="flex gap-1"><dt>Pendientes:</dt><dd>0</dd></div>
+            </dl>
+          </section> : <>
+            <Section id="en-progreso" title="En progreso" rows={inProgress} emptyText="No tienes evaluaciones en progreso." now={now} />
+            <Section id="pendientes" title="Pendientes" rows={pending} emptyText="Estás al día: no tienes evaluaciones pendientes." now={now} />
+          </>}
+          <Section id="completadas" title="Completadas" rows={completed} emptyText="Tus resultados aparecerán aquí cuando finalices una evaluación." now={now} />
+          {inactive.length > 0 && <details className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
+            <summary className="min-h-11 cursor-pointer text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">Invitaciones expiradas y canceladas ({inactive.length})</summary>
+            <div className="mt-4"><Section title="No disponibles" rows={inactive} now={now} /></div>
+          </details>}
+        </div>
+      )}
+      <footer className="mt-10 flex flex-wrap gap-x-6 gap-y-2 border-t border-zinc-200 pt-5 text-sm dark:border-zinc-800">
+        <Link className="inline-flex min-h-11 items-center underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2" href="/mis-evaluaciones">Historial de evaluaciones</Link>
+        <Link className="inline-flex min-h-11 items-center underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2" href="/certificaciones">Explorar certificaciones</Link>
+      </footer>
     </main>
   );
 }
 
-function Section({
-  id,
-  title,
-  count,
-  emptyText,
-  rows,
-  muted,
-  renderAction,
-  renderExtra,
-  renderFooter,
-}: {
-  id?: string;
-  title: string;
-  count: number;
-  emptyText?: string;
-  rows: any[];
-  muted?: boolean;
-  renderAction?: (r: any) => ReactNode;
-  renderExtra?: (r: any) => ReactNode;
-  renderFooter?: () => ReactNode;
-}) {
+const secondaryAction = "inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:bg-zinc-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:border-zinc-700 dark:text-zinc-100 dark:hover:bg-zinc-900";
+type InboxRow = {
+  inv: { id: string; sentAt?: Date | null; createdAt?: Date | null };
+  attempt: { totalScore?: number | null; startedAt?: Date | null; submittedAt?: Date | null; expiresAt?: Date | null } | null;
+  state: UiState; templateTitle: string; companyName: string; jobTitle: string;
+  timeLimit: number | null; startUrl: string; resumeUrl: string; resultsUrl: string | null; expiresAtDisplay: Date | null;
+};
+function DateLabel({ label, value }: { label: string; value?: Date | null }) {
+  return <div><dt className="text-xs text-zinc-600 dark:text-zinc-300">{label}</dt><dd className="mt-1 text-sm">
+    <AssessmentDateTime value={value} />
+  </dd></div>;
+}
+function Section({ id, title, rows, emptyText, now }: { id?: string; title: string; rows: InboxRow[]; emptyText?: string; now: Date }) {
   return (
-    <section id={id} className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold tracking-wide text-zinc-900 dark:text-zinc-100">{title}</h2>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400">{count}</span>
+    <section id={id} aria-labelledby={id ? id + "-heading" : undefined} className="space-y-3">
+      <div className="flex items-center gap-3">
+        <h2 id={id ? id + "-heading" : undefined} className="text-lg font-semibold">{title}</h2>
+        <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-semibold text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200" aria-label={rows.length + " " + title.toLowerCase()}>{rows.length}</span>
       </div>
-
-      {rows.length === 0 ? (
-        emptyText ? (
-          <div className="rounded-2xl border border-zinc-100 bg-white/70 p-4 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950/50 dark:text-zinc-300">
-            {emptyText}
-          </div>
-        ) : null
-      ) : (
-        <div className="grid gap-3">
-          {rows.map((r) => {
-            const tone = statusTone(r.state);
-            const label = statusLabel(r.state);
-
-            // ✅ usa expiresAtDisplay (attempt.expiresAt si existe; si no, invite.expiresAt)
-            const expiresTxt = r.expiresAtDisplay ? fmtDate(r.expiresAtDisplay) : null;
-
-            return (
-              <div
-                key={r.inv.id}
-                className={[
-                  "rounded-2xl border border-zinc-100 p-4 shadow-sm dark:border-zinc-800",
-                  muted ? "bg-white/60 dark:bg-zinc-950/40" : "bg-white/90 dark:bg-zinc-950/70",
-                ].join(" ")}
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{r.templateTitle}</p>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                      {r.companyName} · {r.jobTitle}
-                      {r.timeLimit ? ` · ${r.timeLimit} min` : ""}
-                    </p>
-
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] ${tone}`}>
-                        {label}
-                      </span>
-
-                      {expiresTxt && (
-                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">
-                          {r.state === "EXPIRED" ? "Expiró" : "Expira"}: {expiresTxt}
-                        </span>
-                      )}
-
-                      {renderExtra ? renderExtra(r) : null}
-                    </div>
-
-                    {renderFooter ? renderFooter() : null}
-                  </div>
-
-                  {renderAction ? <div className="flex shrink-0 items-center gap-2">{renderAction(r)}</div> : null}
+      {rows.length === 0 ? <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-600 dark:text-zinc-300 dark:border-zinc-800">{emptyText}</p> :
+        <ul className="space-y-3">{rows.map(row => (
+          <li key={row.inv.id} className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:p-6">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="mb-2 flex flex-wrap items-center gap-2">
+                  <p className="break-words text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-300">{row.companyName}</p>
+                  <span className={"rounded-full border px-2 py-0.5 text-xs font-medium " + statusTone(row.state)}>{statusLabel(row.state)}</span>
                 </div>
+                <h3 className="break-words text-lg font-semibold leading-6">{row.templateTitle}</h3>
+                <p className="mt-1 break-words text-sm text-zinc-600 dark:text-zinc-300">{row.jobTitle}</p>
+                <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+                  {row.timeLimit != null && <div><dt className="text-xs text-zinc-600 dark:text-zinc-300">Duración</dt><dd className="mt-1 text-sm">{row.timeLimit} min</dd></div>}
+                  {row.state === "PENDING" && <>
+                    <DateLabel label={row.inv.sentAt ? "Enviada" : "Asignada"} value={row.inv.sentAt ?? row.inv.createdAt} />
+                    <DateLabel label="Vencimiento de invitación" value={row.expiresAtDisplay} />
+                  </>}
+                  {row.state === "IN_PROGRESS" && <>
+                    <DateLabel label="Inicio" value={row.attempt?.startedAt} />
+                    {row.attempt?.expiresAt ? <div><dt className="text-xs text-zinc-600 dark:text-zinc-300">Tiempo restante al abrir</dt><dd className="mt-1 text-sm">{Math.max(0, Math.ceil((new Date(row.attempt.expiresAt).getTime() - now.getTime()) / 60000))} min</dd></div> : <div><dt className="text-xs text-zinc-600 dark:text-zinc-300">Límite del intento</dt><dd className="mt-1 text-sm">Sin vencimiento registrado</dd></div>}
+                  </>}
+                  {row.state === "COMPLETED" && <>
+                    <DateLabel label="Finalización" value={row.attempt?.submittedAt} />
+                    <div><dt className="text-xs text-zinc-600 dark:text-zinc-300">Calificación</dt><dd className="mt-1 text-lg font-semibold">{row.attempt?.totalScore != null ? row.attempt.totalScore + "%" : "No disponible"}</dd></div>
+                  </>}
+                  {row.state === "EXPIRED" && <DateLabel label="Vencimiento" value={row.expiresAtDisplay} />}
+                </dl>
               </div>
-            );
-          })}
-        </div>
-      )}
+              <div className="flex shrink-0 flex-col gap-2">
+                {row.state === "COMPLETED" ? row.resultsUrl && <Link href={row.resultsUrl} className={secondaryAction}>Ver resultados</Link> :
+                  <CandidateAssessmentAction state={row.state} startUrl={row.startUrl} resumeUrl={row.resumeUrl} />}
+                {(row.state === "EXPIRED" || row.state === "CANCELLED") && <p className="max-w-xs text-xs leading-5 text-zinc-600 dark:text-zinc-300">Solicita una nueva invitación al reclutador.</p>}
+              </div>
+            </div>
+          </li>
+        ))}</ul>}
     </section>
   );
 }

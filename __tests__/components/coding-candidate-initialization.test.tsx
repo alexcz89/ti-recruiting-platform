@@ -6,6 +6,7 @@ import CandidateAssessment from "@/app/assessments/[templateId]/page";
 import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), replace: vi.fn(), push: vi.fn(), resumed: false, starter: "" }));
+vi.mock("@/app/assessments/actions", () => ({ refreshAssessmentInbox: vi.fn(async () => undefined) }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ templateId: "template-a" }),
   useRouter: () => ({ replace: mocks.replace, push: mocks.push }),

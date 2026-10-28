@@ -29,24 +29,43 @@ export default function AssessmentResultsPage() {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<any>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reload, setReload] = useState(0);
+
   useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setResult(null);
+    setLoadError(null);
     async function loadResults() {
       try {
         const res = await fetch(`/api/assessments/attempts/${attemptId}/results`, {
           cache: 'no-store',
+          signal: controller.signal,
         });
-        if (!res.ok) throw new Error('Error al cargar resultados');
+        if (controller.signal.aborted) return;
+        if (!res.ok) {
+          setLoadError(res.status === 403 || res.status === 404
+            ? "Estos resultados no están disponibles o no tienes acceso a ellos."
+            : res.status === 401
+              ? "Tu sesión terminó. Inicia sesión para consultar tus resultados."
+              : "No pudimos cargar los resultados. Intenta nuevamente en unos momentos.");
+          return;
+        }
         const data = await res.json();
-        setResult(data);
+        if (!controller.signal.aborted) setResult(data);
       } catch (error) {
-        console.error(error);
+        if (!controller.signal.aborted) setLoadError(error instanceof TypeError
+          ? "No pudimos conectar para consultar tus resultados. Comprueba tu conexión e inténtalo de nuevo."
+          : "No pudimos cargar los resultados. Intenta nuevamente en unos momentos.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    loadResults();
-  }, [attemptId]);
+    void loadResults();
+    return () => controller.abort();
+  }, [attemptId, reload]);
 
   const [pendingInvites, setPendingInvites] = useState<any[]>([]);
   useEffect(() => {
@@ -79,7 +98,7 @@ export default function AssessmentResultsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
+        <div className="text-center" role="status" aria-live="polite">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
           <p className="mt-4 text-muted">Cargando resultados...</p>
         </div>
@@ -89,9 +108,16 @@ export default function AssessmentResultsPage() {
 
   if (!result) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-red-600">Error al cargar resultados</p>
-      </div>
+      <main className="mx-auto max-w-xl px-4 py-12">
+        <div role="alert" className="rounded-2xl border border-zinc-200 p-6 dark:border-zinc-800">
+          <h1 className="text-xl font-semibold">Resultados no disponibles</h1>
+          <p className="mt-3 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{loadError ?? "No pudimos cargar los resultados. Inténtalo de nuevo."}</p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <button type="button" onClick={() => setReload(value => value + 1)} className="btn btn-primary bg-teal-700 hover:bg-teal-800 dark:bg-teal-700 dark:hover:bg-teal-800 min-h-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 dark:focus-visible:outline-teal-300">Reintentar</button>
+            <Link href="/assessments" className="btn btn-ghost min-h-11 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 dark:focus-visible:outline-teal-300">Mis evaluaciones</Link>
+          </div>
+        </div>
+      </main>
     );
   }
 
@@ -124,6 +150,7 @@ export default function AssessmentResultsPage() {
   return (
     <main className="max-w-none p-0">
       <div className="mx-auto max-w-[1200px] px-4 lg:px-8 py-4">
+        <Link href="/assessments" className="mb-3 inline-flex min-h-11 items-center text-sm font-medium text-teal-700 underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-700 dark:focus-visible:outline-teal-300 dark:text-teal-300">← Mis evaluaciones</Link>
         {/* Header con resultado */}
         <div
           className={`

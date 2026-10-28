@@ -5,13 +5,13 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import Header from "@/components/Header";
 import { ANALYTICS_EVENTS } from "@/lib/analytics";
 
-const state = vi.hoisted(() => ({ path: "/" }));
-vi.mock("next/navigation", () => ({ usePathname: () => state.path }));
+const state = vi.hoisted(() => ({ path: "/", refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ usePathname: () => state.path, useRouter: () => ({ refresh: state.refresh }) }));
 vi.mock("next-auth/react", () => ({ useSession: () => ({ status: "unauthenticated" }), signOut: vi.fn() }));
 vi.mock("@/components/ThemeToggle", () => ({ default: () => <button>Theme</button> }));
 vi.mock("@/components/LogoTaskio", () => ({ default: () => <span>TaskIO</span> }));
 vi.mock("@/components/notifications/NotificationBell", () => ({ NotificationBell: () => null }));
-beforeEach(() => { vi.stubGlobal("React", React); });
+beforeEach(() => { vi.clearAllMocks(); vi.stubGlobal("React", React); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("header demo CTA", () => {
@@ -30,5 +30,6 @@ describe("header demo CTA", () => {
     expect(mobile.className).toContain("landing-header-demo");
     fireEvent.click(mobile);
     expect(screen.queryByRole("navigation", { name: "Navegación móvil" })).toBeNull();
+    expect(state.refresh).not.toHaveBeenCalled();
   });
 });

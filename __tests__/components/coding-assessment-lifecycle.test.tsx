@@ -2,24 +2,31 @@
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { refreshAssessmentInbox } from "@/app/assessments/actions";
 import CandidateAssessment from "@/app/assessments/[templateId]/page";
+import AssessmentResults from "@/app/assessments/attempts/[attemptId]/results/page";
+import { ASSESSMENTS_UPDATED_EVENT } from "@/lib/client/assessment-updates";
+import { toastError } from "@/lib/ui/toast";
 import { getAssessmentCodingStarter } from "@/lib/ai/assessment-coding-starters";
 import { candidateExecutionResult } from "@/lib/code-execution/public-result";
 
 const mocks = vi.hoisted(() => {
   const push = vi.fn();
   const replace = vi.fn();
+  const refresh = vi.fn();
   return {
-    fetch: vi.fn(), push, replace, router: { push, replace },
+    fetch: vi.fn(), push, replace, refresh, router: { push, replace, refresh },
     layout: "single", status: "IN_PROGRESS", trace: [] as string[],
     answers: {} as Record<string, string[]>, expired: false,
   };
 });
+vi.mock("@/app/assessments/actions", () => ({ refreshAssessmentInbox: vi.fn(async () => undefined) }));
 vi.mock("next/navigation", () => ({
-  useParams: () => ({ templateId: "template-a" }),
+  useParams: () => ({ templateId: "template-a", attemptId: "attempt-a" }),
   useRouter: () => mocks.router,
   useSearchParams: () => new URLSearchParams("attemptId=attempt-a"),
 }));
+vi.mock("next-auth/react", () => ({ useSession: () => ({ data: { user: { id: "candidate-a", role: "CANDIDATE" } } }) }));
 vi.mock("next-themes", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("@/lib/ui/toast", () => ({ toastSuccess: vi.fn(), toastError: vi.fn(), toastInfo: vi.fn(), toastWarning: vi.fn() }));
 vi.mock("@/app/assessments/[templateId]/useAntiCheating", () => ({ useAntiCheating: vi.fn() }));
@@ -54,6 +61,7 @@ const json = (value: unknown) => new Response(JSON.stringify(value));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(refreshAssessmentInbox).mockReset().mockResolvedValue(undefined);
   mocks.layout = "single";
   mocks.status = "IN_PROGRESS";
   mocks.trace = [];
@@ -89,6 +97,10 @@ beforeEach(() => {
       mocks.status = "SUBMITTED";
       return json({ passed: true, totalScore: 100 });
     }
+    if (url.endsWith("/results")) return json({
+      attempt: { status: mocks.status, totalScore: 100, passed: true, timeSpent: 30, sectionScores: {} },
+      template: { title: "Coding QA", passingScore: 60 }, answers: [], stats: { totalQuestions: 1, answeredQuestions: 1 },
+    });
     return json({ template: { id: "template-a", title: "Coding QA", type: "CODING", language: "python" }, userStatus: { canStart: true }, accessState: "IN_PROGRESS", antiCheatBypass: true });
   });
 });
@@ -101,6 +113,54 @@ async function openEditor() {
 }
 
 describe("coding run, answer persistence and explicit assessment finalization", () => {
+  it.each(["pending", "rejected"])("navigates and loads submitted results with %s inbox invalidation without submitting twice", async outcome => {
+    vi.mocked(refreshAssessmentInbox).mockImplementation(() => outcome === "pending"
+      ? new Promise<void>(() => {})
+      : Promise.reject(new Error("Invalidation unavailable")));
+    const updated = vi.fn(); window.addEventListener(ASSESSMENTS_UPDATED_EVENT, updated, { once: true });
+    mocks.layout = "mcq";
+    const view = render(<CandidateAssessment />);
+    const option = await screen.findByRole("button", { name: /Respuesta A/ });
+    await waitFor(() => expect((option as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(option);
+    await waitFor(() => expect(mocks.answers["mcq-a"]).toEqual(["a"]));
+    const submit = screen.getByRole("button", { name: "Enviar evaluación ✓" });
+    await act(async () => { fireEvent.click(submit); });
+    expect(refreshAssessmentInbox).toHaveBeenCalledOnce();
+    expect(updated).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.replace.mock.calls.filter(([url]) => url.endsWith("/results"))).toEqual([["/assessments/attempts/attempt-a/results"]]);
+    expect((submit as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(submit);
+    expect(mocks.trace).toEqual(["answer", "submit"]);
+    expect(mocks.status).toBe("SUBMITTED");
+    expect(toastError).not.toHaveBeenCalled();
+    view.unmount(); render(<AssessmentResults />);
+    expect(await screen.findByText("Aprobaste con 100%")).toBeTruthy();
+    expect(mocks.trace.filter(step => step === "submit")).toHaveLength(1);
+  });
+
+  it.each(["pending", "rejected"])("finishes expiration and opens results with %s inbox invalidation", async outcome => {
+    vi.mocked(refreshAssessmentInbox).mockImplementation(() => outcome === "pending"
+      ? new Promise<void>(() => {})
+      : Promise.reject(new Error("Invalidation unavailable")));
+    const updated = vi.fn(); window.addEventListener(ASSESSMENTS_UPDATED_EVENT, updated, { once: true });
+    mocks.expired = true;
+    const view = render(<CandidateAssessment />);
+    const results = await screen.findByRole("button", { name: "Ver resultados" });
+    expect(refreshAssessmentInbox).toHaveBeenCalledOnce();
+    expect(updated).toHaveBeenCalledOnce();
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.trace).toEqual(["submit"]);
+    expect(screen.queryByText("Calculando resultado…")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Reintentar cierre" })).toBeNull();
+    fireEvent.click(results);
+    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/assessments/attempts/attempt-a/results");
+    view.unmount(); render(<AssessmentResults />);
+    expect(await screen.findByText("Aprobaste con 100%")).toBeTruthy();
+    expect(mocks.trace).toEqual(["submit"]);
+  });
+
   it("renders sanitized hidden outcomes without diagnostics or timing and retains explicit finalization", async () => {
     const originalFetch = mocks.fetch.getMockImplementation()!;
     const safeResult = candidateExecutionResult({
@@ -180,7 +240,9 @@ describe("coding run, answer persistence and explicit assessment finalization", 
     await act(async () => { fireEvent.click(screen.getAllByRole("button", { name: "Finalizar" })[0]); });
     expect(mocks.trace).toEqual(["execute:submit", "answer", "submit"]);
     expect(mocks.status).toBe("SUBMITTED");
-    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/assessments/attempts/attempt-a/results");
+    expect(refreshAssessmentInbox).toHaveBeenCalledOnce();
+    expect(mocks.replace).toHaveBeenLastCalledWith("/assessments/attempts/attempt-a/results");
+    expect(mocks.replace.mock.calls.filter(([url]) => url.endsWith("/results"))).toHaveLength(1);
   });
   it.each(["mcq", "mixed"])("autosaves MCQ answers in %s without submitting the attempt", async (layout) => {
     mocks.layout = layout;
@@ -199,7 +261,8 @@ describe("coding run, answer persistence and explicit assessment finalization", 
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Enviar evaluación ✓" })); });
     expect(mocks.status).toBe("SUBMITTED");
     expect(mocks.trace).toEqual(["answer", "submit"]);
-    expect(mocks.push).toHaveBeenCalledExactlyOnceWith("/assessments/attempts/attempt-a/results");
+    expect(mocks.replace).toHaveBeenLastCalledWith("/assessments/attempts/attempt-a/results");
+    expect(mocks.replace.mock.calls.filter(([url]) => url.endsWith("/results"))).toHaveLength(1);
   });
   it("keeps the existing expiration policy and finalizes only once even with two timers", async () => {
     mocks.expired = true;
