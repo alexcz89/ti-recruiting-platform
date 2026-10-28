@@ -6,6 +6,7 @@ import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
 import { isAssessmentExpired } from '@/lib/assessments/expiration';
+import { getAssessmentTemplateVisibilityWhere } from '@/lib/assessments/access';
 import Kanbanboard from "./KanbanBoard";
 import { ApplicationInterest } from "@prisma/client";
 import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
@@ -69,6 +70,11 @@ export default async function JobPipelinePage({ params }: PageProps) {
   if (!companyId) {
     redirect("/dashboard/overview");
   }
+  const templateVisibilityWhere = getAssessmentTemplateVisibilityWhere({
+    role: session.user?.role,
+    companyId,
+  });
+  if (!templateVisibilityWhere) notFound();
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -95,6 +101,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
         },
       },
       assessments: {
+        where: { template: templateVisibilityWhere },
         orderBy: { createdAt: "asc" },
         select: { templateId: true, template: { select: { title: true } } },
       },
@@ -355,7 +362,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
     // Verificar que la aplicación pertenece a una vacante de esta empresa
     const app = await prisma.application.findFirst({
-      where: { id: appId, job: { companyId: companyId2 } },
+      where: { id: appId, jobId: params.id, job: { companyId: companyId2 } },
       select: {
         id: true,
         stateVersion: true,
