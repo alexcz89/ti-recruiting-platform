@@ -5,6 +5,7 @@ import { getSessionCompanyId } from "@/lib/server/session";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
+import { getApplicationWriterCompatibility, LEGACY_APPLICATION_STATE_WHERE } from "@/lib/hiring-process/writer-compatibility";
 import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
   hasApplicationRejectionFootprint,
@@ -76,6 +77,7 @@ export async function PATCH(
         id: true,
         stage: true,
         disposition: true,
+        stateVersion: true,
         status: true,
         recruiterInterest: true,
       },
@@ -137,10 +139,19 @@ export async function PATCH(
       );
     }
 
+    const compatibility = getApplicationWriterCompatibility(app);
+    if (compatibility !== "LEGACY") {
+      if (compatibility === "CANONICAL" && app.recruiterInterest === next) {
+        return jsonNoStore({ id: app.id, recruiterInterest: app.recruiterInterest });
+      }
+      return jsonNoStore({ error: "La transición requiere /intent" }, 409);
+    }
+
     const result = await prisma.application.updateMany({
       where: {
         AND: [
           scopedWhere,
+          LEGACY_APPLICATION_STATE_WHERE,
           APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
           ...(requestsBackwardLegacyInterest
             ? [APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE]

@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { ApplicationStatus } from "@prisma/client";
+import { getApplicationWriterCompatibility, LEGACY_APPLICATION_STATE_WHERE } from "@/lib/hiring-process/writer-compatibility";
 
 import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
@@ -70,6 +71,10 @@ async function updateStatus(id: string, status: string) {
       recruiterInterest: true,
       stage: true,
       disposition: true,
+      stateVersion: true,
+      rejectedAt: true,
+      rejectionEmailSent: true,
+      updatedAt: true,
       job: {
         select: {
           id: true,
@@ -149,6 +154,23 @@ async function updateStatus(id: string, status: string) {
     );
   }
 
+  const compatibility = getApplicationWriterCompatibility(app);
+  if (compatibility !== "LEGACY") {
+    if (compatibility === "CANONICAL" && app.status === newStatus) {
+      return jsonNoStore({
+        ok: true,
+        application: {
+          id: app.id,
+          status: app.status,
+          rejectedAt: app.rejectedAt,
+          rejectionEmailSent: app.rejectionEmailSent,
+          updatedAt: app.updatedAt,
+        },
+      });
+    }
+    return jsonNoStore({ error: "La transición requiere /intent" }, 409);
+  }
+
   const authorizedWhere = role === "ADMIN"
     ? { id }
     : { id, job: { companyId: companyId as string } };
@@ -157,6 +179,7 @@ async function updateStatus(id: string, status: string) {
     where: {
       AND: [
         authorizedWhere,
+        LEGACY_APPLICATION_STATE_WHERE,
         APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
         ...(requestsBackwardLegacyStatus
           ? [APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE]

@@ -2,6 +2,7 @@ import type {
   ApplicationDispositionValue,
   ApplicationStageValue,
 } from "@/lib/hiring-process/types";
+import { classifyLegacyApplicationState } from "@/lib/hiring-process/legacy-mapping";
 
 export const RECRUITER_PIPELINE_BUCKETS = [
   "APPLIED",
@@ -74,7 +75,14 @@ export const PRIMARY_RECRUITER_PIPELINE_BUCKETS = [
   "HIRED",
 ] as const satisfies readonly RecruiterPipelineBucket[];
 
-function legacyBucket(recruiterInterest: string): RecruiterPipelineBucket {
+function legacyBucket(input: RecruiterApplicationReadInput): RecruiterPipelineBucket {
+  const { stage, disposition, status, recruiterInterest } = input;
+  if (stage === null && disposition === null &&
+      ((status === "HIRED" && recruiterInterest === "ACCEPTED") ||
+       (status === "REJECTED" && recruiterInterest === "REJECTED")) &&
+      classifyLegacyApplicationState(status, recruiterInterest).autoApplicable) {
+    return status === "HIRED" ? "HIRED" : "REJECTED";
+  }
   switch (recruiterInterest.toUpperCase()) {
     case "MAYBE":
       return "PRESELECTED";
@@ -127,7 +135,7 @@ export function getRecruiterApplicationReadModel(
       ? "CANONICAL"
       : "LEGACY_FALLBACK";
   const bucket =
-    source === "CANONICAL" ? canonicalBucket(input) : legacyBucket(input.recruiterInterest);
+    source === "CANONICAL" ? canonicalBucket(input) : legacyBucket(input);
 
   return {
     bucket,

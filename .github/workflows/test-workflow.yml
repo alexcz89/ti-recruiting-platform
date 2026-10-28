@@ -50,7 +50,26 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    
+
+    env:
+      DATABASE_URL: "postgresql://taskio_ci:taskio_ci_password@127.0.0.1:55433/taskio_canonical_hiring_qa"
+      DIRECT_URL: "postgresql://taskio_ci:taskio_ci_password@127.0.0.1:55433/taskio_canonical_hiring_qa"
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: taskio_ci
+          POSTGRES_PASSWORD: taskio_ci_password
+          POSTGRES_DB: taskio_canonical_hiring_qa
+        ports:
+          - 55433:5432
+        options: >-
+          --health-cmd "pg_isready -U taskio_ci -d taskio_canonical_hiring_qa"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -64,11 +83,64 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Initialize PostgreSQL test schema
+        run: npm run db:push
+
       - name: Run integration tests
         run: npm run test:integration
         env:
           CI: true
           NODE_ENV: test
+
+      - name: Run ATS PostgreSQL integration tests
+        shell: bash
+        env:
+          CI: true
+          NODE_ENV: test
+        run: |
+          npm run test:hiring-process:db -- --reporter=default --reporter=json --outputFile=/tmp/ats-hiring-tests.json
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(
+            fs.readFileSync('/tmp/ats-hiring-tests.json', 'utf8')
+          );
+
+          const expected = [
+            'hiring-process-transition.test.ts',
+            'hiring-process-pilot-writer.test.ts',
+            'hiring-process-reconciliation.test.ts',
+            'hiring-process-writer-migration.test.ts',
+          ];
+
+          const files = report.testResults ?? [];
+          const missing = expected.filter(
+            (name) => !files.some((file) => file.name.endsWith(name))
+          );
+
+          const valid =
+            files.length === 4 &&
+            missing.length === 0 &&
+            report.numTotalTests >= 118 &&
+            report.numPassedTests === report.numTotalTests &&
+            report.numFailedTests === 0 &&
+            report.numPendingTests === 0 &&
+            (report.numTodoTests ?? 0) === 0 &&
+            files.every((file) => file.status === 'passed');
+
+          console.log('ATS PostgreSQL verification:', {
+            files: files.length,
+            passed: report.numPassedTests,
+            skipped: report.numPendingTests,
+            failed: report.numFailedTests,
+            missing,
+          });
+
+          if (!valid) {
+            console.error('ATS PostgreSQL coverage validation failed.');
+            process.exit(1);
+          }
+          NODE
 
       - name: Upload test results
         if: always()
