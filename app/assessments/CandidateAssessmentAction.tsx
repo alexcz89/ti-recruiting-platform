@@ -13,7 +13,7 @@ export function CandidateAssessmentAction({ state, startUrl, resumeUrl }: Props)
     return (
       <Link
         href={startUrl}
-        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:bg-teal-700 dark:hover:bg-teal-800"
+        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:bg-teal-700 dark:text-white dark:hover:bg-teal-800"
       >
         Iniciar
       </Link>
@@ -24,7 +24,7 @@ export function CandidateAssessmentAction({ state, startUrl, resumeUrl }: Props)
     return (
       <Link
         href={resumeUrl}
-        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:bg-teal-700 dark:hover:bg-teal-800"
+        className="inline-flex min-h-11 items-center justify-center rounded-xl bg-teal-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-600 dark:bg-teal-700 dark:text-white dark:hover:bg-teal-800"
       >
         Continuar
       </Link>

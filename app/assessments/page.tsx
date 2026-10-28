@@ -246,8 +246,17 @@ return (
         </section>
       ) : (
         <div className="space-y-8">
-          <Section id="en-progreso" title="En progreso" rows={inProgress} emptyText="No tienes evaluaciones en progreso." now={now} />
-          <Section id="pendientes" title="Pendientes" rows={pending} emptyText="Estás al día: no tienes evaluaciones pendientes." now={now} />
+          {badgeCount === 0 ? <section aria-labelledby="assessment-up-to-date" className="rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <h2 id="assessment-up-to-date" className="text-sm font-semibold">Estás al día</h2>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">No tienes evaluaciones en progreso ni pendientes.</p>
+            <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+              <div className="flex gap-1"><dt>En progreso:</dt><dd>0</dd></div>
+              <div className="flex gap-1"><dt>Pendientes:</dt><dd>0</dd></div>
+            </dl>
+          </section> : <>
+            <Section id="en-progreso" title="En progreso" rows={inProgress} emptyText="No tienes evaluaciones en progreso." now={now} />
+            <Section id="pendientes" title="Pendientes" rows={pending} emptyText="Estás al día: no tienes evaluaciones pendientes." now={now} />
+          </>}
           <Section id="completadas" title="Completadas" rows={completed} emptyText="Tus resultados aparecerán aquí cuando finalices una evaluación." now={now} />
           {inactive.length > 0 && <details className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
             <summary className="min-h-11 cursor-pointer text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-600">Invitaciones expiradas y canceladas ({inactive.length})</summary>

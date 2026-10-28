@@ -83,6 +83,30 @@ describe("candidate inbox presentation and refresh", () => {
     render(await Page()); expect(screen.getByRole("heading", { name: "Aún no tienes evaluaciones asignadas" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Ver mis postulaciones" })).toBeTruthy();
   });
+  it("combines both zero-work sections while keeping completed dates, scores and results accessible", async () => {
+    mocks.invites.mockResolvedValue([invite("done", "SUBMITTED")]); mocks.attempts.mockResolvedValue([done]);
+    render(await Page());
+    const compact = screen.getByRole("region", { name: "Estás al día" });
+    expect(within(compact).getByText("En progreso:")).toBeTruthy();
+    expect(within(compact).getByText("Pendientes:")).toBeTruthy();
+    expect(within(compact).getAllByText("0")).toHaveLength(2);
+    expect(screen.queryByRole("region", { name: "En progreso" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Pendientes" })).toBeNull();
+    const completed = screen.getByRole("region", { name: "Completadas" });
+    expect(within(completed).getByText("Finalización")).toBeTruthy();
+    expect(within(completed).getByRole("time").getAttribute("datetime")).toBe(date.toISOString());
+    expect(within(completed).getByText("100%")).toBeTruthy();
+    expect(within(completed).getByRole("link", { name: "Ver resultados" }).getAttribute("href")).toContain("attempt-done/results");
+  });
+  it.each(["pending", "active"])("retains separate groups and actions when %s work exists", async state => {
+    mocks.invites.mockResolvedValue([invite(state, state === "active" ? "STARTED" : "SENT"), invite("done", "SUBMITTED")]);
+    mocks.attempts.mockResolvedValue(state === "active" ? [active, done] : [done]);
+    render(await Page());
+    expect(screen.getByRole("region", { name: "En progreso" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Pendientes" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Estás al día" })).toBeNull();
+    expect(screen.getByRole("link", { name: state === "active" ? "Continuar" : "Iniciar" })).toBeTruthy();
+  });
   it("coalesces browser restore/focus/completion and removes listeners after unmount without submitting", async () => {
     const view = render(<AssessmentInboxRefresh />);
     fireEvent(window, new Event("pageshow")); fireEvent(window, new Event("focus")); fireEvent(window, new Event(ASSESSMENTS_UPDATED_EVENT));
@@ -142,6 +166,14 @@ describe("intro and read-only error handling", () => {
     const button = screen.getByRole("button", { name: "Comenzar evaluación" });
     expect(screen.getAllByRole("button")).toHaveLength(1); expect(start).not.toHaveBeenCalled();
     expect(screen.getByText(/El uso de IA/).compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Instrucciones" })).toBeTruthy();
+    const integrity = screen.getByRole("region", { name: "Evaluación con monitoreo de integridad" });
+    expect(within(integrity).getAllByRole("listitem").map(item => item.textContent)).toEqual([
+      "Se registran los cambios de pestaña y las pérdidas de foco de la ventana.",
+      "Se detectan intentos de copiar y pegar texto, y se registra el tiempo por pregunta.",
+      "El reclutador recibe un reporte de estas señales de actividad.",
+      "El uso de IA, buscadores u otras herramientas externas está prohibido y puede resultar en descalificación.",
+    ]);
     button.focus(); expect(document.activeElement).toBe(button); fireEvent.click(button); expect(start).toHaveBeenCalledTimes(1);
   });
   it.each([403, 404])("handles HTTP%s identically, without leaking private response details", async status => {
