@@ -927,7 +927,7 @@ describeDatabase("canonical hiring process pilot writer", () => {
     expect(eligible).toEqual([{ id: ids.application }]);
   });
 
-  it("does not intercept the separate generic Application.status writer", async () => {
+  it("rejects a legacy status writer against a canonical application", async () => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
     const request = new NextRequest(
       `http://localhost/api/applications/${ids.application}/status`,
@@ -943,9 +943,9 @@ describeDatabase("canonical hiring process pilot writer", () => {
     });
     const stored = await storedApplication();
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(409);
     expect(stored).toMatchObject({
-      status: "INTERVIEW",
+      status: "SUBMITTED",
       recruiterInterest: "REVIEW",
       stage: "APPLIED",
       disposition: "ACTIVE",

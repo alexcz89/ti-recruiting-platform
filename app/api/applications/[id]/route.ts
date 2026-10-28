@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId, getSessionOrThrow } from "@/lib/server/session";
 import { ApplicationStatus, Prisma } from "@prisma/client";
+import { getApplicationWriterCompatibility, LEGACY_APPLICATION_STATE_WHERE } from "@/lib/hiring-process/writer-compatibility";
 import { applicationWhereForActor } from "@/lib/server/candidate-access";
 import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
@@ -134,6 +135,7 @@ export async function PATCH(
         id: true,
         stage: true,
         disposition: true,
+        stateVersion: true,
         status: true,
         recruiterInterest: true,
       },
@@ -142,6 +144,9 @@ export async function PATCH(
     if (!found) {
       return jsonNoStore({ error: "Not found" }, 404);
     }
+
+    const compatibility = getApplicationWriterCompatibility(found);
+    const hasStatus = typeof body.status !== "undefined";
 
     const requestsBackwardLegacyStatus =
       typeof body.status !== "undefined" && body.status !== "INTERVIEW";
@@ -197,8 +202,29 @@ export async function PATCH(
       }
     }
 
+    if (bodyRaw && typeof bodyRaw === "object" &&
+        Object.prototype.hasOwnProperty.call(bodyRaw, "recruiterInterest")) {
+      return jsonNoStore(
+        { error: "recruiterInterest requiere /intent" },
+        compatibility === "LEGACY" ? 400 : 409,
+      );
+    }
+
+    if (hasStatus && compatibility !== "LEGACY" &&
+        (compatibility !== "CANONICAL" || body.status !== found.status)) {
+      return jsonNoStore({ error: "La transición requiere /intent" }, 409);
+    }
+    const writeLegacyStatus = hasStatus && compatibility === "LEGACY";
+
+    if (hasStatus && !writeLegacyStatus &&
+        typeof body.resumeUrl === "undefined" &&
+        typeof body.coverLetter === "undefined") {
+      const unchanged = await prisma.application.findFirstOrThrow({ where: scopedWhere });
+      return jsonNoStore(unchanged);
+    }
+
     const data = {
-      status: body.status ?? undefined,
+      status: writeLegacyStatus ? body.status : undefined,
       resumeUrl:
         typeof body.resumeUrl !== "undefined" ? body.resumeUrl : undefined,
       coverLetter:
@@ -207,11 +233,12 @@ export async function PATCH(
           : undefined,
     };
 
-    if (typeof body.status !== "undefined") {
+    if (writeLegacyStatus) {
       const result = await prisma.application.updateMany({
         where: {
           AND: [
             scopedWhere,
+            LEGACY_APPLICATION_STATE_WHERE,
             APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
             ...(requestsBackwardLegacyStatus
               ? [APPLICATION_WITHOUT_CANONICAL_INTERVIEW_WHERE]

@@ -3,6 +3,13 @@ export type ApplicationWriterCompatibility =
   | "LEGACY"
   | "NONE";
 
+/** Guard every legacy state write against a concurrent canonical conversion. */
+export const LEGACY_APPLICATION_STATE_WHERE = {
+  stage: null,
+  disposition: null,
+  stateVersion: 0,
+} as const;
+
 export type ApplicationWriterCompatibilityInput = {
   stage: string | null;
   disposition: string | null;

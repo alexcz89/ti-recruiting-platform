@@ -8,8 +8,47 @@ import {
   resolveRecruiterPipelineFilter,
 } from "@/lib/hiring-process/recruiter-read-model";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import { LEGACY_APPLICATION_STATE_MATRIX } from "@/lib/hiring-process/legacy-mapping";
 
 describe("recruiter application read model", () => {
+  it.each(LEGACY_APPLICATION_STATE_MATRIX)(
+    "classifies legacy $status/$recruiterInterest without reinterpreting ambiguous pairs",
+    ({ status, recruiterInterest }) => {
+      const expected = status === "HIRED" && recruiterInterest === "ACCEPTED"
+        ? "HIRED"
+        : recruiterInterest === "MAYBE" ? "PRESELECTED"
+          : recruiterInterest === "ACCEPTED" ? "INTERVIEW"
+            : recruiterInterest === "REJECTED" ? "REJECTED" : "APPLIED";
+      for (const canonicalReadsEnabled of [false, true]) {
+        expect(getRecruiterApplicationReadModel(
+          { stage: null, disposition: null, status, recruiterInterest },
+          { canonicalReadsEnabled },
+        )).toMatchObject({ bucket: expected, source: "LEGACY_FALLBACK" });
+      }
+    },
+  );
+
+  it("does not apply legacy terminal status to partial or valid canonical state", () => {
+    expect(getRecruiterApplicationReadModel(
+      { stage: "REVIEW", disposition: null, status: "HIRED", recruiterInterest: "ACCEPTED" },
+      { canonicalReadsEnabled: true },
+    ).bucket).toBe("INTERVIEW");
+    expect(getRecruiterApplicationReadModel(
+      { stage: "REVIEW", disposition: "ACTIVE", status: "HIRED", recruiterInterest: "ACCEPTED" },
+      { canonicalReadsEnabled: true },
+    )).toMatchObject({ bucket: "REVIEW", source: "CANONICAL" });
+  });
+
+  it("shares corrected terminal buckets across rows, filters and counts", () => {
+    const rows = buildRecruiterApplicationReadRows([
+      { id: "legacy-hired", stage: null, disposition: null, status: "HIRED", recruiterInterest: "ACCEPTED" },
+      { id: "legacy-rejected", stage: null, disposition: null, status: "REJECTED", recruiterInterest: "REJECTED" },
+      { id: "ambiguous", stage: null, disposition: null, status: "HIRED", recruiterInterest: "REVIEW" },
+    ], { canonicalReadsEnabled: true });
+    expect(countRecruiterPipelineBuckets(rows)).toMatchObject({ HIRED: 1, REJECTED: 1, APPLIED: 1 });
+    expect(filterRecruiterPipelineRows(rows, "HIRED").map((row) => row.id)).toEqual(["legacy-hired"]);
+  });
+
   it.each([
     ["APPLIED", "ACTIVE", "REVIEW", "APPLIED", "Por revisar"],
     ["REVIEW", "ACTIVE", "REVIEW", "REVIEW", "En revisión"],
