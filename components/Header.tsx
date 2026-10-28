@@ -1,6 +1,9 @@
 // components/Header.tsx
 "use client";
 
+import { ASSESSMENTS_UPDATED_EVENT } from "@/lib/client/assessment-updates";
+import { useAssessmentInboxEntryRefresh } from "@/app/assessments/AssessmentInboxRefresh";
+
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -18,6 +21,7 @@ import {
 } from "lucide-react";
 
 export default function Header() {
+  useAssessmentInboxEntryRefresh();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const isAssessmentMode = /^\/assessments\/[^/]+$/.test(pathname ?? "");
@@ -457,6 +461,7 @@ function AuthArea() {
 
 /* -------- Assessment Badge (candidatos) -------- */
 function CandidateAssessmentsNav() {
+  const pathname = usePathname();
   const { data: session, status } = useSession();
   const [badgeCount, setBadgeCount] = useState<number>(0);
 
@@ -489,16 +494,30 @@ function CandidateAssessmentsNav() {
   useEffect(() => {
     if (!shouldFetch) return;
 
-    const controller = new AbortController();
+    let controller = new AbortController();
 
     fetchBadge(controller.signal);
-    const interval = setInterval(() => fetchBadge(controller.signal), 60_000);
+    const refresh = () => {
+      controller.abort();
+      controller = new AbortController();
+      void fetchBadge(controller.signal);
+    };
+    const visible = () => { if (document.visibilityState === "visible") refresh(); };
+    window.addEventListener(ASSESSMENTS_UPDATED_EVENT, refresh);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("pageshow", refresh);
+    document.addEventListener("visibilitychange", visible);
+    const interval = setInterval(refresh, 60_000);
 
     return () => {
       controller.abort();
       clearInterval(interval);
+      window.removeEventListener(ASSESSMENTS_UPDATED_EVENT, refresh);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("pageshow", refresh);
+      document.removeEventListener("visibilitychange", visible);
     };
-  }, [shouldFetch, fetchBadge]);
+  }, [shouldFetch, fetchBadge, pathname]);
 
   const badgeText = badgeCount > 99 ? "99+" : String(badgeCount);
 
