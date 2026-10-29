@@ -45,6 +45,15 @@ it("omits missing city and locked score without inventing a location", () => {
   expect(screen.queryByText("61%")).not.toBeInTheDocument();
   expect(screen.getAllByText("Pro")).toHaveLength(2);
 });
+it("keeps long candidate names and assessment titles readable with a results focus target", () => {
+  const title = "Evaluación técnica de arquitectura y programación con un nombre especialmente largo";
+  render(<KanbanBoard {...props} applications={[{ ...card, _assessments: [{ ...card._assessments[0], templateTitle: title }] }]} moveAction={vi.fn()} />);
+  expect(screen.getAllByRole("link", { name: card.candidate.name })[0]).toHaveClass("break-words", "text-zinc-900", "dark:text-zinc-50");
+  expect(screen.getAllByText(title)).toHaveLength(2);
+  expect(screen.getAllByText(title)[0]).toHaveClass("line-clamp-2", "text-[11px]");
+  expect(screen.queryByText(`${title.slice(0, 21)}…`)).not.toBeInTheDocument();
+  expect(screen.getAllByRole("link", { name: `Ver resultados de ${title}` })[0]).toHaveClass("focus-visible:outline");
+});
 it("holds columns and counts until the server confirms, then moves once", async () => {
   let finish!: (value: { ok: boolean; application?: { stage: string; disposition: string; stateVersion: number; status: string; recruiterInterest: string } }) => void;
   const moveAction = vi.fn(() => new Promise<Parameters<typeof finish>[0]>((resolve) => { finish = resolve; }));

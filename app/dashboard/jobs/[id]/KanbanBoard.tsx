@@ -281,15 +281,15 @@ export default function Kanbanboard({
   };
 
   return (
-    <section className="rounded-2xl border glass-card p-3 sm:p-4">
+    <section className="min-w-0 md:rounded-2xl md:border md:border-zinc-200/70 md:bg-zinc-50/40 md:p-3 dark:md:border-zinc-800 dark:md:bg-zinc-950/20">
       <div className="md:hidden">
-        <label htmlFor="kanban-stage" className="mb-2 block text-sm font-medium">Etapa</label>
-        <select id="kanban-stage" className="w-full rounded-lg border bg-[rgb(var(--card))] p-2" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
+        <label htmlFor="kanban-stage" className="mb-1.5 block text-sm font-medium">Etapa</label>
+        <select id="kanban-stage" className="min-h-11 w-full rounded-lg border border-zinc-300 bg-[rgb(var(--card))] px-3 py-2 text-sm dark:border-zinc-700" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
           {statuses.map((stage) => <option key={stage} value={stage}>{statusLabels[stage] ?? stage} ({grouped[stage]?.length ?? 0})</option>)}
         </select>
-        <div className="mt-3 space-y-3" aria-live="polite">
+        <div className="mt-2.5 space-y-2.5" aria-live="polite">
           {(grouped[selectedStage] ?? []).map((card) => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
-          {(grouped[selectedStage] ?? []).length === 0 && <p className="py-6 text-center text-sm text-zinc-500">No hay candidatos en esta etapa.</p>}
+          {(grouped[selectedStage] ?? []).length === 0 && <p className="py-6 text-center text-sm text-zinc-600 dark:text-zinc-400">No hay candidatos en esta etapa.</p>}
         </div>
       </div>
       <div className="hidden overflow-x-auto md:block">
@@ -389,7 +389,7 @@ export default function Kanbanboard({
         ref={innerRef}
         {...(droppableProps as any)}
         className={[
-          "w-[310px] shrink-0 rounded-2xl border glass-card flex flex-col max-h-[72vh] transition-colors",
+          "w-[310px] shrink-0 rounded-xl border border-zinc-200/70 bg-white/70 flex flex-col max-h-[72vh] transition-colors dark:border-zinc-800 dark:bg-zinc-900/70",
           isDraggingOver ? accent.drag : "",
         ].join(" ")}
       >
@@ -406,7 +406,7 @@ export default function Kanbanboard({
           {count === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
               <span className="text-2xl opacity-30">↓</span>
-              <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+              <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                 Arrastra candidatos aquí
               </p>
             </div>
@@ -425,9 +425,8 @@ export default function Kanbanboard({
   /* ============ AssessmentBadge ============ */
 
   function AssessmentBadge({ assessment }: { assessment: AssessmentMeta }) {
-    // Nombre truncado del examen para mostrar en el badge
     const rawTitle = assessment.templateTitle ?? "";
-    const shortTitle = rawTitle.length > 22 ? rawTitle.slice(0, 21) + "…" : rawTitle;
+    const titleClass = "line-clamp-2 break-words text-[11px] font-medium leading-4 text-zinc-600 dark:text-zinc-300";
 
     if (assessment.state === "COMPLETED") {
       const hasScore = typeof assessment.score === "number";
@@ -468,9 +467,9 @@ export default function Kanbanboard({
       return (
         <div className="mt-2 flex flex-col gap-0.5">
           {/* Nombre del examen */}
-          {shortTitle && (
-            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">
-              {shortTitle}
+          {rawTitle && (
+            <p className={titleClass} title={rawTitle}>
+              {rawTitle}
             </p>
           )}
           {assessment.attemptId ? (
@@ -478,6 +477,8 @@ export default function Kanbanboard({
               href={`/dashboard/assessments/attempts/${assessment.attemptId}/results`}
               onClick={(e) => e.stopPropagation()}
               title="Ver resultados"
+              aria-label={`Ver resultados de ${rawTitle || "la evaluación"}`}
+              className="w-fit rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
             >
               {badge}
             </a>
@@ -489,8 +490,8 @@ export default function Kanbanboard({
     if (assessment.state === "STARTED") {
       return (
         <div className="mt-2 flex flex-col gap-0.5">
-          {shortTitle && (
-            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">{shortTitle}</p>
+          {rawTitle && (
+            <p className={titleClass} title={rawTitle}>{rawTitle}</p>
           )}
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-300">
             <span className="relative flex h-1.5 w-1.5">
@@ -506,8 +507,8 @@ export default function Kanbanboard({
     if (assessment.state === "SENT") {
       return (
         <div className="mt-2 flex flex-col gap-0.5">
-          {shortTitle && (
-            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">{shortTitle}</p>
+          {rawTitle && (
+            <p className={titleClass} title={rawTitle}>{rawTitle}</p>
           )}
           <span className="inline-flex w-fit items-center gap-1 rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:border-teal-500/30 dark:bg-teal-900/20 dark:text-teal-300">
             📋 Enviada · pendiente
@@ -519,8 +520,8 @@ export default function Kanbanboard({
     if (assessment.state === "EXPIRED") {
       return (
         <div className="mt-2 flex flex-col gap-0.5">
-          {shortTitle && (
-            <p className="text-[9px] font-medium uppercase tracking-wide text-zinc-400 truncate">{shortTitle}</p>
+          {rawTitle && (
+            <p className={titleClass} title={rawTitle}>{rawTitle}</p>
           )}
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300">
             ⚠ Expirada
@@ -554,7 +555,7 @@ export default function Kanbanboard({
     return (
       <article
         className={[
-          "group rounded-xl border border-zinc-200/70 bg-white px-3 py-2.5 text-xs shadow-[0_1px_3px_rgba(15,23,42,0.08)]",
+          "group rounded-xl border border-zinc-200/70 bg-white px-3 py-2.5 text-xs shadow-sm",
           "dark:border-zinc-800 dark:bg-zinc-900 transition-all",
           dragging ? "ring-2 ring-emerald-500/50 scale-[1.02] shadow-lg" : "hover:border-emerald-500/50 hover:shadow-md",
           isStale ? "border-l-2 border-l-amber-400" : "",
@@ -565,7 +566,7 @@ export default function Kanbanboard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h4 className="min-w-0 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
-                <a href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} onClick={(event) => event.stopPropagation()} className="break-words hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500">{card.candidate.name}</a>
+                <a href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} onClick={(event) => event.stopPropagation()} className="break-words text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</a>
               </h4>
               {isNew && (
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -574,7 +575,7 @@ export default function Kanbanboard({
               )}
             </div>
             {card.candidate.city && (
-              <p className="mt-0.5 flex items-center gap-0.5 text-[10px] text-zinc-400 truncate max-w-[170px]">
+              <p className="mt-0.5 flex max-w-[170px] items-center gap-0.5 truncate text-[11px] text-zinc-600 dark:text-zinc-400">
                 <MapPin className="h-2.5 w-2.5 shrink-0" />
                 {card.candidate.city}
               </p>

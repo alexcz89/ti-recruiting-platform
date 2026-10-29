@@ -403,45 +403,45 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
   return (
     <main className="max-w-none p-0">
-      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-6 lg:px-10 py-8 space-y-6">
+      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] px-4 py-4 space-y-3 sm:px-6 sm:py-6 sm:space-y-5 lg:px-10 lg:py-8">
         {/* Header vacante */}
-        <header className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+        <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400">
               Pipeline de candidatos
             </p>
-            <h1 className="mt-1 text-2xl font-bold leading-tight text-zinc-900 dark:text-zinc-50">
+            <h1 className="mt-0.5 break-words text-xl font-bold leading-tight text-zinc-900 dark:text-zinc-50 sm:mt-1 sm:text-2xl">
               {job.title}
             </h1>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm">
               {job.company?.name ?? "—"}
               {job.location ? ` · ${job.location}` : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <nav aria-label="Navegación de la vacante" className="flex w-full items-center gap-1 sm:w-auto sm:gap-2">
             <Link
               href={`/dashboard/jobs/${job.id}/applications`}
-              className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
+              className="flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white sm:min-h-10 sm:flex-none sm:px-3 sm:text-sm"
             >
-              Ver postulaciones (lista)
+              Lista
             </Link>
 
             {/* 👇 Nuevo botón: ver la vacante pública */}
             <Link
               href={`/jobs/${job.slug ?? job.id}`}
               target="_blank"
-              className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
+              className="flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white sm:min-h-10 sm:flex-none sm:px-3 sm:text-sm"
             >
-              Ver vacante
+              Vacante
             </Link>
 
             <Link
               href="/dashboard/jobs"
-              className="rounded-full border px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-zinc-700 dark:hover:bg-zinc-900/60"
+              className="flex min-h-11 flex-1 items-center justify-center whitespace-nowrap rounded-lg px-2 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white sm:min-h-10 sm:flex-none sm:px-3 sm:text-sm"
             >
-              Volver a vacantes
+              <span aria-hidden="true">←</span>&nbsp;Vacantes
             </Link>
-          </div>
+          </nav>
         </header>
 
         {/* Kanban / Pipeline */}
