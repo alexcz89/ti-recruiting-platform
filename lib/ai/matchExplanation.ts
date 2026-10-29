@@ -3,6 +3,7 @@ import { getOpenAI } from "./openai";
 import { z } from "zod";
 import { createHash } from "crypto";
 import { AI_MODEL_SMART } from "./config";
+import type { MatchAdjustments } from "./recruiter-match";
 
 
 export const MATCH_EXPLANATION_VERSION = "v2";
@@ -27,6 +28,7 @@ export interface MatchExplanationInput {
   };
 
   match: {
+    adjustments?: MatchAdjustments;
     score: number;
     label: string;
     skillScore: number;
@@ -94,6 +96,7 @@ export function buildMatchExplanationFingerprint(input: MatchExplanationInput): 
       requiredSkills: uniqClean(input.job.requiredSkills).sort(),
     },
     match: {
+      adjustments: input.match.adjustments ?? null,
       score: input.match.score,
       label: input.match.label,
       skillScore: input.match.skillScore,
@@ -164,6 +167,7 @@ function buildPrompt(input: MatchExplanationInput): string {
 
   const matchBlock = [
     `Score total: ${input.match.score}`,
+    ...(input.match.adjustments ? [`Desglose del total (los ajustes de perfil y tags no son coincidencias de skills): ${JSON.stringify(input.match.adjustments)}`] : []),
     `Etiqueta: ${input.match.label}`,
     `Score skills: ${input.match.skillScore}`,
     `Score requeridas: ${input.match.mustScore}`,

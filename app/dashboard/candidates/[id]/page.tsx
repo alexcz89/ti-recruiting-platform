@@ -6,16 +6,12 @@ import { prisma } from "@/lib/server/prisma";
 import { isAssessmentExpired } from "@/lib/assessments/expiration";
 import Link from "next/link";
 import {
-  buildCandidateSkillInputs,
   buildJobSkillInputs,
-  computeMatchScore,
   scoreToColor,
   scoreToTextColor,
   scoreToLabel,
-  hasMatchSignals,
   type BillingPlan,
   type JobSkillInput,
-  type SeniorityLevel,
 } from "@/lib/ai/matchScore";
 import { badgeLevelLabel, badgeValidityCutoff } from "@/lib/badges";
 import { Lock, CheckCircle2, XCircle, ExternalLink, Github, Linkedin } from "lucide-react";
@@ -33,6 +29,8 @@ import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter
 import type { NavEntry } from "@/components/dashboard/CandidateReviewShell";
 import { buildRecruiterWhatsappHref } from "@/lib/whatsapp/recruiter-contact";
 import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
+import { buildRecruiterMatchJob, computeRecruiterMatch, getRecruiterMatchAccessIds } from "@/lib/ai/recruiter-match";
+import MatchBreakdownMini from "@/components/jobs/MatchBreakdownMini";
 
 export const metadata = { title: "Candidato | Panel" };
 
@@ -63,13 +61,6 @@ const EDUCATION_LEVEL_LABEL: Record<string, string> = {
   OTHER: "Otro",
 };
 
-
-function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
-  if (!s) return null;
-  const lower = s.toLowerCase();
-  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
-  return null;
-}
 
 export default async function CandidateDetailPage({
   params,
@@ -110,7 +101,7 @@ export default async function CandidateDetailPage({
   if (!candidateWhere) notFound();
 
   const fromJobId = searchParams?.jobId;
-  const activeAppId = searchParams?.applicationId || "";
+  let activeAppId = searchParams?.applicationId || "";
   if (fromJobId || activeAppId) {
     const applicationWhere = applicationWhereForActor(actor, {
       applicationId: activeAppId || undefined,
@@ -123,6 +114,7 @@ export default async function CandidateDetailPage({
       select: { id: true },
     });
     if (!applicationContext) notFound();
+    activeAppId = applicationContext.id;
   }
 
   const company = companyId
@@ -132,8 +124,9 @@ export default async function CandidateDetailPage({
       })
     : null;
 
-  const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
+  let plan = (company?.billingPlan ?? "FREE") as BillingPlan;
   const currentBadgeCutoff = badgeValidityCutoff();
+  const matchNow = new Date();
 
   const candidate = await prisma.user.findFirst({
     where: candidateWhere,
@@ -149,6 +142,7 @@ export default async function CandidateDetailPage({
       resumeUrl: true,
       role: true,
       certifications: true,
+      aiProfile: { select: { tags: true, profileType: true } },
       seniority: true,
       yearsExperience: true,
       desiredSalaryMin: true,
@@ -172,6 +166,7 @@ export default async function CandidateDetailPage({
           level: true,
           slug: true,
           earnedAt: true,
+          isPublic: true,
           term: {
             select: { id: true, label: true, aliases: true },
           },
@@ -214,6 +209,8 @@ export default async function CandidateDetailPage({
   if (!candidate) notFound();
   if (candidate.role !== "CANDIDATE") redirect("/dashboard");
 
+  let rawMatchJob: Parameters<typeof computeRecruiterMatch>[0] | null = null;
+  let matchCompanyId: string | null = null;
   let jobForMatch: {
     id: string;
     title: string;
@@ -231,6 +228,7 @@ export default async function CandidateDetailPage({
       },
       select: {
         id: true,
+        companyId: true,
         title: true,
         seniority: true,
         minYearsExperience: true,
@@ -254,6 +252,8 @@ export default async function CandidateDetailPage({
     });
 
     if (jobRaw) {
+      rawMatchJob = jobRaw;
+      matchCompanyId = jobRaw.companyId;
       jobForMatch = {
         id: jobRaw.id,
         title: jobRaw.title,
@@ -268,6 +268,14 @@ export default async function CandidateDetailPage({
     }
   }
 
+  // ADMIN uses the billing plan of the validated job's company.
+  if (me.role === "ADMIN" && matchCompanyId) {
+    const matchCompany = await prisma.company.findUnique({
+      where: { id: matchCompanyId },
+      select: { billingPlan: true },
+    });
+    plan = (matchCompany?.billingPlan ?? "FREE") as BillingPlan;
+  }
   // Estado por cada assessment template asignado a la vacante
   type AssessmentStateEntry = {
     applicationId: string;
@@ -344,36 +352,15 @@ export default async function CandidateDetailPage({
     });
   }
 
-  const candidateSkillsForEngine = buildCandidateSkillInputs(
-    candidate.candidateSkills,
-    undefined,
-    candidate.candidateBadges
-  );
-
-  const jobSeniorityForEngine = toSeniorityLevel(jobForMatch?.seniority);
   const hasJobSkills = (jobForMatch?.requiredSkills?.length ?? 0) > 0;
-  const hasMatch = jobForMatch
-    ? hasMatchSignals({
-        jobSkills: jobForMatch.requiredSkills,
-        jobSeniority: jobSeniorityForEngine,
-        jobMinYearsExperience: jobForMatch.minYearsExperience,
-      })
-    : false;
-
-  const matchResult =
-    jobForMatch && hasMatch
-      ? computeMatchScore({
-          jobSkills: jobForMatch.requiredSkills,
-          candidateSkills: candidateSkillsForEngine,
-          jobSeniority: jobSeniorityForEngine,
-          candidateSeniority: toSeniorityLevel(candidate.seniority as string | null),
-          jobMinYearsExperience: jobForMatch.minYearsExperience,
-          candidateYearsExperience: candidate.yearsExperience,
-        })
-      : null;
-
-  const matchLocked = plan === "FREE";
-  const gatedScore = matchResult && !matchLocked ? matchResult.score : null;
+  const hasMatch = rawMatchJob ? buildRecruiterMatchJob(rawMatchJob).hasMatchSignals : false;
+  const matchCohort = jobForMatch && matchCompanyId ? await prisma.application.findMany({
+    where: { jobId: jobForMatch.id, job: { companyId: matchCompanyId } }, select: { id: true, createdAt: true },
+  }) : [];
+  const matchLocked = !getRecruiterMatchAccessIds(matchCohort, plan).has(activeAppId);
+  const match = rawMatchJob && hasMatch && !matchLocked ? computeRecruiterMatch(rawMatchJob, candidate, matchNow) : null;
+  const matchResult = match?.matchResult ?? null;
+  const gatedScore = match?.finalScore ?? null;
 
   // Navegación prev/next entre candidatos de la misma vacante
   let navList: NavEntry[] = [];
@@ -608,14 +595,15 @@ export default async function CandidateDetailPage({
             <div className="mt-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-700/40 dark:bg-amber-950/30">
               <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
               <div>
-                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">AI Match bloqueado en plan Gratis</p>
-                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Actualiza a Starter o Pro para ver el score detallado.</p>
+                <p className="text-sm font-semibold text-amber-900 dark:text-amber-100">AI Match bloqueado para esta postulación</p>
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Actualiza a {plan === "FREE" ? "Starter o Pro" : "Pro"} para ver el score detallado.</p>
               </div>
             </div>
           ) : !hasMatch ? (
             <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">Esta vacante aún no tiene señales suficientes para calcular AI Match.</p>
           ) : !matchResult ? null : (
             <div className="mt-4 space-y-5">
+              {match && <MatchBreakdownMini matchResult={matchResult} adjustments={match} showCounts={false} />}
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-5">
                 <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-6 py-4 dark:border-zinc-700 dark:bg-zinc-900/40">
                   <span className={`text-4xl font-black ${scoreToTextColor(gatedScore!)}`}>{gatedScore}%</span>

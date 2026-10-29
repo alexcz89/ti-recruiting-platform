@@ -1,4 +1,5 @@
 // components/jobs/MatchBreakdownMini.tsx
+import type { MatchAdjustments } from "@/lib/ai/recruiter-match";
 interface SkillDetail {
   termId: string;
   label: string;
@@ -12,7 +13,7 @@ interface MatchResult {
   score: number;
   matchedCount: number;
   details: SkillDetail[];
-  seniorityFit?: "exact" | "close" | "low" | "unknown";
+  seniorityFit?: "exact" | "close" | "low" | "below" | "unknown";
   experienceFit?: "meets" | "close" | "below" | "unknown";
 }
 
@@ -20,6 +21,7 @@ type Props = {
   matchResult: MatchResult;
   showCounts?: boolean;
   compact?: boolean;
+  adjustments?: MatchAdjustments | null;
 };
 
 function seniorityText(v?: MatchResult["seniorityFit"]) {
@@ -40,6 +42,7 @@ export default function MatchBreakdownMini({
   matchResult,
   showCounts = true,
   compact = false,
+  adjustments,
 }: Props) {
   const missingCount = matchResult.details.filter((d) => !d.matched).length;
   const parts: string[] = [];
@@ -54,6 +57,12 @@ export default function MatchBreakdownMini({
 
   if (s) parts.push(s);
   if (e) parts.push(e);
+  if (adjustments) {
+    parts.push(`Base ${adjustments.baseScore}`);
+    parts.push(`Perfil ${adjustments.profileAdjustment >= 0 ? "+" : ""}${adjustments.profileAdjustment}`);
+    parts.push(`Tags +${adjustments.tagAdjustment}`);
+    parts.push(`Final ${adjustments.finalScore}%`);
+  }
 
   if (parts.length === 0) return null;
 

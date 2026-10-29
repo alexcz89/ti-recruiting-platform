@@ -30,12 +30,8 @@ const STATUS_LABELS: Record<string, string> = {
   REJECTED: "Rechazado",
 };
 import QuickActionButtons from "./QuickActionButtons";
-import {
-  buildCandidateSkillInputs,
-  buildJobSkillInputs,
-  computeMatchScore,
-  type JobSkillInput,
-} from "@/lib/ai/matchScore";
+import { type BillingPlan } from "@/lib/ai/matchScore";
+import { buildRecruiterMatchJob, computeRecruiterMatch, getRecruiterMatchAccessIds, recruiterMatchCandidateSelect, recruiterMatchJobSelect } from "@/lib/ai/recruiter-match";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import {
   PRIMARY_RECRUITER_PIPELINE_BUCKETS,
@@ -105,10 +101,13 @@ export default async function OverviewPage() {
         size: true,
         logoUrl: true,
         website: true,
+        billingPlan: true,
       },
     }),
   ]);
 
+  const matchNow = new Date();
+  const matchPlan = (company?.billingPlan ?? "FREE") as BillingPlan;
   const [openJobs, appsTotal, apps7d, attemptsToReview, staleInvites] = await Promise.all([
     prisma.job.count({ where: { companyId } }),
     prisma.application.count({ where: { job: { companyId } } }),
@@ -168,6 +167,7 @@ export default async function OverviewPage() {
       take: 5,
       select: {
         id: true,
+        ...recruiterMatchJobSelect,
         title: true,
         status: true,
         createdAt: true,
@@ -182,16 +182,12 @@ export default async function OverviewPage() {
         },
         applications: {
           take: 50,
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           select: {
+            id: true,
+            createdAt: true,
             candidate: {
-              select: {
-                candidateSkills: {
-                  select: {
-                    level: true,
-                    term: { select: { id: true, label: true, aliases: true } },
-                  },
-                },
-              },
+              select: recruiterMatchCandidateSelect(matchNow),
             },
           },
         },
@@ -280,31 +276,19 @@ export default async function OverviewPage() {
 
   // Process top jobs with match scores
   const topJobs = topJobsRaw.map((job) => {
-    const jobSkills: JobSkillInput[] = buildJobSkillInputs(
-      job.requiredSkills,
-      job.skills
-    );
-
-    let avgMatch: number | null = null;
-
-    if (jobSkills.length > 0 && job.applications.length > 0) {
-      const scores = job.applications.map((app) => {
-        const candidateSkills = buildCandidateSkillInputs(
-          app.candidate?.candidateSkills ?? []
-        );
-
-        return computeMatchScore(jobSkills, candidateSkills).score;
-      });
-
-      avgMatch = scores.reduce((a, b) => a + b, 0) / scores.length;
-    }
+    const context = buildRecruiterMatchJob(job);
+    // The oldest 50 prefix includes the entire Starter allowance of ten.
+    const access = getRecruiterMatchAccessIds(job.applications, matchPlan);
+    const scores = context.hasMatchSignals ? job.applications.filter((app) => access.has(app.id))
+      .map((app) => computeRecruiterMatch(job, app.candidate, matchNow).finalScore) : [];
+    const avgMatch = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null;
 
     return {
       id: job.id,
       title: job.title,
       status: job.status,
       appCount: job._count.applications,
-      hasSkills: jobSkills.length > 0,
+      hasSkills: context.jobSkills.length > 0,
       avgMatch,
       createdAt: job.createdAt,
     };
@@ -599,11 +583,11 @@ export default async function OverviewPage() {
                           >
                             {pct(job.avgMatch)}
                           </span>
-                          <p className="text-[10px] text-zinc-400">promedio</p>
+                          <p className="text-[10px] text-zinc-400">promedio visible</p>
                         </div>
                       ) : (
                         <span className="shrink-0 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800">
-                          {job.appCount === 0 ? "Sin candidatos" : "Sin skills"}
+                          {job.appCount === 0 ? "Sin candidatos" : matchPlan === "FREE" ? "AI Match bloqueado" : "Sin señales"}
                         </span>
                       )}
                     </div>
