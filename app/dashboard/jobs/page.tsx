@@ -143,7 +143,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
   if (canonicalRecruiterReadsEnabled) {
     const groupedApplicationStates = jobIds.length
       ? await prisma.application.groupBy({
-          by: ["jobId", "stage", "disposition", "recruiterInterest"],
+          by: ["jobId", "stage", "disposition", "status", "recruiterInterest"],
           where: { jobId: { in: jobIds } },
           _count: { _all: true },
         })
@@ -155,7 +155,7 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
           stage: row.stage,
           disposition: row.disposition,
           recruiterInterest: row.recruiterInterest,
-          status: "",
+          status: row.status,
         },
         { canonicalReadsEnabled: true },
       );

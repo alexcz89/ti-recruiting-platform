@@ -436,6 +436,90 @@ describeDatabase("canonical hiring process writer migration", () => {
     ]);
   });
 
+  it("START_REVIEW preserves its canonical date, version and single event on command replay", async () => {
+    const application = await createApplication();
+    const reviewingAt = new Date("2026-10-02T12:00:00Z");
+    await prisma.application.update({ where: { id: application.id }, data: { reviewingAt } });
+    const command = { intent: "START_REVIEW" as const, expectedVersion: 1, commandId: "qa-start-review-replay" };
+    await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    expect((await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor })).replayed).toBe(true);
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    expect(stored).toMatchObject({ stage: "REVIEW", disposition: "ACTIVE", stateVersion: 2, reviewingAt });
+    expect(stored.events.filter((event) => event.type === "APPLICATION_STAGE_CHANGED")).toHaveLength(1);
+  });
+
+  it("START_REVIEW keeps safe legacy rows noncanonical and replays without resetting the date", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    const command = { intent: "START_REVIEW" as const, expectedVersion: 0, commandId: "qa-legacy-start-review" };
+    await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor });
+    const first = await prisma.application.findUniqueOrThrow({ where: { id: application.id } });
+    expect(first.reviewingAt).toBeInstanceOf(Date);
+    expect((await executeApplicationIntent({ applicationId: application.id, command, actor: recruiterActor })).replayed).toBe(true);
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    expect(stored).toMatchObject({ stage: null, disposition: null, stateVersion: 0, status: "REVIEWING", recruiterInterest: "REVIEW", reviewingAt: first.reviewingAt, events: [] });
+  });
+
+  it.each([
+    { status: "HIRED" as const, recruiterInterest: "ACCEPTED" as const },
+    { status: "REJECTED" as const }, { recruiterInterest: "REJECTED" as const },
+    { status: "OFFER" as const }, { hiredAt: new Date("2026-10-01") },
+    { rejectedAt: new Date("2026-10-01") }, { offerAt: new Date("2026-10-01") },
+    { interviewAt: new Date("2026-10-01") }, { rejectionEmailSent: true },
+  ])("START_REVIEW rejects contradictory canonical projections %j without writes or events", async (patch) => {
+    const application = await createApplication();
+    await prisma.application.update({ where: { id: application.id }, data: patch });
+    const before = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    await expect(executeApplicationIntent({ applicationId: application.id, actor: recruiterActor,
+      command: { intent: "START_REVIEW", expectedVersion: 1, commandId: "qa-incompatible-canonical-review" },
+    })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } })).toEqual(before);
+  });
+
+  it("START_REVIEW serializes an unversioned contradictory write after source validation", async () => {
+    const application = await createApplication();
+    const hiredAt = new Date("2026-10-01");
+    let changeBeforeCas = true;
+    prisma.$use(async (params, next) => {
+      if (changeBeforeCas && params.model === "Application" && params.action === "updateMany") {
+        changeBeforeCas = false;
+        await prisma.application.update({ where: { id: application.id }, data: { status: "HIRED", recruiterInterest: "ACCEPTED", hiredAt } });
+      }
+      return next(params);
+    });
+    try {
+      await expect(executeApplicationIntent({ applicationId: application.id, actor: recruiterActor,
+        command: { intent: "START_REVIEW", expectedVersion: 1, commandId: "qa-racing-canonical-review" },
+      })).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+    } finally { changeBeforeCas = false; }
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    expect(stored).toMatchObject({ stage: "APPLIED", disposition: "ACTIVE", stateVersion: 1, status: "HIRED", recruiterInterest: "ACCEPTED", hiredAt, reviewingAt: null });
+    expect(stored.events.map((event) => event.type)).toEqual(["APPLICATION_CREATED"]);
+  });
+
+  it("START_REVIEW cannot overwrite a canonical conversion committed between legacy read and CAS", async () => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "false");
+    const application = await createRolloutApplication();
+    let convertBeforeCas = true;
+    // Interleave two real SQL writes; the middleware becomes inert after this test.
+    prisma.$use(async (params, next) => {
+      if (convertBeforeCas && params.model === "Application" && params.action === "updateMany") {
+        convertBeforeCas = false;
+        await prisma.application.update({ where: { id: application.id }, data: { stage: "APPLIED", disposition: "ACTIVE", stateVersion: 1 } });
+      }
+      return next(params);
+    });
+    try {
+      await expect(executeApplicationIntent({ applicationId: application.id, actor: recruiterActor,
+        command: { intent: "START_REVIEW", expectedVersion: 0, commandId: "qa-legacy-review-conversion" },
+      })).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+    } finally {
+      convertBeforeCas = false;
+    }
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    expect(stored).toMatchObject({ stage: "APPLIED", disposition: "ACTIVE", stateVersion: 1, status: "SUBMITTED", recruiterInterest: "REVIEW", reviewingAt: null, events: [] });
+  });
+
   it("marks APPLIED/ACTIVE preselected atomically and replays without another event", async () => {
     const application = await createApplication();
     const command = {

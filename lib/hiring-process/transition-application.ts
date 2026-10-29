@@ -289,6 +289,7 @@ async function executeTransition(
   reasonCode: string | undefined,
   happenedAt: Date,
   fingerprint: string,
+  assertSource?: (application: TransitionApplicationRecord) => void,
 ): Promise<TransitionApplicationResult> {
   const application = await tx.findApplication(input.applicationId);
   if (!application) throw new ApplicationNotFoundError();
@@ -309,6 +310,9 @@ async function executeTransition(
   if (application.stateVersion !== input.expectedVersion) {
     throw new ConcurrentApplicationTransitionError();
   }
+
+  // Runs on the same serializable snapshot as the write, after command replay.
+  assertSource?.(application);
 
   const planned = planApplicationTransition(
     { stage: application.stage, disposition: application.disposition },
@@ -395,6 +399,7 @@ export async function transitionApplication(
   input: TransitionApplicationInput,
   options: {
     store?: ApplicationTransitionStore;
+    assertSource?: (application: TransitionApplicationRecord) => void;
   } = {},
 ): Promise<TransitionApplicationResult> {
 
@@ -415,6 +420,7 @@ export async function transitionApplication(
         reasonCode,
         happenedAt,
         fingerprint,
+        options.assertSource,
       ),
     );
   } catch (error) {

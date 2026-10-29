@@ -116,7 +116,7 @@ beforeEach(() => {
       where.applicationId.in.includes(applicationId) && where.templateId.in.includes(templateId),
     ),
   );
-  mocks.intent.mockResolvedValue({});
+  mocks.intent.mockResolvedValue({ state: { stage: "REVIEW", disposition: "ACTIVE" }, legacy: { stateVersion: 2, status: "REVIEWING", recruiterInterest: "REVIEW" } });
 });
 
 async function board() {
@@ -135,6 +135,25 @@ function moveForm(appId: string) {
 }
 
 describe("ATS Kanban tenant and job boundaries", () => {
+  it("requires the explicit START_REVIEW version even for a legacy command", async () => {
+    const action = (await board()).moveAction as (form: FormData) => Promise<{ ok: boolean }>;
+    const form = moveForm("app-a");
+    form.set("intent", "START_REVIEW");
+    form.set("newStatus", "REVIEW");
+    form.delete("expectedVersion");
+    expect((await action(form)).ok).toBe(false);
+    expect(mocks.intent).not.toHaveBeenCalled();
+  });
+  it("dispatches an explicit START_REVIEW without losing the job scope", async () => {
+    const action = (await board()).moveAction as (form: FormData) => Promise<{ ok: boolean }>;
+    const form = moveForm("app-a");
+    form.set("intent", "START_REVIEW");
+    form.set("newStatus", "REVIEW");
+    expect((await action(form)).ok).toBe(true);
+    expect(mocks.intent).toHaveBeenCalledWith(expect.objectContaining({
+      applicationId: "app-a", command: { intent: "START_REVIEW", expectedVersion: 1, commandId: "command-app-a" },
+    }));
+  });
   it("filters historical foreign templates in the database query and client payload", async () => {
     const props = await board();
     expect(mocks.job.mock.calls[0][0].select.assessments.where.template).toEqual({

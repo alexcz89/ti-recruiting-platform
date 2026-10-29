@@ -67,7 +67,7 @@ describe("recruiter reader architecture", () => {
 
     expect(page).toContain("countRecruiterPipelineGroupedRows");
     expect(page).toContain("getRecruiterApplicationReadModel");
-    expect(page).toContain('by: ["stage", "disposition", "recruiterInterest"]');
+    expect(page).toContain('by: ["stage", "disposition", "status", "recruiterInterest"]');
     expect(page).not.toContain("for (const row of funnelRaw)");
   });
 
@@ -85,7 +85,7 @@ describe("recruiter reader architecture", () => {
     expect(page).toContain("isCanonicalHiringProcessRecruiterReadsEnabled");
     expect(page).toContain("getRecruiterApplicationReadModel");
     expect(page).toContain(
-      'by: ["jobId", "stage", "disposition", "recruiterInterest"]',
+      'by: ["jobId", "stage", "disposition", "status", "recruiterInterest"]',
     );
     expect(page).toContain('readModel.bucket !== "APPLIED"');
     expect(page).toContain("?pipeline=APPLIED");
@@ -110,7 +110,8 @@ describe("recruiter reader architecture", () => {
     expect(board).toContain("isDragDisabled={!isCardWritable(card)}");
     expect(board).toContain("a.displayStatus");
     expect(board).toContain("canonicalWriterStatusForMove");
-    expect(board).toContain('APPLIED: "PRESELECTED"');
+    expect(board).toContain('APPLIED: "REVIEW"');
+    expect(board).toContain('REVIEW: "PRESELECTED"');
     expect(board).toContain('PRESELECTED: "INTERVIEW"');
     expect(board).toContain('OFFER: null');
     expect(board).toContain('OFFER: null');
