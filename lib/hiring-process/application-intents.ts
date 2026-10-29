@@ -7,6 +7,7 @@ import { prisma } from "@/lib/server/prisma";
 
 import { InvalidApplicationTransitionError } from "./rules";
 import { getApplicationWriterCompatibility } from "./writer-compatibility";
+import { canStartReview } from "./start-review-eligibility";
 import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
   hasApplicationRejectionFootprint,
@@ -200,6 +201,10 @@ export async function executeApplicationIntent(input: {
 }) {
   const { applicationId, command, actor } = input;
 
+  if (command.intent === "START_REVIEW") {
+    await assertPersistedPrivilegedActor(actor);
+  }
+
   if (
     (command.intent === "REJECT_CANDIDATE" ||
       command.intent === "MOVE_TO_OFFER" ||
@@ -237,6 +242,14 @@ export async function executeApplicationIntent(input: {
   }
 
   if (writerCompatibility === "CANONICAL") {
+    if (command.intent === "START_REVIEW" && !(
+      routingApplication.disposition === "ACTIVE" &&
+      (routingApplication.stage === "APPLIED" || routingApplication.stage === "REVIEW")
+    )) {
+      throw new InvalidApplicationTransitionError("START_REVIEW requiere APPLIED / ACTIVE");
+    }
+    // REVIEW/ACTIVE is passed to the transactional writer only so that an
+    // existing command can replay; a new command cannot change nothing.
     if (
       command.intent === "MOVE_BACKWARD" ||
       command.intent === "REOPEN_REJECTED"
@@ -564,7 +577,13 @@ export async function executeApplicationIntent(input: {
       expectedVersion: command.expectedVersion,
       actor,
       idempotencyKey: command.commandId,
-    });
+    }, command.intent === "START_REVIEW" ? {
+      assertSource: (source) => {
+        if (!canStartReview(source)) {
+          throw new InvalidApplicationTransitionError("START_REVIEW requiere APPLIED / ACTIVE y SUBMITTED / REVIEW compatibles");
+        }
+      },
+    } : {});
     return {
       ...result,
       legacy: {
@@ -618,6 +637,25 @@ export async function executeApplicationIntent(input: {
   }
   if (application.stateVersion !== command.expectedVersion) {
     throw new ConcurrentApplicationTransitionError();
+  }
+
+  if (command.intent === "START_REVIEW") {
+    if (application.rejectedAt || application.rejectionEmailSent || application.offerAt || application.hiredAt) {
+      throw new InvalidApplicationTransitionError("START_REVIEW legacy requiere una postulación compatible");
+    }
+    if (application.status === "REVIEWING" && application.recruiterInterest === "REVIEW") {
+      return {
+        state: null,
+        event: null,
+        replayed: true,
+        legacyProjectionApplied: true,
+        timestamps: { offerAt: application.offerAt, hiredAt: application.hiredAt },
+        legacy: { status: "REVIEWING" as const, recruiterInterest: "REVIEW" as const, stateVersion: 0 },
+      };
+    }
+    if (!canStartReview(application)) {
+      throw new InvalidApplicationTransitionError("START_REVIEW legacy requiere SUBMITTED / REVIEW");
+    }
   }
 
   // Compatibility path for fully legacy rows, independent of the creation flag.
@@ -801,6 +839,7 @@ export async function executeApplicationIntent(input: {
       stage: null,
       disposition: null,
       stateVersion: 0,
+      ...(command.intent === "START_REVIEW" ? scopedWhere : {}),
       status: application.status,
       recruiterInterest: application.recruiterInterest,
       reviewingAt: application.reviewingAt,
@@ -811,7 +850,7 @@ export async function executeApplicationIntent(input: {
     },
     data: {
       ...projection,
-      ...(command.intent === "START_REVIEW" ? { reviewingAt: happenedAt } : {}),
+      ...(command.intent === "START_REVIEW" ? { reviewingAt: application.reviewingAt ?? happenedAt } : {}),
       ...(command.intent === "MARK_PRESELECTED"
         ? { reviewingAt: application.reviewingAt ?? happenedAt }
         : {}),

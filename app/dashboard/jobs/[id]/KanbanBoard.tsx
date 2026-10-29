@@ -5,6 +5,8 @@ import * as React from "react";
 import { useTransition, useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fromNow } from "@/lib/dates";
+import { canStartReview } from "@/lib/hiring-process/start-review-eligibility";
+import { toastError } from "@/lib/ui/toast";
 import { Lock, MapPin } from "lucide-react";
 import {
   DragDropContext,
@@ -81,7 +83,7 @@ const NEXT_STAGE_LABEL: Record<string, string> = {
 };
 
 const CANONICAL_NEXT_STAGE: Record<string, string | null> = {
-  APPLIED: "PRESELECTED",
+  APPLIED: "REVIEW",
   REVIEW: "PRESELECTED",
   PRESELECTED: "INTERVIEW",
   ASSESSMENT: null,
@@ -94,6 +96,7 @@ const CANONICAL_NEXT_STAGE: Record<string, string | null> = {
 };
 
 const CANONICAL_NEXT_STAGE_LABEL: Record<string, string> = {
+  REVIEW: "En revisión",
   PRESELECTED: "Preselecto",
   INTERVIEW: "Entrevista",
 };
@@ -111,6 +114,7 @@ function canonicalWriterStatusForMove(
   fromStatus: string,
   toStatus: string,
 ): string | null {
+  if (fromStatus === "APPLIED" && toStatus === "REVIEW") return "REVIEW";
   if (toStatus === "REJECTED" && CANONICAL_REJECTION_SOURCES.has(fromStatus)) {
     return "REJECTED";
   }
@@ -156,12 +160,14 @@ export default function Kanbanboard({
   applications: AppCard[];
   hasMatchSignals?: boolean;
   canonicalRecruiterReadsEnabled?: boolean;
-  moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string }>;
+  moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string; application?: { stage: string | null; disposition: string | null; stateVersion: number; status: string; recruiterInterest: string } }>;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<AppCard[]>(applications);
   const [isPending, startTransition] = useTransition();
   const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null);
+  const moveInFlight = React.useRef(false);
+  const reviewCommand = React.useRef<{ key: string; id: string } | null>(null);
 
   useEffect(() => {
     setItems(applications);
@@ -184,6 +190,7 @@ export default function Kanbanboard({
 
   // Ejecutar acción de mover (drag o quick action)
   const doMove = (appId: string, fromStatus: string, toStatus: string, fromIdx: number, toIdx: number) => {
+    if (moveInFlight.current || fromStatus === toStatus) return;
     const writerStatus = canonicalRecruiterReadsEnabled
       ? canonicalWriterStatusForMove(fromStatus, toStatus)
       : toStatus;
@@ -200,6 +207,8 @@ export default function Kanbanboard({
     const moved = sourceCol[fromIdx];
     if (!moved) return;
     if (!isCardWritable(moved)) return;
+    const startsReview = canonicalRecruiterReadsEnabled && fromStatus === "APPLIED" && toStatus === "REVIEW";
+    if (startsReview && !canStartReview({ ...moved, status: moved.applicationStatus, recruiterInterest: moved.status })) return;
     if (
       moved.applicationStatus === "HIRED" ||
       (moved.stage === "CLOSED" && moved.disposition === "HIRED")
@@ -241,24 +250,45 @@ export default function Kanbanboard({
     const fd = new FormData();
     fd.set("appId", appId);
     fd.set("newStatus", writerStatus);
+    if (startsReview) fd.set("intent", "START_REVIEW");
     if (
+      startsReview ||
       writerStatus === "ACCEPTED" ||
       writerStatus === "REJECTED" ||
       writerStatus === "MAYBE" ||
       (writerStatus === "REVIEW" && moved.status === "MAYBE")
     ) {
       fd.set("expectedVersion", String(moved.stateVersion));
-      fd.set("commandId", crypto.randomUUID());
+      if (startsReview) {
+        const key = `${appId}:${moved.stateVersion}`;
+        if (reviewCommand.current?.key !== key) reviewCommand.current = { key, id: crypto.randomUUID() };
+        fd.set("commandId", reviewCommand.current.id);
+      } else {
+        fd.set("commandId", crypto.randomUUID());
+      }
     }
 
+    moveInFlight.current = true;
     startTransition(async () => {
-      const res = await moveAction(fd);
-      if (!res.ok) {
+      try {
+        const res = await moveAction(fd);
+        if (!res.ok) throw new Error("No se pudo mover");
+        if (res.application) {
+          const saved = res.application;
+          setItems((current) => current.map((item) => item.id === appId ? {
+            ...item, stage: saved.stage, disposition: saved.disposition,
+            stateVersion: saved.stateVersion, applicationStatus: saved.status,
+            status: saved.recruiterInterest,
+          } : item));
+        }
+        router.refresh();
+      } catch {
         setItems(prev);
-        console.error(res.message || "No se pudo mover");
-        return;
+        toastError("No se pudo mover el candidato. Actualiza la página e intenta de nuevo.");
+        router.refresh();
+      } finally {
+        moveInFlight.current = false;
       }
-      router.refresh();
     });
   };
 

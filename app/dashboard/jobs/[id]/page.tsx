@@ -336,7 +336,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
   // -------- Server Action para mover tarjetas en el Kanban --------
   async function moveAction(
     fd: FormData
-  ): Promise<{ ok: boolean; message?: string }> {
+  ): Promise<{ ok: boolean; message?: string; application?: { stage: string | null; disposition: string | null; stateVersion: number; status: string; recruiterInterest: string } }> {
     "use server";
 
     const s = await getServerSession(authOptions);
@@ -396,7 +396,9 @@ export default async function JobPipelinePage({ params }: PageProps) {
       return { ok: false, message: "La reapertura requiere el flujo explícito del perfil" };
     }
 
-    const canonicalIntent = newStatusStr === "ACCEPTED"
+    const canonicalIntent = fd.get("intent") === "START_REVIEW" && newStatusStr === "REVIEW"
+      ? "START_REVIEW"
+      : newStatusStr === "ACCEPTED"
       ? "MOVE_TO_INTERVIEW"
       : newStatusStr === "REJECTED"
         ? "REJECT_CANDIDATE"
@@ -409,7 +411,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
     if (canonicalIntent) {
       const expectedVersion = Number(fd.get("expectedVersion"));
       const commandId = String(fd.get("commandId") || "");
-      if (!Number.isInteger(expectedVersion) || expectedVersion < 0 || !commandId) {
+      if (!fd.has("expectedVersion") || !Number.isInteger(expectedVersion) || expectedVersion < 0 || !commandId) {
         return { ok: false, message: "Comando inválido" };
       }
       const role = String(s.user.role ?? "").toUpperCase();
@@ -418,7 +420,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       }
 
       try {
-        await executeApplicationIntent({
+        const result = await executeApplicationIntent({
           applicationId: app.id,
           command: {
             intent: canonicalIntent,
@@ -431,7 +433,11 @@ export default async function JobPipelinePage({ params }: PageProps) {
             companyId: companyId2,
           },
         });
-        return { ok: true };
+        return { ok: true, application: {
+          stage: result.state?.stage ?? null,
+          disposition: result.state?.disposition ?? null,
+          ...result.legacy,
+        } };
       } catch (error) {
         console.error("[Kanban application intent]", error);
         return {

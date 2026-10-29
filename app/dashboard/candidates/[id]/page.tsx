@@ -956,6 +956,7 @@ export default async function CandidateDetailPage({
       matchLocked={matchLocked}
       applicationId={activeAppId}
       currentApplication={appStateForShell}
+      canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
       navList={navList}
       navIndex={navIndex}
       slots={{

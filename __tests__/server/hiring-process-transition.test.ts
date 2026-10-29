@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { canStartReview } from "@/lib/hiring-process/start-review-eligibility";
+import { InvalidApplicationTransitionError } from "@/lib/hiring-process/rules";
 
 import {
 
@@ -101,6 +103,46 @@ const recruiter = {
 };
 
 describe("transitionApplication", () => {
+  const assertReviewSource = (row: TransitionApplicationRecord) => {
+    if (!canStartReview(row)) throw new InvalidApplicationTransitionError("Incompatible START_REVIEW source");
+  };
+
+  it.each([
+    { status: "HIRED" as const, recruiterInterest: "ACCEPTED" as const },
+    { status: "REJECTED" as const }, { recruiterInterest: "REJECTED" as const },
+    { status: "OFFER" as const }, { hiredAt: new Date("2026-10-01") },
+    { rejectedAt: new Date("2026-10-01") }, { offerAt: new Date("2026-10-01") },
+    { interviewAt: new Date("2026-10-01") }, { rejectionEmailSent: true },
+  ])("rejects inconsistent APPLIED/ACTIVE snapshot %j without mutations or events", async (patch) => {
+    const store = new MemoryTransitionStore(application(patch));
+    const before = { ...store.current };
+    await expect(transitionApplication({ applicationId: before.id, targetStage: "REVIEW", targetDisposition: "ACTIVE",
+      expectedVersion: 0, actor: recruiter, idempotencyKey: "incompatible-review",
+    }, { store, assertSource: assertReviewSource })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    expect(store.current).toEqual(before);
+    expect(store.events).toEqual([]);
+  });
+
+  it("checks the transactional source after a clean earlier eligibility read and preserves legitimate command replay", async () => {
+    const store = new MemoryTransitionStore();
+    expect(canStartReview(store.current)).toBe(true);
+    store.current.status = "HIRED";
+    const input = { applicationId: store.current.id, targetStage: "REVIEW" as const, targetDisposition: "ACTIVE" as const,
+      expectedVersion: 0, actor: recruiter, idempotencyKey: "guarded-start-review" };
+    await expect(transitionApplication(input, { store, assertSource: assertReviewSource })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    expect(store.current.status).toBe("HIRED");
+    expect(store.events).toHaveLength(0);
+    store.current.status = "SUBMITTED";
+    await transitionApplication(input, { store, assertSource: assertReviewSource });
+    const after = { ...store.current };
+    const replay = await transitionApplication(input, { store, assertSource: assertReviewSource });
+    expect(replay.replayed).toBe(true);
+    expect(store.current).toEqual(after);
+    expect(store.events).toHaveLength(1);
+    await expect(transitionApplication({ ...input, expectedVersion: 1, idempotencyKey: "new-invalid-review" },
+      { store, assertSource: assertReviewSource })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    expect(store.events).toHaveLength(1);
+  });
   beforeEach(() => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
   });

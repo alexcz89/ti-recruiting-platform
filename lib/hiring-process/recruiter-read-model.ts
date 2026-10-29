@@ -45,6 +45,7 @@ export type RecruiterPipelineGroupedRow = Pick<
   RecruiterApplicationReadInput,
   "stage" | "disposition" | "recruiterInterest"
 > & {
+  status?: string;
   _count: { _all: number };
 };
 
@@ -134,8 +135,12 @@ export function getRecruiterApplicationReadModel(
     options.canonicalReadsEnabled && hasCompleteCanonicalState
       ? "CANONICAL"
       : "LEGACY_FALLBACK";
+  const isLegacyReview = options.canonicalReadsEnabled &&
+    input.stage === null && input.disposition === null &&
+    input.status === "REVIEWING" && input.recruiterInterest === "REVIEW";
   const bucket =
-    source === "CANONICAL" ? canonicalBucket(input) : legacyBucket(input);
+    source === "CANONICAL" ? canonicalBucket(input)
+      : isLegacyReview ? "REVIEW" : legacyBucket(input);
 
   return {
     bucket,
@@ -177,7 +182,8 @@ export function countRecruiterPipelineGroupedRows(
 
   for (const row of rows) {
     const readModel = getRecruiterApplicationReadModel(
-      { ...row, status: "" },
+      // Preserve the historical aggregate fallback while recruiter reads are off.
+      { ...row, status: options.canonicalReadsEnabled ? row.status ?? "" : "" },
       options,
     );
     counts[readModel.bucket] += row._count._all;

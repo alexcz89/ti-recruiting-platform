@@ -157,7 +157,7 @@ export default async function OverviewPage() {
     // Minimal grouped state tuple; the centralized reader resolves canonical
     // authority and legacy fallback without loading full application rows.
     prisma.application.groupBy({
-      by: ["stage", "disposition", "recruiterInterest"],
+      by: ["stage", "disposition", "status", "recruiterInterest"],
       where: { job: { companyId } },
       _count: { _all: true },
     }),

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRecruiterApplicationReadRows,
   countRecruiterPipelineBuckets,
+  countRecruiterPipelineGroupedRows,
   filterRecruiterPipelineRows,
   getRecruiterApplicationReadModel,
   resolveRecruiterPipelineFilter,
@@ -11,6 +12,22 @@ import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-proc
 import { LEGACY_APPLICATION_STATE_MATRIX } from "@/lib/hiring-process/legacy-mapping";
 
 describe("recruiter application read model", () => {
+  it("preserves the previous aggregate fallback with the reader disabled", () => {
+    const grouped = [{ stage: null, disposition: null, status: "HIRED", recruiterInterest: "ACCEPTED", _count: { _all: 2 } }];
+    expect(countRecruiterPipelineGroupedRows(grouped, { canonicalReadsEnabled: false })).toMatchObject({ INTERVIEW: 2, HIRED: 0 });
+  });
+  it.each([true, false])("keeps all safe legacy rows and counts with reads=%s", (canonicalReadsEnabled) => {
+    const inputs = [
+      { status: "SUBMITTED", recruiterInterest: "REVIEW" },
+      { status: "REVIEWING", recruiterInterest: "REVIEW" },
+      { status: "REVIEWING", recruiterInterest: "MAYBE" },
+    ].map((row) => ({ ...row, stage: null, disposition: null }));
+    const rows = buildRecruiterApplicationReadRows(inputs, { canonicalReadsEnabled });
+    const counts = countRecruiterPipelineBuckets(rows);
+    expect(counts).toMatchObject({ APPLIED: canonicalReadsEnabled ? 1 : 2, REVIEW: canonicalReadsEnabled ? 1 : 0, PRESELECTED: 1 });
+    expect(Object.values(counts).reduce((a, b) => a + b, 0)).toBe(3);
+    expect(countRecruiterPipelineGroupedRows(inputs.map((row) => ({ ...row, _count: { _all: 1 } })), { canonicalReadsEnabled })).toEqual(counts);
+  });
   it.each(LEGACY_APPLICATION_STATE_MATRIX)(
     "classifies legacy $status/$recruiterInterest without reinterpreting ambiguous pairs",
     ({ status, recruiterInterest }) => {
@@ -23,7 +40,7 @@ describe("recruiter application read model", () => {
         expect(getRecruiterApplicationReadModel(
           { stage: null, disposition: null, status, recruiterInterest },
           { canonicalReadsEnabled },
-        )).toMatchObject({ bucket: expected, source: "LEGACY_FALLBACK" });
+        )).toMatchObject({ bucket: canonicalReadsEnabled && status === "REVIEWING" && recruiterInterest === "REVIEW" ? "REVIEW" : expected, source: "LEGACY_FALLBACK" });
       }
     },
   );

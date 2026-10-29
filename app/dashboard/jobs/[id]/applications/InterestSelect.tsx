@@ -10,6 +10,7 @@ import React, {
   MouseEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import StartReviewButton from "@/components/dashboard/StartReviewButton";
 import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
 import {
   getRecruiterApplicationReadModel,
@@ -106,8 +107,14 @@ export default function InterestSelect({
   const router = useRouter();
   const [value, setValue] = useState<InterestKey>(initial);
   const [stateVersion, setStateVersion] = useState(initialStateVersion);
-  const [isPending, startTransition] = useTransition();
+  const [actionPending, startTransition] = useTransition();
+  const [reviewPending, setReviewPending] = useState(false);
+  const isPending = actionPending || reviewPending;
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    setValue(initial);
+    setStateVersion(initialStateVersion);
+  }, [applicationId, initial, initialStateVersion]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canonicalOffer =
     canonicalStage === "OFFER" && canonicalDisposition === "ACTIVE";
@@ -186,6 +193,7 @@ export default function InterestSelect({
   }
 
   const handleSelect = (next: InterestKey) => {
+    if (isPending) return;
     setOpen(false);
     if (terminalHired || readOnlyCanonicalPresentation) return;
     if (effectiveValue === "REJECTED") return;
@@ -240,6 +248,9 @@ export default function InterestSelect({
       ref={containerRef}
       className="relative inline-flex flex-col text-xs"
     >
+      {canonicalRecruiterReadsEnabled && <StartReviewButton key={applicationId} applicationId={applicationId}
+        application={{ stage: canonicalStage, disposition: canonicalDisposition, stateVersion, status: legacyStatus, recruiterInterest: value }}
+        disabled={isPending} onPendingChange={setReviewPending} onSuccess={(updated) => { setStateVersion(updated.stateVersion); setValue(updated.recruiterInterest as InterestKey); }} />}
       {/* Botón pill con color por estado */}
       <button
         type="button"

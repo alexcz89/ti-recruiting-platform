@@ -4,6 +4,7 @@
 import React, { useState, useCallback, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import StartReviewButton from "@/components/dashboard/StartReviewButton";
 import { toastError, toastSuccess } from "@/lib/ui/toast";
 import type {
   ApplicationDispositionValue,
@@ -71,6 +72,7 @@ export type ShellProps = {
   // Application
   applicationId: string;
   currentApplication: AppState | null;
+  canonicalRecruiterReadsEnabled?: boolean;
 
   // Navigation
   navList: NavEntry[];
@@ -204,6 +206,7 @@ function CandidateReviewSession({
   matchLocked,
   applicationId,
   currentApplication,
+  canonicalRecruiterReadsEnabled = false,
   navList,
   navIndex,
   slots,
@@ -215,10 +218,16 @@ function CandidateReviewSession({
     currentApplication?.recruiterInterest ??
     "REVIEW"
   );
+  useEffect(() => {
+    setApp(currentApplication);
+    setCurrentInterest(currentApplication?.recruiterInterest ?? "REVIEW");
+  }, [currentApplication]);
   const [activeTab, setActiveTab] = useState<TabId>("summary");
   const [notes, setNotes] = useState(currentApplication?.internalNotes ?? "");
   const [notesSaved, setNotesSaved] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [actionPending, startTransition] = useTransition();
+  const [reviewPending, setReviewPending] = useState(false);
+  const isPending = actionPending || reviewPending;
   const [exceptionAction, setExceptionAction] = useState<ExceptionAction | null>(null);
   const [reasonCode, setReasonCode] = useState<TransitionReasonCode | "">("");
   const [reasonText, setReasonText] = useState("");
@@ -626,6 +635,12 @@ function CandidateReviewSession({
 
             {/* Right: quick actions + nav */}
             <div className="flex w-full min-w-0 flex-wrap items-center gap-2" data-testid="candidate-header-actions">
+              {canonicalRecruiterReadsEnabled && applicationId && app && <StartReviewButton key={applicationId} applicationId={applicationId}
+                application={app} disabled={isPending} onPendingChange={setReviewPending}
+                onSuccess={(updated) => {
+                  setApp((previous) => previous ? { ...previous, ...updated } : previous);
+                  setCurrentInterest(updated.recruiterInterest);
+                }} />}
               {/* Interest buttons */}
               {!rejected && (["MAYBE", "ACCEPTED", "REJECTED"] as const).map((key) => {
                 const m = INTEREST_MAP[key];
