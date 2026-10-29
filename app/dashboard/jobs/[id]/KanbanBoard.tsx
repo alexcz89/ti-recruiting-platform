@@ -2,10 +2,10 @@
 "use client";
 
 import * as React from "react";
-import { useTransition, useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fromNow } from "@/lib/dates";
 import { canStartReview } from "@/lib/hiring-process/start-review-eligibility";
+import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "@/lib/hiring-process/recruiter-read-model";
 import { toastError } from "@/lib/ui/toast";
 import { Lock, MapPin } from "lucide-react";
 import {
@@ -18,11 +18,7 @@ import {
 type Candidate = {
   id: string;
   name: string;
-  email: string;
-  resumeUrl?: string | null;
-  phone?: string | null;
-  location?: string | null;
-  _skills?: string[];
+  city?: string | null;
 };
 
 type AssessmentMeta = {
@@ -69,37 +65,6 @@ function scoreBg(score: number) {
   if (score >= 40) return "bg-amber-400";
   return "bg-rose-400";
 }
-
-// Etapas del pipeline (excluye REJECTED del avance rápido)
-const NEXT_STAGE: Record<string, string | null> = {
-  REVIEW: "MAYBE",
-  MAYBE: "ACCEPTED",
-  ACCEPTED: null,
-  REJECTED: null,
-};
-const NEXT_STAGE_LABEL: Record<string, string> = {
-  MAYBE: "Preselecto",
-  ACCEPTED: "Entrevista",
-};
-
-const CANONICAL_NEXT_STAGE: Record<string, string | null> = {
-  APPLIED: "REVIEW",
-  REVIEW: "PRESELECTED",
-  PRESELECTED: "INTERVIEW",
-  ASSESSMENT: null,
-  INTERVIEW: null,
-  OFFER: null,
-  REJECTED: null,
-  HIRED: null,
-  HOLD: null,
-  CLOSED_OTHER: null,
-};
-
-const CANONICAL_NEXT_STAGE_LABEL: Record<string, string> = {
-  REVIEW: "En revisión",
-  PRESELECTED: "Preselecto",
-  INTERVIEW: "Entrevista",
-};
 
 const CANONICAL_REJECTION_SOURCES = new Set([
   "APPLIED",
@@ -164,7 +129,8 @@ export default function Kanbanboard({
 }) {
   const router = useRouter();
   const [items, setItems] = useState<AppCard[]>(applications);
-  const [isPending, startTransition] = useTransition();
+  const [mobileSelection, setMobileSelection] = useState({ jobId: "", stage: "" });
+  const [isPending, setIsPending] = useState(false);
   const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null);
   const moveInFlight = React.useRef(false);
   const reviewCommand = React.useRef<{ key: string; id: string } | null>(null);
@@ -172,6 +138,31 @@ export default function Kanbanboard({
   useEffect(() => {
     setItems(applications);
   }, [applications]);
+
+  useEffect(() => {
+    setMobileSelection((current) => {
+      if (current.jobId === jobId && statuses.includes(current.stage)) return current;
+      let saved: string | null = null;
+      try {
+        saved = window.sessionStorage.getItem(`kanban-stage:${jobId}`);
+      } catch {
+        // The selector still works when browser storage is unavailable.
+      }
+      return { jobId, stage: saved && statuses.includes(saved) ? saved : statuses[0] ?? "" };
+    });
+  }, [jobId, statuses]);
+
+  const selectedStage = mobileSelection.jobId === jobId && statuses.includes(mobileSelection.stage)
+    ? mobileSelection.stage : statuses[0] ?? "";
+
+  const selectMobileStage = (stage: string) => {
+    setMobileSelection({ jobId, stage });
+    try {
+      window.sessionStorage.setItem(`kanban-stage:${jobId}`, stage);
+    } catch {
+      // Keep the selection in component state for this visit.
+    }
+  };
 
   const isCardWritable = (card: AppCard) =>
     card.writerCompatibility !== "NONE";
@@ -197,16 +188,10 @@ export default function Kanbanboard({
 
     if (!writerStatus) return;
     if (fromStatus === "REJECTED" || fromStatus === "HIRED") return;
-    const prev = items;
 
-    const cols: Record<string, AppCard[]> = {};
-    for (const st of statuses) cols[st] = [...(grouped[st] || [])];
-
-    const sourceCol = cols[fromStatus] || [];
-    const destCol = cols[toStatus] || sourceCol;
-    const moved = sourceCol[fromIdx];
+    const moved = (grouped[fromStatus] || [])[fromIdx];
     if (!moved) return;
-    if (!isCardWritable(moved)) return;
+    if (moved.id !== appId || !isCardWritable(moved)) return;
     const startsReview = canonicalRecruiterReadsEnabled && fromStatus === "APPLIED" && toStatus === "REVIEW";
     if (startsReview && !canStartReview({ ...moved, status: moved.applicationStatus, recruiterInterest: moved.status })) return;
     if (
@@ -235,18 +220,6 @@ export default function Kanbanboard({
     ) {
       return;
     }
-    sourceCol.splice(fromIdx, 1);
-
-    destCol.splice(toIdx, 0, {
-      ...moved,
-      status: writerStatus,
-      displayStatus: canonicalRecruiterReadsEnabled ? toStatus : writerStatus,
-    });
-    cols[fromStatus] = sourceCol;
-    cols[toStatus] = destCol;
-
-    setItems(statuses.flatMap((st) => cols[st]));
-
     const fd = new FormData();
     fd.set("appId", appId);
     fd.set("newStatus", writerStatus);
@@ -269,27 +242,35 @@ export default function Kanbanboard({
     }
 
     moveInFlight.current = true;
-    startTransition(async () => {
+    setIsPending(true);
+    void (async () => {
       try {
         const res = await moveAction(fd);
         if (!res.ok) throw new Error("No se pudo mover");
         if (res.application) {
           const saved = res.application;
+          const confirmedBucket = getRecruiterApplicationReadModel({
+            stage: saved.stage as RecruiterApplicationReadInput["stage"],
+            disposition: saved.disposition as RecruiterApplicationReadInput["disposition"],
+            status: saved.status,
+            recruiterInterest: saved.recruiterInterest,
+          }, { canonicalReadsEnabled: canonicalRecruiterReadsEnabled }).bucket;
           setItems((current) => current.map((item) => item.id === appId ? {
             ...item, stage: saved.stage, disposition: saved.disposition,
             stateVersion: saved.stateVersion, applicationStatus: saved.status,
             status: saved.recruiterInterest,
+            displayStatus: confirmedBucket,
           } : item));
         }
         router.refresh();
       } catch {
-        setItems(prev);
         toastError("No se pudo mover el candidato. Actualiza la página e intenta de nuevo.");
         router.refresh();
       } finally {
         moveInFlight.current = false;
+        setIsPending(false);
       }
-    });
+    })();
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -299,19 +280,19 @@ export default function Kanbanboard({
     doMove(draggableId, source.droppableId, destination.droppableId, source.index, destination.index);
   };
 
-  const handleQuickMove = (card: AppCard, toStatus: string) => {
-    const fromStatus = canonicalRecruiterReadsEnabled
-      ? card.displayStatus
-      : card.status;
-    const fromCol = grouped[fromStatus] || [];
-    const fromIdx = fromCol.findIndex((c) => c.id === card.id);
-    if (fromIdx < 0) return;
-    const toCol = grouped[toStatus] || [];
-    doMove(card.id, fromStatus, toStatus, fromIdx, toCol.length);
-  };
-
   return (
-    <section className="rounded-2xl border glass-card p-3 sm:p-4 overflow-x-auto">
+    <section className="rounded-2xl border glass-card p-3 sm:p-4">
+      <div className="md:hidden">
+        <label htmlFor="kanban-stage" className="mb-2 block text-sm font-medium">Etapa</label>
+        <select id="kanban-stage" className="w-full rounded-lg border bg-[rgb(var(--card))] p-2" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
+          {statuses.map((stage) => <option key={stage} value={stage}>{statusLabels[stage] ?? stage} ({grouped[stage]?.length ?? 0})</option>)}
+        </select>
+        <div className="mt-3 space-y-3" aria-live="polite">
+          {(grouped[selectedStage] ?? []).map((card) => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
+          {(grouped[selectedStage] ?? []).length === 0 && <p className="py-6 text-center text-sm text-zinc-500">No hay candidatos en esta etapa.</p>}
+        </div>
+      </div>
+      <div className="hidden overflow-x-auto md:block">
       <DragDropContext
         onDragStart={(start) => setDragSourceStatus(start.source.droppableId)}
         onDragEnd={(result) => {
@@ -319,19 +300,10 @@ export default function Kanbanboard({
           handleDragEnd(result);
         }}
       >
-        <div className="flex gap-3 lg:gap-4 min-w-[860px] pb-1">
+        <div className="flex w-max gap-3 pb-1">
           {statuses.map((st) => {
             const cards = grouped[st] || [];
             const accent = COLUMN_ACCENT[st] ?? COLUMN_ACCENT.REVIEW;
-            const nextStage = canonicalRecruiterReadsEnabled
-              ? CANONICAL_NEXT_STAGE[st] ?? null
-              : NEXT_STAGE[st] ?? null;
-            const nextStageLabel = nextStage
-              ? canonicalRecruiterReadsEnabled
-                ? CANONICAL_NEXT_STAGE_LABEL[nextStage]
-                : NEXT_STAGE_LABEL[nextStage]
-              : undefined;
-
             return (
               <Droppable
                 key={st}
@@ -367,7 +339,7 @@ export default function Kanbanboard({
                         key={card.id}
                         draggableId={card.id}
                         index={index}
-                        isDragDisabled={!isCardWritable(card)}
+                        isDragDisabled={isPending || !isCardWritable(card)}
                       >
                         {(draggableProvided, draggableSnapshot) => (
                           <div
@@ -381,13 +353,6 @@ export default function Kanbanboard({
                               jobId={jobId}
                               dragging={draggableSnapshot.isDragging}
                               hasMatchSignals={hasMatchSignals}
-                              nextStatus={isCardWritable(card) ? nextStage : null}
-                              nextStatusLabel={isCardWritable(card) ? nextStageLabel : undefined}
-                              onMoveNext={
-                                isCardWritable(card) && nextStage
-                                  ? () => handleQuickMove(card, nextStage)
-                                  : undefined
-                              }
                             />
                           </div>
                         )}
@@ -401,6 +366,7 @@ export default function Kanbanboard({
           })}
         </div>
       </DragDropContext>
+      </div>
     </section>
   );
 
@@ -423,7 +389,7 @@ export default function Kanbanboard({
         ref={innerRef}
         {...(droppableProps as any)}
         className={[
-          "flex-1 min-w-[210px] max-w-[340px] rounded-2xl border glass-card flex flex-col max-h-[72vh] transition-colors",
+          "w-[310px] shrink-0 rounded-2xl border glass-card flex flex-col max-h-[72vh] transition-colors",
           isDraggingOver ? accent.drag : "",
         ].join(" ")}
       >
@@ -569,15 +535,12 @@ export default function Kanbanboard({
   /* ============ Card ============ */
 
   function Card({
-    card, jobId, dragging, hasMatchSignals, nextStatus, nextStatusLabel, onMoveNext,
+    card, jobId, dragging, hasMatchSignals,
   }: {
     card: AppCard;
     jobId: string;
     dragging: boolean;
     hasMatchSignals?: boolean;
-    nextStatus?: string | null;
-    nextStatusLabel?: string;
-    onMoveNext?: () => void;
   }) {
     const now = Date.now();
     const createdMs = card.createdAt ? new Date(card.createdAt).getTime() : null;
@@ -585,9 +548,6 @@ export default function Kanbanboard({
     const isNew = createdMs !== null && now - createdMs < 48 * 60 * 60 * 1000;
     const daysStale = updatedMs !== null ? Math.floor((now - updatedMs) / (1000 * 60 * 60 * 24)) : null;
     const isStale = card.status === "REVIEW" && daysStale !== null && daysStale >= 5;
-    const phone = card.candidate.phone;
-    const waNumber = phone?.replace(/\D/g, "");
-    const hasWhatsApp = phone?.trim().startsWith("+52");
     const score = card._score;
     const locked = card._locked;
 
@@ -604,8 +564,8 @@ export default function Kanbanboard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <h4 className="text-xs font-semibold leading-snug text-zinc-900 truncate max-w-[140px] dark:text-zinc-50">
-                {card.candidate.name}
+              <h4 className="min-w-0 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
+                <a href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} onClick={(event) => event.stopPropagation()} className="break-words hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500">{card.candidate.name}</a>
               </h4>
               {isNew && (
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -613,28 +573,16 @@ export default function Kanbanboard({
                 </span>
               )}
             </div>
-            {card.candidate.location && (
+            {card.candidate.city && (
               <p className="mt-0.5 flex items-center gap-0.5 text-[10px] text-zinc-400 truncate max-w-[170px]">
                 <MapPin className="h-2.5 w-2.5 shrink-0" />
-                {card.candidate.location}
+                {card.candidate.city}
               </p>
             )}
           </div>
 
-          {/* AI Match + CV */}
+          {/* AI Match */}
           <div className="flex shrink-0 flex-col items-end gap-1">
-            {card.candidate.resumeUrl && (
-              <a
-                href={card.candidate.resumeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center rounded-full border border-emerald-500/60 px-2 py-0.5 text-[10px] font-medium text-emerald-600 hover:bg-emerald-50 dark:border-emerald-500 dark:text-emerald-300 dark:hover:bg-emerald-500/10"
-                title="Ver CV"
-                onClick={(e) => e.stopPropagation()}
-              >
-                CV
-              </a>
-            )}
             {hasMatchSignals && (
               locked ? (
                 <div className="flex items-center gap-0.5 rounded-md border border-zinc-200 px-1.5 py-0.5 dark:border-zinc-700">
@@ -657,20 +605,6 @@ export default function Kanbanboard({
           </div>
         )}
 
-        {/* Skills */}
-        {Array.isArray(card.candidate._skills) && card.candidate._skills.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1">
-            {card.candidate._skills.slice(0, 3).map((s) => (
-              <span key={s} className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                {s}
-              </span>
-            ))}
-            {card.candidate._skills.length > 3 && (
-              <span className="text-[10px] text-zinc-400">+{card.candidate._skills.length - 3}</span>
-            )}
-          </div>
-        )}
-
         {/* Badges de assessments (uno por template enviado) */}
         {(card._assessments ?? []).length > 0 && (
           <div className="mt-2 flex flex-col gap-1.5">
@@ -688,72 +622,6 @@ export default function Kanbanboard({
           </div>
         )}
 
-        {/* Footer: acciones rápidas */}
-        {(() => {
-          const completed = (card._assessments ?? []).filter(a => a.state === "COMPLETED" && a.attemptId);
-          const singleResult = completed.length >= 1 ? completed[0] : null;
-          return (
-        <div className="mt-2.5 flex items-center justify-between gap-1">
-          {/* Izquierda: Ver perfil + Ver resultados (solo si hay exactamente 1 completado) */}
-          <div className="flex items-center gap-1 min-w-0">
-            <a
-              href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`}
-              className="inline-flex shrink-0 items-center rounded-full border border-zinc-200 px-2.5 py-1 text-[10px] font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Ver perfil
-            </a>
-
-            {singleResult && (
-              <a
-                href={`/dashboard/assessments/attempts/${singleResult.attemptId}/results`}
-                onClick={(e) => e.stopPropagation()}
-                className={[
-                  "inline-flex shrink-0 items-center rounded-full border px-2.5 py-1 text-[10px] font-semibold transition-colors",
-                  singleResult.passed === true
-                    ? "border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-300"
-                    : singleResult.passed === false
-                    ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-600/40 dark:bg-rose-900/20 dark:text-rose-300"
-                    : "border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-600/40 dark:bg-teal-900/20 dark:text-teal-300",
-                ].join(" ")}
-                title="Ver resultados"
-              >
-                📊 Resultados
-              </a>
-            )}
-          </div>
-
-          {/* Derecha: WhatsApp + avanzar etapa */}
-          <div className="flex shrink-0 items-center gap-1">
-            {hasWhatsApp && waNumber && (
-              <a
-                href={`https://wa.me/${waNumber}`}
-                target="_blank"
-                rel="noreferrer"
-                title="Contactar por WhatsApp"
-                className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <svg viewBox="0 0 24 24" className="h-3 w-3 fill-current">
-                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                </svg>
-              </a>
-            )}
-
-            {nextStatus && nextStatusLabel && onMoveNext && (
-              <button
-                type="button"
-                title={`Mover a ${nextStatusLabel}`}
-                onClick={(e) => { e.stopPropagation(); onMoveNext(); }}
-                className="inline-flex items-center gap-0.5 rounded-full border border-zinc-200 px-2 py-1 text-[10px] font-medium text-zinc-500 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-700 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/20 dark:hover:text-emerald-300 transition-colors"
-              >
-                {nextStatusLabel} →
-              </button>
-            )}
-          </div>
-        </div>
-          );
-        })()}
       </article>
     );
   }

@@ -115,9 +115,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
           id: true,
           name: true,
           email: true,
-          resumeUrl: true,
-          phone: true,
-          location: true,
+          city: true,
           seniority: true,
           yearsExperience: true,
         },
@@ -282,11 +280,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       candidate: {
         id: a.candidate.id,
         name: a.candidate.name ?? a.candidate.email,
-        email: a.candidate.email,
-        resumeUrl: a.candidate.resumeUrl,
-        phone: (a.candidate as any).phone ?? null,
-        location: (a.candidate as any).location ?? null,
-        _skills: (a.candidate.candidateSkills ?? []).map((cs: any) => cs.term.label),
+        city: a.candidate.city?.trim() || null,
       },
     };
   });
