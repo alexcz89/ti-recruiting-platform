@@ -10,6 +10,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import MatchScoreBadge from "@/components/jobs/MatchScoreBadge";
+import MatchBreakdownMini from "@/components/jobs/MatchBreakdownMini";
+import type { MatchAdjustments } from "@/lib/ai/recruiter-match";
 
 interface SkillDetail {
   termId: string;
@@ -55,6 +57,7 @@ interface Props {
   scoreLabel: string;
   candidateId?: string | null;
   jobId?: string | null;
+  adjustments?: MatchAdjustments | null;
 }
 
 const SKILL_LEVEL_LABEL: Record<number, string> = {
@@ -125,6 +128,7 @@ export default function MatchScorePopover({
   scoreLabel,
   candidateId,
   jobId,
+  adjustments,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [aiExplanation, setAiExplanation] = useState<MatchExplanation | null>(null);
@@ -426,6 +430,7 @@ export default function MatchScorePopover({
               <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
                 {getRecommendation(score)}
               </p>
+              {adjustments && <MatchBreakdownMini matchResult={matchResult} adjustments={adjustments} showCounts={false} compact />}
 
               <ul className="mt-2 space-y-1.5">
                 {explanationLines.map((line, idx) => (

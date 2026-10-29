@@ -21,22 +21,11 @@ import {
   type RecruiterPipelineBucket,
 } from "@/lib/hiring-process/recruiter-read-model";
 import {
-  computeMatchScore,
-  applyPlanGate,
   scoreToTextColor,
   scoreToLabel,
   type BillingPlan,
-  type JobSkillInput,
-  type CandidateSkillInput,
-  type SeniorityLevel,
 } from "@/lib/ai/matchScore";
-
-function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
-  if (!s) return null;
-  const lower = s.toLowerCase();
-  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
-  return null;
-}
+import { buildRecruiterMatchJob, computeRecruiterMatch, getRecruiterMatchAccessIds, recruiterMatchCandidateSelect, recruiterMatchJobSelect } from "@/lib/ai/recruiter-match";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -81,11 +70,13 @@ export default async function JobPipelinePage({ params }: PageProps) {
     select: { billingPlan: true, name: true },
   });
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
+  const matchNow = new Date();
 
   // Verificar que la vacante pertenece a la empresa de la sesión
   const job = await prisma.job.findFirst({
     where: { id: params.id, companyId },
     select: {
+      ...recruiterMatchJobSelect,
       id: true,
       slug: true,
       title: true,
@@ -93,13 +84,6 @@ export default async function JobPipelinePage({ params }: PageProps) {
       seniority: true,
       minYearsExperience: true,
       company: { select: { name: true } },
-      requiredSkills: {
-        select: {
-          must: true,
-          weight: true,
-          term: { select: { id: true, label: true } },
-        },
-      },
       assessments: {
         where: { template: templateVisibilityWhere },
         orderBy: { createdAt: "asc" },
@@ -118,22 +102,16 @@ export default async function JobPipelinePage({ params }: PageProps) {
     (job.assessments ?? []).map((a) => [a.templateId, (a as any).template?.title ?? a.templateId])
   );
 
-  const jobSkills: JobSkillInput[] = job.requiredSkills.map((rs) => ({
-    termId: rs.term.id,
-    label: rs.term.label,
-    must: rs.must,
-    weight: rs.weight,
-  }));
-  const jobSeniority = toSeniorityLevel(job.seniority);
-  const hasMatchSignals = jobSkills.length > 0 || jobSeniority !== null || job.minYearsExperience !== null;
+  const { hasMatchSignals } = buildRecruiterMatchJob(job);
 
   // Traer aplicaciones + candidato
   const applications = await prisma.application.findMany({
-    where: { jobId: job.id },
+    where: { jobId: job.id, job: { companyId } },
     orderBy: { createdAt: "asc" },
     include: {
       candidate: {
         select: {
+          ...recruiterMatchCandidateSelect(matchNow),
           id: true,
           name: true,
           email: true,
@@ -142,13 +120,6 @@ export default async function JobPipelinePage({ params }: PageProps) {
           location: true,
           seniority: true,
           yearsExperience: true,
-          candidateSkills: {
-            select: {
-              level: true,
-              term: { select: { id: true, label: true } },
-            },
-            orderBy: [{ level: "desc" }],
-          },
         },
       },
     },
@@ -286,22 +257,9 @@ export default async function JobPipelinePage({ params }: PageProps) {
     ? RECRUITER_PIPELINE_LABELS
     : INTEREST_LABEL;
 
-  const appCards = recruiterRows.map((a, idx) => {
-    const candidateSkills: CandidateSkillInput[] = (a.candidate.candidateSkills ?? []).map((cs: any) => ({
-      termId: cs.term.id,
-      label: cs.term.label,
-      level: cs.level,
-    }));
-    const matchResult = computeMatchScore({
-      jobSkills,
-      candidateSkills,
-      jobSeniority,
-      candidateSeniority: toSeniorityLevel((a.candidate as any).seniority),
-      jobMinYearsExperience: job.minYearsExperience ?? null,
-      candidateYearsExperience: (a.candidate as any).yearsExperience ?? null,
-    });
-    const rawScore = matchResult?.score ?? 0;
-    const gatedScore = applyPlanGate(rawScore, idx, plan);
+  const matchAccess = getRecruiterMatchAccessIds(applications, plan);
+  const appCards = recruiterRows.map((a) => {
+    const gatedScore = matchAccess.has(a.id) ? computeRecruiterMatch(job, a.candidate, matchNow).finalScore : null;
 
     const assessMetas = assessmentEnabled ? (assessmentByAppId.get(a.id) ?? []) : [];
 

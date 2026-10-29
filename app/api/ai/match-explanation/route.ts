@@ -10,12 +10,10 @@ import {
   type CandidateAccessActor,
 } from "@/lib/server/candidate-access";
 import {
-  buildCandidateSkillInputs,
-  buildJobSkillInputs,
-  computeMatchScore,
-  type JobSkillInput,
-  type SeniorityLevel,
+  scoreToLabel,
+  type BillingPlan,
 } from "@/lib/ai/matchScore";
+import { computeRecruiterMatch, getRecruiterMatchAccessIds, recruiterMatchCandidateSelect } from "@/lib/ai/recruiter-match";
 import {
   generateMatchExplanation,
   buildMatchExplanationFingerprint,
@@ -55,11 +53,16 @@ function toPrismaJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 }
 
-function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
-  if (!s) return null;
-  const lower = s.toLowerCase();
-  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
-  return null;
+async function matchAccessError(candidateId: string, jobId: string, actor: CandidateAccessActor) {
+  const where = applicationWhereForActor(actor, { candidateId, jobId });
+  if (!where) return noStoreJson({ error: "Forbidden" }, 403);
+  const application = await prisma.application.findFirst({ where,
+    select: { id: true, job: { select: { companyId: true, company: { select: { billingPlan: true } } } } },
+  });
+  if (!application) return noStoreJson({ error: "Candidato o vacante no encontrado" }, 404);
+  const cohort = await prisma.application.findMany({ where: { jobId, job: { companyId: application.job.companyId } }, select: { id: true, createdAt: true } });
+  const access = getRecruiterMatchAccessIds(cohort, (application.job.company.billingPlan ?? "FREE") as BillingPlan);
+  return access.has(application.id) ? null : noStoreJson({ error: "AI Match no disponible para esta postulación en tu plan" }, 403);
 }
 
 function toStringArray(value: unknown): string[] {
@@ -85,6 +88,7 @@ async function buildMatchExplanationInput(
   jobId: string,
   actor: CandidateAccessActor
 ): Promise<MatchExplanationInput | null> {
+  const now = new Date();
   const applicationWhere = applicationWhereForActor(actor, { candidateId, jobId });
   if (!applicationWhere) return null;
 
@@ -99,6 +103,7 @@ async function buildMatchExplanationInput(
     prisma.user.findUnique({
       where: { id: candidateId },
       select: {
+        ...recruiterMatchCandidateSelect(now),
         id: true,
         name: true,
         location: true,
@@ -114,6 +119,7 @@ async function buildMatchExplanationInput(
             strengthsJson: true,
             risksJson: true,
             tags: true,
+            profileType: true,
             generatedAt: true,
             updatedAt: true,
           },
@@ -167,21 +173,9 @@ async function buildMatchExplanationInput(
 
   if (!candidate || !job) return null;
 
-  const jobSkills: JobSkillInput[] = buildJobSkillInputs(
-    job.requiredSkills,
-    job.skills
-  );
-
-  const candidateSkillsInput = buildCandidateSkillInputs(candidate.candidateSkills);
-
-  const matchResult = computeMatchScore({
-    jobSkills,
-    candidateSkills: candidateSkillsInput,
-    jobSeniority: toSeniorityLevel(job.seniority),
-    candidateSeniority: toSeniorityLevel(candidate.seniority),
-    jobMinYearsExperience: job.minYearsExperience ?? null,
-    candidateYearsExperience: candidate.yearsExperience ?? null,
-  });
+  const match = computeRecruiterMatch(job, candidate, now);
+  const matchResult = match.matchResult;
+  const candidateSkillsInput = match.candidateSkills;
 
   const matchedSkills = (matchResult.details ?? [])
     .filter((d) => d.matched)
@@ -236,8 +230,9 @@ async function buildMatchExplanationInput(
       requiredSkills: job.requiredSkills.map((rs) => rs.term.label),
     },
     match: {
-      score: matchResult.score,
-      label: matchResult.label,
+      adjustments: { baseScore: match.baseScore, profileAdjustment: match.profileAdjustment, tagAdjustment: match.tagAdjustment, finalScore: match.finalScore },
+      score: match.finalScore,
+      label: scoreToLabel(match.finalScore),
       skillScore: matchResult.skillScore,
       mustScore: matchResult.mustScore,
       niceScore: matchResult.niceScore,
@@ -320,6 +315,9 @@ export async function GET(req: NextRequest) {
     return noStoreJson({ error: "candidateId y jobId son requeridos" }, 400);
   }
 
+  const denied = await matchAccessError(candidateId, jobId, actor);
+  if (denied) return denied;
+
   const cacheKey = buildCacheKey(candidateId, jobId);
 
   if (!force) {
@@ -399,6 +397,9 @@ export async function POST(req: NextRequest) {
   if (!candidateId || !jobId) {
     return noStoreJson({ error: "candidateId y jobId son requeridos" }, 400);
   }
+
+  const denied = await matchAccessError(candidateId, jobId, actor);
+  if (denied) return denied;
 
   const input = await buildMatchExplanationInput(candidateId, jobId, actor);
   if (!input) {

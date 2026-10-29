@@ -14,20 +14,14 @@ import ShareLinkedInButton from "./ShareLinkedInButton";
 import JobActionsMenu from "@/components/dashboard/JobActionsMenu";
 import MatchScorePopover from "@/components/dashboard/MatchScorePopover";
 import MatchBreakdownMini from "@/components/jobs/MatchBreakdownMini";
-import { computeTagBoost } from "@/lib/ai/tagBoost";
+import { buildRecruiterMatchJob, computeRecruiterMatch, getRecruiterMatchAccessIds, recruiterMatchCandidateSelect, recruiterMatchJobSelect } from "@/lib/ai/recruiter-match";
 import {
-  buildCandidateSkillInputs,
-  buildJobSkillInputs,
-  computeMatchScore,
-  applyPlanGate,
   scoreToColor,
   scoreToTextColor,
   scoreToLabel,
   type BillingPlan,
-  type JobSkillInput,
-  type SeniorityLevel,
 } from "@/lib/ai/matchScore";
-import { badgeLevelLabel, badgeValidityCutoff } from "@/lib/badges";
+import { badgeLevelLabel } from "@/lib/badges";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import {
   buildRecruiterApplicationReadRows,
@@ -78,38 +72,6 @@ function scoreToRange(score: number): "HIGH" | "MED" | "LOW" {
   return "LOW";
 }
 
-function toSeniorityLevel(s: string | null | undefined): SeniorityLevel | null {
-  if (!s) return null;
-  const lower = s.toLowerCase();
-  if (lower === "junior" || lower === "mid" || lower === "senior") return lower;
-  return null;
-}
-
-function adjustScoreByProfileType(params: {
-  baseScore: number;
-  profileType: string | null | undefined;
-  jobIsTech: boolean;
-}): number {
-  const { baseScore, profileType, jobIsTech } = params;
-
-  let score = baseScore;
-  const normalizedProfile = String(profileType ?? "").toUpperCase();
-
-  if (!jobIsTech || !normalizedProfile) {
-    return Math.max(0, Math.min(100, score));
-  }
-
-  if (normalizedProfile === "RECRUITING" || normalizedProfile === "BUSINESS") {
-    score -= 15;
-  } else if (normalizedProfile === "HYBRID") {
-    score -= 5;
-  } else if (normalizedProfile === "ENGINEERING") {
-    score += 5;
-  }
-
-  return Math.max(0, Math.min(100, score));
-}
-
 export default async function JobApplicationsPage({
   params,
   searchParams,
@@ -150,7 +112,7 @@ export default async function JobApplicationsPage({
     select: { billingPlan: true, name: true },
   });
   const plan = (company?.billingPlan ?? "FREE") as BillingPlan;
-  const currentBadgeCutoff = badgeValidityCutoff();
+  const matchNow = new Date();
 
   // Nombre del reclutador para el mensaje de WhatsApp (solo primer nombre)
   const session = await getServerSession(authOptions);
@@ -159,6 +121,7 @@ export default async function JobApplicationsPage({
   const job = await prisma.job.findFirst({
     where: { id: params.id, companyId },
     select: {
+      ...recruiterMatchJobSelect,
       id: true,
       slug: true,
       title: true,
@@ -167,13 +130,6 @@ export default async function JobApplicationsPage({
       minYearsExperience: true,
       company: { select: { name: true } },
       skills: true,
-      requiredSkills: {
-        select: {
-          must: true,
-          weight: true,
-          term: { select: { id: true, label: true, aliases: true } },
-        },
-      },
       assessments: {
         where: { template: templateVisibilityWhere },
         orderBy: { createdAt: "asc" },
@@ -194,16 +150,8 @@ export default async function JobApplicationsPage({
     jobAssessmentTemplates.map(a => [a.templateId, (a as any).template?.title ?? a.templateId])
   );
 
-  const jobSkillsForEngine: JobSkillInput[] = buildJobSkillInputs(
-    job.requiredSkills,
-    job.skills
-  );
-
-  const jobSeniorityForEngine = toSeniorityLevel(job.seniority);
-
+  const { jobSkills: jobSkillsForEngine, hasMatchSignals } = buildRecruiterMatchJob(job);
   const hasJobSkills = jobSkillsForEngine.length > 0;
-  const hasMatchSignals =
-    hasJobSkills || jobSeniorityForEngine !== null || job.minYearsExperience !== null;
 
   const allApps = await prisma.application.findMany({
     where: { jobId: job.id, job: { companyId } },
@@ -211,6 +159,7 @@ export default async function JobApplicationsPage({
     include: {
       candidate: {
         select: {
+          ...recruiterMatchCandidateSelect(matchNow),
           id: true,
           name: true,
           firstName: true,
@@ -223,32 +172,6 @@ export default async function JobApplicationsPage({
           seniority: true,
           yearsExperience: true,
           desiredSalaryMin: true,
-          aiProfile: {
-            select: {
-              tags: true,
-              profileType: true,
-            },
-          },
-          candidateSkills: {
-            select: {
-              level: true,
-              term: { select: { id: true, label: true, aliases: true } },
-            },
-          },
-          candidateBadges: {
-            where: {
-              isPublic: true,
-              earnedAt: { gte: currentBadgeCutoff },
-            },
-            orderBy: [{ level: "desc" }, { earnedAt: "desc" }],
-            select: {
-              level: true,
-              slug: true,
-              term: {
-                select: { id: true, label: true, aliases: true },
-              },
-            },
-          },
           candidateLanguages: {
             select: {
               level: true,
@@ -422,38 +345,10 @@ export default async function JobApplicationsPage({
   const cvParam = (searchParams?.cv as string | undefined) ?? "ALL";
   const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
 
+  const matchAccess = getRecruiterMatchAccessIds(allApps, plan);
   let enriched = recruiterRows.map((a) => {
-    const candidateSkillsForEngine = buildCandidateSkillInputs(
-      a.candidate?.candidateSkills ?? [],
-      undefined,
-      a.candidate?.candidateBadges ?? []
-    );
-
-    const matchResult = computeMatchScore({
-      jobSkills: jobSkillsForEngine,
-      candidateSkills: candidateSkillsForEngine,
-      jobSeniority: jobSeniorityForEngine,
-      candidateSeniority: toSeniorityLevel((a.candidate as any)?.seniority),
-      jobMinYearsExperience: job.minYearsExperience ?? null,
-      candidateYearsExperience: (a.candidate as any)?.yearsExperience ?? null,
-    });
-
-    const baseScore = matchResult?.score ?? 0;
+    const match = matchAccess.has(a.id) ? computeRecruiterMatch(job, a.candidate, matchNow) : null;
     const profileType = a.candidate?.aiProfile?.profileType ?? null;
-
-    const tagBoost = computeTagBoost({
-      candidateTags: Array.isArray(a.candidate?.aiProfile?.tags) ? a.candidate.aiProfile.tags : [],
-      jobTitle: job.title,
-      jobSkills: jobSkillsForEngine.map((s) => s.label),
-    });
-
-    const scoreAfterProfile = adjustScoreByProfileType({
-      baseScore,
-      profileType,
-      jobIsTech: hasJobSkills,
-    });
-
-    const finalScore = Math.max(0, Math.min(100, scoreAfterProfile + tagBoost));
 
     const fullName =
       a.candidate?.name ||
@@ -462,12 +357,11 @@ export default async function JobApplicationsPage({
 
     return {
       ...a,
-      _matchResult: matchResult,
-      _score: baseScore,
+      _matchResult: match?.matchResult ?? null,
+      _matchAdjustments: match ? { baseScore: match.baseScore, profileAdjustment: match.profileAdjustment, tagAdjustment: match.tagAdjustment, finalScore: match.finalScore } : null,
       _profileType: profileType,
-      _profileAdjustedScore: scoreAfterProfile,
-      _finalScore: finalScore,
-      _tagBoost: tagBoost,
+      _gatedFinalScore: match?.finalScore ?? null,
+      _locked: match === null,
       _fullName: fullName,
       _lastActivity: a.createdAt,
       _hasCV: Boolean(a.candidate?.resumeUrl),
@@ -492,22 +386,15 @@ export default async function JobApplicationsPage({
   const sorted = [...enriched].sort((a, b) => {
     if (sortKey === "recent") return new Date(b._lastActivity).getTime() - new Date(a._lastActivity).getTime();
     if (sortKey === "name") return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
-    return (b._finalScore ?? 0) - (a._finalScore ?? 0);
+    if (a._locked !== b._locked) return a._locked ? 1 : -1;
+    return (b._gatedFinalScore ?? 0) - (a._gatedFinalScore ?? 0) ||
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || a.id.localeCompare(b.id);
   });
-
-  const withGate = sorted.map((a, idx) => {
-    const gatedScore = applyPlanGate(a._score, idx, plan);
-    const gatedFinalScore = applyPlanGate(a._finalScore, idx, plan);
-    return {
-      ...a,
-      _gatedScore: gatedScore,
-      _gatedFinalScore: gatedFinalScore,
-      _locked: gatedScore === null,
-    };
-  });
+  const withGate = sorted;
 
   const apps = withGate.filter((a) => {
-    if (matchFilter !== "ALL" && hasMatchSignals && !a._locked) {
+    if (matchFilter !== "ALL" && hasMatchSignals) {
+      if (a._locked) return false;
       if (scoreToRange(a._gatedFinalScore ?? 0) !== matchFilter) return false;
     }
     if (cvFilter === "YES" && !a._hasCV) return false;
@@ -818,7 +705,7 @@ export default async function JobApplicationsPage({
 
             <div className="block divide-y divide-zinc-100 dark:divide-zinc-800 sm:hidden">
               {apps.map((a: any) => {
-                const matchResult = a._matchResult;
+                const matchResult = a._matchResult!; // Used only inside authorized match branches.
                 const gatedFinalScore: number | null = a._gatedFinalScore;
                 const locked: boolean = a._locked;
                 const profileTypeLabel =
@@ -880,6 +767,7 @@ export default async function JobApplicationsPage({
                     {!locked && hasMatchSignals && (
                       <MatchBreakdownMini
                         matchResult={matchResult}
+                        adjustments={a._matchAdjustments}
                         compact
                         showCounts={hasJobSkills}
                       />
@@ -1006,7 +894,7 @@ export default async function JobApplicationsPage({
                 </thead>
                 <tbody>
                   {apps.map((a: any) => {
-                    const matchResult = a._matchResult;
+                    const matchResult = a._matchResult!; // Used only inside authorized match branches.
                     const gatedFinalScore: number | null = a._gatedFinalScore;
                     const locked: boolean = a._locked;
                     const matchedDetails = (matchResult?.details ?? []).filter((d: any) => d.matched).slice(0, 4);
@@ -1172,6 +1060,7 @@ export default async function JobApplicationsPage({
                             <MatchScorePopover
                               score={gatedFinalScore!}
                               matchResult={matchResult}
+                              adjustments={a._matchAdjustments}
                               jobSkillCount={jobSkillsForEngine.length}
                               scoreColor={scoreToColor(gatedFinalScore!)}
                               scoreTextColor={scoreToTextColor(gatedFinalScore!)}
