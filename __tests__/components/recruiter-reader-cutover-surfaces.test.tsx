@@ -103,7 +103,7 @@ describe("recruiter reader surface cutover", () => {
 
     const legacyReviewColumn = screen
       .getByRole("heading", { name: "Por revisar" })
-      .closest(".flex-1");
+      .closest('[class*="w-[310px]"]');
     expect(legacyReviewColumn).not.toBeNull();
     expect(
       within(legacyReviewColumn as HTMLElement).getByText("Mixed Cohort Candidate"),
@@ -121,7 +121,7 @@ describe("recruiter reader surface cutover", () => {
     );
     const canonicalInterviewColumn = screen
       .getByRole("heading", { name: "Entrevista" })
-      .closest(".flex-1");
+      .closest('[class*="w-[310px]"]');
     expect(canonicalInterviewColumn).not.toBeNull();
     expect(
       within(canonicalInterviewColumn as HTMLElement).getByText(
@@ -147,7 +147,7 @@ describe("recruiter reader surface cutover", () => {
       within(
         screen
           .getByRole("heading", { name: "Por revisar" })
-          .closest(".flex-1") as HTMLElement,
+          .closest('[class*="w-[310px]"]') as HTMLElement,
       ).getByText("Mixed Cohort Candidate"),
     ).toBeInTheDocument();
     expect(moveAction).not.toHaveBeenCalled();

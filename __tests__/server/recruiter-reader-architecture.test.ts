@@ -107,17 +107,15 @@ describe("recruiter reader architecture", () => {
     expect(board).toContain("isCardWritable");
     expect(board).toContain('card.writerCompatibility !== "NONE"');
     expect(board).not.toContain("canonicalHiringProcessEnabled");
-    expect(board).toContain("isDragDisabled={!isCardWritable(card)}");
+    expect(board).toContain("isDragDisabled={isPending || !isCardWritable(card)}");
     expect(board).toContain("a.displayStatus");
     expect(board).toContain("canonicalWriterStatusForMove");
-    expect(board).toContain('APPLIED: "REVIEW"');
-    expect(board).toContain('REVIEW: "PRESELECTED"');
-    expect(board).toContain('PRESELECTED: "INTERVIEW"');
-    expect(board).toContain('OFFER: null');
-    expect(board).toContain('OFFER: null');
-    expect(board).toContain('HIRED: null');
-    expect(board).toContain('HOLD: null');
-    expect(board).toContain('CLOSED_OTHER: null');
+    expect(board).toContain('fromStatus === "APPLIED" && toStatus === "REVIEW"');
+    expect(board).toContain('toStatus === "PRESELECTED"');
+    expect(board).toContain('toStatus === "INTERVIEW"');
+    expect(board).toContain('CANONICAL_REJECTION_SOURCES');
+    expect(board).toContain('if (fromStatus === "REJECTED" || fromStatus === "HIRED") return');
+    expect(board).not.toContain('onMoveNext={');
 
     expect(page).not.toContain('intent: "MOVE_TO_OFFER"');
     expect(page).not.toContain('intent: "HIRE_CANDIDATE"');

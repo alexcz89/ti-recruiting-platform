@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DropResult } from "@hello-pangea/dnd";
@@ -116,7 +116,7 @@ describe("START_REVIEW interactions", () => {
     expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
   });
 
-  it("supports dragging to Review then quick advancing to Preselecto with the saved version", async () => {
+  it("supports dragging to Review then Preselecto with the saved version", async () => {
     const move = vi.fn().mockResolvedValue({ ok: true, application: reviewed });
     render(<KanbanBoard {...boardProps} moveAction={move} />);
     act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "APPLIED", index: 0 }, destination: { droppableId: "REVIEW", index: 0 } }));
@@ -125,7 +125,8 @@ describe("START_REVIEW interactions", () => {
     expect(first.get("intent")).toBe("START_REVIEW");
     expect(first.get("expectedVersion")).toBe("1");
     expect(first.get("commandId")).toEqual(expect.any(String));
-    fireEvent.click(screen.getByTitle("Mover a Preselecto"));
+    expect(screen.queryByTitle("Mover a Preselecto")).not.toBeInTheDocument();
+    act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "REVIEW", index: 0 }, destination: { droppableId: "PRESELECTED", index: 0 } }));
     await waitFor(() => expect(move).toHaveBeenCalledTimes(2));
     expect((move.mock.calls[1][0] as FormData).get("expectedVersion")).toBe("2");
     expect((move.mock.calls[1][0] as FormData).get("newStatus")).toBe("MAYBE");
@@ -133,10 +134,10 @@ describe("START_REVIEW interactions", () => {
 
   it("restores the original column when the Kanban request rejects", async () => {
     render(<KanbanBoard {...boardProps} moveAction={vi.fn().mockRejectedValue(new Error("offline"))} />);
-    fireEvent.click(screen.getByTitle("Mover a En revisión"));
+    act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "APPLIED", index: 0 }, destination: { droppableId: "REVIEW", index: 0 } }));
     await waitFor(() => expect(mocks.error).toHaveBeenCalledOnce());
-    const column = screen.getByRole("heading", { name: "Por revisar" }).closest(".flex-1") as HTMLElement;
-    expect(within(column).getByText("Candidate A")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Candidate A" })).toHaveLength(2);
+    expect(screen.getByRole("option", { name: /Por revisar \(1\)/ })).toBeInTheDocument();
   });
 
   it("retains the legacy column when the reader flag is disabled", () => {
@@ -144,7 +145,7 @@ describe("START_REVIEW interactions", () => {
       statuses={["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"]}
       statusLabels={{ REVIEW: "Por revisar", MAYBE: "Preselecto", ACCEPTED: "Entrevista", REJECTED: "Descartado" }}
       applications={[{ ...card, applicationStatus: "REVIEWING", displayStatus: "REVIEW" }]} moveAction={vi.fn()} />);
-    const column = screen.getByRole("heading", { name: "Por revisar" }).closest(".flex-1") as HTMLElement;
-    expect(within(column).getByText("Candidate A")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Candidate A" })).toHaveLength(2);
+    expect(screen.getByRole("option", { name: /Por revisar \(1\)/ })).toBeInTheDocument();
   });
 });
