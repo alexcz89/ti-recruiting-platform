@@ -97,6 +97,51 @@ describe("recruiter match surface consistency and plan boundaries", () => {
     expect(mocks.jobs.mock.calls[0][0].select.applications.orderBy).toEqual([{ createdAt: "asc" }, { id: "asc" }]);
     expect(mocks.jobs.mock.calls[0][0].select.applications.take).toBeGreaterThanOrEqual(10);
   });
+  it("hides upgrade messaging when the job has no match signals", async () => {
+    mocks.company.mockResolvedValue({
+      billingPlan: "FREE",
+      name: "Company A",
+    });
+
+    mocks.job.mockResolvedValue({
+      ...job,
+      requiredSkills: [],
+      skills: [],
+      seniority: null,
+      minYearsExperience: null,
+    });
+
+    const list = await ListPage({
+      params: { id: "job-a" },
+      searchParams: {},
+    });
+
+    const html = JSON.stringify(list, (key, value) =>
+      key === "type" || key === "_owner" ? undefined : value
+    );
+
+    expect(html).toContain("sin señales");
+    expect(html).not.toContain("candidatos con AI Match bloqueado");
+  });
+
+  it("finds candidates using structured city in the list search", async () => {
+    mocks.apps.mockResolvedValue(
+      cohort.map((app, index) => ({
+        ...app,
+        candidate: {
+          ...app.candidate,
+          city: index === 0 ? "Monterrey" : null,
+        },
+      }))
+    );
+
+    const list = await ListPage({
+      params: { id: "job-a" },
+      searchParams: { q: "Monterrey" },
+    });
+
+    expect(rows(list)).toEqual(["app-00"]);
+  });
   it("uses the same final score and normalized selections on the actual two pages", async () => {
     const [kanban, list] = await pages();
     const cards = board(kanban).applications as Array<{ _score: number; candidate: { id: string } }>;

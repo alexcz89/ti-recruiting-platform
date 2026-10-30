@@ -262,6 +262,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       stateVersion: a.stateVersion,
       writerCompatibility: getApplicationWriterCompatibility(a),
       createdAt: a.createdAt,
+      submittedAt: a.submittedAt,
       updatedAt: (a as any).updatedAt ?? a.createdAt,
       _score: gatedScore,
       _locked: gatedScore === null,

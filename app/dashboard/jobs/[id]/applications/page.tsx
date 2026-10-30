@@ -398,7 +398,7 @@ export default async function JobApplicationsPage({
     enriched = enriched.filter((a) => {
       const skills = (a.candidate?.candidateSkills ?? []).map((cs: any) => cs.term.label).join(" ");
       const profileTypeLabel = PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? "";
-      const haystack = [a._fullName, a.candidate?.email ?? "", a.candidate?.location ?? "", skills, profileTypeLabel]
+      const haystack = [a._fullName, a.candidate?.email ?? "", a._location.full ?? "", skills, profileTypeLabel]
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
@@ -521,7 +521,7 @@ export default async function JobApplicationsPage({
           </div>
         </header>
 
-        {lockedCount > 0 && (
+        {hasMatchSignals && lockedCount > 0 && (
           <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-700/40 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="flex items-start gap-3">
               <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />

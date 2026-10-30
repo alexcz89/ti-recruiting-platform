@@ -23,6 +23,45 @@ const props = { jobId: "job-a", statuses: [...PRIMARY_RECRUITER_PIPELINE_BUCKETS
 const drop = (source = "APPLIED", destination = "REVIEW") => ({ draggableId: "app-a", source: { droppableId: source, index: 0 }, destination: { droppableId: destination, index: 0 } } as DropResult);
 beforeEach(() => { vi.clearAllMocks(); window.sessionStorage.clear(); vi.stubGlobal("React", React); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+it("marks only applied candidates as overdue based on submittedAt", () => {
+  const oldDate = new Date(Date.now() - 10 * 86_400_000);
+  const recentDate = new Date();
+
+  const pending = {
+    ...card,
+    submittedAt: oldDate,
+    updatedAt: recentDate,
+  };
+
+  const view = render(
+    <KanbanBoard
+      {...props}
+      applications={[pending]}
+      moveAction={vi.fn()}
+    />
+  );
+
+  expect(
+    screen.getAllByText(/Pendiente de revisión desde hace \d+ días/)
+  ).toHaveLength(2);
+
+  view.rerender(
+    <KanbanBoard
+      {...props}
+      applications={[{
+        ...pending,
+        stage: "REVIEW",
+        applicationStatus: "REVIEWING",
+        displayStatus: "REVIEW",
+      }]}
+      moveAction={vi.fn()}
+    />
+  );
+
+  expect(
+    screen.queryByText(/Pendiente de revisión desde hace \d+ días/)
+  ).not.toBeInTheDocument();
+});
 it("shows the same authorized essentials on desktop and mobile, with a stage selector", () => {
   render(<KanbanBoard {...props} moveAction={vi.fn()} />);
   expect(screen.getAllByRole("link", { name: card.candidate.name })).toHaveLength(2);

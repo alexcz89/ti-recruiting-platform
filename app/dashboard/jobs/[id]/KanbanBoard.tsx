@@ -41,6 +41,7 @@ type AppCard = {
   writerCompatibility: "CANONICAL" | "LEGACY" | "NONE";
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
+  submittedAt?: string | Date | null;
   _score?: number | null;
   _locked?: boolean;
   _assessments?: AssessmentMeta[];
@@ -478,10 +479,20 @@ export default function Kanbanboard({
   }) {
     const now = Date.now();
     const createdMs = card.createdAt ? new Date(card.createdAt).getTime() : null;
-    const updatedMs = card.updatedAt ? new Date(card.updatedAt).getTime() : createdMs;
     const isNew = createdMs !== null && now - createdMs < 48 * 60 * 60 * 1000;
-    const daysStale = updatedMs !== null ? Math.floor((now - updatedMs) / (1000 * 60 * 60 * 24)) : null;
-    const isStale = card.status === "REVIEW" && daysStale !== null && daysStale >= 5;
+    const submittedMs = card.submittedAt
+      ? new Date(card.submittedAt).getTime()
+      : null;
+    const daysPendingReview =
+      submittedMs !== null && Number.isFinite(submittedMs)
+        ? Math.floor((now - submittedMs) / 86_400_000)
+        : null;
+    const processState = presentation(card);
+    const isStale =
+      processState.section === "ACTIVE" &&
+      processState.column === "APPLIED" &&
+      daysPendingReview !== null &&
+      daysPendingReview >= 5;
     const score = card._score;
     const locked = card._locked;
 
@@ -557,7 +568,7 @@ export default function Kanbanboard({
         {isStale && (
           <div className="mt-2 flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
             <span>⚠</span>
-            <span>Sin revisar hace {daysStale} días</span>
+            <span>Pendiente de revisión desde hace {daysPendingReview} días</span>
           </div>
         )}
 
