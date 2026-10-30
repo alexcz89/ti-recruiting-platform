@@ -1,10 +1,13 @@
 // app/dashboard/jobs/[id]/applications/ActionsMenu.tsx
 "use client";
 
-import { useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
+import { getRecruitingActions, getRecruitingPresentation, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
+import ProcessReasonDialog from "./ProcessReasonDialog";
+import { useApplicationIntent } from "./useApplicationIntent";
 import {
   MoreHorizontal,
   FileText,
@@ -23,6 +26,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 type AssessmentMeta =
@@ -57,6 +61,8 @@ type Props = {
   jobTitle?: string | null;        // Título de la vacante para el mensaje de WhatsApp
   companyName?: string | null;     // Nombre de la empresa para el mensaje de WhatsApp
   assessment?: AssessmentMeta;
+  processSource: PresentationSource;
+  canonicalRecruiterReadsEnabled: boolean;
 };
 
 type InviteResponse = {
@@ -82,11 +88,22 @@ export default function ActionsMenu(props: Props) {
     jobTitle,
     companyName,
     assessment,
+    processSource,
+    canonicalRecruiterReadsEnabled,
   } = props;
 
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [showModal, setShowModal] = useState(false);
+  const [showReopenReason, setShowReopenReason] = useState(false);
+  const { source, pending: processPending, submit: submitProcess } = useApplicationIntent(applicationId, processSource);
+  const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
+  const processActions = getRecruitingActions(source, canonicalRecruiterReadsEnabled)
+    .filter(action => ["MARK_PRESELECTED", "CLEAR_PRESELECTED", "REJECT_CANDIDATE"].includes(action));
+  const canHire = presentation.section === "ACTIVE" && presentation.column === "OFFER" &&
+    source.status === "OFFER" && source.recruiterInterest === "ACCEPTED";
+  const canReopen = presentation.section === "CLOSED" && presentation.outcome === "REJECTED" &&
+    source.status === "REJECTED" && source.recruiterInterest === "REJECTED";
 
   // Todos los templateIds del job
   const allTemplateIds: string[] =
@@ -272,7 +289,7 @@ export default function ActionsMenu(props: Props) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          disabled={pending}
+          disabled={pending || processPending}
           aria-label="Acciones de la postulación"
           className="
             inline-flex h-7 w-7 items-center justify-center
@@ -291,8 +308,19 @@ export default function ActionsMenu(props: Props) {
 
         <DropdownMenuContent
           align="end"
+          onCloseAutoFocus={event => { if (showReopenReason) event.preventDefault(); }}
           className="min-w-[200px] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700/80 dark:bg-zinc-900"
         >
+          {processActions.map(action => <DropdownMenuItem key={action} disabled={processPending}
+            onSelect={() => { void submitProcess(action); }}
+            className="rounded-lg px-2.5 py-2 text-xs dark:text-zinc-100">
+            {({ MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección", REJECT_CANDIDATE: "Descartar" } as Record<string, string>)[action]}
+          </DropdownMenuItem>)}
+          {canHire && <DropdownMenuItem disabled={processPending} onSelect={() => { void submitProcess("HIRE_CANDIDATE"); }}
+            className="rounded-lg px-2.5 py-2 text-xs dark:text-zinc-100">Contratar</DropdownMenuItem>}
+          {canReopen && <DropdownMenuItem disabled={processPending} onSelect={() => setShowReopenReason(true)}
+            className="rounded-lg px-2.5 py-2 text-xs dark:text-zinc-100">Reabrir proceso</DropdownMenuItem>}
+          {(processActions.length > 0 || canHire || canReopen) && <DropdownMenuSeparator />}
           {/* Assessment — un item por template completado, o acción global si no */}
           {hasMultipleCompleted ? (
             <>
@@ -418,6 +446,13 @@ export default function ActionsMenu(props: Props) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {showReopenReason && <ProcessReasonDialog title="Reabrir proceso" pending={processPending}
+        onCancel={() => setShowReopenReason(false)}
+        onConfirm={async reason => {
+          const success = await submitProcess("REOPEN_REJECTED", reason);
+          if (success) setShowReopenReason(false);
+        }} />}
 
       {/* ── Modal de selección múltiple ─────────────────────────────────── */}
       {showModal && (

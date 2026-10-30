@@ -47,7 +47,7 @@ describe("recruiter reader architecture", () => {
     );
 
     const badges = read("app", "dashboard", "jobs", "[id]", "applications", "ApplicationStatusBadges.tsx");
-    expect(select).toContain("getRecruitingActions");
+    expect(select).toContain("getRecruiterStageOptions");
     expect(badges).toContain("presentation.label");
     expect(select).not.toContain("/status");
     expect(select).not.toContain("/interest");

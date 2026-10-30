@@ -70,3 +70,34 @@ export function getRecruitingActions(input: PresentationSource, reads: boolean) 
     actions.push("REJECT_CANDIDATE");
     return actions;
 }
+
+export type RecruiterStageOption = {
+    label: string;
+    intent: "START_REVIEW" | "MOVE_TO_INTERVIEW" | "MOVE_TO_OFFER" | "MOVE_BACKWARD";
+    targetStage?: "REVIEW" | "INTERVIEW";
+    requiresReason: boolean;
+};
+
+/** Display choices only. The intent writer validates ownership, state and version again. */
+export function getRecruiterStageOptions(input: PresentationSource, reads: boolean): RecruiterStageOption[] {
+    const presentation = getRecruitingPresentation(input, reads);
+    if (presentation.section !== "ACTIVE") return [];
+    const actions = getRecruitingActions(input, reads);
+    const options: RecruiterStageOption[] = [];
+    if (actions.includes("START_REVIEW")) options.push({ label: "En revisión", intent: "START_REVIEW", requiresReason: false });
+    if (actions.includes("MOVE_TO_INTERVIEW")) options.push({ label: "Entrevista", intent: "MOVE_TO_INTERVIEW", requiresReason: false });
+    if (actions.includes("MOVE_TO_OFFER")) options.push({ label: "Oferta", intent: "MOVE_TO_OFFER", requiresReason: false });
+
+    // These source/target pairs are the ones accepted by MOVE_BACKWARD in the writer.
+    const compatibleCanonical = input.disposition === "ACTIVE" &&
+        ((input.stage === "INTERVIEW" && input.status === "INTERVIEW") ||
+         (input.stage === "OFFER" && input.status === "OFFER")) &&
+        input.recruiterInterest === "ACCEPTED";
+    const compatibleLegacy = input.stage === null && input.disposition === null && input.stateVersion === 0 &&
+        (input.status === "INTERVIEW" || input.status === "OFFER") && input.recruiterInterest === "ACCEPTED";
+    if (compatibleCanonical || compatibleLegacy) {
+        if (presentation.column === "OFFER") options.push({ label: "Entrevista", intent: "MOVE_BACKWARD", targetStage: "INTERVIEW", requiresReason: true });
+        if (presentation.column === "OFFER" || presentation.column === "INTERVIEW") options.push({ label: "En revisión", intent: "MOVE_BACKWARD", targetStage: "REVIEW", requiresReason: true });
+    }
+    return options;
+}

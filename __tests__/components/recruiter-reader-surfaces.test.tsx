@@ -16,6 +16,7 @@ vi.mock("@/lib/ui/toast", () => ({
 }));
 
 import InterestSelect from "@/app/dashboard/jobs/[id]/applications/InterestSelect";
+import ActionsMenu from "@/app/dashboard/jobs/[id]/applications/ActionsMenu";
 import ApplicationStatusBadges from "@/app/dashboard/jobs/[id]/applications/ApplicationStatusBadges";
 import CandidateReviewShell, {
   type AppState,
@@ -103,23 +104,26 @@ describe("recruiter reader surfaces", () => {
   it.each([true, false])("separates process state, preselection and authorized actions with reads=%s", async reads => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ application: { stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 3 } })));
     vi.stubGlobal("fetch", fetch);
-    render(<InterestSelect applicationId="app" initial="MAYBE" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Acciones del proceso" }), { button: 0, ctrlKey: false });
+    render(<ActionsMenu applicationId="app" jobId="job" candidateEmail="candidate@example.test" assessment={{ enabled: false }}
+      processSource={{ stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "MAYBE", stateVersion: 2 }} canonicalRecruiterReadsEnabled={reads} />);
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Acciones de la postulación" }), { button: 0, ctrlKey: false });
     fireEvent.click(await screen.findByRole("menuitem", { name: "Quitar preselección" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ intent: "CLEAR_PRESELECTED", expectedVersion: 2 });
   });
   it.each([true, false])("does not offer transitions for inconsistent rows with reads=%s", reads => {
     render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
-    expect(screen.queryByRole("button", { name: "Acciones del proceso" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cambiar etapa: Requiere conciliación" })).toBeDisabled();
   });
-  it("keeps hired terminal and offers only rejection for an active offer", () => {
+  it("keeps hired terminal and separates stage changes from closing actions", async () => {
     const view = render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={4} legacyStatus="OFFER" canonicalStage="OFFER" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled />);
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Acciones del proceso" }), { button: 0, ctrlKey: false });
-    expect(screen.queryByRole("menuitem", { name: "Pasar a entrevista" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Descartar" })).toBeInTheDocument();
-    view.rerender(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={5} legacyStatus="HIRED" canonicalStage="CLOSED" canonicalDisposition="HIRED" canonicalRecruiterReadsEnabled />);
-    expect(screen.queryByRole("button", { name: "Acciones del proceso" })).not.toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Oferta" }), { button: 0, ctrlKey: false });
+    expect(await screen.findByRole("menuitem", { name: "Entrevista · requiere motivo" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Descartar" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Contratar" })).not.toBeInTheDocument();
+    view.unmount();
+    render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={5} legacyStatus="HIRED" canonicalStage="CLOSED" canonicalDisposition="HIRED" canonicalRecruiterReadsEnabled />);
+    expect(screen.getByRole("button", { name: "Cambiar etapa: Contratado" })).toBeDisabled();
   });
   it.each([true, false])("uses the same process label in list and profile with reads=%s", reads => {
     const cases = [

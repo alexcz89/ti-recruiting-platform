@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getRecruitingPresentation as present, getRecruitingActions, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
+import { getRecruitingPresentation as present, getRecruitingActions, getRecruiterStageOptions, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
 import { LEGACY_APPLICATION_STATE_MATRIX } from "@/lib/hiring-process/legacy-mapping";
 
 const source: PresentationSource = { stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", stateVersion: 1 };
@@ -25,5 +25,20 @@ describe.each([true, false])("recruiting presentation, canonical reads=%s", read
     expect(getRecruitingActions({ ...source, stage: "INTERVIEW", status: "INTERVIEW", recruiterInterest: "ACCEPTED" }, reads)).toContain("MOVE_TO_OFFER");
     expect(getRecruitingActions({ ...source, disposition: "HOLD" }, reads)).toEqual([]);
     expect(getRecruitingActions({ ...source, status: "HIRED" }, reads)).toEqual([]);
+  });
+  it("offers only writer-compatible forward and backward stage choices", () => {
+    expect(getRecruiterStageOptions(source, reads).map(option => option.intent)).toContain("START_REVIEW");
+    expect(getRecruiterStageOptions({ ...source, stage: "REVIEW", status: "REVIEWING" }, reads).some(option => option.label === "Por revisar")).toBe(false);
+    const interview = { ...source, stage: "INTERVIEW" as const, status: "INTERVIEW", recruiterInterest: "ACCEPTED" };
+    expect(getRecruiterStageOptions(interview, reads)).toMatchObject([
+      { intent: "MOVE_TO_OFFER", label: "Oferta", requiresReason: false },
+      { intent: "MOVE_BACKWARD", targetStage: "REVIEW", requiresReason: true },
+    ]);
+    const offer = { ...interview, stage: "OFFER" as const, status: "OFFER" };
+    expect(getRecruiterStageOptions(offer, reads).filter(option => option.intent === "MOVE_BACKWARD").map(option => option.targetStage)).toEqual(["INTERVIEW", "REVIEW"]);
+    expect(getRecruiterStageOptions({ ...offer, stage: null, disposition: null, stateVersion: 0 }, reads).filter(option => option.intent === "MOVE_BACKWARD")).toHaveLength(2);
+    expect(getRecruiterStageOptions({ ...offer, status: "HIRED" }, reads)).toEqual([]);
+    expect(getRecruiterStageOptions({ ...offer, disposition: "HOLD" }, reads)).toEqual([]);
+    expect(getRecruiterStageOptions({ ...offer, stage: null, disposition: null, stateVersion: 2 }, reads)).toEqual([]);
   });
 });

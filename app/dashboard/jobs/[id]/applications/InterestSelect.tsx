@@ -1,73 +1,55 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { getRecruitingPresentation, getRecruitingActions, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
+
+import React, { useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { getRecruitingPresentation, getRecruiterStageOptions, type PresentationSource, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 import type { ApplicationStageValue, ApplicationDispositionValue } from "@/lib/hiring-process/types";
-import { toastError } from "@/lib/ui/toast";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import ProcessReasonDialog from "./ProcessReasonDialog";
+import { useApplicationIntent } from "./useApplicationIntent";
+
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
-const labels: Record<string, string> = { START_REVIEW: "Iniciar revisión", MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección", MOVE_TO_INTERVIEW: "Pasar a entrevista", MOVE_TO_OFFER: "Mover a oferta", REJECT_CANDIDATE: "Descartar" };
-export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false, candidateHref }: {
-    applicationId: string;
-    initial: InterestKey;
-    initialStateVersion: number;
-    legacyStatus?: string;
-    canonicalStage?: ApplicationStageValue | null;
-    canonicalDisposition?: ApplicationDispositionValue | null;
-    canonicalRecruiterReadsEnabled?: boolean;
-    candidateHref?: string;
+
+export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false }: {
+  applicationId: string;
+  initial: InterestKey;
+  initialStateVersion: number;
+  legacyStatus?: string;
+  canonicalStage?: ApplicationStageValue | null;
+  canonicalDisposition?: ApplicationDispositionValue | null;
+  canonicalRecruiterReadsEnabled?: boolean;
 }) {
-    const router = useRouter();
-    const [source, setSource] = useState<PresentationSource>({ stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion });
-    useEffect(() => { setSource({ stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion }); }, [applicationId, initial, initialStateVersion, legacyStatus, canonicalStage, canonicalDisposition]);
-    const [pending, setPending] = useState(false);
-    const inFlight = useRef(false);
-    const command = useRef<{
-        intent: string;
-        version: number;
-        id: string;
-    } | null>(null);
-    const p = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
-    async function execute(intent: string) {
-        if (!intent || inFlight.current || !getRecruitingActions(source, canonicalRecruiterReadsEnabled).includes(intent))
-            return;
-        inFlight.current = true;
-        setPending(true);
-        if (!command.current || command.current.intent !== intent || command.current.version !== source.stateVersion)
-            command.current = { intent, version: source.stateVersion, id: crypto.randomUUID() };
-        try {
-            const response = await fetch(`/api/applications/${applicationId}/intent`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent, expectedVersion: source.stateVersion, commandId: command.current.id }) });
-            if (!response.ok)
-                throw new Error("Transition failed");
-            const data = await response.json();
-            setSource(data.application);
-            router.refresh();
-        }
-        catch {
-            toastError("No se pudo actualizar. Actualiza la página e intenta de nuevo.");
-            router.refresh();
-        }
-        finally {
-            inFlight.current = false;
-            setPending(false);
-        }
-    }
-    const actions = getRecruitingActions(source, canonicalRecruiterReadsEnabled);
-    const profileAction = candidateHref && (
-      p.column === "INTERVIEW" ? "Retroceder en perfil" :
-      p.column === "OFFER" ? "Contratar o retroceder en perfil" :
-      p.section === "CLOSED" && p.outcome === "REJECTED" ? "Reabrir en perfil" : null
-    );
-    if (!actions.length && !profileAction) return null;
-    return <DropdownMenu>
-      <DropdownMenuTrigger disabled={pending} aria-label="Acciones del proceso" className="min-h-9 rounded-lg border border-zinc-200 px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800">
-        {pending ? "Actualizando…" : "Proceso ▾"}
+  const initialSource: PresentationSource = { stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion };
+  const { source, pending, submit } = useApplicationIntent(applicationId, initialSource);
+  const [reasonAction, setReasonAction] = useState<RecruiterStageOption | null>(null);
+  const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
+  const options = getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled);
+
+  function choose(option: RecruiterStageOption) {
+    if (option.requiresReason) setReasonAction(option);
+    else void submit(option.intent);
+  }
+
+  return <>
+    <DropdownMenu>
+      <DropdownMenuTrigger disabled={options.length === 0 || pending} aria-label={`Cambiar etapa: ${presentation.label}`}
+        className="inline-flex min-h-10 w-full min-w-[135px] items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-left text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:border-emerald-400 hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-default disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
+        <span className="truncate">{presentation.label}</span><ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-48 border-zinc-200 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-900">
-        {actions.map((intent) => <DropdownMenuItem key={intent} onSelect={() => { void execute(intent); }} className="px-2.5 py-2 text-xs dark:text-zinc-100">
-          {labels[intent]}
+      <DropdownMenuContent align="start" onCloseAutoFocus={event => { if (reasonAction) event.preventDefault(); }}
+        className="min-w-[190px] border-zinc-200 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-900">
+        <DropdownMenuLabel className="px-2.5 py-1 text-[11px] text-zinc-500">Cambiar etapa</DropdownMenuLabel>
+        {options.map(option => <DropdownMenuItem key={`${option.intent}:${option.targetStage ?? ""}`}
+          onSelect={() => choose(option)} className="px-2.5 py-2 text-xs dark:text-zinc-100">
+          {option.label}{option.requiresReason ? " · requiere motivo" : ""}
         </DropdownMenuItem>)}
-        {profileAction && <DropdownMenuItem asChild className="px-2.5 py-2 text-xs dark:text-zinc-100"><a href={candidateHref}>{profileAction}</a></DropdownMenuItem>}
       </DropdownMenuContent>
-    </DropdownMenu>;
+    </DropdownMenu>
+    {reasonAction && <ProcessReasonDialog title={`Regresar a ${reasonAction.label}`} pending={pending}
+      onCancel={() => setReasonAction(null)}
+      onConfirm={async reason => {
+        const success = await submit(reasonAction.intent, { targetStage: reasonAction.targetStage, ...reason });
+        if (success) setReasonAction(null);
+      }} />}
+  </>;
 }

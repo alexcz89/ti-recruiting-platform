@@ -809,9 +809,7 @@ export default async function JobApplicationsPage({
                     )}
 
                     <div className="flex items-center justify-between gap-2">
-                      <ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} />
-
-                      <div className="flex shrink-0 items-center gap-1.5">
+                      <div className="min-w-0 flex-1 space-y-1.5">
                         <InterestSelect
                           applicationId={a.id}
                           initial={a.recruiterInterest as InterestKey}
@@ -820,8 +818,11 @@ export default async function JobApplicationsPage({
                           canonicalStage={a.stage}
                           canonicalDisposition={a.disposition}
                           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
-                          candidateHref={candidateHref}
                         />
+                        <ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} showStage={false} />
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-1.5">
                         {phone && (
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={phone}>
                             <Phone className="h-3 w-3" />
@@ -841,6 +842,8 @@ export default async function JobApplicationsPage({
                         <ActionsMenu
                           applicationId={a.id}
                           jobId={job.id}
+                          processSource={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }}
+                          canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                           candidateHref={candidateHref}
                           resumeUrl={resumeUrl ?? null}
                           candidateEmail={a.candidate?.email ?? ""}
@@ -902,7 +905,7 @@ export default async function JobApplicationsPage({
                       <Link href={sortHref("match")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">AI Match {sortKey === "match" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link>{!hasMatchSignals && <span className="ml-1 font-normal text-zinc-400">(sin señales)</span>}
                     </th>
                     <th className="px-3 py-2.5 font-medium">Skills</th>
-                    <th scope="col" aria-sort={sortKey === "status" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("status")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Estado {sortKey === "status" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
+                    <th scope="col" aria-sort={sortKey === "status" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("status")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Etapa {sortKey === "status" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th scope="col" aria-sort={sortKey === "activity" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("activity")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Actividad {sortKey === "activity" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th className="px-3 py-2.5 font-medium">Acciones</th>
                   </tr>
@@ -1112,7 +1115,20 @@ export default async function JobApplicationsPage({
                           )}
                         </td>
 
-                        <td className="px-3 py-2.5"><ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} /></td>
+                        <td className="min-w-[170px] px-3 py-2.5">
+                          <div className="space-y-1.5">
+                            <InterestSelect
+                              applicationId={a.id}
+                              initial={a.recruiterInterest as InterestKey}
+                              initialStateVersion={a.stateVersion}
+                              legacyStatus={a.status}
+                              canonicalStage={a.stage}
+                              canonicalDisposition={a.disposition}
+                              canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
+                            />
+                            <ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} showStage={false} />
+                          </div>
+                        </td>
 
                         <td className="px-3 py-2.5" title={a._activity.at.toISOString()}>
                           <span className="block text-[10px] text-zinc-400">
@@ -1123,27 +1139,11 @@ export default async function JobApplicationsPage({
 
                         <td className="px-3 py-2.5 align-top">
                           <div className="flex items-center gap-1.5">
-                            <InterestSelect
-                              applicationId={a.id}
-                              initial={a.recruiterInterest as InterestKey}
-                              initialStateVersion={a.stateVersion}
-                              legacyStatus={a.status}
-                              canonicalStage={a.stage}
-                              canonicalDisposition={a.disposition}
-                              canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
-                              candidateHref={candidateHref}
-                            />
-                            {candidateHref && (
-                              <CandidateProfileLink
-                                applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref}
-                                className="inline-flex items-center rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-700 whitespace-nowrap transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-emerald-700/40 dark:hover:text-emerald-200"
-                              >
-                                Ver perfil
-                              </CandidateProfileLink>
-                            )}
                             <ActionsMenu
                               applicationId={a.id}
                               jobId={job.id}
+                              processSource={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }}
+                              canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                               candidateHref={candidateHref}
                               resumeUrl={resumeUrl ?? null}
                               candidateEmail={a.candidate?.email ?? ""}
