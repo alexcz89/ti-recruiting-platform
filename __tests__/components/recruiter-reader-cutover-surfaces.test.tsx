@@ -86,14 +86,38 @@ const currentApplication: AppState = {
 
 describe("recruiter reader surface cutover", () => {
   it("keeps inconsistent selector sources in reconciliation ON/OFF without mutation", () => {
-    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
-    const props = { applicationId: "app", initial: "ACCEPTED" as const, initialStateVersion: 2, legacyStatus: "REVIEWING", canonicalStage: "REVIEW" as const, canonicalDisposition: "ACTIVE" as const };
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+
+    const props = {
+      applicationId: "app",
+      initial: "ACCEPTED" as const,
+      initialStateVersion: 2,
+      legacyStatus: "REVIEWING",
+      canonicalStage: "REVIEW" as const,
+      canonicalDisposition: "ACTIVE" as const,
+    };
+
     const view = render(<InterestSelect {...props} />);
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
-    view.rerender(<InterestSelect {...props} canonicalRecruiterReadsEnabled />);
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", { name: "Acciones del proceso" })
+    ).not.toBeInTheDocument();
+
+    view.rerender(
+      <InterestSelect {...props} canonicalRecruiterReadsEnabled />
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Acciones del proceso" })
+    ).not.toBeInTheDocument();
+
     view.rerender(<InterestSelect {...props} />);
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+
+    expect(
+      screen.queryByRole("button", { name: "Acciones del proceso" })
+    ).not.toBeInTheDocument();
+
     expect(fetch).not.toHaveBeenCalled();
   });
 

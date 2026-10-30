@@ -1,13 +1,13 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import StartReviewButton from "@/components/dashboard/StartReviewButton";
 import { getRecruitingPresentation, getRecruitingActions, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
 import type { ApplicationStageValue, ApplicationDispositionValue } from "@/lib/hiring-process/types";
 import { toastError } from "@/lib/ui/toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
-const labels: Record<string, string> = { MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección", MOVE_TO_INTERVIEW: "Pasar a entrevista", MOVE_TO_OFFER: "Mover a oferta", REJECT_CANDIDATE: "Descartar" };
-export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false }: {
+const labels: Record<string, string> = { START_REVIEW: "Iniciar revisión", MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección", MOVE_TO_INTERVIEW: "Pasar a entrevista", MOVE_TO_OFFER: "Mover a oferta", REJECT_CANDIDATE: "Descartar" };
+export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false, candidateHref }: {
     applicationId: string;
     initial: InterestKey;
     initialStateVersion: number;
@@ -15,6 +15,7 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
     canonicalStage?: ApplicationStageValue | null;
     canonicalDisposition?: ApplicationDispositionValue | null;
     canonicalRecruiterReadsEnabled?: boolean;
+    candidateHref?: string;
 }) {
     const router = useRouter();
     const [source, setSource] = useState<PresentationSource>({ stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion });
@@ -28,7 +29,7 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
     } | null>(null);
     const p = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
     async function execute(intent: string) {
-        if (!intent || inFlight.current)
+        if (!intent || inFlight.current || !getRecruitingActions(source, canonicalRecruiterReadsEnabled).includes(intent))
             return;
         inFlight.current = true;
         setPending(true);
@@ -51,12 +52,22 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
             setPending(false);
         }
     }
-    const actions = getRecruitingActions(source, canonicalRecruiterReadsEnabled).filter(a => a !== "START_REVIEW");
-    return <div className="flex flex-col gap-1 text-xs">
-    <span className="font-medium">{p.label}</span>
-    {p.preselected && <span className="text-amber-700 dark:text-amber-300">Preselecto</span>}
-    {p.assessmentStage && <span>Evaluación técnica</span>}
-    {<StartReviewButton applicationId={applicationId} application={source} disabled={pending} onPendingChange={setPending} onSuccess={setSource}/>}
-    {actions.length > 0 && <select aria-label="Acciones de candidatura" disabled={pending} value="" onChange={e => { void execute(e.target.value); }} className="min-h-11 max-w-full rounded-lg border bg-[rgb(var(--card))] px-2"><option value="">Acciones…</option>{actions.map(intent => <option key={intent} value={intent}>{labels[intent]}</option>)}</select>}
-  </div>;
+    const actions = getRecruitingActions(source, canonicalRecruiterReadsEnabled);
+    const profileAction = candidateHref && (
+      p.column === "INTERVIEW" ? "Retroceder en perfil" :
+      p.column === "OFFER" ? "Contratar o retroceder en perfil" :
+      p.section === "CLOSED" && p.outcome === "REJECTED" ? "Reabrir en perfil" : null
+    );
+    if (!actions.length && !profileAction) return null;
+    return <DropdownMenu>
+      <DropdownMenuTrigger disabled={pending} aria-label="Acciones del proceso" className="min-h-9 rounded-lg border border-zinc-200 px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800">
+        {pending ? "Actualizando…" : "Proceso ▾"}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-48 border-zinc-200 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-900">
+        {actions.map((intent) => <DropdownMenuItem key={intent} onSelect={() => { void execute(intent); }} className="px-2.5 py-2 text-xs dark:text-zinc-100">
+          {labels[intent]}
+        </DropdownMenuItem>)}
+        {profileAction && <DropdownMenuItem asChild className="px-2.5 py-2 text-xs dark:text-zinc-100"><a href={candidateHref}>{profileAction}</a></DropdownMenuItem>}
+      </DropdownMenuContent>
+    </DropdownMenu>;
 }

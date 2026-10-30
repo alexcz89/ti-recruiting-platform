@@ -582,7 +582,7 @@ function CandidateReviewSession({
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 dark:text-zinc-500">
                   {entry.seniority && <span>{SENIORITY_LABEL[entry.seniority] ?? entry.seniority}</span>}
                   {entry.seniority && entry.location && <span>·</span>}
-                  {entry.location && <span className="truncate">{entry.location.split(",")[0]}</span>}
+                  {entry.location && <span className="truncate">{entry.location}</span>}
                 </div>
                 <span className={`text-[9px] font-medium ${stateTextColor}`}>
                   {presentation.label}{presentation.preselected ? " · Preselecto" : ""}

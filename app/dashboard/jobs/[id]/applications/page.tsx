@@ -1,5 +1,6 @@
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { getRecruitingPresentation, ACTIVE_PIPELINE, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
+import { buildRecruiterListHref, compareRecruiterListRows, countRecruiterPresentationRows, matchesRecruiterListFilters, matchScoreLevel, resolveCandidateLocation, resolveProcessActivity, type RecruiterListAssessment, type RecruiterListQuery, type RecruiterListSort, type SortDirection } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/jobs/[id]/applications/page.tsx
 import Link from "next/link";
 import { prisma } from "@/lib/server/prisma";
@@ -10,6 +11,7 @@ import { authOptions } from "@/lib/server/auth";
 import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
+import ApplicationStatusBadges from "./ApplicationStatusBadges";
 import ActionsMenu from "./ActionsMenu";
 import { Phone, FileText as FileTextIcon, Search, Lock, ArrowLeft, MapPin, Calendar, Eye as EyeIcon, BarChart2, Users } from "lucide-react";
 import ShareLinkedInButton from "./ShareLinkedInButton";
@@ -64,15 +66,9 @@ const LEGACY_RECRUITER_TABS = [
   { bucket: "REJECTED", query: "REJECTED" },
 ] as const;
 
-type SortKey = "match" | "recent" | "name";
 type MatchFilter = "ALL" | "HIGH" | "MED" | "LOW";
 type CvFilter = "ALL" | "YES" | "NO";
-
-function scoreToRange(score: number): "HIGH" | "MED" | "LOW" {
-  if (score >= 70) return "HIGH";
-  if (score >= 40) return "MED";
-  return "LOW";
-}
+const LIST_SECTIONS = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"] as const;
 
 export default async function JobApplicationsPage({
   params,
@@ -83,9 +79,13 @@ export default async function JobApplicationsPage({
     interest?: InterestKey | "ALL";
     pipeline?: string;
     q?: string;
-    sort?: SortKey | string;
+    sort?: string;
+    dir?: string;
     match?: MatchFilter | string;
     cv?: CvFilter | string;
+    preselected?: string;
+    assessment?: string;
+    outcome?: string;
   };
 }) {
   const canonicalRecruiterReadsEnabled =
@@ -170,6 +170,9 @@ export default async function JobApplicationsPage({
           resumeUrl: true,
           phone: true,
           location: true,
+          city: true,
+          admin1: true,
+          country: true,
           certifications: true,
           seniority: true,
           yearsExperience: true,
@@ -325,8 +328,15 @@ export default async function JobApplicationsPage({
     canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
   });
   const presentationOf = (a: typeof allApps[number]) => getRecruitingPresentation(a, canonicalRecruiterReadsEnabled);
-  const counters = Object.fromEntries([...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"].map(key => [key, allApps.filter(a => { const p = presentationOf(a); return p.column === key || p.section === key; }).length]));
+  // Etapas: universo de la vacante antes de búsqueda y filtros secundarios.
+  const counters = countRecruiterPresentationRows(allApps, canonicalRecruiterReadsEnabled);
   const total = allApps.length;
+  const activityEvents = allApps.length ? await prisma.applicationEvent.groupBy({
+    by: ["applicationId"],
+    where: { companyId, applicationId: { in: allApps.map((a) => a.id) } },
+    _max: { happenedAt: true },
+  }) : [];
+  const lastEventByApp = new Map(activityEvents.map((row) => [row.applicationId, row._max.happenedAt]));
 
   const interestParam = searchParams?.interest as string | undefined;
   const pipelineParam = searchParams?.pipeline as string | undefined;
@@ -339,12 +349,20 @@ export default async function JobApplicationsPage({
 
   const qParam = (searchParams?.q ?? "").toString();
   const q = qParam.trim().toLowerCase();
-  const sortParamRaw = (searchParams?.sort as string | undefined) ?? "match";
-  const sortKey: SortKey = sortParamRaw === "recent" || sortParamRaw === "name" ? sortParamRaw : "match";
+  const sortParamRaw = searchParams?.sort ?? "match";
+  const sortKey: RecruiterListSort = sortParamRaw === "recent" ? "activity" : sortParamRaw === "name" ? "candidate"
+    : ["candidate", "match", "status", "activity", "location"].includes(sortParamRaw) ? sortParamRaw as RecruiterListSort : "match";
+  const sortDirection: SortDirection = searchParams?.dir === "asc" || searchParams?.dir === "desc"
+    ? searchParams.dir : sortKey === "match" || sortKey === "activity" ? "desc" : "asc";
   const matchParam = (searchParams?.match as string | undefined) ?? "ALL";
   const matchFilter: MatchFilter = ["HIGH", "MED", "LOW"].includes(matchParam) ? (matchParam as MatchFilter) : "ALL";
   const cvParam = (searchParams?.cv as string | undefined) ?? "ALL";
   const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
+  const preselectedFilter = searchParams?.preselected === "1";
+  const assessmentFilter: RecruiterListAssessment = ["NONE", "SENT", "STARTED", "COMPLETED", "EXPIRED"].includes(searchParams?.assessment ?? "")
+    ? searchParams!.assessment as RecruiterListAssessment : "ALL";
+  const outcomeFilter = chosenPipeline === "CLOSED" && ["REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"].includes(searchParams?.outcome ?? "")
+    ? searchParams!.outcome : undefined;
 
   const matchAccess = getRecruiterMatchAccessIds(allApps, plan);
   let enriched = recruiterRows.map((a) => {
@@ -364,8 +382,11 @@ export default async function JobApplicationsPage({
       _gatedFinalScore: match?.finalScore ?? null,
       _locked: match === null,
       _fullName: fullName,
-      _lastActivity: a.createdAt,
+      _activity: resolveProcessActivity(a.submittedAt, lastEventByApp.get(a.id)),
+      _location: resolveCandidateLocation(a.candidate),
       _hasCV: Boolean(a.candidate?.resumeUrl),
+      _presentation: presentationOf(a),
+      _assessmentState: (assessmentByAppId.get(a.id)?.state ?? "NONE") as RecruiterListAssessment,
     };
   });
 
@@ -384,24 +405,16 @@ export default async function JobApplicationsPage({
     });
   }
 
-  const sorted = [...enriched].sort((a, b) => {
-    if (sortKey === "recent") return new Date(b._lastActivity).getTime() - new Date(a._lastActivity).getTime();
-    if (sortKey === "name") return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
-    if (a._locked !== b._locked) return a._locked ? 1 : -1;
-    return (b._gatedFinalScore ?? 0) - (a._gatedFinalScore ?? 0) ||
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || a.id.localeCompare(b.id);
+  const toListRow = (a: typeof enriched[number]) => ({
+    id: a.id, name: a._fullName, score: hasMatchSignals ? a._gatedFinalScore : null,
+    presentation: a._presentation, activityAt: a._activity.at,
+    location: a._location.full, hasCV: a._hasCV, assessment: a._assessmentState,
   });
-  const withGate = sorted;
-
-  const apps = withGate.filter((a) => {
-    if (matchFilter !== "ALL" && hasMatchSignals) {
-      if (a._locked) return false;
-      if (scoreToRange(a._gatedFinalScore ?? 0) !== matchFilter) return false;
-    }
-    if (cvFilter === "YES" && !a._hasCV) return false;
-    if (cvFilter === "NO" && a._hasCV) return false;
-    return true;
-  });
+  const withGate = enriched;
+  const apps = enriched.filter((a) => matchesRecruiterListFilters(toListRow(a), {
+    preselected: preselectedFilter, assessment: assessmentFilter, outcome: outcomeFilter,
+    match: hasMatchSignals ? matchFilter : "ALL", cv: cvFilter,
+  })).sort((a, b) => compareRecruiterListRows(toListRow(a), toListRow(b), sortKey, sortDirection));
 
   const lockedCount = withGate.filter((a) => a._locked).length;
 
@@ -409,31 +422,33 @@ export default async function JobApplicationsPage({
   for (const a of withGate) {
     matchCounts.ALL++;
     if (!a._locked && hasMatchSignals) {
-      matchCounts[scoreToRange(a._gatedFinalScore ?? 0)]++;
+      matchCounts[matchScoreLevel(a._gatedFinalScore!)]++;
     }
   }
 
-  function buildHref(overrides: { pipeline?: string; interest?: string; q?: string; sort?: string; match?: string; cv?: string }) {
-    const usp = new URLSearchParams();
-    const stateFilter = { key: "pipeline", value: "pipeline" in overrides ? overrides.pipeline : chosenPipeline };
-    const qv = "q" in overrides ? overrides.q : qParam;
-    const sv = "sort" in overrides ? overrides.sort : sortKey;
-    const mv = "match" in overrides ? overrides.match : matchFilter !== "ALL" ? matchFilter : undefined;
-    const cv = "cv" in overrides ? overrides.cv : cvFilter !== "ALL" ? cvFilter : undefined;
+  const currentQuery: RecruiterListQuery = {
+    pipeline: chosenPipeline, q: qParam, sort: sortKey, dir: sortDirection,
+    match: matchFilter !== "ALL" ? matchFilter : undefined,
+    cv: cvFilter !== "ALL" ? cvFilter : undefined,
+    preselected: preselectedFilter ? "1" : undefined,
+    assessment: assessmentFilter !== "ALL" ? assessmentFilter : undefined,
+    outcome: outcomeFilter,
+  };
+  function buildHref(overrides: RecruiterListQuery) {
+    return buildRecruiterListHref(params.id, currentQuery, overrides);
+  }
 
-    if (stateFilter.value) usp.set(stateFilter.key, stateFilter.value);
-    if (qv) usp.set("q", qv);
-    if (sv) usp.set("sort", sv);
-    if (mv) usp.set("match", mv);
-    if (cv) usp.set("cv", cv);
-
-    return `/dashboard/jobs/${params.id}/applications${usp.toString() ? `?${usp.toString()}` : ""}`;
+  function sortHref(key: RecruiterListSort) {
+    const nextDirection = sortKey === key ? (sortDirection === "asc" ? "desc" : "asc")
+      : key === "match" || key === "activity" ? "desc" : "asc";
+    return buildHref({ sort: key, dir: nextDirection });
   }
 
   const headerBtnClasses =
     "inline-flex items-center whitespace-nowrap rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900";
 
-  const activeFiltersCount = (matchFilter !== "ALL" ? 1 : 0) + (cvFilter !== "ALL" ? 1 : 0);
+  const activeFiltersCount = (matchFilter !== "ALL" ? 1 : 0) + (cvFilter !== "ALL" ? 1 : 0)
+    + (preselectedFilter ? 1 : 0) + (assessmentFilter !== "ALL" ? 1 : 0) + (outcomeFilter ? 1 : 0);
 
   const seniorityLabel = job.seniority
     ? { JUNIOR: "Junior", MID: "Mid", SENIOR: "Senior", LEAD: "Lead" }[job.seniority] ?? job.seniority
@@ -538,8 +553,9 @@ export default async function JobApplicationsPage({
               label={`Todos (${total})`}
               count={total}
             />
-            {[...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"].map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${PIPELINE_LABELS[key] ?? ({ CLOSED: "Cerrados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key]} (${counters[key]})`} count={counters[key]} />)}
+            {LIST_SECTIONS.map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${PIPELINE_LABELS[key] ?? ({ CLOSED: "Cerrados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key]} (${counters[key]})`} count={counters[key]} />)}
           </div>
+          <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Los conteos incluyen todas las postulaciones de esta vacante, antes de los filtros secundarios.</p>
         </section>
 
 
@@ -565,7 +581,7 @@ export default async function JobApplicationsPage({
               )}
             </div>
             {activeFiltersCount > 0 ? (
-              <Link href={buildHref({ match: undefined, cv: undefined })}
+              <Link href={buildHref({ match: undefined, cv: undefined, preselected: undefined, assessment: undefined, outcome: undefined })}
                 className="inline-block text-sm text-emerald-600 underline hover:no-underline">
                 Limpiar filtros
               </Link>
@@ -583,8 +599,12 @@ export default async function JobApplicationsPage({
                   {pipelineParam && <input type="hidden" name="pipeline" value={pipelineParam} />}
                   {interestParam && <input type="hidden" name="interest" value={interestParam} />}
                   {sortKey && <input type="hidden" name="sort" value={sortKey} />}
+                  <input type="hidden" name="dir" value={sortDirection} />
                   {matchFilter !== "ALL" && <input type="hidden" name="match" value={matchFilter} />}
                   {cvFilter !== "ALL" && <input type="hidden" name="cv" value={cvFilter} />}
+                  {preselectedFilter && <input type="hidden" name="preselected" value="1" />}
+                  {assessmentFilter !== "ALL" && <input type="hidden" name="assessment" value={assessmentFilter} />}
+                  {outcomeFilter && <input type="hidden" name="outcome" value={outcomeFilter} />}
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
                   <input
                     name="q"
@@ -594,12 +614,13 @@ export default async function JobApplicationsPage({
                   />
                 </form>
 
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs sm:hidden">
                   <span className="shrink-0 text-zinc-500">Ordenar:</span>
-                  <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
-                    <SortPill href={buildHref({ sort: "match" })} active={sortKey === "match"}>Match</SortPill>
-                    <SortPill href={buildHref({ sort: "recent" })} active={sortKey === "recent"}>Reciente</SortPill>
-                    <SortPill href={buildHref({ sort: "name" })} active={sortKey === "name"}>Nombre</SortPill>
+                  <div className="flex flex-wrap rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
+                    <SortPill href={sortHref("match")} active={sortKey === "match"}>Match</SortPill>
+                    <SortPill href={sortHref("activity")} active={sortKey === "activity"}>Actividad</SortPill>
+                    <SortPill href={sortHref("candidate")} active={sortKey === "candidate"}>Nombre</SortPill>
+                    <SortPill href={sortHref("status")} active={sortKey === "status"}>Estado</SortPill>
                   </div>
                 </div>
               </div>
@@ -657,10 +678,34 @@ export default async function JobApplicationsPage({
                   </div>
                 </div>
 
+                <Link href={buildHref({ preselected: preselectedFilter ? undefined : "1" })}
+                  aria-pressed={preselectedFilter}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${preselectedFilter ? "border-amber-500 bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
+                  Solo preselectos
+                </Link>
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] text-zinc-500">Evaluación:</span>
+                  {(["ALL", "NONE", "SENT", "STARTED", "COMPLETED", "EXPIRED"] as RecruiterListAssessment[]).map((state) =>
+                    <Link key={state} href={buildHref({ assessment: state === "ALL" ? undefined : state })}
+                      aria-current={assessmentFilter === state ? "true" : undefined}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] ${assessmentFilter === state ? "border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
+                      {({ ALL: "Todas", NONE: "Sin evaluación", SENT: "Enviada", STARTED: "Iniciada", COMPLETED: "Completada", EXPIRED: "Vencida" } as Record<string, string>)[state]}
+                    </Link>)}
+                </div>
+                {chosenPipeline === "CLOSED" && <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] text-zinc-500">Resultado:</span>
+                  {(["ALL", "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"] as const).map((outcome) =>
+                    <Link key={outcome} href={buildHref({ outcome: outcome === "ALL" ? undefined : outcome })}
+                      aria-current={(outcomeFilter ?? "ALL") === outcome ? "true" : undefined}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] ${(outcomeFilter ?? "ALL") === outcome ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
+                      {({ ALL: "Todos", REJECTED: "Descartado", HIRED: "Contratado", WITHDRAWN: "Retirado", CANCELLED: "Cancelado" } as Record<string, string>)[outcome]}
+                    </Link>)}
+                </div>}
+
                 <div className="ml-auto flex items-center gap-3">
                   {activeFiltersCount > 0 && (
                     <Link
-                      href={buildHref({ match: undefined, cv: undefined })}
+                      href={buildHref({ match: undefined, cv: undefined, preselected: undefined, assessment: undefined, outcome: undefined })}
                       className="text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600 whitespace-nowrap"
                     >
                       Limpiar
@@ -698,7 +743,7 @@ export default async function JobApplicationsPage({
                         ) : (
                           <span className="text-sm font-semibold">{a._fullName}</span>
                         )}
-                        <p className="truncate text-xs text-zinc-500">{a.candidate?.location ?? "—"}</p>
+                        <p className="truncate text-xs text-zinc-500">{a._location.full ?? "—"}</p>
                         {(a.candidate as any)?.desiredSalaryMin != null && (
                           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
                             💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes
@@ -764,7 +809,9 @@ export default async function JobApplicationsPage({
                     )}
 
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 max-w-[160px]">
+                      <ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} />
+
+                      <div className="flex shrink-0 items-center gap-1.5">
                         <InterestSelect
                           applicationId={a.id}
                           initial={a.recruiterInterest as InterestKey}
@@ -773,10 +820,8 @@ export default async function JobApplicationsPage({
                           canonicalStage={a.stage}
                           canonicalDisposition={a.disposition}
                           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
+                          candidateHref={candidateHref}
                         />
-                      </div>
-
-                      <div className="flex shrink-0 items-center gap-1.5">
                         {phone && (
                           <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-zinc-100 text-zinc-600 dark:bg-zinc-900/70" title={phone}>
                             <Phone className="h-3 w-3" />
@@ -852,13 +897,13 @@ export default async function JobApplicationsPage({
               <table className="w-full text-sm">
                 <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-900/40 dark:text-zinc-400">
                   <tr>
-                    <th className="px-3 py-2.5 font-medium">Candidato</th>
-                    <th className="px-3 py-2.5 font-medium">
-                      {hasMatchSignals ? "AI Match" : <span className="text-zinc-400">AI Match <span className="font-normal">(sin señales)</span></span>}
+                    <th scope="col" aria-sort={sortKey === "candidate" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("candidate")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Candidato {sortKey === "candidate" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
+                    <th scope="col" aria-sort={sortKey === "match" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium">
+                      <Link href={sortHref("match")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">AI Match {sortKey === "match" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link>{!hasMatchSignals && <span className="ml-1 font-normal text-zinc-400">(sin señales)</span>}
                     </th>
                     <th className="px-3 py-2.5 font-medium">Skills</th>
-                    <th className="px-3 py-2.5 font-medium">Estado</th>
-                    <th className="px-3 py-2.5 font-medium">Actividad</th>
+                    <th scope="col" aria-sort={sortKey === "status" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("status")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Estado {sortKey === "status" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
+                    <th scope="col" aria-sort={sortKey === "activity" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("activity")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Actividad {sortKey === "activity" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th className="px-3 py-2.5 font-medium">Acciones</th>
                   </tr>
                 </thead>
@@ -890,7 +935,7 @@ export default async function JobApplicationsPage({
                               <span className="font-medium">{a._fullName}</span>
                             )}
 
-                            <span className="text-xs text-zinc-500">{a.candidate?.location ?? "—"}</span>
+                            <span className="text-xs text-zinc-500">{a._location.full ?? "—"}</span>
 
                             {((a.candidate as any)?.candidateBadges?.length ?? 0) > 0 && (
                               <span className="flex flex-wrap gap-1">
@@ -1067,8 +1112,17 @@ export default async function JobApplicationsPage({
                           )}
                         </td>
 
-                        <td className="px-3 py-2.5">
-                          <div className="inline-flex min-w-[130px] max-w-[150px]">
+                        <td className="px-3 py-2.5"><ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} /></td>
+
+                        <td className="px-3 py-2.5" title={a._activity.at.toISOString()}>
+                          <span className="block text-[10px] text-zinc-400">
+                            {a._activity.kind === "APPLICATION" ? "Postulación" : "Actividad del proceso"}
+                          </span>
+                          <span className="text-xs text-zinc-500">{fromNow(a._activity.at)}</span>
+                        </td>
+
+                        <td className="px-3 py-2.5 align-top">
+                          <div className="flex items-center gap-1.5">
                             <InterestSelect
                               applicationId={a.id}
                               initial={a.recruiterInterest as InterestKey}
@@ -1077,21 +1131,8 @@ export default async function JobApplicationsPage({
                               canonicalStage={a.stage}
                               canonicalDisposition={a.disposition}
                               canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
+                              candidateHref={candidateHref}
                             />
-                          </div>
-                        </td>
-
-                        <td className="px-3 py-2.5" title={new Date(a._lastActivity).toLocaleString()}>
-                          <span className="block text-[10px] text-zinc-400">
-                            {Math.abs(new Date(a.createdAt).getTime() - new Date(a.updatedAt).getTime()) < 5000
-                              ? "Nueva"
-                              : "Actualizada"}
-                          </span>
-                          <span className="text-xs text-zinc-500">{fromNow(a._lastActivity)}</span>
-                        </td>
-
-                        <td className="px-3 py-2.5 align-top">
-                          <div className="flex items-center gap-1.5">
                             {candidateHref && (
                               <CandidateProfileLink
                                 applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref}

@@ -18,9 +18,9 @@ describe("recruiter reader architecture", () => {
     const page = read("app", "dashboard", "jobs", "[id]", "applications", "page.tsx");
 
     expect(page).toContain("buildRecruiterApplicationReadRows");
-    expect(page).toContain("countRecruiterPipelineBuckets");
-    expect(page).toContain("filterRecruiterPipelineRows");
-    expect(page).toContain("RECRUITER_PIPELINE_LABELS");
+    expect(page).toContain("countRecruiterPresentationRows");
+    expect(page).toContain("matchesRecruiterListFilters");
+    expect(page).toContain("ApplicationStatusBadges");
     expect(page).not.toContain("function getAppInterest");
     expect(page).not.toContain("INTEREST_LABEL");
   });
@@ -46,8 +46,9 @@ describe("recruiter reader architecture", () => {
       "InterestSelect.tsx",
     );
 
-    expect(select).toContain("getRecruitingPresentation");
-    expect(select).toContain("p.label");
+    const badges = read("app", "dashboard", "jobs", "[id]", "applications", "ApplicationStatusBadges.tsx");
+    expect(select).toContain("getRecruitingActions");
+    expect(badges).toContain("presentation.label");
     expect(select).not.toContain("/status");
     expect(select).not.toContain("/interest");
   });
@@ -66,9 +67,9 @@ describe("recruiter reader architecture", () => {
   it("keeps overview aggregation and current labels on the centralized read model", () => {
     const page = read("app", "dashboard", "overview", "page.tsx");
 
-    expect(page).toContain("countRecruiterPipelineGroupedRows");
+    expect(page).toContain("countRecruiterPresentationGroupedRows");
     expect(page).toContain("getRecruiterApplicationReadModel");
-    expect(page).toContain('by: ["stage", "disposition", "status", "recruiterInterest"]');
+    expect(page).toContain('by: ["stage", "disposition", "status", "recruiterInterest", "stateVersion"]');
     expect(page).not.toContain("for (const row of funnelRaw)");
   });
 

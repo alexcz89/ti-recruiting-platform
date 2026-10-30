@@ -5,6 +5,20 @@ import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+async function selectProcessAction(name: string) {
+  const trigger = screen.getByRole("button", {
+    name: "Acciones del proceso",
+  });
+
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+
+  const option = await screen.findByRole("menuitem", {
+    name,
+  });
+
+  fireEvent.click(option);
+}
+
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   toastSuccess: vi.fn(),
@@ -116,7 +130,7 @@ describe("canonical rejection surfaces", () => {
       canonicalStage="APPLIED"
       canonicalDisposition="ACTIVE"
     />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "MARK_PRESELECTED" } });
+    await selectProcessAction("Preseleccionar");
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = vi.mocked(fetch).mock.calls[0];
@@ -147,7 +161,7 @@ describe("canonical rejection surfaces", () => {
       canonicalStage="REVIEW"
       canonicalDisposition="ACTIVE"
     />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "CLEAR_PRESELECTED" } });
+    await selectProcessAction("Quitar preselección");
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
@@ -237,7 +251,7 @@ describe("canonical rejection surfaces", () => {
         initialStateVersion={1}
       />,
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "REJECT_CANDIDATE" } });
+    await selectProcessAction("Descartar");
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = vi.mocked(fetch).mock.calls[0];

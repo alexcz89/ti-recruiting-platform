@@ -16,6 +16,7 @@ vi.mock("@/lib/ui/toast", () => ({
 }));
 
 import InterestSelect from "@/app/dashboard/jobs/[id]/applications/InterestSelect";
+import ApplicationStatusBadges from "@/app/dashboard/jobs/[id]/applications/ApplicationStatusBadges";
 import CandidateReviewShell, {
   type AppState,
   type NavEntry,
@@ -103,26 +104,22 @@ describe("recruiter reader surfaces", () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ application: { stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 3 } })));
     vi.stubGlobal("fetch", fetch);
     render(<InterestSelect applicationId="app" initial="MAYBE" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
-    expect(screen.getByText("En revisión")).toBeInTheDocument();
-    expect(screen.getByText("Preselecto")).toBeInTheDocument();
-    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "CLEAR_PRESELECTED" } });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Acciones del proceso" }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Quitar preselección" }));
     await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
     expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ intent: "CLEAR_PRESELECTED", expectedVersion: 2 });
-    await waitFor(() => expect(screen.queryByText("Preselecto")).not.toBeInTheDocument());
   });
   it.each([true, false])("does not offer transitions for inconsistent rows with reads=%s", reads => {
     render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Acciones del proceso" })).not.toBeInTheDocument();
   });
   it("keeps hired terminal and offers only rejection for an active offer", () => {
     const view = render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={4} legacyStatus="OFFER" canonicalStage="OFFER" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled />);
-    expect(screen.getByText("Oferta")).toBeInTheDocument();
-    expect(screen.queryByRole("option", { name: "Pasar a entrevista" })).not.toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Descartar" })).toBeInTheDocument();
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Acciones del proceso" }), { button: 0, ctrlKey: false });
+    expect(screen.queryByRole("menuitem", { name: "Pasar a entrevista" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Descartar" })).toBeInTheDocument();
     view.rerender(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={5} legacyStatus="HIRED" canonicalStage="CLOSED" canonicalDisposition="HIRED" canonicalRecruiterReadsEnabled />);
-    expect(screen.getByText("Contratado")).toBeInTheDocument();
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Acciones del proceso" })).not.toBeInTheDocument();
   });
   it.each([true, false])("uses the same process label in list and profile with reads=%s", reads => {
     const cases = [
@@ -136,7 +133,7 @@ describe("recruiter reader surfaces", () => {
       { stage: "REVIEW", disposition: "HOLD", status: "REVIEWING", recruiterInterest: "REVIEW", label: "En pausa" },
     ] as const;
     for (const state of cases) {
-      const list = render(<InterestSelect applicationId="app" initial={state.recruiterInterest} initialStateVersion={2} legacyStatus={state.status} canonicalStage={state.stage} canonicalDisposition={state.disposition} canonicalRecruiterReadsEnabled={reads} />);
+      const list = render(<ApplicationStatusBadges presentation={getRecruitingPresentation({ ...state, stateVersion: 2 }, reads)} assessment="NONE" />);
       expect(within(list.container).getByText(state.label)).toBeInTheDocument();
       const profile = render(<CandidateReviewShell candidateId="c" candidateName="Candidate" candidateSeniority={null} candidateLocation={null} resumeUrl={null} waHref={null} fromJobId="j" jobTitle="Job" matchScore={null} matchLocked={false} applicationId="app" currentApplication={{ ...baseApplication, ...state }} canonicalRecruiterReadsEnabled={reads} navList={[]} navIndex={-1} slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }} />);
       expect(within(profile.container).getAllByText(state.recruiterInterest === "MAYBE" ? "En revisión · Preselecto" : state.stage === "ASSESSMENT" ? "En revisión · Evaluación técnica" : state.label).length).toBeGreaterThan(0);

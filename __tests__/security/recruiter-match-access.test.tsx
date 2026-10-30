@@ -8,6 +8,7 @@ vi.mock("next/navigation", () => ({ redirect: () => { throw new Error("REDIRECT"
 vi.mock("@/lib/server/prisma", () => ({ prisma: {
   company: { findUnique: mocks.company }, job: { findFirst: mocks.job, findMany: mocks.jobs, count: mocks.count },
   application: { findMany: mocks.apps, findFirst: mocks.app, count: mocks.count, groupBy: mocks.group }, user: { findUnique: mocks.candidate, findFirst: mocks.candidate },
+  applicationEvent: { groupBy: mocks.group },
   recruiterProfile: { findUnique: mocks.recruiter }, assessmentAttempt: { count: mocks.count }, assessmentInvite: { count: mocks.count },
   matchExplanationCache: { findFirst: mocks.cache, create: mocks.save, update: mocks.save },
 } }));
@@ -30,9 +31,22 @@ const job = { id: "job-a", title: "Backend Java AWS", slug: null, status: "OPEN"
 const candidate = { id: "candidate-a", name: "Synthetic Candidate", email: "candidate@example.invalid", firstName: "Synthetic", lastName: "Candidate", resumeUrl: null, phone: null, location: null, certifications: [], seniority: null, yearsExperience: null,
   skills: [], candidateSkills: [{ term, level: 3 }], candidateBadges: [], candidateLanguages: [], experiences: [], aiProfile: { profileType: "ENGINEERING", tags: ["backend", "cloud"] },
 };
-const cohort = Array.from({ length: 12 }, (_, i) => ({ id: `app-${String(i).padStart(2, "0")}`, jobId: "job-a", createdAt: new Date(now.getTime() + i * 1000), updatedAt: now,
-  status: "SUBMITTED", recruiterInterest: "REVIEW", stage: "APPLIED", disposition: "ACTIVE", stateVersion: 1,
-  candidate: { ...candidate, id: `candidate-${i}`, name: `Synthetic Candidate ${i}` },
+const cohort = Array.from({ length: 12 }, (_, i) => ({
+  id: `app-${String(i).padStart(2, "0")}`,
+  jobId: "job-a",
+  createdAt: new Date(now.getTime() + i * 1000),
+  updatedAt: now,
+  submittedAt: new Date(now.getTime() + i * 1000),
+  status: "SUBMITTED",
+  recruiterInterest: "REVIEW",
+  stage: "APPLIED",
+  disposition: "ACTIVE",
+  stateVersion: 1,
+  candidate: {
+    ...candidate,
+    id: `candidate-${i}`,
+    name: `Synthetic Candidate ${i}`,
+  },
 }));
 function nodes(value: unknown): React.ReactElement<Record<string, unknown>>[] {
   if (Array.isArray(value)) return value.flatMap(nodes);

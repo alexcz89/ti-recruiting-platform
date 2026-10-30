@@ -1,4 +1,5 @@
 import { ACTIVE_PIPELINE, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
+import { resolveCandidateLocation } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/jobs/[id]/page.tsx
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -117,6 +118,9 @@ export default async function JobPipelinePage({ params }: PageProps) {
           name: true,
           email: true,
           city: true,
+          admin1: true,
+          country: true,
+          location: true,
           seniority: true,
           yearsExperience: true,
         },
@@ -265,7 +269,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       candidate: {
         id: a.candidate.id,
         name: a.candidate.name ?? a.candidate.email,
-        city: a.candidate.city?.trim() || null,
+        city: resolveCandidateLocation(a.candidate).compact,
       },
     };
   });
