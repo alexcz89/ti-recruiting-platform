@@ -29,8 +29,9 @@ describe("recruiter reader architecture", () => {
     const page = read("app", "dashboard", "candidates", "[id]", "page.tsx");
     const shell = read("components", "dashboard", "CandidateReviewShell.tsx");
 
-    expect(page).toContain("readModel: getRecruiterApplicationReadModel");
-    expect(shell).toContain("entry.readModel");
+    expect(page).toContain("presentation: getRecruitingPresentation");
+    expect(shell).toContain("const { presentation } = entry");
+    expect(shell).not.toContain("entry.readModel");
     expect(shell).not.toContain("entry.recruiterInterest");
     expect(shell).not.toContain("entry.status");
   });

@@ -39,6 +39,7 @@ import {
   RECRUITER_PIPELINE_LABELS,
   getRecruiterApplicationReadModel,
 } from "@/lib/hiring-process/recruiter-read-model";
+import { getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
 
 afterEach(() => {
   cleanup();
@@ -96,25 +97,21 @@ describe("recruiter reader surface cutover", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("changes the recruiter rail label without mutating or requesting", () => {
+  it.each([
+    { stage: "REVIEW" as const, disposition: "ACTIVE" as const, stateVersion: 2 },
+    { stage: null, disposition: null, stateVersion: 0 },
+  ])("shows REVIEWING / REVIEW as En revisión in the rail with the reader flag off (%j)", state => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
+    const source = { ...state, status: "REVIEWING", recruiterInterest: "REVIEW" };
+    expect(getRecruiterApplicationReadModel(source, { canonicalReadsEnabled: false }).bucket).toBe("APPLIED");
     const navEntry = (canonicalReadsEnabled: boolean): NavEntry => ({
       candidateId: "candidate-1",
       applicationId: "application-1",
       name: "Rail Candidate",
       seniority: null,
       location: null,
-      readModel: getRecruiterApplicationReadModel(
-        {
-          stage: "INTERVIEW",
-          disposition: "ACTIVE",
-          status: "INTERVIEW",
-          recruiterInterest: "REVIEW",
-        },
-        { canonicalReadsEnabled },
-      ),
-      canonicalRecruiterReadsEnabled: canonicalReadsEnabled,
+      presentation: getRecruitingPresentation(source, canonicalReadsEnabled),
       starred: false,
     });
     const renderShell = (entry: NavEntry) => (
@@ -142,16 +139,11 @@ describe("recruiter reader surface cutover", () => {
       />
     );
     const { rerender } = render(renderShell(navEntry(false)));
-
-    expect(screen.getByText("1. Rail Candidate").closest("a")).not.toHaveTextContent(
-      "Entrevista",
-    );
+    expect(screen.getByText("1. Rail Candidate").closest("a")).toHaveTextContent("En revisión");
     rerender(renderShell(navEntry(true)));
-    expect(screen.getByText("1. Rail Candidate").closest("a")).toHaveTextContent("Entrevista");
+    expect(screen.getByText("1. Rail Candidate").closest("a")).toHaveTextContent("En revisión");
     rerender(renderShell(navEntry(false)));
-    expect(screen.getByText("1. Rail Candidate").closest("a")).not.toHaveTextContent(
-      "Entrevista",
-    );
+    expect(screen.getByText("1. Rail Candidate").closest("a")).toHaveTextContent("En revisión");
     expect(fetch).not.toHaveBeenCalled();
   });
 });

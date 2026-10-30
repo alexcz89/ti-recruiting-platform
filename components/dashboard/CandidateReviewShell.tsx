@@ -11,10 +11,6 @@ import type {
   ApplicationDispositionValue,
   ApplicationStageValue,
 } from "@/lib/hiring-process/types";
-import type {
-  RecruiterApplicationReadModel,
-  RecruiterPipelineBucket,
-} from "@/lib/hiring-process/recruiter-read-model";
 import {
   ArrowLeft, ChevronLeft, ChevronRight, GitBranch,
   CheckCircle2, Clock, Star, FileText, User, ClipboardList,
@@ -30,9 +26,7 @@ export type NavEntry = {
   name: string;
   seniority: string | null;
   location: string | null;
-  readModel: RecruiterApplicationReadModel;
-  presentation?: ReturnType<typeof getRecruitingPresentation>;
-  canonicalRecruiterReadsEnabled: boolean;
+  presentation: ReturnType<typeof getRecruitingPresentation>;
   starred: boolean;
 };
 
@@ -110,7 +104,7 @@ const INTEREST_ICON: Record<string, React.ReactNode> = {
   REJECTED: <XCircle className="h-3.5 w-3.5" />,     // Descartar
 };
 
-const STATUS_ICON: Partial<Record<RecruiterPipelineBucket, React.ReactNode>> = {
+const STATUS_ICON: Record<string, React.ReactNode> = {
   REVIEW: <Clock className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />,
   PRESELECTED: <ThumbsUp className="h-3 w-3 text-teal-500 dark:text-teal-400" />,
   ASSESSMENT: <ClipboardList className="h-3 w-3 text-violet-500 dark:text-violet-400" />,
@@ -120,9 +114,11 @@ const STATUS_ICON: Partial<Record<RecruiterPipelineBucket, React.ReactNode>> = {
   HIRED: <CheckCircle2 className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />,
   HOLD: <Clock className="h-3 w-3 text-orange-500 dark:text-orange-400" />,
   CLOSED_OTHER: <XCircle className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />,
+  WITHDRAWN: <XCircle className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />,
+  CANCELLED: <XCircle className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />,
 };
 
-const STATUS_TEXT_COLOR: Record<RecruiterPipelineBucket, string> = {
+const STATUS_TEXT_COLOR: Record<string, string> = {
   APPLIED: "text-zinc-500 dark:text-zinc-400",
   REVIEW: "text-indigo-600 dark:text-indigo-400",
   PRESELECTED: "text-teal-600 dark:text-teal-400",
@@ -133,6 +129,8 @@ const STATUS_TEXT_COLOR: Record<RecruiterPipelineBucket, string> = {
   HIRED: "text-emerald-600 dark:text-emerald-400",
   HOLD: "text-orange-600 dark:text-orange-400",
   CLOSED_OTHER: "text-zinc-500 dark:text-zinc-400",
+  WITHDRAWN: "text-zinc-500 dark:text-zinc-400",
+  CANCELLED: "text-zinc-500 dark:text-zinc-400",
 };
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
@@ -560,16 +558,11 @@ function CandidateReviewSession({
         <div className="flex-1 overflow-y-auto">
           {navList.map((entry, i) => {
             const isActive = entry.applicationId === applicationId;
-            const { bucket, label } = entry.readModel;
-            const showStateLabel =
-              entry.canonicalRecruiterReadsEnabled || bucket !== "APPLIED";
-            const stateTextColor = entry.canonicalRecruiterReadsEnabled
-              ? STATUS_TEXT_COLOR[bucket]
-              : bucket === "PRESELECTED"
-                ? "text-teal-600 dark:text-teal-400"
-                : bucket === "INTERVIEW"
-                  ? "text-sky-600 dark:text-sky-400"
-                  : "text-zinc-400 dark:text-zinc-500";
+            const { presentation } = entry;
+            const stateKey = presentation.preselected ? "PRESELECTED"
+              : presentation.assessmentStage ? "ASSESSMENT"
+                : presentation.column ?? (presentation.section === "CLOSED" ? presentation.outcome : presentation.section);
+            const stateTextColor = STATUS_TEXT_COLOR[stateKey ?? ""] ?? "text-zinc-500 dark:text-zinc-400";
             return (
               <Link
                 key={entry.applicationId}
@@ -584,18 +577,16 @@ function CandidateReviewSession({
                   <span className={`text-xs font-medium truncate ${isActive ? "text-emerald-800 dark:text-emerald-200" : "text-zinc-800 dark:text-zinc-200"}`}>
                     {i + 1}. {entry.name}
                   </span>
-                  {STATUS_ICON[bucket] ?? null}
+                  {STATUS_ICON[stateKey ?? ""] ?? null}
                 </div>
                 <div className="flex items-center gap-1.5 text-[10px] text-zinc-400 dark:text-zinc-500">
                   {entry.seniority && <span>{SENIORITY_LABEL[entry.seniority] ?? entry.seniority}</span>}
                   {entry.seniority && entry.location && <span>·</span>}
                   {entry.location && <span className="truncate">{entry.location.split(",")[0]}</span>}
                 </div>
-                {showStateLabel && (
-                  <span className={`text-[9px] font-medium ${stateTextColor}`}>
-                    {entry.presentation?.label ?? label}{entry.presentation?.preselected ? " · Preselecto" : ""}
-                  </span>
-                )}
+                <span className={`text-[9px] font-medium ${stateTextColor}`}>
+                  {presentation.label}{presentation.preselected ? " · Preselecto" : ""}
+                </span>
               </Link>
             );
           })}

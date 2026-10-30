@@ -20,7 +20,7 @@ import CandidateReviewShell, {
   type AppState,
   type NavEntry,
 } from "@/components/dashboard/CandidateReviewShell";
-import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
+import { getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
 
 const baseApplication: AppState = {
   id: "application-current",
@@ -49,19 +49,19 @@ afterEach(() => {
 
 describe("recruiter reader surfaces", () => {
   it.each([
-    ["APPLIED", "ACTIVE", "REVIEW", "Por revisar"],
-    ["REVIEW", "ACTIVE", "REVIEW", "En revisión"],
-    ["REVIEW", "ACTIVE", "MAYBE", "Preselecto"],
-    ["INTERVIEW", "ACTIVE", "REVIEW", "Entrevista"],
-    ["OFFER", "ACTIVE", "ACCEPTED", "Oferta"],
-    ["CLOSED", "REJECTED", "ACCEPTED", "Descartado"],
-    ["CLOSED", "HIRED", "ACCEPTED", "Contratado"],
+    ["APPLIED", "ACTIVE", "SUBMITTED", "REVIEW", "Por revisar"],
+    ["REVIEW", "ACTIVE", "REVIEWING", "REVIEW", "En revisión"],
+    ["REVIEW", "ACTIVE", "REVIEWING", "MAYBE", "Preselecto"],
+    ["INTERVIEW", "ACTIVE", "INTERVIEW", "ACCEPTED", "Entrevista"],
+    ["OFFER", "ACTIVE", "OFFER", "ACCEPTED", "Oferta"],
+    ["CLOSED", "REJECTED", "REJECTED", "REJECTED", "Descartado"],
+    ["CLOSED", "HIRED", "HIRED", "ACCEPTED", "Contratado"],
   ] as const)(
     "shows %s/%s as %s in the candidate rail",
-    (stage, disposition, recruiterInterest, label) => {
-      const readModel = getRecruiterApplicationReadModel(
-        { stage, disposition, status: "SUBMITTED", recruiterInterest },
-        { canonicalReadsEnabled: true },
+    (stage, disposition, status, recruiterInterest, label) => {
+      const presentation = getRecruitingPresentation(
+        { stage, disposition, status, recruiterInterest, stateVersion: 2 },
+        true,
       );
       const navList: NavEntry[] = [
         {
@@ -70,8 +70,7 @@ describe("recruiter reader surfaces", () => {
           name: "Rail Candidate",
           seniority: null,
           location: null,
-          readModel,
-          canonicalRecruiterReadsEnabled: true,
+          presentation,
           starred: false,
         },
       ];

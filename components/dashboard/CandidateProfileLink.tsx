@@ -18,19 +18,14 @@ export default function CandidateProfileLink({ applicationId, jobId, source, ena
     } | null>(null);
     const activate = (event: React.MouseEvent<HTMLAnchorElement>) => {
         event.stopPropagation();
-        if (!enabled || !jobId || !canStartReview(source) || event.altKey || (event.button !== 0 && event.button !== 1))
+        // Modified, middle and external-target clicks use native navigation. A new tab
+        // cannot reliably wait for the write without showing a blank page first.
+        if (!enabled || !jobId || !canStartReview(source) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0 ||
+            (event.currentTarget.target && event.currentTarget.target !== "_self"))
             return;
         event.preventDefault();
         if (pending.current)
             return;
-        const newTab = event.button === 1 || event.ctrlKey || event.metaKey || event.shiftKey || props.target === "_blank";
-        const tab = newTab ? window.open("about:blank", "_blank") : null;
-        if (tab)
-            tab.opener = null;
-        if (newTab && !tab) {
-            window.location.assign(href);
-            return;
-        }
         pending.current = true;
         if (!command.current || command.current.version !== source.stateVersion)
             command.current = { version: source.stateVersion, id: crypto.randomUUID() };
@@ -41,13 +36,10 @@ export default function CandidateProfileLink({ applicationId, jobId, source, ena
             .catch(() => undefined).finally(() => {
             window.clearTimeout(timer);
             pending.current = false;
-            if (tab)
-                tab.location.href = href;
-            else {
-                router.push(href);
-                router.refresh();
-            }
+            router.push(href);
+            router.refresh();
         });
     };
-    return <a {...props} href={href} onClick={activate} onAuxClick={activate}>{children}</a>;
+    return <a {...props} href={href} rel={props.target === "_blank" ? [props.rel, "noopener"].filter(Boolean).join(" ") : props.rel}
+        onClick={activate} onAuxClick={activate}>{children}</a>;
 }

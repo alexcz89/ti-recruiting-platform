@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+// @vitest-environment-options {"settings":{"navigation":{"disableMainFrameNavigation":true,"disableChildFrameNavigation":true,"disableChildPageNavigation":true}}}
 import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
@@ -34,21 +35,26 @@ it.each(["network", "conflict"])("opens the profile despite %s failure", async f
 });
 it.each([{ ...source, stage: "REVIEW" as const, status: "REVIEWING", recruiterInterest: "MAYBE" }, { ...source, disposition: "HOLD" as const }, { ...source, status: "HIRED" }])("does not transition ineligible source %j", state => {
   const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
-  render(<CandidateProfileLink {...props} source={state}>Candidate</CandidateProfileLink>);
+  render(<CandidateProfileLink {...props} href="#candidate" source={state}>Candidate</CandidateProfileLink>);
   fireEvent.click(screen.getByRole("link")); expect(fetch).not.toHaveBeenCalled();
 });
-it.each(["modified", "middle"])("opens %s activation in a new tab", async kind => {
-  const tab = { opener: {}, location: { href: "about:blank" } };
-  vi.spyOn(window, "open").mockReturnValue(tab as unknown as Window);
-  const fetch = vi.fn().mockResolvedValue(new Response("{}")); vi.stubGlobal("fetch", fetch);
-  render(<CandidateProfileLink {...props}>Candidate</CandidateProfileLink>);
-  if (kind === "middle") fireEvent(screen.getByRole("link"), new MouseEvent("auxclick", { bubbles: true, button: 1 }));
-  else fireEvent.click(screen.getByRole("link"), { ctrlKey: true });
-  await waitFor(() => expect(tab.location.href).toBe(props.href));
-  expect(tab.opener).toBeNull(); expect(mocks.push).not.toHaveBeenCalled();
+it.each(["ctrl", "meta", "shift", "middle", "blank"])("leaves %s activation to native navigation without a blank tab or write", kind => {
+  const open = vi.spyOn(window, "open").mockReturnValue(null);
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  render(<CandidateProfileLink {...props} href="#candidate" target={kind === "blank" ? "_blank" : undefined}>Candidate</CandidateProfileLink>);
+  if (kind === "blank") expect(screen.getByRole("link")).toHaveAttribute("rel", "noopener");
+  const event = new MouseEvent(kind === "middle" ? "auxclick" : "click", {
+    bubbles: true, cancelable: true, button: kind === "middle" ? 1 : 0,
+    ctrlKey: kind === "ctrl", metaKey: kind === "meta", shiftKey: kind === "shift",
+  });
+  fireEvent(screen.getByRole("link"), event);
+  expect(event.defaultPrevented).toBe(false);
+  expect(open).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+  expect(mocks.push).not.toHaveBeenCalled();
 });
 it("keeps ADMIN/passive links as normal navigation", () => {
   const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
-  render(<CandidateProfileLink {...props} enabled={false}>Candidate</CandidateProfileLink>);
+  render(<CandidateProfileLink {...props} href="#candidate" enabled={false}>Candidate</CandidateProfileLink>);
   fireEvent.click(screen.getByRole("link")); expect(fetch).not.toHaveBeenCalled();
 });

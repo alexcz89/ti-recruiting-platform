@@ -26,7 +26,6 @@ import {
   candidateWhereForActor,
 } from "@/lib/server/candidate-access";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
-import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
 import type { NavEntry } from "@/components/dashboard/CandidateReviewShell";
 import { buildRecruiterWhatsappHref } from "@/lib/whatsapp/recruiter-contact";
 import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
@@ -394,10 +393,6 @@ export default async function CandidateDetailPage({
       seniority: a.candidate.seniority ?? null,
       location: a.candidate.location ?? null,
       presentation: getRecruitingPresentation(a, canonicalRecruiterReadsEnabled),
-      readModel: getRecruiterApplicationReadModel(a, {
-        canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
-      }),
-      canonicalRecruiterReadsEnabled,
       starred: a.starred,
     }));
     navIndex = navList.findIndex((n) => n.applicationId === activeAppId);
