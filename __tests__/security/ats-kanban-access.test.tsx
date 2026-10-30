@@ -154,6 +154,13 @@ describe("ATS Kanban tenant and job boundaries", () => {
       applicationId: "app-a", command: { intent: "START_REVIEW", expectedVersion: 1, commandId: "command-app-a" },
     }));
   });
+  it("routes Interview to Offer through the existing tenant-scoped intent", async () => {
+    const action = (await board()).moveAction as (form: FormData) => Promise<{ ok: boolean }>;
+    const form = moveForm("app-a"); form.set("intent", "MOVE_TO_OFFER"); form.set("newStatus", "ACCEPTED");
+    expect((await action(form)).ok).toBe(true);
+    expect(mocks.intent).toHaveBeenCalledWith(expect.objectContaining({ applicationId: "app-a", command: { intent: "MOVE_TO_OFFER", expectedVersion: 1, commandId: "command-app-a" } }));
+    expect(mocks.application.mock.calls[0][0].where).toEqual({ id: "app-a", jobId: "job-a", job: { companyId: "company-a" } });
+  });
   it("filters historical foreign templates in the database query and client payload", async () => {
     const props = await board();
     expect(mocks.job.mock.calls[0][0].select.assessments.where.template).toEqual({

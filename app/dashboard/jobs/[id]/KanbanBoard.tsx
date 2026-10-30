@@ -4,8 +4,9 @@
 import * as React from "react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { canStartReview } from "@/lib/hiring-process/start-review-eligibility";
 import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "@/lib/hiring-process/recruiter-read-model";
+import { PIPELINE_LABELS, getRecruitingPresentation, getRecruitingActions } from "@/lib/hiring-process/recruiting-presentation";
+import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { toastError } from "@/lib/ui/toast";
 import { Lock, MapPin } from "lucide-react";
 import {
@@ -66,50 +67,6 @@ function scoreBg(score: number) {
   return "bg-rose-400";
 }
 
-const CANONICAL_REJECTION_SOURCES = new Set([
-  "APPLIED",
-  "REVIEW",
-  "PRESELECTED",
-  "ASSESSMENT",
-  "INTERVIEW",
-  "OFFER",
-]);
-
-function canonicalWriterStatusForMove(
-  fromStatus: string,
-  toStatus: string,
-): string | null {
-  if (fromStatus === "APPLIED" && toStatus === "REVIEW") return "REVIEW";
-  if (toStatus === "REJECTED" && CANONICAL_REJECTION_SOURCES.has(fromStatus)) {
-    return "REJECTED";
-  }
-
-  if (
-    toStatus === "PRESELECTED" &&
-    (fromStatus === "APPLIED" || fromStatus === "REVIEW")
-  ) {
-    return "MAYBE";
-  }
-
-  if (fromStatus === "PRESELECTED" && toStatus === "REVIEW") {
-    return "REVIEW";
-  }
-
-  if (
-    toStatus === "INTERVIEW" &&
-    (fromStatus === "REVIEW" || fromStatus === "PRESELECTED")
-  ) {
-    return "ACCEPTED";
-  }
-
-  return null;
-}
-
-function isCanonicalDropSupported(fromStatus: string, toStatus: string) {
-  if (fromStatus === toStatus) return true;
-  return canonicalWriterStatusForMove(fromStatus, toStatus) !== null;
-}
-
 export default function Kanbanboard({
   jobId,
   statuses,
@@ -117,6 +74,7 @@ export default function Kanbanboard({
   applications,
   hasMatchSignals = false,
   canonicalRecruiterReadsEnabled = false,
+  autoReviewEnabled = false,
   moveAction,
 }: {
   jobId: string;
@@ -125,9 +83,12 @@ export default function Kanbanboard({
   applications: AppCard[];
   hasMatchSignals?: boolean;
   canonicalRecruiterReadsEnabled?: boolean;
+  autoReviewEnabled?: boolean;
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string; application?: { stage: string | null; disposition: string | null; stateVersion: number; status: string; recruiterInterest: string } }>;
 }) {
   const router = useRouter();
+  const [section, setSection] = useState("ACTIVE");
+  const [outcome, setOutcome] = useState("ALL");
   const [items, setItems] = useState<AppCard[]>(applications);
   const [mobileSelection, setMobileSelection] = useState({ jobId: "", stage: "" });
   const [isPending, setIsPending] = useState(false);
@@ -167,14 +128,13 @@ export default function Kanbanboard({
   const isCardWritable = (card: AppCard) =>
     card.writerCompatibility !== "NONE";
 
+  const presentation = (a: AppCard) => getRecruitingPresentation({ ...a, stage: a.stage as RecruiterApplicationReadInput["stage"], disposition: a.disposition as RecruiterApplicationReadInput["disposition"], status: a.applicationStatus, recruiterInterest: a.status }, canonicalRecruiterReadsEnabled);
   const grouped = useMemo(() => {
     const map: Record<string, AppCard[]> = {};
     for (const st of statuses) map[st] = [];
     for (const a of items) {
-      const presentationStatus = canonicalRecruiterReadsEnabled
-        ? a.displayStatus
-        : a.status;
-      (map[presentationStatus] ||= []).push(a);
+      const p = getRecruitingPresentation({ ...a, stage: a.stage as RecruiterApplicationReadInput["stage"], disposition: a.disposition as RecruiterApplicationReadInput["disposition"], status: a.applicationStatus, recruiterInterest: a.status }, canonicalRecruiterReadsEnabled);
+      if (p.section === "ACTIVE" && p.column) map[p.column]?.push(a);
     }
     return map;
   }, [items, statuses, canonicalRecruiterReadsEnabled]);
@@ -182,55 +142,19 @@ export default function Kanbanboard({
   // Ejecutar acción de mover (drag o quick action)
   const doMove = (appId: string, fromStatus: string, toStatus: string, fromIdx: number, toIdx: number) => {
     if (moveInFlight.current || fromStatus === toStatus) return;
-    const writerStatus = canonicalRecruiterReadsEnabled
-      ? canonicalWriterStatusForMove(fromStatus, toStatus)
-      : toStatus;
-
-    if (!writerStatus) return;
-    if (fromStatus === "REJECTED" || fromStatus === "HIRED") return;
-
     const moved = (grouped[fromStatus] || [])[fromIdx];
-    if (!moved) return;
-    if (moved.id !== appId || !isCardWritable(moved)) return;
-    const startsReview = canonicalRecruiterReadsEnabled && fromStatus === "APPLIED" && toStatus === "REVIEW";
-    if (startsReview && !canStartReview({ ...moved, status: moved.applicationStatus, recruiterInterest: moved.status })) return;
-    if (
-      moved.applicationStatus === "HIRED" ||
-      (moved.stage === "CLOSED" && moved.disposition === "HIRED")
-    ) {
-      return;
-    }
-    if (
-      moved.stage === "OFFER" &&
-      moved.disposition === "ACTIVE" &&
-      writerStatus !== "REJECTED"
-    ) {
-      return;
-    }
-    const isPreselectCommand =
-      writerStatus === "MAYBE" ||
-      (writerStatus === "REVIEW" && moved.status === "MAYBE");
-    if (
-      isPreselectCommand &&
-      moved.stage !== null &&
-      !(
-        moved.disposition === "ACTIVE" &&
-        (moved.stage === "APPLIED" || moved.stage === "REVIEW")
-      )
-    ) {
-      return;
-    }
+    if (!moved || moved.id !== appId || !isCardWritable(moved)) return;
+    const source = { ...moved, stage: moved.stage as RecruiterApplicationReadInput["stage"], disposition: moved.disposition as RecruiterApplicationReadInput["disposition"], status: moved.applicationStatus, recruiterInterest: moved.status };
+    const intent = toStatus === "REVIEW" && fromStatus === "APPLIED" ? "START_REVIEW"
+      : toStatus === "INTERVIEW" ? "MOVE_TO_INTERVIEW" : toStatus === "OFFER" ? "MOVE_TO_OFFER" : null;
+    if (!intent || !getRecruitingActions(source, canonicalRecruiterReadsEnabled).includes(intent)) return;
+    const writerStatus = intent === "START_REVIEW" ? "REVIEW" : "ACCEPTED";
+    const startsReview = intent === "START_REVIEW";
     const fd = new FormData();
     fd.set("appId", appId);
     fd.set("newStatus", writerStatus);
-    if (startsReview) fd.set("intent", "START_REVIEW");
-    if (
-      startsReview ||
-      writerStatus === "ACCEPTED" ||
-      writerStatus === "REJECTED" ||
-      writerStatus === "MAYBE" ||
-      (writerStatus === "REVIEW" && moved.status === "MAYBE")
-    ) {
+    fd.set("intent", intent);
+    {
       fd.set("expectedVersion", String(moved.stateVersion));
       if (startsReview) {
         const key = `${appId}:${moved.stateVersion}`;
@@ -282,6 +206,15 @@ export default function Kanbanboard({
 
   return (
     <section className="min-w-0 md:rounded-2xl md:border md:border-zinc-200/70 md:bg-zinc-50/40 md:p-3 dark:md:border-zinc-800 dark:md:bg-zinc-950/20">
+      <p className="mb-2 text-xs text-zinc-600 dark:text-zinc-400">Total de postulaciones: {items.length}</p>
+      <nav aria-label="Procesos de candidatura" className="mb-3 flex flex-wrap gap-2">
+        {([ ["ACTIVE", "Activos"], ["CLOSED", "Cerrados"], ["HOLD", "En pausa"], ["RECONCILIATION", "Requiere conciliación"] ] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} onClick={() => setSection(key)} className={`min-h-11 rounded-lg border px-3 text-sm ${section === key ? "border-emerald-700 bg-emerald-700 text-white" : "border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"}`}>{label} ({items.filter(a => presentation(a).section === key).length})</button>)}
+      </nav>
+      {section !== "ACTIVE" ? <div className="space-y-3">
+        {section === "CLOSED" && <label className="block text-sm">Resultado <select value={outcome} onChange={e => setOutcome(e.target.value)} className="rounded border bg-[rgb(var(--card))] p-2">{["ALL", "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"].map(key => <option key={key} value={key}>{key === "ALL" ? "Todos" : PIPELINE_LABELS[key]} ({items.filter(a => presentation(a).section === "CLOSED" && (key === "ALL" || presentation(a).outcome === key)).length})</option>)}</select></label>}
+        {items.filter(a => presentation(a).section === section && (section !== "CLOSED" || outcome === "ALL" || presentation(a).outcome === outcome)).map(card => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
+        {items.filter(a => presentation(a).section === section && (section !== "CLOSED" || outcome === "ALL" || presentation(a).outcome === outcome)).length === 0 && <p className="p-4 text-sm">No hay candidaturas en esta sección.</p>}
+      </div> : <>
       <div className="md:hidden">
         <label htmlFor="kanban-stage" className="mb-1.5 block text-sm font-medium">Etapa</label>
         <select id="kanban-stage" className="min-h-11 w-full rounded-lg border border-zinc-300 bg-[rgb(var(--card))] px-3 py-2 text-sm dark:border-zinc-700" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
@@ -310,9 +243,8 @@ export default function Kanbanboard({
                 droppableId={st}
                 type="APPLICATION"
                 isDropDisabled={
-                  canonicalRecruiterReadsEnabled &&
                   dragSourceStatus !== null &&
-                  !isCanonicalDropSupported(dragSourceStatus, st)
+                  !((dragSourceStatus === "APPLIED" && st === "REVIEW") || (dragSourceStatus === "REVIEW" && st === "INTERVIEW") || (dragSourceStatus === "INTERVIEW" && st === "OFFER"))
                 }
                 renderClone={(provided, _snapshot, rubric) => {
                   const card = (grouped[rubric.source.droppableId] || [])[rubric.source.index];
@@ -367,6 +299,7 @@ export default function Kanbanboard({
         </div>
       </DragDropContext>
       </div>
+      </>}
     </section>
   );
 
@@ -566,7 +499,7 @@ export default function Kanbanboard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h4 className="min-w-0 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
-                <a href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} onClick={(event) => event.stopPropagation()} className="break-words text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</a>
+                <CandidateProfileLink applicationId={card.id} jobId={jobId} source={{ stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], stateVersion: card.stateVersion, status: card.applicationStatus, recruiterInterest: card.status }} enabled={autoReviewEnabled} href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} className="break-words text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</CandidateProfileLink>
               </h4>
               {isNew && (
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -599,6 +532,11 @@ export default function Kanbanboard({
           </div>
         </div>
 
+        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+          {presentation(card).section !== "ACTIVE" && <span>{presentation(card).label}</span>}
+          {presentation(card).preselected && <span className="rounded bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-900 dark:text-amber-100">Preselecto</span>}
+          {presentation(card).assessmentStage && <span>Evaluación técnica</span>}
+        </div>
         {/* Barra de match */}
         {hasMatchSignals && !locked && score !== null && score !== undefined && (
           <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">

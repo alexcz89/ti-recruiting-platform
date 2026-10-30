@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -20,7 +20,7 @@ import CandidateReviewShell, {
   type AppState,
   type NavEntry,
 } from "@/components/dashboard/CandidateReviewShell";
-import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
+import { getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
 
 const baseApplication: AppState = {
   id: "application-current",
@@ -49,19 +49,19 @@ afterEach(() => {
 
 describe("recruiter reader surfaces", () => {
   it.each([
-    ["APPLIED", "ACTIVE", "REVIEW", "Por revisar"],
-    ["REVIEW", "ACTIVE", "REVIEW", "En revisión"],
-    ["REVIEW", "ACTIVE", "MAYBE", "Preselecto"],
-    ["INTERVIEW", "ACTIVE", "REVIEW", "Entrevista"],
-    ["OFFER", "ACTIVE", "ACCEPTED", "Oferta"],
-    ["CLOSED", "REJECTED", "ACCEPTED", "Descartado"],
-    ["CLOSED", "HIRED", "ACCEPTED", "Contratado"],
+    ["APPLIED", "ACTIVE", "SUBMITTED", "REVIEW", "Por revisar"],
+    ["REVIEW", "ACTIVE", "REVIEWING", "REVIEW", "En revisión"],
+    ["REVIEW", "ACTIVE", "REVIEWING", "MAYBE", "Preselecto"],
+    ["INTERVIEW", "ACTIVE", "INTERVIEW", "ACCEPTED", "Entrevista"],
+    ["OFFER", "ACTIVE", "OFFER", "ACCEPTED", "Oferta"],
+    ["CLOSED", "REJECTED", "REJECTED", "REJECTED", "Descartado"],
+    ["CLOSED", "HIRED", "HIRED", "ACCEPTED", "Contratado"],
   ] as const)(
     "shows %s/%s as %s in the candidate rail",
-    (stage, disposition, recruiterInterest, label) => {
-      const readModel = getRecruiterApplicationReadModel(
-        { stage, disposition, status: "SUBMITTED", recruiterInterest },
-        { canonicalReadsEnabled: true },
+    (stage, disposition, status, recruiterInterest, label) => {
+      const presentation = getRecruitingPresentation(
+        { stage, disposition, status, recruiterInterest, stateVersion: 2 },
+        true,
       );
       const navList: NavEntry[] = [
         {
@@ -70,8 +70,7 @@ describe("recruiter reader surfaces", () => {
           name: "Rail Candidate",
           seniority: null,
           location: null,
-          readModel,
-          canonicalRecruiterReadsEnabled: true,
+          presentation,
           starred: false,
         },
       ];
@@ -100,221 +99,49 @@ describe("recruiter reader surfaces", () => {
     },
   );
 
-  it("shows canonical Interview instead of stale legacy Review in InterestSelect", () => {
-    render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="REVIEW"
-        initialStateVersion={3}
-        legacyStatus="INTERVIEW"
-        canonicalStage="INTERVIEW"
-        canonicalDisposition="ACTIVE"
-        canonicalRecruiterReadsEnabled
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: "Entrevista" })).toBeDisabled();
-    expect(screen.queryByRole("button", { name: "Por revisar" })).not.toBeInTheDocument();
-  });
-
-  it("preserves the legacy rail presentation while the reader flag is off", () => {
-    const navList: NavEntry[] = [
-      {
-        candidateId: "candidate-rail",
-        applicationId: "application-rail",
-        name: "Legacy Rail Candidate",
-        seniority: null,
-        location: null,
-        readModel: getRecruiterApplicationReadModel(
-          {
-            stage: "INTERVIEW",
-            disposition: "ACTIVE",
-            status: "INTERVIEW",
-            recruiterInterest: "REVIEW",
-          },
-          { canonicalReadsEnabled: false },
-        ),
-        canonicalRecruiterReadsEnabled: false,
-        starred: false,
-      },
-    ];
-
-    render(
-      <CandidateReviewShell
-        candidateId="candidate-current"
-        candidateName="Current Candidate"
-        candidateSeniority={null}
-        candidateLocation={null}
-        resumeUrl={null}
-        waHref={null}
-        fromJobId="job-1"
-        jobTitle="Job"
-        matchScore={null}
-        matchLocked={false}
-        applicationId="application-current"
-        currentApplication={baseApplication}
-        navList={navList}
-        navIndex={-1}
-        slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
-      />,
-    );
-
-    expect(screen.getByText("1. Legacy Rail Candidate").closest("a")).not.toHaveTextContent("Por revisar");
-  });
-
-  it("shows Offer and Hired canonically without making them writable", () => {
-    const offer = render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="ACCEPTED"
-        initialStateVersion={4}
-        legacyStatus="OFFER"
-        canonicalStage="OFFER"
-        canonicalDisposition="ACTIVE"
-        canonicalRecruiterReadsEnabled
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Oferta" })).toBeDisabled();
-    offer.unmount();
-
-    render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="ACCEPTED"
-        initialStateVersion={5}
-        legacyStatus="HIRED"
-        canonicalStage="CLOSED"
-        canonicalDisposition="HIRED"
-        canonicalRecruiterReadsEnabled
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Contratado" })).toBeDisabled();
-  });
-
-  it("keeps the legacy InterestSelect presentation when the reader flag is off", () => {
-    render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="REVIEW"
-        initialStateVersion={3}
-        legacyStatus="INTERVIEW"
-        canonicalStage="INTERVIEW"
-        canonicalDisposition="ACTIVE"
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: /Por revisar/ })).toBeEnabled();
-  });
-
-  it("uses canonical Review as the current selector option despite stale Accepted", () => {
-    const fetch = vi.fn();
+  it.each([true, false])("separates process state, preselection and authorized actions with reads=%s", async reads => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ application: { stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 3 } })));
     vi.stubGlobal("fetch", fetch);
-    render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="ACCEPTED"
-        initialStateVersion={2}
-        legacyStatus="REVIEWING"
-        canonicalStage="REVIEW"
-        canonicalDisposition="ACTIVE"
-        canonicalRecruiterReadsEnabled
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /En revisión/ }));
-    const review = screen.getByRole("option", { name: /En revisión/ });
-    expect(review).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("option", { name: /Entrevista/ })).toHaveAttribute(
-      "aria-selected",
-      "false",
-    );
-
-    fireEvent.click(review);
-    expect(fetch).not.toHaveBeenCalled();
+    render(<InterestSelect applicationId="app" initial="MAYBE" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
+    expect(screen.getByText("En revisión")).toBeInTheDocument();
+    expect(screen.getByText("Preselecto")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "CLEAR_PRESELECTED" } });
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ intent: "CLEAR_PRESELECTED", expectedVersion: 2 });
+    await waitFor(() => expect(screen.queryByText("Preselecto")).not.toBeInTheDocument());
+  });
+  it.each([true, false])("does not offer transitions for inconsistent rows with reads=%s", reads => {
+    render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+  it("keeps hired terminal and offers only rejection for an active offer", () => {
+    const view = render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={4} legacyStatus="OFFER" canonicalStage="OFFER" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled />);
+    expect(screen.getByText("Oferta")).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Pasar a entrevista" })).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Descartar" })).toBeInTheDocument();
+    view.rerender(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={5} legacyStatus="HIRED" canonicalStage="CLOSED" canonicalDisposition="HIRED" canonicalRecruiterReadsEnabled />);
+    expect(screen.getByText("Contratado")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+  it.each([true, false])("uses the same process label in list and profile with reads=%s", reads => {
+    const cases = [
+      { stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", label: "Por revisar" },
+      { stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "MAYBE", label: "En revisión" },
+      { stage: "ASSESSMENT", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "REVIEW", label: "En revisión" },
+      { stage: "INTERVIEW", disposition: "ACTIVE", status: "INTERVIEW", recruiterInterest: "ACCEPTED", label: "Entrevista" },
+      { stage: "OFFER", disposition: "ACTIVE", status: "OFFER", recruiterInterest: "ACCEPTED", label: "Oferta" },
+      { stage: "CLOSED", disposition: "WITHDRAWN", status: "REVIEWING", recruiterInterest: "REVIEW", label: "Retirado" },
+      { stage: "CLOSED", disposition: "CANCELLED", status: "REVIEWING", recruiterInterest: "REVIEW", label: "Cancelado" },
+      { stage: "REVIEW", disposition: "HOLD", status: "REVIEWING", recruiterInterest: "REVIEW", label: "En pausa" },
+    ] as const;
+    for (const state of cases) {
+      const list = render(<InterestSelect applicationId="app" initial={state.recruiterInterest} initialStateVersion={2} legacyStatus={state.status} canonicalStage={state.stage} canonicalDisposition={state.disposition} canonicalRecruiterReadsEnabled={reads} />);
+      expect(within(list.container).getByText(state.label)).toBeInTheDocument();
+      const profile = render(<CandidateReviewShell candidateId="c" candidateName="Candidate" candidateSeniority={null} candidateLocation={null} resumeUrl={null} waHref={null} fromJobId="j" jobTitle="Job" matchScore={null} matchLocked={false} applicationId="app" currentApplication={{ ...baseApplication, ...state }} canonicalRecruiterReadsEnabled={reads} navList={[]} navIndex={-1} slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }} />);
+      expect(within(profile.container).getAllByText(state.recruiterInterest === "MAYBE" ? "En revisión · Preselecto" : state.stage === "ASSESSMENT" ? "En revisión · Evaluación técnica" : state.label).length).toBeGreaterThan(0);
+      list.unmount(); profile.unmount();
+    }
   });
 
-  it("uses Review as the current selector option for canonical Applied", () => {
-    render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="ACCEPTED"
-        initialStateVersion={1}
-        legacyStatus="SUBMITTED"
-        canonicalStage="APPLIED"
-        canonicalDisposition="ACTIVE"
-        canonicalRecruiterReadsEnabled
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /Por revisar/ }));
-    expect(screen.getByRole("option", { name: /Por revisar/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.getByRole("option", { name: /Entrevista/ })).toHaveAttribute(
-      "aria-selected",
-      "false",
-    );
-  });
-
-  it("labels canonical Review correctly and clears canonical Preselected", async () => {
-    const fetch = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          application: {
-            stateVersion: 3,
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
-    vi.stubGlobal("fetch", fetch);
-    render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="MAYBE"
-        initialStateVersion={2}
-        legacyStatus="REVIEWING"
-        canonicalStage="REVIEW"
-        canonicalDisposition="ACTIVE"
-        canonicalRecruiterReadsEnabled
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /Preselecto/ }));
-    expect(screen.getByRole("option", { name: /Preselecto/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    fireEvent.click(screen.getByRole("option", { name: /En revisión/ }));
-
-    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({
-      intent: "CLEAR_PRESELECTED",
-      expectedVersion: 2,
-    });
-  });
-
-  it("keeps legacy option labels and active selection when reader flag is off", () => {
-    render(
-      <InterestSelect
-        applicationId="application-1"
-        initial="ACCEPTED"
-        initialStateVersion={2}
-        legacyStatus="REVIEWING"
-        canonicalStage="REVIEW"
-        canonicalDisposition="ACTIVE"
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
-    expect(screen.getByRole("option", { name: /Entrevista/ })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    );
-    expect(screen.getByRole("option", { name: /Por revisar/ })).toHaveAttribute(
-      "aria-selected",
-      "false",
-    );
-  });
 });

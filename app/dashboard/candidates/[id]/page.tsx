@@ -1,3 +1,4 @@
+import { getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
 // app/dashboard/candidates/[id]/page.tsx
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
@@ -25,7 +26,6 @@ import {
   candidateWhereForActor,
 } from "@/lib/server/candidate-access";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
-import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
 import type { NavEntry } from "@/components/dashboard/CandidateReviewShell";
 import { buildRecruiterWhatsappHref } from "@/lib/whatsapp/recruiter-contact";
 import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
@@ -381,6 +381,7 @@ export default async function CandidateDetailPage({
         disposition: true,
         status: true,
         recruiterInterest: true,
+        stateVersion: true,
         starred: true,
         candidate: { select: { id: true, name: true, seniority: true, location: true } },
       },
@@ -391,10 +392,7 @@ export default async function CandidateDetailPage({
       name: a.candidate.name ?? "Candidato",
       seniority: a.candidate.seniority ?? null,
       location: a.candidate.location ?? null,
-      readModel: getRecruiterApplicationReadModel(a, {
-        canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
-      }),
-      canonicalRecruiterReadsEnabled,
+      presentation: getRecruitingPresentation(a, canonicalRecruiterReadsEnabled),
       starred: a.starred,
     }));
     navIndex = navList.findIndex((n) => n.applicationId === activeAppId);

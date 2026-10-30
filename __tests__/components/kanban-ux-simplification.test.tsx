@@ -15,7 +15,7 @@ vi.mock("@hello-pangea/dnd", () => ({
   Draggable: ({ children }: { children: (...args: unknown[]) => React.ReactNode }) => children({ innerRef: vi.fn(), draggableProps: {}, dragHandleProps: {} }, { isDragging: false }),
 }));
 import KanbanBoard from "@/app/dashboard/jobs/[id]/KanbanBoard";
-import { PRIMARY_RECRUITER_PIPELINE_BUCKETS, RECRUITER_PIPELINE_LABELS } from "@/lib/hiring-process/recruiter-read-model";
+import { ACTIVE_PIPELINE as PRIMARY_RECRUITER_PIPELINE_BUCKETS, PIPELINE_LABELS as RECRUITER_PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
 const card = { id: "app-a", stage: "APPLIED", disposition: "ACTIVE", applicationStatus: "SUBMITTED", status: "REVIEW", displayStatus: "APPLIED", stateVersion: 1, writerCompatibility: "CANONICAL" as const,
   candidate: { id: "candidate-a", name: "Nombre de candidato extraordinariamente largo para verificar que no se trunca", email: "a@example.invalid", city: "México", location: "Ubicación ambigua" }, _score: 61, _locked: false,
   _assessments: [{ state: "COMPLETED" as const, score: 85, passed: true, attemptId: "attempt-a", templateTitle: "Prueba técnica" }] };
@@ -88,7 +88,9 @@ it("uses the persisted state to classify a successful response that differs from
   expect(moveAction).toHaveBeenCalledOnce();
   expect(screen.getByRole("option", { name: /Por revisar \(0\)/ })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: /En revisión \(0\)/ })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: /Descartado \(1\)/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Cerrados (1)" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cerrados (1)" }));
+  expect(screen.getByRole("link", { name: card.candidate.name })).toBeInTheDocument();
 });
 it("restores the selected mobile stage after navigating to a profile and returning to the same job", () => {
   const view = render(<KanbanBoard {...props} moveAction={vi.fn()} />);
@@ -99,27 +101,23 @@ it("restores the selected mobile stage after navigating to a profile and returni
   expect(screen.getByRole("combobox", { name: "Etapa" })).toHaveValue("REVIEW");
 });
 it.each([true, false])("keeps canonical and legacy columns distinct with reader flag %s", (reads) => {
-  const states = reads ? [...props.statuses, "HOLD", "CLOSED_OTHER"] : ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"];
+  const states = [...props.statuses];
   const applications = [
-    { ...card, id: "active", displayStatus: "REVIEW", stage: "REVIEW", status: "REVIEW", candidate: { ...card.candidate, name: "Active" } },
+    { ...card, id: "active", displayStatus: "REVIEW", stage: "REVIEW", applicationStatus: "REVIEWING", status: "REVIEW", candidate: { ...card.candidate, name: "Active" } },
     { ...card, id: "legacy", displayStatus: reads ? "APPLIED" : "REVIEW", stage: null, disposition: null, stateVersion: 0, status: "REVIEW", writerCompatibility: "LEGACY" as const, candidate: { ...card.candidate, name: "Legacy" } },
     { ...card, id: "hired", displayStatus: "HIRED", stage: "CLOSED", disposition: "HIRED", applicationStatus: "HIRED", status: "ACCEPTED", candidate: { ...card.candidate, name: "Hired" } },
     { ...card, id: "hold", displayStatus: "HOLD", stage: "REVIEW", disposition: "HOLD", status: "REVIEW", candidate: { ...card.candidate, name: "Hold" } },
     { ...card, id: "closed", displayStatus: "CLOSED_OTHER", stage: "CLOSED", disposition: "CANCELLED", status: "REVIEW", candidate: { ...card.candidate, name: "Closed" } },
   ];
-  render(<KanbanBoard {...props} statuses={states} statusLabels={reads ? RECRUITER_PIPELINE_LABELS : { REVIEW: "Por revisar", MAYBE: "Preselecto", ACCEPTED: "Entrevista", REJECTED: "Descartado" }} applications={applications} canonicalRecruiterReadsEnabled={reads} moveAction={vi.fn()} />);
-  const selector = screen.getByRole("combobox", { name: "Etapa" });
-  if (reads) {
-    expect(screen.getByRole("option", { name: /En revisión \(1\)/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /Por revisar \(1\)/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /En pausa \(1\)/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /Cerrado \(1\)/ })).toBeInTheDocument();
-    fireEvent.change(selector, { target: { value: "HOLD" } });
-    expect(screen.getAllByRole("link", { name: "Hold" }).length).toBeGreaterThan(0);
-  } else {
-    expect(screen.getByRole("option", { name: /Por revisar \(4\)/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /Entrevista \(1\)/ })).toBeInTheDocument();
-  }
+  render(<KanbanBoard {...props} statuses={states} statusLabels={RECRUITER_PIPELINE_LABELS} applications={applications} canonicalRecruiterReadsEnabled={reads} moveAction={vi.fn()} />);
+  expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(4);
+  expect(screen.getByRole("option", { name: /En revisión \(1\)/ })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /Por revisar \(1\)/ })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "En pausa (1)" }));
+  expect(screen.getByRole("link", { name: "Hold" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cerrados (2)" }));
+  expect(screen.getByRole("link", { name: "Hired" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Closed" })).toBeInTheDocument();
 });
 
 it("keeps each job's mobile stage separate and restores it when returning", () => {
@@ -159,4 +157,22 @@ it("ignores a saved stage that is unavailable for the new job", () => {
   const view = render(<KanbanBoard {...props} moveAction={vi.fn()} />);
   view.rerender(<KanbanBoard {...props} jobId="job-b" moveAction={vi.fn()} />);
   expect(screen.getByRole("combobox", { name: "Etapa" })).toHaveValue("APPLIED");
+});
+
+it("confirms Interview to Offer using the existing intent and saved version", async () => {
+  const interview = { ...card, stage: "INTERVIEW", applicationStatus: "INTERVIEW", status: "ACCEPTED", displayStatus: "INTERVIEW" };
+  const move = vi.fn().mockResolvedValue({ ok: true, application: { stage: "OFFER", disposition: "ACTIVE", stateVersion: 2, status: "OFFER", recruiterInterest: "ACCEPTED" } });
+  render(<KanbanBoard {...props} applications={[interview]} moveAction={move} />);
+  await act(async () => mocks.drag(drop("INTERVIEW", "OFFER")));
+  expect(move).toHaveBeenCalledOnce();
+  expect((move.mock.calls[0][0] as FormData).get("intent")).toBe("MOVE_TO_OFFER");
+  expect((move.mock.calls[0][0] as FormData).get("expectedVersion")).toBe("1");
+  expect(screen.getByRole("option", { name: /Oferta \(1\)/ })).toBeInTheDocument();
+});
+it("does not turn a visual Review card from ASSESSMENT into a new review or preselection", async () => {
+  const move = vi.fn();
+  render(<KanbanBoard {...props} applications={[{ ...card, stage: "ASSESSMENT", applicationStatus: "REVIEWING", displayStatus: "ASSESSMENT" }]} moveAction={move} />);
+  await act(async () => mocks.drag(drop("REVIEW", "APPLIED")));
+  expect(move).not.toHaveBeenCalled();
+  expect(screen.getByRole("option", { name: /En revisión \(1\)/ })).toBeInTheDocument();
 });

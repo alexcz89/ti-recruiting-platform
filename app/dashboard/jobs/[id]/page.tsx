@@ -1,3 +1,4 @@
+import { ACTIVE_PIPELINE, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
 // app/dashboard/jobs/[id]/page.tsx
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -239,22 +240,6 @@ export default async function JobPipelinePage({ params }: PageProps) {
     canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
   });
 
-  const supplementalCanonicalBuckets = (
-    ["HOLD", "CLOSED_OTHER"] as RecruiterPipelineBucket[]
-  ).filter((bucket) =>
-    recruiterRows.some(
-      (application) => application._recruiterRead.bucket === bucket,
-    ),
-  );
-
-  const kanbanStatuses = canonicalRecruiterReadsEnabled
-    ? [...PRIMARY_RECRUITER_PIPELINE_BUCKETS, ...supplementalCanonicalBuckets]
-    : INTEREST_STATUSES;
-
-  const kanbanStatusLabels = canonicalRecruiterReadsEnabled
-    ? RECRUITER_PIPELINE_LABELS
-    : INTEREST_LABEL;
-
   const matchAccess = getRecruiterMatchAccessIds(applications, plan);
   const appCards = recruiterRows.map((a) => {
     const gatedScore = matchAccess.has(a.id) ? computeRecruiterMatch(job, a.candidate, matchNow).finalScore : null;
@@ -350,6 +335,8 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
     const canonicalIntent = fd.get("intent") === "START_REVIEW" && newStatusStr === "REVIEW"
       ? "START_REVIEW"
+      : fd.get("intent") === "MOVE_TO_OFFER" && newStatusStr === "ACCEPTED"
+        ? "MOVE_TO_OFFER"
       : newStatusStr === "ACCEPTED"
       ? "MOVE_TO_INTERVIEW"
       : newStatusStr === "REJECTED"
@@ -446,9 +433,10 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
         {/* Kanban / Pipeline */}
         <Kanbanboard
+          autoReviewEnabled={session.user?.role === "RECRUITER"}
           jobId={job.id}
-          statuses={kanbanStatuses}
-          statusLabels={kanbanStatusLabels}
+          statuses={[...ACTIVE_PIPELINE]}
+          statusLabels={PIPELINE_LABELS}
           applications={appCards}
           hasMatchSignals={hasMatchSignals}
           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
