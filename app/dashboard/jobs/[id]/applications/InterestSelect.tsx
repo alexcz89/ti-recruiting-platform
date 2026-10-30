@@ -1,343 +1,62 @@
-// app/dashboard/jobs/[id]/applications/InterestSelect.tsx
 "use client";
-
-import React, {
-  useState,
-  useTransition,
-  useEffect,
-  useRef,
-  KeyboardEvent,
-  MouseEvent,
-} from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import StartReviewButton from "@/components/dashboard/StartReviewButton";
-import { toastSuccess, toastError, toastInfo, toastWarning } from "@/lib/ui/toast";
-import {
-  getRecruiterApplicationReadModel,
-  type RecruiterPipelineBucket,
-} from "@/lib/hiring-process/recruiter-read-model";
-import type {
-  ApplicationDispositionValue,
-  ApplicationStageValue,
-} from "@/lib/hiring-process/types";
-
+import { getRecruitingPresentation, getRecruitingActions, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
+import type { ApplicationStageValue, ApplicationDispositionValue } from "@/lib/hiring-process/types";
+import { toastError } from "@/lib/ui/toast";
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
-
-const LABEL: Record<InterestKey, string> = {
-  REVIEW: "Por revisar",
-  MAYBE: "Preselecto",
-  ACCEPTED: "Entrevista",
-  REJECTED: "Descartado",
-};
-
-const INTEREST_KEYS: InterestKey[] = [
-  "REVIEW",
-  "MAYBE",
-  "ACCEPTED",
-  "REJECTED",
-];
-
-// 🎨 Fondo + borde + texto del pill principal (según estado)
-const COLOR_CLASSES: Record<InterestKey, string> = {
-  REVIEW:
-    "bg-zinc-100 text-zinc-700 border-zinc-300 " +
-    "dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-600",
-  MAYBE:
-    "bg-amber-100 text-amber-800 border-amber-300 " +
-    "dark:bg-amber-500/25 dark:text-amber-50 dark:border-amber-500/60",
-  ACCEPTED:
-    "bg-sky-100 text-sky-800 border-sky-300 " +
-    "dark:bg-sky-500/25 dark:text-sky-50 dark:border-sky-500/60",
-  REJECTED:
-    "bg-rose-100 text-rose-800 border-rose-300 " +
-    "dark:bg-rose-500/25 dark:text-rose-50 dark:border-rose-500/60",
-};
-
-// Puntito de color en el menú
-const DOT_COLOR: Record<InterestKey, string> = {
-  REVIEW: "bg-zinc-400",
-  MAYBE: "bg-amber-500",
-  ACCEPTED: "bg-sky-500",
-  REJECTED: "bg-rose-500",
-};
-
-const READ_COLOR_CLASSES: Record<RecruiterPipelineBucket, string> = {
-  APPLIED: COLOR_CLASSES.REVIEW,
-  REVIEW: "bg-indigo-100 text-indigo-800 border-indigo-300 dark:bg-indigo-500/25 dark:text-indigo-50 dark:border-indigo-500/60",
-  PRESELECTED: COLOR_CLASSES.MAYBE,
-  ASSESSMENT: "bg-violet-100 text-violet-800 border-violet-300 dark:bg-violet-500/25 dark:text-violet-50 dark:border-violet-500/60",
-  INTERVIEW: COLOR_CLASSES.ACCEPTED,
-  OFFER: "bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-500/25 dark:text-cyan-50 dark:border-cyan-500/60",
-  REJECTED: COLOR_CLASSES.REJECTED,
-  HIRED: "bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-500/25 dark:text-emerald-50 dark:border-emerald-500/60",
-  HOLD: "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-500/25 dark:text-orange-50 dark:border-orange-500/60",
-  CLOSED_OTHER: "bg-zinc-100 text-zinc-700 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-100 dark:border-zinc-600",
-};
-
-const READ_DOT_COLOR: Record<RecruiterPipelineBucket, string> = {
-  APPLIED: DOT_COLOR.REVIEW,
-  REVIEW: "bg-indigo-500",
-  PRESELECTED: DOT_COLOR.MAYBE,
-  ASSESSMENT: "bg-violet-500",
-  INTERVIEW: DOT_COLOR.ACCEPTED,
-  OFFER: "bg-cyan-500",
-  REJECTED: DOT_COLOR.REJECTED,
-  HIRED: "bg-emerald-500",
-  HOLD: "bg-orange-500",
-  CLOSED_OTHER: "bg-zinc-500",
-};
-
-export default function InterestSelect({
-  applicationId,
-  initial,
-  initialStateVersion,
-  legacyStatus = "",
-  canonicalStage = null,
-  canonicalDisposition = null,
-  canonicalRecruiterReadsEnabled = false,
-}: {
-  applicationId: string;
-  initial: InterestKey;
-  initialStateVersion: number;
-  legacyStatus?: string;
-  canonicalStage?: ApplicationStageValue | null;
-  canonicalDisposition?: ApplicationDispositionValue | null;
-  canonicalRecruiterReadsEnabled?: boolean;
+const labels: Record<string, string> = { MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección", MOVE_TO_INTERVIEW: "Pasar a entrevista", MOVE_TO_OFFER: "Mover a oferta", REJECT_CANDIDATE: "Descartar" };
+export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false }: {
+    applicationId: string;
+    initial: InterestKey;
+    initialStateVersion: number;
+    legacyStatus?: string;
+    canonicalStage?: ApplicationStageValue | null;
+    canonicalDisposition?: ApplicationDispositionValue | null;
+    canonicalRecruiterReadsEnabled?: boolean;
 }) {
-  const router = useRouter();
-  const [value, setValue] = useState<InterestKey>(initial);
-  const [stateVersion, setStateVersion] = useState(initialStateVersion);
-  const [actionPending, startTransition] = useTransition();
-  const [reviewPending, setReviewPending] = useState(false);
-  const isPending = actionPending || reviewPending;
-  const [open, setOpen] = useState(false);
-  useEffect(() => {
-    setValue(initial);
-    setStateVersion(initialStateVersion);
-  }, [applicationId, initial, initialStateVersion]);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const canonicalOffer =
-    canonicalStage === "OFFER" && canonicalDisposition === "ACTIVE";
-  const terminalHired =
-    legacyStatus === "HIRED" ||
-    (canonicalStage === "CLOSED" && canonicalDisposition === "HIRED");
-  const readModel = getRecruiterApplicationReadModel(
-    {
-      stage: canonicalStage,
-      disposition: canonicalDisposition,
-      status: legacyStatus,
-      recruiterInterest: value,
-    },
-    { canonicalReadsEnabled: canonicalRecruiterReadsEnabled },
-  );
-  const readOnlyCanonicalPresentation =
-    canonicalRecruiterReadsEnabled &&
-    readModel.source === "CANONICAL" &&
-    !(["APPLIED", "REVIEW", "PRESELECTED"] as RecruiterPipelineBucket[]).includes(
-      readModel.bucket,
-    );
-  const effectiveValue: InterestKey =
-    canonicalRecruiterReadsEnabled && readModel.source === "CANONICAL"
-      ? readModel.bucket === "PRESELECTED"
-        ? "MAYBE"
-        : readModel.bucket === "APPLIED" || readModel.bucket === "REVIEW"
-          ? "REVIEW"
-          : value
-      : value;
-  const reviewOptionLabel =
-    canonicalRecruiterReadsEnabled &&
-    readModel.source === "CANONICAL" &&
-    canonicalStage === "REVIEW"
-      ? "En revisión"
-      : LABEL.REVIEW;
-
-  async function updateInterest(next: InterestKey) {
-    if (terminalHired) return;
-    const prev = value;
-    setValue(next); // UI optimista
-
-    try {
-      const canonicalIntent = next === "ACCEPTED"
-        ? "MOVE_TO_INTERVIEW"
-        : next === "REJECTED"
-          ? "REJECT_CANDIDATE"
-          : next === "MAYBE"
-            ? "MARK_PRESELECTED"
-            : effectiveValue === "MAYBE" && next === "REVIEW"
-              ? "CLEAR_PRESELECTED"
-              : null;
-
-      if (canonicalIntent) {
-        const res = await fetch(`/api/applications/${applicationId}/intent`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            intent: canonicalIntent,
-            expectedVersion: stateVersion,
-            commandId: crypto.randomUUID(),
-          }),
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        setStateVersion(data.application.stateVersion);
-        toastSuccess("Nivel de interés actualizado");
-        router.refresh();
-        return;
-      }
-      throw new Error("Transición de interés no soportada");
-    } catch (err) {
-      setValue(prev);
-      toastError("No se pudo actualizar");
-      console.error(err);
+    const router = useRouter();
+    const [source, setSource] = useState<PresentationSource>({ stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion });
+    useEffect(() => { setSource({ stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion }); }, [applicationId, initial, initialStateVersion, legacyStatus, canonicalStage, canonicalDisposition]);
+    const [pending, setPending] = useState(false);
+    const inFlight = useRef(false);
+    const command = useRef<{
+        intent: string;
+        version: number;
+        id: string;
+    } | null>(null);
+    const p = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
+    async function execute(intent: string) {
+        if (!intent || inFlight.current)
+            return;
+        inFlight.current = true;
+        setPending(true);
+        if (!command.current || command.current.intent !== intent || command.current.version !== source.stateVersion)
+            command.current = { intent, version: source.stateVersion, id: crypto.randomUUID() };
+        try {
+            const response = await fetch(`/api/applications/${applicationId}/intent`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent, expectedVersion: source.stateVersion, commandId: command.current.id }) });
+            if (!response.ok)
+                throw new Error("Transition failed");
+            const data = await response.json();
+            setSource(data.application);
+            router.refresh();
+        }
+        catch {
+            toastError("No se pudo actualizar. Actualiza la página e intenta de nuevo.");
+            router.refresh();
+        }
+        finally {
+            inFlight.current = false;
+            setPending(false);
+        }
     }
-  }
-
-  const handleSelect = (next: InterestKey) => {
-    if (isPending) return;
-    setOpen(false);
-    if (terminalHired || readOnlyCanonicalPresentation) return;
-    if (effectiveValue === "REJECTED") return;
-    if (canonicalOffer && next !== "REJECTED") return;
-    if (next === effectiveValue) return;
-    startTransition(() => updateInterest(next));
-  };
-
-  const handleToggle = () => {
-    if (isPending || terminalHired || readOnlyCanonicalPresentation) return;
-    setOpen((o) => !o);
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLButtonElement>) => {
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      handleToggle();
-    }
-    if (e.key === "Escape") {
-      setOpen(false);
-    }
-  };
-
-  // Cerrar al hacer click fuera
-  useEffect(() => {
-    if (!open) return;
-
-    function onClickOutside(ev: MouseEvent<Document>) {
-      if (!containerRef.current) return;
-      if (!containerRef.current.contains(ev.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", onClickOutside as any);
-    return () =>
-      document.removeEventListener("mousedown", onClickOutside as any);
-  }, [open]);
-
-  const baseButtonClasses =
-    "inline-flex h-8 min-w-[150px] items-center gap-2 rounded-full " +
-    "border px-3 text-xs font-medium shadow-sm " +
-    "transition-colors transition-shadow " +
-    "cursor-pointer select-none " +
-    "focus-visible:outline-none focus-visible:ring-2 " +
-    "focus-visible:ring-emerald-500/70 focus-visible:ring-offset-1 " +
-    "dark:focus-visible:ring-offset-zinc-900 " +
-    "disabled:opacity-60 disabled:cursor-default";
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative inline-flex flex-col text-xs"
-    >
-      {canonicalRecruiterReadsEnabled && <StartReviewButton key={applicationId} applicationId={applicationId}
-        application={{ stage: canonicalStage, disposition: canonicalDisposition, stateVersion, status: legacyStatus, recruiterInterest: value }}
-        disabled={isPending} onPendingChange={setReviewPending} onSuccess={(updated) => { setStateVersion(updated.stateVersion); setValue(updated.recruiterInterest as InterestKey); }} />}
-      {/* Botón pill con color por estado */}
-      <button
-        type="button"
-        className={`${baseButtonClasses} ${
-          canonicalRecruiterReadsEnabled
-            ? READ_COLOR_CLASSES[readModel.bucket]
-            : COLOR_CLASSES[value]
-        }`}
-        onClick={handleToggle}
-        onKeyDown={handleKeyDown}
-        disabled={isPending || terminalHired || readOnlyCanonicalPresentation}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-      >
-        <span
-          className={`h-2 w-2 shrink-0 rounded-full ${
-            canonicalRecruiterReadsEnabled
-              ? READ_DOT_COLOR[readModel.bucket]
-              : DOT_COLOR[value]
-          }`}
-          aria-hidden
-        />
-        <span className="flex-1 truncate text-left">
-          {canonicalRecruiterReadsEnabled ? readModel.label : LABEL[value]}
-        </span>
-        {!readOnlyCanonicalPresentation && (
-          <span className="shrink-0 text-[10px] opacity-60">▾</span>
-        )}
-      </button>
-
-      {/* Menú: ahora es un bloque normal debajo del botón (no absoluto) */}
-      {open && (
-        <div
-          className={`
-            mt-1 w-full min-w-[170px]
-            rounded-xl border border-zinc-200/80 bg-white/95
-            shadow-lg shadow-zinc-900/10 backdrop-blur-sm
-            dark:bg-zinc-900/95 dark:border-zinc-700 dark:shadow-black/40
-          `}
-          role="listbox"
-        >
-          {INTEREST_KEYS.map((key) => {
-            const isActive = key === effectiveValue;
-            const optionLabel = key === "REVIEW" ? reviewOptionLabel : LABEL[key];
-            const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
-            const blockedPreselectBackward =
-              (key === "REVIEW" || key === "MAYBE") &&
-              canonicalStage !== null &&
-              !(
-                canonicalDisposition === "ACTIVE" &&
-                (canonicalStage === "APPLIED" || canonicalStage === "REVIEW")
-              );
-            return (
-              <button
-                key={key}
-                type="button"
-                role="option"
-                aria-selected={isActive}
-                disabled={blockedByCanonicalOffer || blockedPreselectBackward || terminalHired}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelect(key)}
-                className={`
-                  flex w-full items-center justify-between gap-2 px-3 py-2
-                  text-left text-[11px] transition-colors
-                  ${
-                    isActive
-                      ? "bg-zinc-50 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                      : "text-zinc-600 hover:bg-zinc-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  }
-                  disabled:cursor-not-allowed disabled:opacity-50
-                `}
-              >
-                <span className="flex items-center gap-2">
-                  <span
-                    className={`h-2 w-2 rounded-full ${DOT_COLOR[key]}`}
-                    aria-hidden
-                  />
-                  {optionLabel}
-                </span>
-                {isActive && (
-                  <span className="text-[10px] text-emerald-500">●</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
+    const actions = getRecruitingActions(source, canonicalRecruiterReadsEnabled).filter(a => a !== "START_REVIEW");
+    return <div className="flex flex-col gap-1 text-xs">
+    <span className="font-medium">{p.label}</span>
+    {p.preselected && <span className="text-amber-700 dark:text-amber-300">Preselecto</span>}
+    {p.assessmentStage && <span>Evaluación técnica</span>}
+    {<StartReviewButton applicationId={applicationId} application={source} disabled={pending} onPendingChange={setPending} onSuccess={setSource}/>}
+    {actions.length > 0 && <select aria-label="Acciones de candidatura" disabled={pending} value="" onChange={e => { void execute(e.target.value); }} className="min-h-11 max-w-full rounded-lg border bg-[rgb(var(--card))] px-2"><option value="">Acciones…</option>{actions.map(intent => <option key={intent} value={intent}>{labels[intent]}</option>)}</select>}
+  </div>;
 }

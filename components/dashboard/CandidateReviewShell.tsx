@@ -1,5 +1,6 @@
 // components/dashboard/CandidateReviewShell.tsx
 "use client";
+import { getRecruitingPresentation, getRecruitingActions } from "@/lib/hiring-process/recruiting-presentation";
 
 import React, { useState, useCallback, useTransition, useRef, useEffect } from "react";
 import Link from "next/link";
@@ -30,6 +31,7 @@ export type NavEntry = {
   seniority: string | null;
   location: string | null;
   readModel: RecruiterApplicationReadModel;
+  presentation?: ReturnType<typeof getRecruitingPresentation>;
   canonicalRecruiterReadsEnabled: boolean;
   starred: boolean;
 };
@@ -235,6 +237,7 @@ function CandidateReviewSession({
   const [exceptionSubmitting, setExceptionSubmitting] = useState(false);
   const notesTimer = useRef<NodeJS.Timeout | null>(null);
   const hireInFlight = useRef(false);
+  const interestInFlight = useRef(false);
   const exceptionInFlight = useRef(false);
   const canonicalOffer =
     app?.stage === "OFFER" && app.disposition === "ACTIVE";
@@ -254,6 +257,8 @@ function CandidateReviewSession({
     (app.disposition === "ACTIVE" &&
       (app.stage === "APPLIED" || app.stage === "REVIEW"));
 
+  const presentation = app ? getRecruitingPresentation(app, canonicalRecruiterReadsEnabled) : null;
+  const allowedActions = app ? getRecruitingActions(app, canonicalRecruiterReadsEnabled) : [];
   const prevNav = navIndex > 0 ? navList[navIndex - 1] : null;
   const nextNav = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
 
@@ -266,14 +271,16 @@ function CandidateReviewSession({
   // ── API calls ──────────────────────────────────────────────────────────────
 
   const patchInterest = useCallback((recruiterInterest: string) => {
-    if (!applicationId) return;
+    if (!applicationId || interestInFlight.current) return;
     if (terminalHired) return;
     if (rejected) return;
     if (currentInterest === "REJECTED") return;
     if (canonicalOffer && recruiterInterest !== "REJECTED") return;
     // Actualización optimista inmediata — el botón responde al instante
+    interestInFlight.current = true;
     setCurrentInterest(recruiterInterest);
     startTransition(async () => {
+      try {
       const canonicalIntent = recruiterInterest === "ACCEPTED"
         ? "MOVE_TO_INTERVIEW"
         : recruiterInterest === "REJECTED"
@@ -285,6 +292,7 @@ function CandidateReviewSession({
               : null;
       if (!canonicalIntent) {
         setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
+        interestInFlight.current = false;
         return;
       }
       const res = await fetch(
@@ -313,17 +321,18 @@ function CandidateReviewSession({
           disposition: updated.disposition ?? prev.disposition,
         } : prev);
       } else {
-        // Revertir si falla
         setCurrentInterest(app?.recruiterInterest ?? "REVIEW");
       }
+      router.refresh();
+      } catch { setCurrentInterest(app?.recruiterInterest ?? "REVIEW"); toastError("No se pudo actualizar"); }
+      finally { interestInFlight.current = false; }
     });
-  }, [applicationId, app?.recruiterInterest, app?.stateVersion, canonicalOffer, currentInterest, terminalHired, rejected]);
+  }, [applicationId, app?.recruiterInterest, app?.stateVersion, canonicalOffer, currentInterest, terminalHired, rejected, router]);
 
   const moveToOffer = useCallback(() => {
     if (
       !applicationId ||
-      app?.stage !== "INTERVIEW" ||
-      app.disposition !== "ACTIVE"
+      !app || !getRecruitingActions(app, canonicalRecruiterReadsEnabled).includes("MOVE_TO_OFFER")
     ) {
       return;
     }
@@ -362,13 +371,12 @@ function CandidateReviewSession({
         toastError("No se pudo mover al candidato a oferta. Intenta de nuevo.");
       }
     });
-  }, [applicationId, app, router]);
+  }, [applicationId, app, router, canonicalRecruiterReadsEnabled]);
 
   const hireCandidate = useCallback(() => {
     if (
       !applicationId ||
-      app?.stage !== "OFFER" ||
-      app.disposition !== "ACTIVE" ||
+      !app || getRecruitingPresentation(app, canonicalRecruiterReadsEnabled).column !== "OFFER" ||
       hireInFlight.current
     ) {
       return;
@@ -411,7 +419,7 @@ function CandidateReviewSession({
         hireInFlight.current = false;
       }
     });
-  }, [applicationId, app, router]);
+  }, [applicationId, app, router, canonicalRecruiterReadsEnabled]);
 
   const openExceptionDialog = useCallback((action: ExceptionAction) => {
     setExceptionAction(action);
@@ -585,7 +593,7 @@ function CandidateReviewSession({
                 </div>
                 {showStateLabel && (
                   <span className={`text-[9px] font-medium ${stateTextColor}`}>
-                    {label}
+                    {entry.presentation?.label ?? label}{entry.presentation?.preselected ? " · Preselecto" : ""}
                   </span>
                 )}
               </Link>
@@ -635,14 +643,17 @@ function CandidateReviewSession({
 
             {/* Right: quick actions + nav */}
             <div className="flex w-full min-w-0 flex-wrap items-center gap-2" data-testid="candidate-header-actions">
-              {canonicalRecruiterReadsEnabled && applicationId && app && <StartReviewButton key={applicationId} applicationId={applicationId}
+              {applicationId && app && <StartReviewButton key={applicationId} applicationId={applicationId}
                 application={app} disabled={isPending} onPendingChange={setReviewPending}
                 onSuccess={(updated) => {
                   setApp((previous) => previous ? { ...previous, ...updated } : previous);
                   setCurrentInterest(updated.recruiterInterest);
                 }} />}
+              {presentation && <span className="text-xs font-medium">{presentation.label}{presentation.preselected ? " · Preselecto" : ""}{presentation.assessmentStage ? " · Evaluación técnica" : ""}</span>}
               {/* Interest buttons */}
               {!rejected && (["MAYBE", "ACCEPTED", "REJECTED"] as const).map((key) => {
+                const action = key === "MAYBE" ? (currentInterest === "MAYBE" ? "CLEAR_PRESELECTED" : "MARK_PRESELECTED") : key === "ACCEPTED" ? "MOVE_TO_INTERVIEW" : "REJECT_CANDIDATE";
+                if (!allowedActions.includes(action)) return null;
                 const m = INTEREST_MAP[key];
                 const isSelected = currentInterest === key;
                 const blockedByCanonicalOffer = canonicalOffer && key !== "REJECTED";
@@ -665,7 +676,7 @@ function CandidateReviewSession({
                 );
               })}
 
-              {app?.stage === "INTERVIEW" && app.disposition === "ACTIVE" && (
+              {presentation?.section === "ACTIVE" && presentation.column === "INTERVIEW" && (
                 <>
                   <button
                     type="button"
@@ -692,7 +703,7 @@ function CandidateReviewSession({
                 </>
               )}
 
-              {app?.stage === "OFFER" && app.disposition === "ACTIVE" && (
+              {presentation?.section === "ACTIVE" && presentation.column === "OFFER" && (
                 <>
                   <button
                     type="button"
@@ -732,7 +743,7 @@ function CandidateReviewSession({
                 </>
               )}
 
-              {rejected && (
+              {rejected && !presentation && (
                 <span className="inline-flex h-11 items-center rounded-lg bg-red-50 px-3 text-sm font-semibold text-red-700 dark:bg-red-950/40 dark:text-red-300">
                   Descartado
                 </span>

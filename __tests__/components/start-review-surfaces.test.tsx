@@ -18,7 +18,7 @@ vi.mock("@hello-pangea/dnd", () => ({
 import InterestSelect from "@/app/dashboard/jobs/[id]/applications/InterestSelect";
 import KanbanBoard from "@/app/dashboard/jobs/[id]/KanbanBoard";
 import CandidateReviewShell, { type AppState } from "@/components/dashboard/CandidateReviewShell";
-import { PRIMARY_RECRUITER_PIPELINE_BUCKETS, RECRUITER_PIPELINE_LABELS } from "@/lib/hiring-process/recruiter-read-model";
+import { ACTIVE_PIPELINE as PRIMARY_RECRUITER_PIPELINE_BUCKETS, PIPELINE_LABELS as RECRUITER_PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
 
 const initial: AppState = {
   id: "app-a", stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", stateVersion: 1,
@@ -41,16 +41,10 @@ describe("START_REVIEW interactions", () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ application: saved })));
     vi.stubGlobal("fetch", fetch);
     const { rerender } = render(selector(reads, legacy));
-    if (!reads) {
-      expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /Por revisar/ })).toBeEnabled();
-      expect(fetch).not.toHaveBeenCalled();
-      return;
-    }
     fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
     rerender(selector(reads, saved));
-    expect(screen.getByRole("button", { name: reads ? /En revisión/ : /Por revisar/ })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
   });
 
@@ -58,7 +52,7 @@ describe("START_REVIEW interactions", () => {
     const fetch = vi.fn();
     vi.stubGlobal("fetch", fetch);
     render(profile(initial, reads));
-    expect(screen.queryByRole("button", { name: "Iniciar revisión" }) !== null).toBe(reads);
+    expect(screen.queryByRole("button", { name: "Iniciar revisión" }) !== null).toBe(true);
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -82,11 +76,11 @@ describe("START_REVIEW interactions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
     fireEvent.click(screen.getByRole("button", { name: "Iniciando revisión…" }));
     expect(fetch).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: /Por revisar/ })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeDisabled();
     await act(async () => resolve(response()));
     expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toMatchObject({ intent: "START_REVIEW", expectedVersion: 1, commandId: expect.any(String) });
     rerender(selector(true, reviewed));
-    expect(screen.getByRole("button", { name: /En revisión/ })).toBeEnabled();
+    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeEnabled();
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
 
@@ -111,12 +105,12 @@ describe("START_REVIEW interactions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
     rerender(profile(reviewed));
-    expect(screen.getByText("En revisión")).toBeInTheDocument();
+    expect(screen.getAllByText("En revisión")[0]).toBeInTheDocument();
     expect(screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")).toHaveValue("Local draft");
     expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
   });
 
-  it("supports dragging to Review then Preselecto with the saved version", async () => {
+  it("supports dragging to Review then Interview with the saved version", async () => {
     const move = vi.fn().mockResolvedValue({ ok: true, application: reviewed });
     render(<KanbanBoard {...boardProps} moveAction={move} />);
     act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "APPLIED", index: 0 }, destination: { droppableId: "REVIEW", index: 0 } }));
@@ -126,10 +120,10 @@ describe("START_REVIEW interactions", () => {
     expect(first.get("expectedVersion")).toBe("1");
     expect(first.get("commandId")).toEqual(expect.any(String));
     expect(screen.queryByTitle("Mover a Preselecto")).not.toBeInTheDocument();
-    act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "REVIEW", index: 0 }, destination: { droppableId: "PRESELECTED", index: 0 } }));
+    act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "REVIEW", index: 0 }, destination: { droppableId: "INTERVIEW", index: 0 } }));
     await waitFor(() => expect(move).toHaveBeenCalledTimes(2));
     expect((move.mock.calls[1][0] as FormData).get("expectedVersion")).toBe("2");
-    expect((move.mock.calls[1][0] as FormData).get("newStatus")).toBe("MAYBE");
+    expect((move.mock.calls[1][0] as FormData).get("newStatus")).toBe("ACCEPTED");
   });
 
   it("restores the original column when the Kanban request rejects", async () => {
@@ -142,10 +136,10 @@ describe("START_REVIEW interactions", () => {
 
   it("retains the legacy column when the reader flag is disabled", () => {
     render(<KanbanBoard {...boardProps} canonicalRecruiterReadsEnabled={false}
-      statuses={["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"]}
-      statusLabels={{ REVIEW: "Por revisar", MAYBE: "Preselecto", ACCEPTED: "Entrevista", REJECTED: "Descartado" }}
-      applications={[{ ...card, applicationStatus: "REVIEWING", displayStatus: "REVIEW" }]} moveAction={vi.fn()} />);
-    expect(screen.getAllByRole("link", { name: "Candidate A" })).toHaveLength(2);
-    expect(screen.getByRole("option", { name: /Por revisar \(1\)/ })).toBeInTheDocument();
+      statuses={[...PRIMARY_RECRUITER_PIPELINE_BUCKETS]}
+      statusLabels={RECRUITER_PIPELINE_LABELS}
+      applications={[{ ...card, stage: "REVIEW", applicationStatus: "REVIEWING", displayStatus: "REVIEW" }]} moveAction={vi.fn()} />);
+    expect(screen.getAllByRole("link", { name: "Candidate A" })).toHaveLength(1);
+    expect(screen.getByRole("option", { name: /En revisión \(1\)/ })).toBeInTheDocument();
   });
 });

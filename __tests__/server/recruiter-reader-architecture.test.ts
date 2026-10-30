@@ -45,8 +45,8 @@ describe("recruiter reader architecture", () => {
       "InterestSelect.tsx",
     );
 
-    expect(select).toContain("getRecruiterApplicationReadModel");
-    expect(select).toContain("readModel.label");
+    expect(select).toContain("getRecruitingPresentation");
+    expect(select).toContain("p.label");
     expect(select).not.toContain("/status");
     expect(select).not.toContain("/interest");
   });
@@ -97,8 +97,8 @@ describe("recruiter reader architecture", () => {
 
     expect(page).toContain("buildRecruiterApplicationReadRows");
     expect(page).toContain("displayStatus: canonicalRecruiterReadsEnabled");
-    expect(page).toContain("statuses={kanbanStatuses}");
-    expect(page).toContain("statusLabels={kanbanStatusLabels}");
+    expect(page).toContain("statuses={[...ACTIVE_PIPELINE]}");
+    expect(page).toContain("statusLabels={PIPELINE_LABELS}");
     expect(page).toContain("getApplicationWriterCompatibility");
     expect(page).toContain("writerCompatibility: getApplicationWriterCompatibility(a)");
     expect(page).not.toContain("canonicalHiringProcessEnabled");
@@ -108,13 +108,11 @@ describe("recruiter reader architecture", () => {
     expect(board).toContain('card.writerCompatibility !== "NONE"');
     expect(board).not.toContain("canonicalHiringProcessEnabled");
     expect(board).toContain("isDragDisabled={isPending || !isCardWritable(card)}");
-    expect(board).toContain("a.displayStatus");
-    expect(board).toContain("canonicalWriterStatusForMove");
-    expect(board).toContain('fromStatus === "APPLIED" && toStatus === "REVIEW"');
-    expect(board).toContain('toStatus === "PRESELECTED"');
+    expect(board).toContain("getRecruitingPresentation");
+    expect(board).toContain("getRecruitingActions");
+    expect(board).toContain('toStatus === "REVIEW" && fromStatus === "APPLIED"');
+    expect(board).toContain('toStatus === "OFFER"');
     expect(board).toContain('toStatus === "INTERVIEW"');
-    expect(board).toContain('CANONICAL_REJECTION_SOURCES');
-    expect(board).toContain('if (fromStatus === "REJECTED" || fromStatus === "HIRED") return');
     expect(board).not.toContain('onMoveNext={');
 
     expect(page).not.toContain('intent: "MOVE_TO_OFFER"');

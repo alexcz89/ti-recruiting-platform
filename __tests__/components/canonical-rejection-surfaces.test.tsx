@@ -112,11 +112,11 @@ describe("canonical rejection surfaces", () => {
       applicationId="application-1"
       initial="REVIEW"
       initialStateVersion={1}
+      legacyStatus="SUBMITTED"
       canonicalStage="APPLIED"
       canonicalDisposition="ACTIVE"
     />);
-    fireEvent.click(screen.getByRole("button", { name: /Por revisar/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Preselecto/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "MARK_PRESELECTED" } });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = vi.mocked(fetch).mock.calls[0];
@@ -143,11 +143,11 @@ describe("canonical rejection surfaces", () => {
       applicationId="application-1"
       initial="MAYBE"
       initialStateVersion={2}
+      legacyStatus="REVIEWING"
       canonicalStage="REVIEW"
       canonicalDisposition="ACTIVE"
     />);
-    fireEvent.click(screen.getByRole("button", { name: /Preselecto/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Por revisar/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "CLEAR_PRESELECTED" } });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
@@ -212,7 +212,7 @@ describe("canonical rejection surfaces", () => {
       slots={{ summary: <div>Summary</div>, profile: <div>Profile</div>, cv: null, assessments: null }}
     />);
 
-    expect(screen.getByRole("button", { name: /Preselecto/ })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Preselecto/ })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -233,12 +233,11 @@ describe("canonical rejection surfaces", () => {
     render(
       <InterestSelect
         applicationId="application-1"
-        initial="REVIEW"
+        initial="REVIEW" legacyStatus="SUBMITTED" canonicalStage="APPLIED" canonicalDisposition="ACTIVE"
         initialStateVersion={1}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Por revisar/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Descartado/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "REJECT_CANDIDATE" } });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = vi.mocked(fetch).mock.calls[0];
@@ -339,7 +338,7 @@ describe("canonical rejection surfaces", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: "Mover a oferta" })).not.toBeInTheDocument(),
     );
-    expect(screen.getByRole("button", { name: "Entrevista" })).toBeInTheDocument();
+    expect(screen.getByText("Oferta")).toBeInTheDocument();
     expect(screen.getByText("Oferta enviada")).toBeInTheDocument();
     expect(mocks.toastSuccess).toHaveBeenCalledWith("Candidato movido a oferta");
   });
@@ -408,12 +407,8 @@ describe("canonical rejection surfaces", () => {
       />,
     );
 
-    const preselected = screen.getByRole("button", { name: /Preselecto/ });
-    const interview = screen.getByRole("button", { name: "Entrevista" });
-    expect(preselected).toBeDisabled();
-    expect(interview).toBeDisabled();
-    fireEvent.click(preselected);
-    fireEvent.click(interview);
+    expect(screen.queryByRole("button", { name: /Preselecto/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Entrevista" })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -423,16 +418,13 @@ describe("canonical rejection surfaces", () => {
         applicationId="application-1"
         initial="ACCEPTED"
         initialStateVersion={4}
+        legacyStatus="OFFER"
         canonicalStage="OFFER"
         canonicalDisposition="ACTIVE"
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
-    expect(screen.getByRole("option", { name: /Por revisar/ })).toBeDisabled();
-    expect(screen.getByRole("option", { name: /Preselecto/ })).toBeDisabled();
-    expect(screen.getByRole("option", { name: /Entrevista/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole("option", { name: /Preselecto/ }));
+    expect(screen.queryByRole("option", { name: /Preselecto|Por revisar|Entrevista/ })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -442,13 +434,12 @@ describe("canonical rejection surfaces", () => {
         applicationId="application-1"
         initial="ACCEPTED"
         initialStateVersion={3}
+        legacyStatus="INTERVIEW"
         canonicalStage="INTERVIEW"
         canonicalDisposition="ACTIVE"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
-    expect(screen.getByRole("option", { name: /Por revisar/ })).toBeDisabled();
-    expect(screen.getByRole("option", { name: /Preselecto/ })).toBeDisabled();
+    expect(screen.queryByRole("option", { name: /Preselecto|Por revisar/ })).not.toBeInTheDocument();
     interview.unmount();
 
     render(
@@ -460,8 +451,7 @@ describe("canonical rejection surfaces", () => {
         canonicalDisposition="REJECTED"
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /Descartado/ }));
-    fireEvent.click(screen.getByRole("option", { name: /Entrevista/ }));
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -518,9 +508,9 @@ describe("canonical rejection surfaces", () => {
     expect(String(init?.body)).not.toContain("/interest");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Contratar" })).not.toBeInTheDocument());
     expect(screen.getByText("Candidato contratado")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Preselecto/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /Descartar/ })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Preselecto/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Entrevista/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Descartar/ })).not.toBeInTheDocument();
     expect(screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")).toBeEnabled();
   });
 
@@ -533,8 +523,7 @@ describe("canonical rejection surfaces", () => {
         legacyStatus="HIRED"
       />,
     );
-    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: /Entrevista/ }));
+    expect(screen.queryByRole("button", { name: /Entrevista/ })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
 
     rerender(
@@ -547,7 +536,7 @@ describe("canonical rejection surfaces", () => {
         canonicalDisposition={hiredApplication.disposition}
       />,
     );
-    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Entrevista/ })).not.toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 

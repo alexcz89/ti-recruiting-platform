@@ -145,7 +145,7 @@ describe("canonical hiring process writer migration", () => {
       "InterestSelect.tsx",
     );
 
-    expect(interestSelect).toContain('"MOVE_TO_INTERVIEW"');
+    expect(interestSelect).toContain("getRecruitingActions");
     expect(interestSelect).not.toContain('ACCEPTED: "OFFER"');
   });
 
@@ -155,15 +155,15 @@ describe("canonical hiring process writer migration", () => {
     const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
     const kanbanAction = read("app", "dashboard", "jobs", "[id]", "page.tsx");
 
-    for (const source of [interestSelect, candidateShell, kanbanAction]) {
+    for (const source of [read("lib", "hiring-process", "recruiting-presentation.ts"), candidateShell, kanbanAction]) {
       expect(source).toContain('"MARK_PRESELECTED"');
       expect(source).toContain('"CLEAR_PRESELECTED"');
     }
     expect(interestSelect).not.toContain('/status`');
     expect(interestSelect).not.toMatch(/recruiterInterest:\s*next/);
     expect(candidateShell).not.toMatch(/canonicalIntent \? "intent" : "interest"/);
-    expect(kanban).toMatch(/toStatus === "PRESELECTED"[\s\S]*return "MAYBE"/);
-    expect(kanban).toContain('fromStatus === "PRESELECTED" && toStatus === "REVIEW"');
+    expect(kanban).toContain("getRecruitingActions");
+    expect(kanban).not.toContain('toStatus === "PRESELECTED"');
     expect(kanbanAction).not.toContain("prisma.application.updateMany({");
   });
 
@@ -180,7 +180,7 @@ describe("canonical hiring process writer migration", () => {
     const candidatePage = read("app", "dashboard", "candidates", "[id]", "page.tsx");
 
     expect(candidateShell).toContain('intent: "MOVE_TO_OFFER"');
-    expect(candidateShell).toContain('app?.stage === "INTERVIEW"');
+    expect(candidateShell).toContain('presentation.column === "INTERVIEW"');
     expect(candidateShell).toContain('app.disposition === "ACTIVE"');
     expect(candidateShell).toContain("Mover a oferta");
     expect(candidateShell).toContain('? "MOVE_TO_INTERVIEW"');
@@ -207,14 +207,12 @@ describe("canonical hiring process writer migration", () => {
     const overviewButtons = read("app", "dashboard", "overview", "QuickActionButtons.tsx");
     const overviewActions = read("app", "dashboard", "overview", "actions.ts");
 
-    expect(interestSelect).toContain('"REJECT_CANDIDATE"');
-    expect(interestSelect).toMatch(
-      /next === "REJECTED"[\s\S]*"REJECT_CANDIDATE"[\s\S]*\/intent[\s\S]*return;/,
-    );
+    expect(interestSelect).toContain("getRecruitingActions");
+    expect(interestSelect).toContain("/intent");
     expect(candidateShell).toContain('? "REJECT_CANDIDATE"');
     expect(candidateShell).toContain('if (currentInterest === "REJECTED") return;');
-    expect(kanban).toMatch(/toStatus === "INTERVIEW"[\s\S]*return "ACCEPTED"/);
-    expect(kanban).toContain('toStatus === "REJECTED"');
+    expect(kanban).toContain('toStatus === "INTERVIEW"');
+    expect(kanban).toContain("getRecruitingActions");
     expect(jobPage).toContain('"REJECT_CANDIDATE"');
     expect(overviewButtons).toContain('commandId: crypto.randomUUID()');
     expect(overviewActions).toContain('intent: "REJECT_CANDIDATE"');
@@ -285,12 +283,12 @@ describe("canonical hiring process writer migration", () => {
     const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
     const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
 
-    expect(interestSelect).toContain("blockedByCanonicalOffer");
+    expect(interestSelect).toContain("getRecruitingActions");
     expect(applicationsPage).toContain("canonicalStage={a.stage}");
     expect(applicationsPage).toContain("canonicalDisposition={a.disposition}");
     expect(candidateShell).toContain("blockedByCanonicalOffer");
-    expect(kanban).toContain('moved.stage === "OFFER"');
-    expect(kanban).toContain('moved.disposition === "ACTIVE"');
+    expect(kanban).toContain("getRecruitingActions");
+    expect(kanban).toContain("getRecruitingPresentation");
   });
 
   it("keeps backward and reopen commands in the explicit CandidateReviewShell path", () => {
@@ -369,8 +367,8 @@ describe("canonical hiring process writer migration", () => {
       expect(source).toContain("hasApplicationHiredFootprint");
       expect(source).toContain("APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE");
     }
-    expect(kanban).toContain('moved.applicationStatus === "HIRED"');
-    expect(interestSelect).toContain("terminalHired");
+    expect(kanban).toContain("getRecruitingActions");
+    expect(interestSelect).toContain("getRecruitingActions");
 
     const intentRoute = read("app", "api", "applications", "[id]", "intent", "route.ts");
     expect(intentRoute).toContain("result.timestamps.hiredAt");

@@ -84,93 +84,15 @@ const currentApplication: AppState = {
 };
 
 describe("recruiter reader surface cutover", () => {
-  it("regroups Kanban presentation OFF -> ON -> OFF without invoking its writer", () => {
-    const moveAction = vi.fn().mockResolvedValue({ ok: true });
-    const { rerender } = render(
-      <KanbanBoard
-        jobId="job-1"
-        statuses={["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"]}
-        statusLabels={{
-          REVIEW: "Por revisar",
-          MAYBE: "Preselecto",
-          ACCEPTED: "Entrevista",
-          REJECTED: "Descartado",
-        }}
-        applications={[application]}
-        moveAction={moveAction}
-      />,
-    );
-
-    const legacyReviewColumn = screen
-      .getByRole("heading", { name: "Por revisar" })
-      .closest('[class*="w-[310px]"]');
-    expect(legacyReviewColumn).not.toBeNull();
-    expect(
-      within(legacyReviewColumn as HTMLElement).getByText("Mixed Cohort Candidate"),
-    ).toBeInTheDocument();
-
-    rerender(
-      <KanbanBoard
-        jobId="job-1"
-        statuses={[...PRIMARY_RECRUITER_PIPELINE_BUCKETS]}
-        statusLabels={RECRUITER_PIPELINE_LABELS}
-        applications={[application]}
-        canonicalRecruiterReadsEnabled
-        moveAction={moveAction}
-      />,
-    );
-    const canonicalInterviewColumn = screen
-      .getByRole("heading", { name: "Entrevista" })
-      .closest('[class*="w-[310px]"]');
-    expect(canonicalInterviewColumn).not.toBeNull();
-    expect(
-      within(canonicalInterviewColumn as HTMLElement).getByText(
-        "Mixed Cohort Candidate",
-      ),
-    ).toBeInTheDocument();
-
-    rerender(
-      <KanbanBoard
-        jobId="job-1"
-        statuses={["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"]}
-        statusLabels={{
-          REVIEW: "Por revisar",
-          MAYBE: "Preselecto",
-          ACCEPTED: "Entrevista",
-          REJECTED: "Descartado",
-        }}
-        applications={[application]}
-        moveAction={moveAction}
-      />,
-    );
-    expect(
-      within(
-        screen
-          .getByRole("heading", { name: "Por revisar" })
-          .closest('[class*="w-[310px]"]') as HTMLElement,
-      ).getByText("Mixed Cohort Candidate"),
-    ).toBeInTheDocument();
-    expect(moveAction).not.toHaveBeenCalled();
-  });
-
-  it("changes selector presentation OFF -> ON -> OFF without issuing a request", () => {
-    const fetch = vi.fn();
-    vi.stubGlobal("fetch", fetch);
-    const props = {
-      applicationId: "application-1",
-      initial: "ACCEPTED" as const,
-      initialStateVersion: 2,
-      legacyStatus: "REVIEWING",
-      canonicalStage: "REVIEW" as const,
-      canonicalDisposition: "ACTIVE" as const,
-    };
-    const { rerender } = render(<InterestSelect {...props} />);
-
-    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeEnabled();
-    rerender(<InterestSelect {...props} canonicalRecruiterReadsEnabled />);
-    expect(screen.getByRole("button", { name: /En revisión/ })).toBeEnabled();
-    rerender(<InterestSelect {...props} />);
-    expect(screen.getByRole("button", { name: /Entrevista/ })).toBeEnabled();
+  it("keeps inconsistent selector sources in reconciliation ON/OFF without mutation", () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    const props = { applicationId: "app", initial: "ACCEPTED" as const, initialStateVersion: 2, legacyStatus: "REVIEWING", canonicalStage: "REVIEW" as const, canonicalDisposition: "ACTIVE" as const };
+    const view = render(<InterestSelect {...props} />);
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    view.rerender(<InterestSelect {...props} canonicalRecruiterReadsEnabled />);
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    view.rerender(<InterestSelect {...props} />);
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
