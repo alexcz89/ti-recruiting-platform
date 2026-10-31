@@ -8,7 +8,11 @@ import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } 
 import { PIPELINE_LABELS, getRecruitingPresentation, getRecruitingActions } from "@/lib/hiring-process/recruiting-presentation";
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { toastError } from "@/lib/ui/toast";
-import { Lock, MapPin } from "lucide-react";
+import { Lock, MapPin, MoreHorizontal, X } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import ProcessReasonDialog from "./applications/ProcessReasonDialog";
+import { useApplicationIntent } from "./applications/useApplicationIntent";
+import type { PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
 import {
   DragDropContext,
   Droppable,
@@ -41,11 +45,54 @@ type AppCard = {
   writerCompatibility: "CANONICAL" | "LEGACY" | "NONE";
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
+  submittedAt?: string | Date | null;
   _score?: number | null;
   _locked?: boolean;
   _assessments?: AssessmentMeta[];
   candidate: Candidate;
 };
+
+function KanbanCardActions({ card, reads, disabled, onConfirmed }: {
+  card: AppCard;
+  reads: boolean;
+  disabled: boolean;
+  onConfirmed: (source: PresentationSource) => void;
+}) {
+  const initialSource: PresentationSource = {
+    stage: card.stage as RecruiterApplicationReadInput["stage"],
+    disposition: card.disposition as RecruiterApplicationReadInput["disposition"],
+    status: card.applicationStatus,
+    recruiterInterest: card.status,
+    stateVersion: card.stateVersion,
+  };
+  const { source, pending, submit } = useApplicationIntent(card.id, initialSource, onConfirmed);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const canDiscard = getRecruitingActions(source, reads).includes("REJECT_CANDIDATE") && card.writerCompatibility !== "NONE";
+  if (!canDiscard && !confirmDiscard) return null;
+  return <>
+    {canDiscard && <DropdownMenu>
+      <DropdownMenuTrigger aria-label={`Acciones de ${card.candidate.name}`} disabled={pending || disabled}
+        onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}
+        onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()}
+        onClick={event => event.stopPropagation()}
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-400 dark:hover:bg-zinc-800">
+        <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent compact align="end" collisionPadding={8} onCloseAutoFocus={event => { if (confirmDiscard) event.preventDefault(); }} className="w-[210px]">
+        <DropdownMenuItem compact onSelect={() => setConfirmDiscard(true)} className="text-rose-700 dark:text-rose-300">
+          <X className="h-3.5 w-3.5" />Descartar candidato
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>}
+    {confirmDiscard && <ProcessReasonDialog title="Descartar candidato" pending={pending} confirmationOnly
+      description="La candidatura pasará a Cerrados. Podrás reabrirla si el proceso lo permite."
+      onCancel={() => setConfirmDiscard(false)}
+      onConfirm={async () => {
+        const saved = await submit("REJECT_CANDIDATE");
+        if (saved) setConfirmDiscard(false);
+      }} />}
+  </>;
+}
 
 // Colores por etapa del pipeline
 const COLUMN_ACCENT: Record<string, { header: string; badge: string; drag: string }> = {
@@ -202,6 +249,14 @@ export default function Kanbanboard({
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
     doMove(draggableId, source.droppableId, destination.droppableId, source.index, destination.index);
+  };
+
+  const applyConfirmedCard = (appId: string, saved: PresentationSource) => {
+    const confirmedBucket = getRecruiterApplicationReadModel(saved, { canonicalReadsEnabled: canonicalRecruiterReadsEnabled }).bucket;
+    setItems(current => current.map(item => item.id === appId ? {
+      ...item, stage: saved.stage, disposition: saved.disposition, stateVersion: saved.stateVersion,
+      applicationStatus: saved.status, status: saved.recruiterInterest, displayStatus: confirmedBucket,
+    } : item));
   };
 
   return (
@@ -478,19 +533,29 @@ export default function Kanbanboard({
   }) {
     const now = Date.now();
     const createdMs = card.createdAt ? new Date(card.createdAt).getTime() : null;
-    const updatedMs = card.updatedAt ? new Date(card.updatedAt).getTime() : createdMs;
     const isNew = createdMs !== null && now - createdMs < 48 * 60 * 60 * 1000;
-    const daysStale = updatedMs !== null ? Math.floor((now - updatedMs) / (1000 * 60 * 60 * 24)) : null;
-    const isStale = card.status === "REVIEW" && daysStale !== null && daysStale >= 5;
+    const submittedMs = card.submittedAt
+      ? new Date(card.submittedAt).getTime()
+      : null;
+    const daysPendingReview =
+      submittedMs !== null && Number.isFinite(submittedMs)
+        ? Math.floor((now - submittedMs) / 86_400_000)
+        : null;
+    const processState = presentation(card);
+    const isStale =
+      processState.section === "ACTIVE" &&
+      processState.column === "APPLIED" &&
+      daysPendingReview !== null &&
+      daysPendingReview >= 5;
     const score = card._score;
     const locked = card._locked;
 
     return (
       <article
         className={[
-          "group rounded-xl border border-zinc-200/70 bg-white px-3 py-2.5 text-xs shadow-sm",
-          "dark:border-zinc-800 dark:bg-zinc-900 transition-all",
-          dragging ? "ring-2 ring-emerald-500/50 scale-[1.02] shadow-lg" : "hover:border-emerald-500/50 hover:shadow-md",
+          "group rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs transition-colors",
+          "dark:border-zinc-800 dark:bg-zinc-900",
+          dragging ? "ring-2 ring-emerald-500/50" : "hover:border-zinc-300 dark:hover:border-zinc-700",
           isStale ? "border-l-2 border-l-amber-400" : "",
         ].join(" ")}
       >
@@ -515,8 +580,8 @@ export default function Kanbanboard({
             )}
           </div>
 
-          {/* AI Match */}
-          <div className="flex shrink-0 flex-col items-end gap-1">
+          {/* AI Match y acción contextual */}
+          <div className="flex shrink-0 items-start gap-1">
             {hasMatchSignals && (
               locked ? (
                 <div className="flex items-center gap-0.5 rounded-md border border-zinc-200 px-1.5 py-0.5 dark:border-zinc-700">
@@ -529,6 +594,8 @@ export default function Kanbanboard({
                 </span>
               ) : null
             )}
+            {!dragging && <KanbanCardActions card={card} reads={canonicalRecruiterReadsEnabled} disabled={isPending}
+              onConfirmed={saved => applyConfirmedCard(card.id, saved)} />}
           </div>
         </div>
 
@@ -557,7 +624,7 @@ export default function Kanbanboard({
         {isStale && (
           <div className="mt-2 flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
             <span>⚠</span>
-            <span>Sin revisar hace {daysStale} días</span>
+            <span>Pendiente de revisión desde hace {daysPendingReview} días</span>
           </div>
         )}
 

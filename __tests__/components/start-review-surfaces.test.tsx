@@ -4,6 +4,21 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DropResult } from "@hello-pangea/dnd";
+
+async function selectProcessAction(name: string) {
+  const trigger = screen.getByRole("button", {
+    name: "Acciones del proceso",
+  });
+
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+
+  const option = await screen.findByRole("menuitem", {
+    name,
+  });
+
+  fireEvent.click(option);
+}
+
 const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: vi.fn(), drag: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/lib/ui/toast", () => ({ toastError: mocks.error, toastSuccess: vi.fn() }));
@@ -41,10 +56,10 @@ describe("START_REVIEW interactions", () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ application: saved })));
     vi.stubGlobal("fetch", fetch);
     const { rerender } = render(selector(reads, legacy));
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+    await selectProcessAction("Iniciar revisión");
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
     rerender(selector(reads, saved));
-    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Acciones del proceso" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
   });
 
@@ -73,14 +88,19 @@ describe("START_REVIEW interactions", () => {
     const fetch = vi.fn((_url: string, _options: RequestInit) => new Promise<Response>((done) => { resolve = done; }));
     vi.stubGlobal("fetch", fetch);
     const { rerender } = render(selector());
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
-    fireEvent.click(screen.getByRole("button", { name: "Iniciando revisión…" }));
+    await selectProcessAction("Iniciar revisión");
+    const trigger = screen.getByRole("button", {
+      name: "Acciones del proceso",
+    });
+
+    expect(trigger).toBeDisabled();
+    fireEvent.click(trigger);
     expect(fetch).toHaveBeenCalledOnce();
-    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Acciones del proceso" })).toBeDisabled();
     await act(async () => resolve(response()));
     expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toMatchObject({ intent: "START_REVIEW", expectedVersion: 1, commandId: expect.any(String) });
     rerender(selector(true, reviewed));
-    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Acciones del proceso" })).toBeEnabled();
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
 
@@ -91,23 +111,40 @@ describe("START_REVIEW interactions", () => {
     fetch.mockResolvedValueOnce(response());
     vi.stubGlobal("fetch", fetch);
     render(selector());
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+    await selectProcessAction("Iniciar revisión");
     await waitFor(() => expect(mocks.error).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+    await selectProcessAction("Iniciar revisión");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument());
     expect(JSON.parse(fetch.mock.calls[0][1].body).commandId).toBe(JSON.parse(fetch.mock.calls[1][1].body).commandId);
   });
 
   it("refreshes the profile activity without losing unsaved notes", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response()));
+
     const { rerender } = render(profile());
-    fireEvent.change(screen.getByPlaceholderText("Escribe tus notas sobre este candidato..."), { target: { value: "Local draft" } });
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Escribe tus notas sobre este candidato..."),
+      { target: { value: "Local draft" } }
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Iniciar revisión" })
+    );
+
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+
     rerender(profile(reviewed));
+
     expect(screen.getAllByText("En revisión")[0]).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")).toHaveValue("Local draft");
-    expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
+
+    expect(
+      screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")
+    ).toHaveValue("Local draft");
+
+    expect(
+      screen.queryByRole("button", { name: "Iniciar revisión" })
+    ).not.toBeInTheDocument();
   });
 
   it("supports dragging to Review then Interview with the saved version", async () => {

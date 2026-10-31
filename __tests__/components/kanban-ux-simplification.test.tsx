@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { DropResult } from "@hello-pangea/dnd";
-const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: vi.fn(), drag: vi.fn() }));
+const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: vi.fn(), drag: vi.fn(), dragStart: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/lib/ui/toast", () => ({ toastError: mocks.error }));
 vi.mock("@hello-pangea/dnd", () => ({
@@ -12,7 +12,7 @@ vi.mock("@hello-pangea/dnd", () => ({
     mocks.drag.mockImplementation(onDragEnd); return <>{children}</>;
   },
   Droppable: ({ children }: { children: (...args: unknown[]) => React.ReactNode }) => children({ innerRef: vi.fn(), droppableProps: {}, placeholder: null }, { isDraggingOver: false }),
-  Draggable: ({ children }: { children: (...args: unknown[]) => React.ReactNode }) => children({ innerRef: vi.fn(), draggableProps: {}, dragHandleProps: {} }, { isDragging: false }),
+  Draggable: ({ children }: { children: (...args: unknown[]) => React.ReactNode }) => children({ innerRef: vi.fn(), draggableProps: {}, dragHandleProps: { onMouseDown: mocks.dragStart } }, { isDragging: false }),
 }));
 import KanbanBoard from "@/app/dashboard/jobs/[id]/KanbanBoard";
 import { ACTIVE_PIPELINE as PRIMARY_RECRUITER_PIPELINE_BUCKETS, PIPELINE_LABELS as RECRUITER_PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
@@ -23,6 +23,45 @@ const props = { jobId: "job-a", statuses: [...PRIMARY_RECRUITER_PIPELINE_BUCKETS
 const drop = (source = "APPLIED", destination = "REVIEW") => ({ draggableId: "app-a", source: { droppableId: source, index: 0 }, destination: { droppableId: destination, index: 0 } } as DropResult);
 beforeEach(() => { vi.clearAllMocks(); window.sessionStorage.clear(); vi.stubGlobal("React", React); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+it("marks only applied candidates as overdue based on submittedAt", () => {
+  const oldDate = new Date(Date.now() - 10 * 86_400_000);
+  const recentDate = new Date();
+
+  const pending = {
+    ...card,
+    submittedAt: oldDate,
+    updatedAt: recentDate,
+  };
+
+  const view = render(
+    <KanbanBoard
+      {...props}
+      applications={[pending]}
+      moveAction={vi.fn()}
+    />
+  );
+
+  expect(
+    screen.getAllByText(/Pendiente de revisión desde hace \d+ días/)
+  ).toHaveLength(2);
+
+  view.rerender(
+    <KanbanBoard
+      {...props}
+      applications={[{
+        ...pending,
+        stage: "REVIEW",
+        applicationStatus: "REVIEWING",
+        displayStatus: "REVIEW",
+      }]}
+      moveAction={vi.fn()}
+    />
+  );
+
+  expect(
+    screen.queryByText(/Pendiente de revisión desde hace \d+ días/)
+  ).not.toBeInTheDocument();
+});
 it("shows the same authorized essentials on desktop and mobile, with a stage selector", () => {
   render(<KanbanBoard {...props} moveAction={vi.fn()} />);
   expect(screen.getAllByRole("link", { name: card.candidate.name })).toHaveLength(2);
@@ -76,6 +115,63 @@ it("retains source and counts after a conflict or rejected transition", async ()
   expect(screen.getByRole("option", { name: /Por revisar \(1\)/ })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: /En revisión \(0\)/ })).toBeInTheDocument();
   expect(mocks.error).toHaveBeenCalledOnce();
+});
+
+it.each([true, false])("confirms Kanban discard before changing counters with canonical reads=%s", async reads => {
+  let finish!: (response: Response) => void;
+  const fetch = vi.fn((_url: string, _init?: RequestInit) => new Promise<Response>(resolve => { finish = resolve; }));
+  vi.stubGlobal("fetch", fetch);
+  const sourceCard = reads ? card : { ...card, stage: null, disposition: null, stateVersion: 0,
+    writerCompatibility: "LEGACY" as const };
+  render(<KanbanBoard {...props} applications={[sourceCard]} canonicalRecruiterReadsEnabled={reads} moveAction={vi.fn()} />);
+  const menuButton = screen.getAllByRole("button", { name: `Acciones de ${card.candidate.name}` })[0];
+  fireEvent.mouseDown(menuButton);
+  expect(mocks.dragStart).not.toHaveBeenCalled();
+  fireEvent.pointerDown(menuButton, { button: 0, ctrlKey: false });
+  expect(await screen.findByRole("menuitem", { name: "Descartar candidato" })).toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", { name: "Contratar" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("menuitem", { name: "Descartar candidato" }));
+  expect(screen.getByRole("dialog", { name: "Descartar candidato" })).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus());
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+  expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Guardando…" }));
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body ?? ""))).toMatchObject({ intent: "REJECT_CANDIDATE", expectedVersion: reads ? 1 : 0, commandId: expect.any(String) });
+  expect(screen.getByRole("button", { name: "Activos (1)" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Cerrados (0)" })).toBeInTheDocument();
+  await act(async () => finish(new Response(JSON.stringify({ application: reads
+    ? { stage: "CLOSED", disposition: "REJECTED", status: "REJECTED", recruiterInterest: "REJECTED", stateVersion: 2 }
+    : { stage: null, disposition: null, status: "REJECTED", recruiterInterest: "REJECTED", stateVersion: 0 },
+  }))));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Activos (0)" })).toBeInTheDocument());
+  expect(screen.getByRole("button", { name: "Cerrados (1)" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Cerrados (1)" }));
+  expect(screen.getByRole("link", { name: card.candidate.name })).toBeInTheDocument();
+});
+
+it("keeps Kanban counters and the candidate when discard is rejected", async () => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "private metadata" }), { status: 409 }));
+  vi.stubGlobal("fetch", fetch);
+  render(<KanbanBoard {...props} moveAction={vi.fn()} />);
+  fireEvent.pointerDown(screen.getAllByRole("button", { name: `Acciones de ${card.candidate.name}` })[0], { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Descartar candidato" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(screen.getByRole("button", { name: "Activos (1)" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Cerrados (0)" })).toBeInTheDocument();
+  expect(screen.getByRole("dialog", { name: "Descartar candidato" })).toBeInTheDocument();
+  expect(JSON.stringify(mocks.error.mock.calls)).not.toContain("private metadata");
+});
+
+it("does not offer discard for terminal or incompatible cards", () => {
+  const terminal = { ...card, id: "closed", stage: "CLOSED", disposition: "REJECTED", applicationStatus: "REJECTED", status: "REJECTED",
+    candidate: { ...card.candidate, name: "Closed" } };
+  const incompatible = { ...card, id: "invalid", writerCompatibility: "NONE" as const, candidate: { ...card.candidate, name: "Invalid" } };
+  render(<KanbanBoard {...props} applications={[terminal, incompatible]} moveAction={vi.fn()} />);
+  expect(screen.queryByRole("button", { name: "Acciones de Closed" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Acciones de Invalid" })).not.toBeInTheDocument();
 });
 
 it("uses the persisted state to classify a successful response that differs from the requested column", async () => {

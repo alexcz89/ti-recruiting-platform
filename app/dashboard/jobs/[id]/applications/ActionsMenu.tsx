@@ -1,10 +1,13 @@
 // app/dashboard/jobs/[id]/applications/ActionsMenu.tsx
 "use client";
 
-import { useState, useTransition } from "react";
+import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
+import { getRecruitingActions, getRecruitingPresentation, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
+import ProcessReasonDialog from "./ProcessReasonDialog";
+import { useApplicationIntent } from "./useApplicationIntent";
 import {
   MoreHorizontal,
   FileText,
@@ -23,6 +26,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
 type AssessmentMeta =
@@ -57,6 +61,8 @@ type Props = {
   jobTitle?: string | null;        // Título de la vacante para el mensaje de WhatsApp
   companyName?: string | null;     // Nombre de la empresa para el mensaje de WhatsApp
   assessment?: AssessmentMeta;
+  processSource: PresentationSource;
+  canonicalRecruiterReadsEnabled: boolean;
 };
 
 type InviteResponse = {
@@ -82,11 +88,22 @@ export default function ActionsMenu(props: Props) {
     jobTitle,
     companyName,
     assessment,
+    processSource,
+    canonicalRecruiterReadsEnabled,
   } = props;
 
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [showModal, setShowModal] = useState(false);
+  const [showReopenReason, setShowReopenReason] = useState(false);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const { source, pending: processPending, submit: submitProcess } = useApplicationIntent(applicationId, processSource);
+  const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
+  const availableActions = getRecruitingActions(source, canonicalRecruiterReadsEnabled);
+  const processActions = availableActions.filter(action => ["MARK_PRESELECTED", "CLEAR_PRESELECTED"].includes(action));
+  const canDiscard = availableActions.includes("REJECT_CANDIDATE");
+  const canReopen = presentation.section === "CLOSED" && presentation.outcome === "REJECTED" &&
+    source.status === "REJECTED" && source.recruiterInterest === "REJECTED";
 
   // Todos los templateIds del job
   const allTemplateIds: string[] =
@@ -109,7 +126,7 @@ export default function ActionsMenu(props: Props) {
   const completedTemplates = perTemplateState.filter(t => t.state === "COMPLETED");
   // Mostrar items individuales por template cuando hay 2 o más templates asignados al job.
   // Así el reclutador puede elegir exactamente cuál enviar en lugar de enviar todos.
-  const hasMultipleCompleted = assessmentCount > 1;
+  const hasMultipleCompleted = assessmentCount > 1 && perTemplateState.length > 0;
 
   // Estado del primero para derivar el label global
   const assessmentState = assessment?.enabled ? assessment.state : "NONE";
@@ -244,45 +261,36 @@ export default function ActionsMenu(props: Props) {
   };
 
   // ── Labels e íconos ───────────────────────────────────────────────────────
-  const { label: assessmentLabel, Icon: AssessmentIcon, iconColor } = (() => {
+  const { label: assessmentLabel, Icon: AssessmentIcon } = (() => {
     if (assessmentState === "COMPLETED")
-      return { label: "Ver resultados", Icon: CheckCircle2,
-        iconColor: "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400" };
+      return { label: "Ver resultados", Icon: CheckCircle2 };
     if (assessmentState === "SENT")
-      return { label: "Enviado · Copiar link", Icon: Clock,
-        iconColor: "bg-blue-50 text-blue-600 group-hover:bg-blue-100 dark:bg-blue-500/10 dark:text-blue-400" };
+      return { label: "Enviado · Copiar link", Icon: Clock };
     if (assessmentState === "STARTED")
-      return { label: "En progreso · Copiar link", Icon: ClipboardCopy,
-        iconColor: "bg-sky-50 text-sky-600 group-hover:bg-sky-100 dark:bg-sky-500/10 dark:text-sky-400" };
+      return { label: "En progreso · Copiar link", Icon: ClipboardCopy };
     if (assessmentState === "EXPIRED")
-      return { label: "Reenviar evaluación", Icon: RotateCcw,
-        iconColor: "bg-amber-50 text-amber-600 group-hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-400" };
+      return { label: "Reenviar evaluación", Icon: RotateCcw };
     // NONE
     if (assessmentCount === 0)
-      return { label: "Sin evaluaciones asignadas", Icon: ClipboardCheck,
-        iconColor: "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500" };
+      return { label: "Sin evaluaciones asignadas", Icon: ClipboardCheck };
     if (assessmentCount === 1)
-      return { label: "Enviar evaluación", Icon: Send,
-        iconColor: "bg-teal-50 text-teal-600 group-hover:bg-teal-100 dark:bg-teal-500/10 dark:text-teal-400" };
-    return { label: `Enviar evaluaciones (${assessmentCount})`, Icon: Send,
-      iconColor: "bg-teal-50 text-teal-600 group-hover:bg-teal-100 dark:bg-teal-500/10 dark:text-teal-400" };
+      return { label: "Enviar evaluación", Icon: Send };
+    return { label: `Enviar evaluaciones (${assessmentCount})`, Icon: Send };
   })();
 
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger
-          disabled={pending}
+          disabled={pending || processPending}
           aria-label="Acciones de la postulación"
           className="
-            inline-flex h-7 w-7 items-center justify-center
-            rounded-full border border-zinc-200/80 bg-white
-            text-zinc-500 shadow-sm transition-all
-            hover:bg-zinc-100 hover:text-zinc-700 hover:border-zinc-300
-            active:scale-[0.96]
-            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-400/40
+            inline-flex h-9 w-9 items-center justify-center
+            rounded-lg bg-transparent text-zinc-500 transition-colors
+            hover:bg-zinc-100 hover:text-zinc-700
+            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500
             disabled:opacity-60
-            dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400
+            dark:text-zinc-400
             dark:hover:bg-zinc-800 dark:hover:text-zinc-100
           "
         >
@@ -291,13 +299,23 @@ export default function ActionsMenu(props: Props) {
 
         <DropdownMenuContent
           align="end"
-          className="min-w-[200px] rounded-xl border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700/80 dark:bg-zinc-900"
+          compact
+          collisionPadding={8}
+          onCloseAutoFocus={event => { if (showReopenReason || showDiscardConfirm) event.preventDefault(); }}
+          className="w-[220px]"
         >
+          {processActions.map(action => <DropdownMenuItem compact key={action} disabled={processPending}
+            onSelect={() => { void submitProcess(action); }}
+            >
+            {({ MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección" } as Record<string, string>)[action]}
+          </DropdownMenuItem>)}
+          {canReopen && <DropdownMenuItem compact disabled={processPending} onSelect={() => setShowReopenReason(true)}>Reabrir proceso</DropdownMenuItem>}
+          {(processActions.length > 0 || canReopen) && (assessmentCount > 0 || resumeUrl || candidatePhone) && <DropdownMenuSeparator compact />}
           {/* Assessment — un item por template completado, o acción global si no */}
           {hasMultipleCompleted ? (
             <>
               {completedTemplates.map((t) => (
-                <DropdownMenuItem
+                <DropdownMenuItem compact
                   key={t.templateId}
                   onClick={() => {
                     if (t.attemptId) {
@@ -309,9 +327,7 @@ export default function ActionsMenu(props: Props) {
                   }}
                   className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
                 >
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3 w-3" />
-                  </span>
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                   <span className="truncate max-w-[140px]" title={t.title}>
                     {t.title.length > 22 ? t.title.slice(0, 22) + "…" : t.title}
                     {typeof t.score === "number" && (
@@ -326,12 +342,9 @@ export default function ActionsMenu(props: Props) {
               {perTemplateState.filter(t => t.state !== "COMPLETED").map((t) => {
                 const isSentOrStarted = t.state === "SENT" || t.state === "STARTED";
                 const prefix = t.state === "SENT" ? "Enviado · " : t.state === "STARTED" ? "En progreso · " : "Enviar: ";
-                const iconBg = isSentOrStarted
-                  ? "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
-                  : "bg-teal-50 text-teal-600 dark:bg-teal-500/10 dark:text-teal-400";
                 const IconComp = t.state === "SENT" ? Clock : t.state === "STARTED" ? ClipboardCopy : Send;
                 return (
-                  <DropdownMenuItem
+                  <DropdownMenuItem compact
                     key={t.templateId}
                     onClick={() => {
                       if (isSentOrStarted && t.token) {
@@ -357,9 +370,7 @@ export default function ActionsMenu(props: Props) {
                     disabled={pending}
                     className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
                   >
-                    <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
-                      <IconComp className="h-3 w-3" />
-                    </span>
+                    <IconComp className={`h-3.5 w-3.5 shrink-0 ${isSentOrStarted ? "text-blue-600 dark:text-blue-400" : "text-teal-600 dark:text-teal-400"}`} />
                     <span className="truncate max-w-[140px]" title={t.title}>
                       <span className="text-zinc-400">{prefix}</span>
                       {t.title.length > 16 ? t.title.slice(0, 16) + "…" : t.title}
@@ -368,56 +379,68 @@ export default function ActionsMenu(props: Props) {
                 );
               })}
             </>
-          ) : (
-            <DropdownMenuItem
+          ) : assessmentCount > 0 ? (
+            <DropdownMenuItem compact
               onClick={handleAssessmentAction}
-              disabled={pending || assessmentCount === 0}
+              disabled={pending}
               className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
             >
-              <span className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${iconColor}`}>
-                <AssessmentIcon className="h-3 w-3" />
-              </span>
+              <AssessmentIcon className="h-3.5 w-3.5 shrink-0 text-teal-600 dark:text-teal-400" />
               <span>{pending ? "..." : assessmentLabel}</span>
             </DropdownMenuItem>
-          )}
+          ) : null}
 
           {/* Ver CV */}
-          <DropdownMenuItem
+          {resumeUrl && <DropdownMenuItem compact
             onClick={handleOpenResume}
-            disabled={pending || !resumeUrl}
+            disabled={pending}
             className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
           >
-            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400">
-              <FileText className="h-3 w-3" />
-            </span>
+            <FileText className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
             <span>Ver CV</span>
-          </DropdownMenuItem>
+          </DropdownMenuItem>}
 
           {/* WhatsApp */}
-          <DropdownMenuItem
+          {candidatePhone && <DropdownMenuItem compact
             onClick={handleWhatsApp}
-            disabled={pending || !candidatePhone}
+            disabled={pending}
             className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
           >
-            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-green-50 text-green-600 group-hover:bg-green-100 dark:bg-green-500/10 dark:text-green-400">
-              <MessageCircle className="h-3 w-3" />
-            </span>
+            <MessageCircle className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
             <span>WhatsApp</span>
-          </DropdownMenuItem>
+          </DropdownMenuItem>}
 
-          {/* Eliminar */}
-          <DropdownMenuItem
+          {(processActions.length > 0 || canReopen || assessmentCount > 0 || resumeUrl || candidatePhone) && <DropdownMenuSeparator compact />}
+          {canDiscard && <DropdownMenuItem compact
+            onSelect={() => setShowDiscardConfirm(true)} disabled={processPending}
+            className="text-rose-700 dark:text-rose-300">
+            <X className="h-3.5 w-3.5" />Descartar candidato
+          </DropdownMenuItem>}
+          {/* Eliminar es una operación distinta del descarte. */}
+          <DropdownMenuItem compact
             onClick={handleDelete}
             disabled={pending}
             className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40"
           >
-            <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-500 group-hover:bg-red-100 dark:bg-red-500/10 dark:text-red-400">
-              <Trash2 className="h-3 w-3" />
-            </span>
+            <Trash2 className="h-3.5 w-3.5 shrink-0" />
             <span>Eliminar</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {showReopenReason && <ProcessReasonDialog title="Reabrir proceso" pending={processPending}
+        onCancel={() => setShowReopenReason(false)}
+        onConfirm={async reason => {
+          const success = await submitProcess("REOPEN_REJECTED", reason);
+          if (success) setShowReopenReason(false);
+        }} />}
+      {showDiscardConfirm && <ProcessReasonDialog title="Descartar candidato" pending={processPending}
+        confirmationOnly description="La candidatura pasará a Cerrados. Podrás reabrirla si el proceso lo permite."
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={async () => {
+          const success = await submitProcess("REJECT_CANDIDATE");
+          if (success) setShowDiscardConfirm(false);
+        }} />}
 
       {/* ── Modal de selección múltiple ─────────────────────────────────── */}
       {showModal && (
