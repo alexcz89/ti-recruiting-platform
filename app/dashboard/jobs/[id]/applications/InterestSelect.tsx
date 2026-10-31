@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { getRecruitingPresentation, getRecruiterStageOptions, type PresentationSource, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 import type { ApplicationStageValue, ApplicationDispositionValue } from "@/lib/hiring-process/types";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ProcessReasonDialog from "./ProcessReasonDialog";
 import { useApplicationIntent } from "./useApplicationIntent";
 
@@ -24,6 +24,12 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
   const [reasonAction, setReasonAction] = useState<RecruiterStageOption | null>(null);
   const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
   const options = getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled);
+  const stageTone: Record<string, string> = {
+    APPLIED: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
+    REVIEW: "bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200",
+    INTERVIEW: "bg-violet-50 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200",
+    OFFER: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
+  };
 
   function choose(option: RecruiterStageOption) {
     if (option.requiresReason) setReasonAction(option);
@@ -33,14 +39,13 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
   return <>
     <DropdownMenu>
       <DropdownMenuTrigger disabled={options.length === 0 || pending} aria-label={`Cambiar etapa: ${presentation.label}`}
-        className="inline-flex min-h-10 w-full min-w-[135px] items-center justify-between gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-1.5 text-left text-xs font-semibold text-zinc-800 shadow-sm transition-colors hover:border-emerald-400 hover:bg-emerald-50/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-default disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100">
-        <span className="truncate">{presentation.label}</span><ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
+        className={`inline-flex h-9 max-w-[180px] items-center justify-between gap-2 rounded-lg px-2.5 text-left text-xs font-medium transition-colors hover:ring-1 hover:ring-current/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-default disabled:opacity-70 ${stageTone[presentation.column ?? ""] ?? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"}`}>
+        <span className="truncate">{pending ? "Guardando…" : presentation.label}</span><ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 opacity-70" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" onCloseAutoFocus={event => { if (reasonAction) event.preventDefault(); }}
-        className="min-w-[190px] border-zinc-200 bg-white p-1 dark:border-zinc-700 dark:bg-zinc-900">
-        <DropdownMenuLabel className="px-2.5 py-1 text-[11px] text-zinc-500">Cambiar etapa</DropdownMenuLabel>
+      <DropdownMenuContent compact align="start" collisionPadding={8} onCloseAutoFocus={event => { if (reasonAction) event.preventDefault(); }}
+        className="w-[190px]">
         {options.map(option => <DropdownMenuItem key={`${option.intent}:${option.targetStage ?? ""}`}
-          onSelect={() => choose(option)} className="px-2.5 py-2 text-xs dark:text-zinc-100">
+          compact onSelect={() => choose(option)}>
           {option.label}{option.requiresReason ? " · requiere motivo" : ""}
         </DropdownMenuItem>)}
       </DropdownMenuContent>

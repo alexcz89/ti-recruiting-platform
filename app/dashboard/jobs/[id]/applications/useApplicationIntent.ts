@@ -11,7 +11,7 @@ type IntentExtra = {
   reasonText?: string;
 };
 
-export function useApplicationIntent(applicationId: string, initialSource: PresentationSource) {
+export function useApplicationIntent(applicationId: string, initialSource: PresentationSource, onConfirmed?: (source: PresentationSource) => void) {
   const router = useRouter();
   const [source, setSource] = useState(initialSource);
   const [pending, setPending] = useState(false);
@@ -46,10 +46,14 @@ export function useApplicationIntent(applicationId: string, initialSource: Prese
         return false;
       }
       const data = await response.json();
-      if (!data?.application || typeof data.application.stateVersion !== "number") {
+      if (!data?.application || !Number.isInteger(data.application.stateVersion) || data.application.stateVersion < 0 ||
+          typeof data.application.status !== "string" || typeof data.application.recruiterInterest !== "string" ||
+          (data.application.stage !== null && typeof data.application.stage !== "string") ||
+          (data.application.disposition !== null && typeof data.application.disposition !== "string")) {
         throw new Error("Invalid transition response");
       }
       setSource(data.application);
+      onConfirmed?.(data.application);
       router.refresh();
       return true;
     } catch {

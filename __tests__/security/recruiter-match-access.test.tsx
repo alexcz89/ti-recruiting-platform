@@ -176,6 +176,33 @@ describe("recruiter match surface consistency and plan boundaries", () => {
       expect(payload).not.toContain(`${computeRecruiterMatch(job, candidate, now).finalScore}%`);
     }
   });
+  it.each([["FREE", "app-00", 0], ["STARTER", "app-11", 10]])("does not serialize registered skills in a locked %s list row", async (plan, applicationId, visibleScores) => {
+    const privateSkill = { id: "private-skill", label: "PrivateSkillSentinel", aliases: [] };
+    mocks.company.mockResolvedValue({ billingPlan: plan, name: "Company A" });
+    mocks.apps.mockResolvedValue(cohort.map((app) => app.id === applicationId ? {
+      ...app, candidate: { ...app.candidate, candidateSkills: [{ term: privateSkill, level: 4 }] },
+    } : app));
+    const list = await ListPage({ params: { id: "job-a" }, searchParams: { interest: "ALL" } });
+    const payload = JSON.stringify(list, (key, value) => key === "type" || key === "_owner" ? undefined : value);
+    expect(payload).not.toContain(privateSkill.label);
+    expect(payload).toContain("Habilidades no disponibles");
+    expect(popovers(list)).toHaveLength(visibleScores);
+  });
+  it("shows registered skills consistently, with match count identified separately", async () => {
+    const unrelated = { id: "kotlin", label: "KotlinSentinel", aliases: [] };
+    mocks.company.mockResolvedValue({ billingPlan: "PRO", name: "Company A" });
+    mocks.apps.mockResolvedValue(cohort.map((app) => app.id === "app-00" ? {
+      ...app, candidate: { ...app.candidate, candidateSkills: [{ term, level: 3 }, { term: unrelated, level: 2 }] },
+    } : app.id === "app-01" ? {
+      ...app, candidate: { ...app.candidate, candidateSkills: [{ term: unrelated, level: 2 }] },
+    } : app));
+    const list = await ListPage({ params: { id: "job-a" }, searchParams: { interest: "ALL" } });
+    const row = (id: string) => JSON.stringify(nodes(list).find((node) => node.type === "tr" && node.key === id));
+    expect(row("app-00")).toContain("Java · KotlinSentinel");
+    expect(row("app-00")).toContain("AI Match · ");
+    expect(row("app-01")).toContain("KotlinSentinel");
+    expect(row("app-01")).not.toContain("AI Match · ");
+  });
   it("does not unlock filtered candidates and does not sort by private scores", async () => {
     mocks.company.mockResolvedValue({ billingPlan: "STARTER", name: "Company A" });
     const original = await ListPage({ params: { id: "job-a" }, searchParams: { interest: "ALL", sort: "match" } });

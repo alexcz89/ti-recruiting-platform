@@ -897,14 +897,14 @@ export default async function JobApplicationsPage({
             </div>
 
             <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[940px] text-sm">
                 <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-900/40 dark:text-zinc-400">
                   <tr>
                     <th scope="col" aria-sort={sortKey === "candidate" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("candidate")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Candidato {sortKey === "candidate" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th scope="col" aria-sort={sortKey === "match" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium">
                       <Link href={sortHref("match")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">AI Match {sortKey === "match" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link>{!hasMatchSignals && <span className="ml-1 font-normal text-zinc-400">(sin señales)</span>}
                     </th>
-                    <th className="px-3 py-2.5 font-medium">Skills</th>
+                    <th className="px-3 py-2.5 font-medium">Habilidades registradas</th>
                     <th scope="col" aria-sort={sortKey === "status" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("status")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Etapa {sortKey === "status" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th scope="col" aria-sort={sortKey === "activity" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("activity")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Actividad {sortKey === "activity" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th className="px-3 py-2.5 font-medium">Acciones</th>
@@ -915,8 +915,8 @@ export default async function JobApplicationsPage({
                     const matchResult = a._matchResult!; // Used only inside authorized match branches.
                     const gatedFinalScore: number | null = a._gatedFinalScore;
                     const locked: boolean = a._locked;
-                    const matchedDetails = (matchResult?.details ?? []).filter((d: any) => d.matched).slice(0, 4);
-                    const hiddenCount = Math.max(0, (matchResult?.matchedCount ?? 0) - matchedDetails.length);
+                    const candidateSkills: string[] = locked ? [] : (a.candidate?.candidateSkills ?? [])
+                      .map((skill: any) => skill.term?.label).filter(Boolean);
                     const candidateHref = a.candidate?.id
                       ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
                       : undefined;
@@ -929,16 +929,16 @@ export default async function JobApplicationsPage({
                       PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? null;
 
                     return (
-                      <tr key={a.id} className="align-top border-t border-zinc-100 transition-colors hover:bg-zinc-50/40 dark:border-zinc-800 dark:hover:bg-zinc-900/20">
+                      <tr key={a.id} className="align-middle border-t border-zinc-100 transition-colors hover:bg-zinc-50/70 dark:border-zinc-800 dark:hover:bg-zinc-900/40">
                         <td className="px-3 py-2.5">
                           <div className="flex flex-col gap-0.5">
                             {candidateHref ? (
-                              <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref} className="font-medium hover:underline">{a._fullName}</CandidateProfileLink>
+                              <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref} className="block max-w-[240px] truncate font-semibold text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-100" title={a._fullName}>{a._fullName}</CandidateProfileLink>
                             ) : (
                               <span className="font-medium">{a._fullName}</span>
                             )}
 
-                            <span className="text-xs text-zinc-500">{a._location.full ?? "—"}</span>
+                            {a._location.full && <span className="max-w-[240px] truncate text-xs text-zinc-500" title={a._location.full}>{a._location.full}</span>}
 
                             {((a.candidate as any)?.candidateBadges?.length ?? 0) > 0 && (
                               <span className="flex flex-wrap gap-1">
@@ -1091,31 +1091,24 @@ export default async function JobApplicationsPage({
 
                         <td className="px-3 py-2.5">
                           {locked ? (
-                            <span className="text-xs text-zinc-400">—</span>
-                          ) : matchedDetails.length ? (
-                            <div className="flex flex-wrap items-center gap-1">
-                              {matchedDetails.map((d: any, i: number) => (
-                                <span
-                                  key={`${d.termId}-${i}`}
-                                  title={d.must ? "Requerida" : "Deseable"}
-                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                                    d.must
-                                      ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                      : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
-                                  }`}
-                                >
-                                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${d.must ? "bg-emerald-500" : "bg-zinc-400"}`} />
-                                  {d.label}
-                                </span>
-                              ))}
-                              {hiddenCount > 0 && <span className="text-[10px] text-zinc-400">+{hiddenCount}</span>}
-                            </div>
+                            <span aria-label="Habilidades no disponibles" className="text-xs text-zinc-400">—</span>
                           ) : (
-                            <span className="text-zinc-400">—</span>
+                            <div className="max-w-[190px] space-y-0.5">
+                              {candidateSkills.length ? (
+                                <span className="block truncate text-xs text-zinc-700 dark:text-zinc-200" title={candidateSkills.join(", ")}>
+                                  {candidateSkills.slice(0, 3).join(" · ")}{candidateSkills.length > 3 ? ` +${candidateSkills.length - 3}` : ""}
+                                </span>
+                              ) : <span className="text-xs text-zinc-400">—</span>}
+                              {hasMatchSignals && (matchResult?.matchedCount ?? 0) > 0 && (
+                                <span className="block text-[10px] text-zinc-500 dark:text-zinc-400">
+                                  AI Match · {matchResult.matchedCount} coincidencia{matchResult.matchedCount === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </div>
                           )}
                         </td>
 
-                        <td className="min-w-[170px] px-3 py-2.5">
+                        <td className="min-w-[145px] px-3 py-2.5">
                           <div className="space-y-1.5">
                             <InterestSelect
                               applicationId={a.id}
@@ -1137,7 +1130,7 @@ export default async function JobApplicationsPage({
                           <span className="text-xs text-zinc-500">{fromNow(a._activity.at)}</span>
                         </td>
 
-                        <td className="px-3 py-2.5 align-top">
+                        <td className="px-3 py-2.5 align-middle">
                           <div className="flex items-center gap-1.5">
                             <ActionsMenu
                               applicationId={a.id}

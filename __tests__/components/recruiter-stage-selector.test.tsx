@@ -141,6 +141,7 @@ describe("editable recruiter stage", () => {
   it("opens the stage menu from the keyboard with a labelled trigger", async () => {
     render(<InterestSelect {...applied} />);
     const trigger = screen.getByRole("button", { name: "Cambiar etapa: Por revisar" });
+    expect(trigger).toHaveClass("h-9", "max-w-[180px]");
     trigger.focus();
     fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" });
     expect(await screen.findByRole("menuitem", { name: "En revisión" })).toBeInTheDocument();

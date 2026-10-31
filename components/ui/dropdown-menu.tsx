@@ -15,8 +15,8 @@ export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 export const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>
->(function DropdownMenuContent({ className, sideOffset = 6, ...props }, ref) {
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & { compact?: boolean }
+>(function DropdownMenuContent({ className, sideOffset = 6, compact = false, ...props }, ref) {
   return (
     <DropdownMenuPortal>
       <DropdownMenuPrimitive.Content
@@ -24,8 +24,9 @@ export const DropdownMenuContent = React.forwardRef<
         sideOffset={sideOffset}
         className={clsx(
           // base
-          "z-50 min-w-[12rem] rounded-2xl border glass-card p-4 md:p-6",
-          "border-zinc-200 glass-card p-4 md:p-6",
+          compact
+            ? "z-50 min-w-[11rem] rounded-xl border border-zinc-200 bg-white p-1 shadow-md dark:border-zinc-700 dark:bg-zinc-900"
+            : "z-50 min-w-[12rem] rounded-2xl border border-zinc-200 glass-card p-4 md:p-6",
           // animación (scale + fade)
           "origin-[var(--radix-dropdown-menu-content-transform-origin)]",
           "opacity-0 scale-95 data-[state=open]:opacity-100 data-[state=open]:scale-100",
@@ -40,15 +41,15 @@ export const DropdownMenuContent = React.forwardRef<
 
 export const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>
->(function DropdownMenuItem({ className, ...props }, ref) {
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & { compact?: boolean }
+>(function DropdownMenuItem({ className, compact = false, ...props }, ref) {
   return (
     <DropdownMenuPrimitive.Item
       ref={ref}
       className={clsx(
-        "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm outline-none",
-        "text-zinc-800 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-        "hover:glass-card p-4 md:p-6",
+        compact
+          ? "relative flex min-h-9 cursor-pointer select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-zinc-800 outline-none data-[highlighted]:bg-zinc-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 dark:text-zinc-100 dark:data-[highlighted]:bg-zinc-800"
+          : "relative flex cursor-pointer select-none items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-zinc-800 outline-none hover:glass-card p-4 md:p-6 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
         className
       )}
       {...props}
@@ -120,12 +121,12 @@ export const DropdownMenuLabel = React.forwardRef<
 
 export const DropdownMenuSeparator = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Separator>,
-  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
->(function DropdownMenuSeparator({ className, ...props }, ref) {
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator> & { compact?: boolean }
+>(function DropdownMenuSeparator({ className, compact = false, ...props }, ref) {
   return (
     <DropdownMenuPrimitive.Separator
       ref={ref}
-      className={clsx("my-1 h-px glass-card p-4 md:p-6", className)}
+      className={clsx(compact ? "my-1 h-px bg-zinc-200 dark:bg-zinc-700" : "my-1 h-px glass-card p-4 md:p-6", className)}
       {...props}
     />
   );
