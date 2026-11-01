@@ -73,9 +73,10 @@ export function getRecruitingActions(input: PresentationSource, reads: boolean) 
 
 export type RecruiterStageOption = {
     label: string;
-    intent: "START_REVIEW" | "MOVE_TO_INTERVIEW" | "MOVE_TO_OFFER" | "MOVE_BACKWARD";
+    intent: "START_REVIEW" | "MOVE_TO_INTERVIEW" | "MOVE_TO_OFFER" | "MOVE_BACKWARD" | "HIRE_CANDIDATE" | "REJECT_CANDIDATE";
     targetStage?: "REVIEW" | "INTERVIEW";
     requiresReason: boolean;
+    requiresConfirmation?: boolean;
 };
 
 /** Display choices only. The intent writer validates ownership, state and version again. */
@@ -98,6 +99,12 @@ export function getRecruiterStageOptions(input: PresentationSource, reads: boole
     if (compatibleCanonical || compatibleLegacy) {
         if (presentation.column === "OFFER") options.push({ label: "Entrevista", intent: "MOVE_BACKWARD", targetStage: "INTERVIEW", requiresReason: true });
         if (presentation.column === "OFFER" || presentation.column === "INTERVIEW") options.push({ label: "En revisión", intent: "MOVE_BACKWARD", targetStage: "REVIEW", requiresReason: true });
+    }
+    if (presentation.column === "OFFER" && (compatibleCanonical || compatibleLegacy)) {
+        options.push({ label: "Contratar candidato", intent: "HIRE_CANDIDATE", requiresReason: false, requiresConfirmation: true });
+    }
+    if (actions.includes("REJECT_CANDIDATE")) {
+        options.push({ label: "Descartar candidato", intent: "REJECT_CANDIDATE", requiresReason: false, requiresConfirmation: true });
     }
     return options;
 }

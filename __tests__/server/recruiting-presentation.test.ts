@@ -30,7 +30,7 @@ describe.each([true, false])("recruiting presentation, canonical reads=%s", read
     expect(getRecruiterStageOptions(source, reads).map(option => option.intent)).toContain("START_REVIEW");
     expect(getRecruiterStageOptions({ ...source, stage: "REVIEW", status: "REVIEWING" }, reads).some(option => option.label === "Por revisar")).toBe(false);
     const interview = { ...source, stage: "INTERVIEW" as const, status: "INTERVIEW", recruiterInterest: "ACCEPTED" };
-    expect(getRecruiterStageOptions(interview, reads)).toMatchObject([
+    expect(getRecruiterStageOptions(interview, reads).filter(option => !option.requiresConfirmation)).toMatchObject([
       { intent: "MOVE_TO_OFFER", label: "Oferta", requiresReason: false },
       { intent: "MOVE_BACKWARD", targetStage: "REVIEW", requiresReason: true },
     ]);
@@ -40,5 +40,32 @@ describe.each([true, false])("recruiting presentation, canonical reads=%s", read
     expect(getRecruiterStageOptions({ ...offer, status: "HIRED" }, reads)).toEqual([]);
     expect(getRecruiterStageOptions({ ...offer, disposition: "HOLD" }, reads)).toEqual([]);
     expect(getRecruiterStageOptions({ ...offer, stage: null, disposition: null, stateVersion: 2 }, reads)).toEqual([]);
+  });
+  it.each([
+    { stage: "APPLIED", status: "SUBMITTED", recruiterInterest: "REVIEW" },
+    { stage: "REVIEW", status: "REVIEWING", recruiterInterest: "MAYBE" },
+    { stage: "ASSESSMENT", status: "REVIEWING", recruiterInterest: "REVIEW" },
+    { stage: "INTERVIEW", status: "INTERVIEW", recruiterInterest: "ACCEPTED" },
+    { stage: "OFFER", status: "OFFER", recruiterInterest: "ACCEPTED" },
+  ] as const)("offers confirmed discard from active $stage and hire only from OFFER", active => {
+    for (const canonical of [true, false]) {
+      const input = { ...source, ...active, ...(canonical ? {} : { stage: null, disposition: null, stateVersion: 0 }) };
+      const options = getRecruiterStageOptions(input, reads);
+      expect(options).toContainEqual({ label: "Descartar candidato", intent: "REJECT_CANDIDATE", requiresReason: false, requiresConfirmation: true });
+      expect(options.filter(option => option.intent === "HIRE_CANDIDATE")).toEqual(active.stage === "OFFER"
+        ? [{ label: "Contratar candidato", intent: "HIRE_CANDIDATE", requiresReason: false, requiresConfirmation: true }] : []);
+      expect(options.some(option => ["MARK_PRESELECTED", "CLEAR_PRESELECTED", "REOPEN_REJECTED"].includes(option.intent))).toBe(false);
+    }
+  });
+  it.each([
+    { disposition: "HOLD" },
+    { stage: "CLOSED", disposition: "HIRED", status: "HIRED" },
+    { stage: "CLOSED", disposition: "REJECTED", status: "REJECTED", recruiterInterest: "REJECTED" },
+    { status: "HIRED" }, { status: "REJECTED" }, { recruiterInterest: "REJECTED" },
+    { recruiterInterest: "REVIEW" }, { status: "INTERVIEW" },
+    { stage: null }, { stage: null, disposition: null, stateVersion: 2 },
+    { stage: null, disposition: null, stateVersion: 0, recruiterInterest: "MAYBE" },
+  ] as const)("offers no stage or closure actions for incompatible source %j", invalid => {
+    expect(getRecruiterStageOptions({ ...source, stage: "OFFER", status: "OFFER", recruiterInterest: "ACCEPTED", ...invalid }, reads)).toEqual([]);
   });
 });

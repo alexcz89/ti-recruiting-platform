@@ -56,7 +56,7 @@ describe("secondary recruiter process actions", () => {
     expect(screen.getByRole("menuitem", { name: "Acción existente" })).toHaveClass("p-4", "md:p-6");
     expect(menu.querySelector('[role="separator"]')).toHaveClass("glass-card", "p-4", "md:p-6");
   });
-  it("keeps preselection and discard in the three-dot menu, outside the stage selector", async () => {
+  it("keeps preselection in the three-dot menu and preserves its existing discard action", async () => {
     render(<>
       <InterestSelect applicationId="app" initial="REVIEW" initialStateVersion={1} legacyStatus="SUBMITTED" canonicalStage="APPLIED" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled />
       <ActionsMenu {...base} processSource={{ stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", stateVersion: 1 }} />
@@ -64,7 +64,7 @@ describe("secondary recruiter process actions", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Por revisar" }), { button: 0, ctrlKey: false });
     expect(await screen.findByRole("menuitem", { name: "Avanzar a En revisión" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Preseleccionar" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Descartar candidato" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Descartar candidato" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     await openMenu();
     expect(await screen.findByRole("menuitem", { name: "Preseleccionar" })).toBeInTheDocument();
