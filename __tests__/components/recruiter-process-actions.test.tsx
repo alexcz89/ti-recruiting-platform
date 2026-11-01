@@ -21,13 +21,29 @@ const base = {
 const offer = { stage: "OFFER" as const, disposition: "ACTIVE" as const, status: "OFFER", recruiterInterest: "ACCEPTED", stateVersion: 6 };
 const rejected = { stage: "CLOSED" as const, disposition: "REJECTED" as const, status: "REJECTED", recruiterInterest: "REJECTED", stateVersion: 8 };
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); refresh.mockClear(); vi.mocked(toastError).mockClear(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); refresh.mockClear(); vi.mocked(toastError).mockClear(); });
 
 async function openMenu() {
   fireEvent.pointerDown(screen.getByRole("button", { name: "Acciones de la postulación" }), { button: 0, ctrlKey: false });
 }
 
 describe("secondary recruiter process actions", () => {
+  it.each([["55 1234 5678", "525512345678"], ["+52 1 55 1234 5678", "525512345678"], ["+1 415 555 2671", "14155552671"]])("opens a validated WhatsApp conversation for %s", async (phone, digits) => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(<ActionsMenu {...base} candidatePhone={phone} processSource={offer} />);
+    await openMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Abrir WhatsApp" }));
+    expect(open).toHaveBeenCalledWith(expect.stringContaining(`https://wa.me/${digits}?text=`), "_blank", "noopener,noreferrer");
+  });
+  it.each([[null, "WhatsApp: Sin teléfono registrado"], ["123", "WhatsApp: teléfono inválido"]])("keeps unavailable WhatsApp accessible without opening an invalid link", async (phone, label) => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(<ActionsMenu {...base} candidatePhone={phone} processSource={offer} />);
+    await openMenu();
+    const item = await screen.findByRole("menuitem", { name: label! });
+    expect(item).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(item);
+    expect(open).not.toHaveBeenCalled();
+  });
   it("keeps the existing shared menu styling when compact is omitted", async () => {
     render(<DropdownMenu>
       <DropdownMenuTrigger>Menú existente</DropdownMenuTrigger>

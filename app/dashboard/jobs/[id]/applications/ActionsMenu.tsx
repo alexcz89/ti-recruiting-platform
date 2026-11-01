@@ -5,6 +5,8 @@ import React, { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toastSuccess, toastError } from "@/lib/ui/toast";
 import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
+import { parsePhoneNumberFromString } from "libphonenumber-js";
+import { buildRecruiterWhatsappHref, normalizeMexicanWhatsappPhone } from "@/lib/whatsapp/recruiter-contact";
 import { getRecruitingActions, getRecruitingPresentation, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
 import ProcessReasonDialog from "./ProcessReasonDialog";
 import { useApplicationIntent } from "./useApplicationIntent";
@@ -243,21 +245,15 @@ export default function ActionsMenu(props: Props) {
     window.open(resumeUrl, "_blank", "noopener,noreferrer");
   };
 
+  const normalizedPhone = normalizeMexicanWhatsappPhone(candidatePhone ?? null);
+  const validPhone = Boolean(candidatePhone && /^[+\d\s().-]+$/.test(candidatePhone) &&
+    parsePhoneNumberFromString(`+${normalizedPhone}`)?.isValid());
+  const whatsappHref = validPhone ? buildRecruiterWhatsappHref({
+    phone: normalizedPhone, candidateName: candidateName ?? null, recruiterName: recruiterName ?? null,
+    job: { title: jobTitle ?? null, companyConfidential: false, company: { name: companyName ?? null } },
+  }) : null;
   const handleWhatsApp = () => {
-    if (!candidatePhone) return toastError("Este candidato no tiene WhatsApp registrado");
-    let digits = candidatePhone.replace(/\D/g, "");
-    if (digits.length === 10) digits = `52${digits}`;
-    if (digits.length === 13 && digits.startsWith("521")) digits = `52${digits.slice(3)}`;
-    if (digits.startsWith("52") && digits.length !== 12)
-      return toastError("Número de WhatsApp inválido");
-    // Construir el mensaje con el formato correcto igual al del perfil del candidato
-    const firstName = candidateName?.split(" ")[0] ?? "candidato/a";
-    const recruiter = recruiterName ?? "el equipo de reclutamiento";
-    const company = companyName ?? "";
-    const vacancy = jobTitle ?? "nuestra vacante";
-    const intro = company ? `soy ${recruiter} de ${company}` : `soy ${recruiter}`;
-    const msg = `Hola ${firstName}, ${intro}. Te contacto porque aplicaste a la vacante de ${vacancy}. ¿Tienes disponibilidad para platicar?`;
-    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+    if (whatsappHref) window.open(whatsappHref, "_blank", "noopener,noreferrer");
   };
 
   // ── Labels e íconos ───────────────────────────────────────────────────────
@@ -401,14 +397,16 @@ export default function ActionsMenu(props: Props) {
           </DropdownMenuItem>}
 
           {/* WhatsApp */}
-          {candidatePhone && <DropdownMenuItem compact
+          <DropdownMenuItem compact
             onClick={handleWhatsApp}
-            disabled={pending}
+            disabled={pending || !whatsappHref}
+            aria-label={whatsappHref ? "Abrir WhatsApp" : candidatePhone ? "WhatsApp: teléfono inválido" : "WhatsApp: Sin teléfono registrado"}
             className="group flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-xs text-zinc-700 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800/80"
           >
             <MessageCircle className="h-3.5 w-3.5 shrink-0 text-zinc-500" />
-            <span>WhatsApp</span>
-          </DropdownMenuItem>}
+            <span>{whatsappHref ? "Abrir WhatsApp" : "WhatsApp"}</span>
+            {!whatsappHref && <span className="text-[10px] text-zinc-500">{candidatePhone ? "Teléfono inválido" : "Sin teléfono registrado"}</span>}
+          </DropdownMenuItem>
 
           {(processActions.length > 0 || canReopen || assessmentCount > 0 || resumeUrl || candidatePhone) && <DropdownMenuSeparator compact />}
           {canDiscard && <DropdownMenuItem compact

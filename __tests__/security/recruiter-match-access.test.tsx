@@ -1,6 +1,6 @@
 import React from "react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), companyId: vi.fn(), company: vi.fn(), job: vi.fn(), jobs: vi.fn(), count: vi.fn(), group: vi.fn(), recruiter: vi.fn(), apps: vi.fn(), app: vi.fn(), candidate: vi.fn(), cache: vi.fn(), save: vi.fn(), generate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), companyId: vi.fn(), company: vi.fn(), job: vi.fn(), jobs: vi.fn(), count: vi.fn(), group: vi.fn(), recruiter: vi.fn(), apps: vi.fn(), app: vi.fn(), candidate: vi.fn(), cache: vi.fn(), save: vi.fn(), generate: vi.fn(), invites: vi.fn(), attempts: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }));
 vi.mock("@/lib/server/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/server/session", () => ({ getSessionCompanyId: mocks.companyId }));
@@ -9,7 +9,7 @@ vi.mock("@/lib/server/prisma", () => ({ prisma: {
   company: { findUnique: mocks.company }, job: { findFirst: mocks.job, findMany: mocks.jobs, count: mocks.count },
   application: { findMany: mocks.apps, findFirst: mocks.app, count: mocks.count, groupBy: mocks.group }, user: { findUnique: mocks.candidate, findFirst: mocks.candidate },
   applicationEvent: { groupBy: mocks.group },
-  recruiterProfile: { findUnique: mocks.recruiter }, assessmentAttempt: { count: mocks.count }, assessmentInvite: { count: mocks.count },
+  recruiterProfile: { findUnique: mocks.recruiter }, assessmentAttempt: { count: mocks.count, findMany: mocks.attempts }, assessmentInvite: { count: mocks.count, findMany: mocks.invites },
   matchExplanationCache: { findFirst: mocks.cache, create: mocks.save, update: mocks.save },
 } }));
 vi.mock("@/lib/ai/matchExplanation", () => ({ generateMatchExplanation: mocks.generate, buildMatchExplanationFingerprint: () => "fingerprint", MATCH_EXPLANATION_VERSION: "test" }));
@@ -71,6 +71,7 @@ beforeEach(() => {
   mocks.candidate.mockResolvedValue(candidate);
   mocks.cache.mockResolvedValue(null);
   mocks.count.mockResolvedValue(0);
+  mocks.invites.mockResolvedValue([]); mocks.attempts.mockResolvedValue([]);
   mocks.group.mockResolvedValue([]);
   mocks.recruiter.mockResolvedValue({ status: "APPROVED", phone: "synthetic" });
   mocks.generate.mockResolvedValue({ summary: "Synthetic", strengths: [], gaps: [], interviewFocus: [], recommendation: "REVIEW", generatedAt: now.toISOString() });
@@ -185,23 +186,80 @@ describe("recruiter match surface consistency and plan boundaries", () => {
     const list = await ListPage({ params: { id: "job-a" }, searchParams: { interest: "ALL" } });
     const payload = JSON.stringify(list, (key, value) => key === "type" || key === "_owner" ? undefined : value);
     expect(payload).not.toContain(privateSkill.label);
-    expect(payload).toContain("Habilidades no disponibles");
+    expect(payload).not.toContain("Habilidades registradas");
     expect(popovers(list)).toHaveLength(visibleScores);
   });
-  it("shows registered skills consistently, with match count identified separately", async () => {
+  it("uses five columns and only real match skills, never registered skills as fallback", async () => {
     const unrelated = { id: "kotlin", label: "KotlinSentinel", aliases: [] };
-    mocks.company.mockResolvedValue({ billingPlan: "PRO", name: "Company A" });
-    mocks.apps.mockResolvedValue(cohort.map((app) => app.id === "app-00" ? {
-      ...app, candidate: { ...app.candidate, candidateSkills: [{ term, level: 3 }, { term: unrelated, level: 2 }] },
-    } : app.id === "app-01" ? {
-      ...app, candidate: { ...app.candidate, candidateSkills: [{ term: unrelated, level: 2 }] },
-    } : app));
-    const list = await ListPage({ params: { id: "job-a" }, searchParams: { interest: "ALL" } });
-    const row = (id: string) => JSON.stringify(nodes(list).find((node) => node.type === "tr" && node.key === id));
-    expect(row("app-00")).toContain("Java · KotlinSentinel");
-    expect(row("app-00")).toContain("AI Match · ");
-    expect(row("app-01")).toContain("KotlinSentinel");
-    expect(row("app-01")).not.toContain("AI Match · ");
+    mocks.apps.mockResolvedValue([{ ...cohort[0], candidate: { ...candidate, candidateSkills: [{ term, level: 3 }, { term: unrelated, level: 2 }] } }]);
+    const list = await ListPage({ params: { id: "job-a" } });
+    expect(nodes(list).filter(node => node.type === "th")).toHaveLength(5);
+    const headerPayload = JSON.stringify(nodes(list).filter(node => node.type === "th"), (key, value) => key === "type" || key === "_owner" ? undefined : value);
+    for (const label of ["Candidato", "AI Match / Skills", "Etapa", "Última actividad", "Acciones"]) expect(headerPayload).toContain(label);
+    expect(headerPayload).not.toContain("Habilidades registradas");
+    expect(headerPayload).not.toContain("Assessment");
+    const skillNode = nodes(list).find(node => typeof node.type === "function" && node.type.name === "MatchedSkills")!;
+    const rendered = (skillNode.type as Function)(skillNode.props);
+    expect(JSON.stringify(rendered)).toContain("Java");
+    expect(JSON.stringify(rendered)).not.toContain("KotlinSentinel");
+    const summaries = nodes(list).filter(node => typeof node.type === "function" && node.type.name === "AssessmentSummary");
+    expect(summaries.every(node => (node.type as Function)(node.props) === null)).toBe(true);
+  });
+  it("keeps a real zero match distinct from a job without analysis signals", async () => {
+    mocks.apps.mockResolvedValue([{ ...cohort[0], candidate: { ...candidate, candidateSkills: [], aiProfile: null } }]);
+    const zero = await ListPage({ params: { id: "job-a" } });
+    expect(popovers(zero)[0].score).toBe(0);
+    mocks.job.mockResolvedValue({ ...job, title: "Vacante general", requiredSkills: [], skills: [] });
+    const absent = await ListPage({ params: { id: "job-a" } });
+    expect(popovers(absent)).toHaveLength(0);
+    const payload = JSON.stringify(absent, (key, value) => key === "type" || key === "_owner" ? undefined : value);
+    expect(payload).toContain("Sin análisis");
+    expect(payload).not.toContain('Evaluación:');
+  });
+  it.each([0, 12, 85])("shows the recorded completed score %s with an authorized results link", async score => {
+    mocks.job.mockResolvedValue({ ...job, assessments: [{ templateId: "test", template: { title: "Full assessment title" } }] });
+    mocks.attempts.mockResolvedValue([{ id: "attempt", applicationId: "app-00", templateId: "test", status: "SUBMITTED", totalScore: score }]);
+    const list = await ListPage({ params: { id: "job-a" } });
+    const summary = nodes(list).find(node => typeof node.type === "function" && node.type.name === "AssessmentSummary" && (node.props.states as any[]).some(state => state.state === "COMPLETED"))!;
+    const rendered = JSON.stringify((summary.type as Function)(summary.props));
+    expect(rendered).toContain(` · ${score}%`);
+    expect(rendered).toContain("/dashboard/assessments/attempts/attempt/results");
+    expect(rendered).toContain("Full assessment title");
+    const row = nodes(list).find(node => node.type === "tr" && node.key === "app-00")!;
+    const stageCell = nodes(row).filter(node => node.type === "td")[2];
+    expect(nodes(stageCell).some(node => typeof node.type === "function" && node.type.name === "AssessmentSummary")).toBe(false);
+  });
+  it.each([["SENT", "Evaluación enviada · Pendiente"], ["STARTED", "Evaluación en progreso"], ["EXPIRED", "Evaluación vencida"]])("renders %s without a fictitious score", async (status, label) => {
+    mocks.job.mockResolvedValue({ ...job, assessments: [{ templateId: "test", template: { title: "Assessment" } }] });
+    mocks.invites.mockResolvedValue([{ applicationId: "app-00", templateId: "test", status: status === "EXPIRED" ? "SENT" : status, expiresAt: new Date(status === "EXPIRED" ? "2020-01-01" : "2099-01-01") }]);
+    const list = await ListPage({ params: { id: "job-a" } });
+    const summary = nodes(list).find(node => typeof node.type === "function" && node.type.name === "AssessmentSummary" && (node.props.states as any[]).some(state => state.state !== "NONE"))!;
+    const rendered = JSON.stringify((summary.type as Function)(summary.props));
+    expect(rendered).toContain(label);
+    expect(rendered).not.toContain("%");
+  });
+  it("summarizes multiple associated assessments without averaging or counting uninvited templates", async () => {
+    mocks.job.mockResolvedValue({ ...job, assessments: ["a", "b", "c"].map(templateId => ({ templateId, template: { title: templateId } })) });
+    mocks.attempts.mockResolvedValue([{ id: "attempt", applicationId: "app-00", templateId: "a", status: "SUBMITTED", totalScore: 85 }]);
+    mocks.invites.mockResolvedValue([{ applicationId: "app-00", templateId: "b", status: "SENT", expiresAt: new Date("2099-01-01") }]);
+    const list = await ListPage({ params: { id: "job-a" } });
+    const summary = nodes(list).find(node => typeof node.type === "function" && node.type.name === "AssessmentSummary" && (node.props.states as any[]).some(state => state.state === "COMPLETED"))!;
+    const rendered = JSON.stringify((summary.type as Function)(summary.props));
+    expect(rendered).toContain("evaluaciones");
+    expect(rendered).not.toContain("85%");
+    expect(rendered).toContain("Ver detalle");
+    expect((summary.props.states as any[]).filter(state => state.state !== "NONE")).toHaveLength(2);
+  });
+  it.each([0, 2, 4, 5, 6])("shows at most three permanent skills and up to five of %s matches", async count => {
+    const list = await ListPage({ params: { id: "job-a" } });
+    const skillNode = nodes(list).find(node => typeof node.type === "function" && node.type.name === "MatchedSkills")!;
+    const details = Array.from({ length: count }, (_, i) => ({ label: `Skill${i}`, matched: true }));
+    const rendered = (skillNode.type as Function)({ details });
+    if (!count) { expect(rendered).toBeNull(); return; }
+    const paragraphs = nodes(rendered).filter(node => node.type === "p");
+    expect(paragraphs[0].props.children).toBe(details.slice(0, 3).map(d => d.label).join(" · "));
+    expect(JSON.stringify(rendered)).not.toContain("Skill5");
+    expect(nodes(rendered).some(node => node.type === "summary")).toBe(count > 3);
   });
   it("does not unlock filtered candidates and does not sort by private scores", async () => {
     mocks.company.mockResolvedValue({ billingPlan: "STARTER", name: "Company A" });

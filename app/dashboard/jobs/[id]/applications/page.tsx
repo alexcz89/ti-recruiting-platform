@@ -11,7 +11,6 @@ import { authOptions } from "@/lib/server/auth";
 import { notFound } from "next/navigation";
 import { fromNow } from "@/lib/dates";
 import InterestSelect from "./InterestSelect";
-import ApplicationStatusBadges from "./ApplicationStatusBadges";
 import ActionsMenu from "./ActionsMenu";
 import { Phone, FileText as FileTextIcon, Search, Lock, ArrowLeft, MapPin, Calendar, Eye as EyeIcon, BarChart2, Users } from "lucide-react";
 import ShareLinkedInButton from "./ShareLinkedInButton";
@@ -25,7 +24,6 @@ import {
   scoreToLabel,
   type BillingPlan,
 } from "@/lib/ai/matchScore";
-import { badgeLevelLabel } from "@/lib/badges";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import {
   buildRecruiterApplicationReadRows,
@@ -37,13 +35,6 @@ import {
   type RecruiterPipelineBucket,
 } from "@/lib/hiring-process/recruiter-read-model";
 import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
-
-const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
-  NATIVE: "Nativo",
-  PROFESSIONAL: "Profesional",
-  CONVERSATIONAL: "Conversacional",
-  BASIC: "Básico",
-};
 
 const PROFILE_TYPE_LABEL: Record<string, string> = {
   ENGINEERING: "Engineering",
@@ -69,6 +60,37 @@ const LEGACY_RECRUITER_TABS = [
 type MatchFilter = "ALL" | "HIGH" | "MED" | "LOW";
 type CvFilter = "ALL" | "YES" | "NO";
 const LIST_SECTIONS = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"] as const;
+
+// Presentation only: consumes the authorized state already resolved below.
+function AssessmentSummary({ states, detailHref }: { states: Array<{ title: string; state: string; score: number | null; attemptId: string | null }>; detailHref?: string }) {
+  const associated = states.filter(state => state.state !== "NONE");
+  if (!associated.length) return null;
+  const completed = associated.filter(state => state.state === "COMPLETED").length;
+  if (associated.length > 1) return <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+    {associated.length} evaluaciones · {completed} completada{completed === 1 ? "" : "s"}
+    {detailHref && <a href={detailHref} className="ml-1 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">Ver detalle</a>}
+  </p>;
+  const state = associated[0];
+  const label = state.state === "COMPLETED" ? "Evaluación completada" : state.state === "STARTED" ? "Evaluación en progreso" : state.state === "EXPIRED" ? "Evaluación vencida" : "Evaluación enviada · Pendiente";
+  return <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+    {label}{state.state === "COMPLETED" && typeof state.score === "number" ? ` · ${state.score}%` : ""}
+    {state.state === "COMPLETED" && state.attemptId
+      ? <a href={`/dashboard/assessments/attempts/${encodeURIComponent(state.attemptId)}/results`} aria-label={`Ver resultado de ${state.title}`} className="ml-1 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">Ver resultado</a>
+      : detailHref && <a href={detailHref} aria-label={`Ver detalle de ${state.title}`} className="ml-1 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">Ver detalle</a>}
+  </p>;
+}
+
+function MatchedSkills({ details }: { details: Array<{ label: string; matched: boolean }> }) {
+  // Preserve the deterministic order produced by the shared match engine; no new ranking.
+  const matched = details.filter(detail => detail.matched).slice(0, 5);
+  if (!matched.length) return null;
+  return <div className="mt-1 max-w-[230px] text-xs text-zinc-600 dark:text-zinc-300">
+    <p className="break-words">{matched.slice(0, 3).map(detail => detail.label).join(" · ")}</p>
+    {matched.length > 3 && <details className="mt-0.5"><summary className="cursor-pointer rounded text-zinc-500 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 dark:text-zinc-400">+{matched.length - 3} coincidencias</summary>
+      <p className="mt-1">{matched.slice(3).map(detail => detail.label).join(" · ")}</p>
+    </details>}
+  </div>;
+}
 
 export default async function JobApplicationsPage({
   params,
@@ -683,7 +705,7 @@ export default async function JobApplicationsPage({
                   className={`rounded-full border px-2 py-0.5 text-[11px] ${preselectedFilter ? "border-amber-500 bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
                   Solo preselectos
                 </Link>
-                <div className="flex flex-wrap items-center gap-1">
+                {(assessmentEnabled || assessmentFilter !== "ALL") && <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[11px] text-zinc-500">Evaluación:</span>
                   {(["ALL", "NONE", "SENT", "STARTED", "COMPLETED", "EXPIRED"] as RecruiterListAssessment[]).map((state) =>
                     <Link key={state} href={buildHref({ assessment: state === "ALL" ? undefined : state })}
@@ -691,7 +713,7 @@ export default async function JobApplicationsPage({
                       className={`rounded-full border px-2 py-0.5 text-[11px] ${assessmentFilter === state ? "border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
                       {({ ALL: "Todas", NONE: "Sin evaluación", SENT: "Enviada", STARTED: "Iniciada", COMPLETED: "Completada", EXPIRED: "Vencida" } as Record<string, string>)[state]}
                     </Link>)}
-                </div>
+                </div>}
                 {chosenPipeline === "CLOSED" && <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[11px] text-zinc-500">Resultado:</span>
                   {(["ALL", "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"] as const).map((outcome) =>
@@ -744,6 +766,7 @@ export default async function JobApplicationsPage({
                           <span className="text-sm font-semibold">{a._fullName}</span>
                         )}
                         <p className="truncate text-xs text-zinc-500">{a._location.full ?? "—"}</p>
+                        <AssessmentSummary states={assessMeta?.perTemplateState ?? []} detailHref={candidateHref} />
                         {(a.candidate as any)?.desiredSalaryMin != null && (
                           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
                             💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes
@@ -788,25 +811,7 @@ export default async function JobApplicationsPage({
                       />
                     )}
 
-                    {!locked && hasJobSkills && matchResult.details.filter((d: any) => d.matched).length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {matchResult.details.filter((d: any) => d.matched).slice(0, 3).map((d: any) => (
-                          <span
-                            key={d.termId}
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                              d.must
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
-                            }`}
-                          >
-                            {d.label}
-                          </span>
-                        ))}
-                        {matchResult.matchedCount > 3 && (
-                          <span className="text-[10px] text-zinc-400">+{matchResult.matchedCount - 3}</span>
-                        )}
-                      </div>
-                    )}
+                    {!locked && hasMatchSignals && <MatchedSkills details={matchResult.details} />}
 
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1 space-y-1.5">
@@ -819,7 +824,7 @@ export default async function JobApplicationsPage({
                           canonicalDisposition={a.disposition}
                           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                         />
-                        <ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} showStage={false} />
+                        {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Preselecto</span>}
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -856,7 +861,10 @@ export default async function JobApplicationsPage({
                             assessmentEnabled && chosenTemplateId
                               ? ({
                                   enabled: true,
-                                  templateId: chosenTemplateId,
+                                  templateId: assessMeta?.templateId ?? chosenTemplateId,
+                                  templateIds: allJobTemplateIds,
+                                  templateTitles: jobTemplateTitles,
+                                  perTemplateState: assessMeta?.perTemplateState,
                                   state: (assessMeta?.state ?? "NONE") as any,
                                   token: assessMeta?.token ?? null,
                                   attemptId: assessMeta?.attemptId ?? null,
@@ -866,31 +874,6 @@ export default async function JobApplicationsPage({
                         />
                       </div>
                     </div>
-
-                    {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                      <div className="flex flex-wrap gap-1">
-                        {(assessMeta.perTemplateState?.filter(t => t.state === "COMPLETED") ?? []).length > 0
-                          ? assessMeta.perTemplateState!.filter(t => t.state === "COMPLETED").map(t => (
-                              <span key={t.templateId} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200">
-                                {t.title.length > 18 ? t.title.slice(0, 18) + "…" : t.title}
-                                {typeof t.score === "number" && <span className="ml-1 font-bold">{t.score}%</span>}
-                              </span>
-                            ))
-                          : (
-                              <span className={[
-                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
-                                  : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                  : "border-teal-200 bg-teal-50 text-teal-700",
-                              ].join(" ")}>
-                                {assessMeta.state === "STARTED" ? "Assessment: iniciado"
-                                  : assessMeta.state === "EXPIRED" ? "Assessment: expirado"
-                                  : "Assessment: enviado"}
-                              </span>
-                            )
-                        }
-                      </div>
-                    )}
                   </div>
                 );
               })}
@@ -902,11 +885,10 @@ export default async function JobApplicationsPage({
                   <tr>
                     <th scope="col" aria-sort={sortKey === "candidate" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("candidate")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Candidato {sortKey === "candidate" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th scope="col" aria-sort={sortKey === "match" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium">
-                      <Link href={sortHref("match")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">AI Match {sortKey === "match" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link>{!hasMatchSignals && <span className="ml-1 font-normal text-zinc-400">(sin señales)</span>}
+                      <Link href={sortHref("match")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">AI Match / Skills {sortKey === "match" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link>{!hasMatchSignals && <span className="ml-1 font-normal text-zinc-400">(sin señales)</span>}
                     </th>
-                    <th className="px-3 py-2.5 font-medium">Habilidades registradas</th>
                     <th scope="col" aria-sort={sortKey === "status" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("status")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Etapa {sortKey === "status" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
-                    <th scope="col" aria-sort={sortKey === "activity" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("activity")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Actividad {sortKey === "activity" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
+                    <th scope="col" aria-sort={sortKey === "activity" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("activity")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Última actividad {sortKey === "activity" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th className="px-3 py-2.5 font-medium">Acciones</th>
                   </tr>
                 </thead>
@@ -915,18 +897,12 @@ export default async function JobApplicationsPage({
                     const matchResult = a._matchResult!; // Used only inside authorized match branches.
                     const gatedFinalScore: number | null = a._gatedFinalScore;
                     const locked: boolean = a._locked;
-                    const candidateSkills: string[] = locked ? [] : (a.candidate?.candidateSkills ?? [])
-                      .map((skill: any) => skill.term?.label).filter(Boolean);
                     const candidateHref = a.candidate?.id
                       ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
                       : undefined;
                     const phone = a.candidate?.phone as string | undefined;
                     const resumeUrl = a.candidate?.resumeUrl as string | undefined;
-                    const hasWhatsApp = phone?.trim().startsWith("+52");
                     const assessMeta = assessmentEnabled && chosenTemplateId ? assessmentByAppId.get(a.id) ?? null : null;
-                    const languages = a.candidate?.candidateLanguages ?? [];
-                    const profileTypeLabel =
-                      PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? null;
 
                     return (
                       <tr key={a.id} className="align-middle border-t border-zinc-100 transition-colors hover:bg-zinc-50/70 dark:border-zinc-800 dark:hover:bg-zinc-900/40">
@@ -940,121 +916,13 @@ export default async function JobApplicationsPage({
 
                             {a._location.full && <span className="max-w-[240px] truncate text-xs text-zinc-500" title={a._location.full}>{a._location.full}</span>}
 
-                            {((a.candidate as any)?.candidateBadges?.length ?? 0) > 0 && (
-                              <span className="flex flex-wrap gap-1">
-                                {(
-                                  (a.candidate as any).candidateBadges as {
-                                    level: number;
-                                    slug: string;
-                                    term: { label: string };
-                                  }[]
-                                )
-                                  .slice(0, 3)
-                                  .map((badge) => (
-                                    <Link
-                                      key={badge.slug}
-                                      href={"/badge/" + badge.slug}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 hover:bg-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:hover:bg-teal-900/60"
-                                      title="Abrir credencial Taskio vigente"
-                                    >
-                                      ✓ {badge.term.label} ·{" "}
-                                      {badgeLevelLabel(badge.level)}
-                                    </Link>
-                                  ))}
-                              </span>
-                            )}
-
-                            {(a.candidate as any)?.desiredSalaryMin != null && (
-                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-950/30 dark:text-emerald-300">
-                                💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes
-                              </span>
-                            )}
-
-                            {profileTypeLabel && (
-                              <div className="mt-0.5">
-                                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">
-                                  {profileTypeLabel}
-                                </span>
-                              </div>
-                            )}
-
-                            {languages.length > 0 && (
-                              <div className="mt-0.5 flex flex-wrap gap-1">
-                                {languages.slice(0, 2).map((l: any) => (
-                                  <span
-                                    key={`${l.term.label}-${l.level}`}
-                                    className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300"
-                                  >
-                                    {l.term.label} {LANGUAGE_LEVEL_LABEL[l.level] ?? l.level}
-                                  </span>
-                                ))}
-                                {languages.length > 2 && <span className="text-[10px] text-zinc-400">+{languages.length - 2}</span>}
-                              </div>
-                            )}
-
-                            <div className="mt-1 flex flex-wrap items-center gap-1">
-                              {phone && (
-                                <a
-                                  href={`tel:${phone}`}
-                                  title={phone}
-                                  className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70 dark:text-zinc-400 transition-colors"
-                                >
-                                  <Phone className="h-3 w-3 shrink-0" />
-                                  Tel
-                                </a>
-                              )}
-                              {resumeUrl && (
-                                <a
-                                  href={resumeUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title="Ver CV"
-                                  className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 transition-colors"
-                                >
-                                  <FileTextIcon className="h-3 w-3 shrink-0" />
-                                  CV
-                                </a>
-                              )}
-                              {hasWhatsApp && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
-                                  <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 fill-current" aria-hidden><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.121 1.532 5.851L.057 23.997l6.305-1.655A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.003-1.366l-.359-.213-3.742.982.999-3.648-.234-.374A9.785 9.785 0 012.182 12C2.182 6.579 6.579 2.182 12 2.182S21.818 6.579 21.818 12 17.421 21.818 12 21.818z"/></svg>
-                                  WA
-                                </span>
-                              )}
-                            </div>
-
-                            {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                              <div className="mt-0.5 flex flex-wrap gap-1">
-                                {(assessMeta.perTemplateState?.filter(t => t.state === "COMPLETED") ?? []).length > 0
-                                  ? assessMeta.perTemplateState!.filter(t => t.state === "COMPLETED").map(t => (
-                                      <span key={t.templateId} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200">
-                                        {t.title.length > 16 ? t.title.slice(0, 16) + "…" : t.title}
-                                        {typeof t.score === "number" && <span className="ml-1 font-bold">{t.score}%</span>}
-                                      </span>
-                                    ))
-                                  : (
-                                      <span className={[
-                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                        assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
-                                          : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                          : "border-teal-200 bg-teal-50 text-teal-700",
-                                      ].join(" ")}>
-                                        {assessMeta.state === "STARTED" ? "Iniciado"
-                                          : assessMeta.state === "EXPIRED" ? "Expirado"
-                                          : "Enviado"}
-                                      </span>
-                                    )
-                                }
-                              </div>
-                            )}
+                            <AssessmentSummary states={assessMeta?.perTemplateState ?? []} detailHref={candidateHref} />
                           </div>
                         </td>
 
                         <td className="px-3 py-2.5">
                           {!hasMatchSignals ? (
-                            <span className="text-xs text-zinc-400">—</span>
+                            <span className="text-xs text-zinc-400">Sin análisis</span>
                           ) : locked ? (
                             <div className="group relative inline-flex cursor-pointer items-center gap-1.5">
                               <div className="flex h-8 w-20 items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40">
@@ -1087,25 +955,7 @@ export default async function JobApplicationsPage({
                               jobId={job.id}
                             />
                           )}
-                        </td>
-
-                        <td className="px-3 py-2.5">
-                          {locked ? (
-                            <span aria-label="Habilidades no disponibles" className="text-xs text-zinc-400">—</span>
-                          ) : (
-                            <div className="max-w-[190px] space-y-0.5">
-                              {candidateSkills.length ? (
-                                <span className="block truncate text-xs text-zinc-700 dark:text-zinc-200" title={candidateSkills.join(", ")}>
-                                  {candidateSkills.slice(0, 3).join(" · ")}{candidateSkills.length > 3 ? ` +${candidateSkills.length - 3}` : ""}
-                                </span>
-                              ) : <span className="text-xs text-zinc-400">—</span>}
-                              {hasMatchSignals && (matchResult?.matchedCount ?? 0) > 0 && (
-                                <span className="block text-[10px] text-zinc-500 dark:text-zinc-400">
-                                  AI Match · {matchResult.matchedCount} coincidencia{matchResult.matchedCount === 1 ? "" : "s"}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                          {!locked && hasMatchSignals && <MatchedSkills details={matchResult.details} />}
                         </td>
 
                         <td className="min-w-[145px] px-3 py-2.5">
@@ -1119,7 +969,7 @@ export default async function JobApplicationsPage({
                               canonicalDisposition={a.disposition}
                               canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                             />
-                            <ApplicationStatusBadges presentation={a._presentation} assessment={a._assessmentState} showStage={false} />
+                            {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Preselecto</span>}
                           </div>
                         </td>
 
