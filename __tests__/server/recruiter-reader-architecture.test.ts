@@ -20,7 +20,9 @@ describe("recruiter reader architecture", () => {
     expect(page).toContain("buildRecruiterApplicationReadRows");
     expect(page).toContain("countRecruiterPresentationRows");
     expect(page).toContain("matchesRecruiterListFilters");
-    expect(page).toContain("ApplicationStatusBadges");
+    expect(page).toContain("<InterestSelect");
+    expect(page).toContain("canonicalStage={a.stage}");
+    expect(page).toContain("canonicalDisposition={a.disposition}");
     expect(page).not.toContain("function getAppInterest");
     expect(page).not.toContain("INTEREST_LABEL");
   });
