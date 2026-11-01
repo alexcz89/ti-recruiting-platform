@@ -5,7 +5,7 @@ import * as React from "react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "@/lib/hiring-process/recruiter-read-model";
-import { PIPELINE_LABELS, getRecruitingPresentation, getRecruitingActions } from "@/lib/hiring-process/recruiting-presentation";
+import { getRecruitingPresentation, getRecruitingActions } from "@/lib/hiring-process/recruiting-presentation";
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { toastError } from "@/lib/ui/toast";
 import { Lock, MapPin, MoreHorizontal, X } from "lucide-react";
@@ -85,7 +85,7 @@ function KanbanCardActions({ card, reads, disabled, onConfirmed }: {
       </DropdownMenuContent>
     </DropdownMenu>}
     {confirmDiscard && <ProcessReasonDialog title="Descartar candidato" pending={pending} confirmationOnly
-      description="La candidatura pasará a Cerrados. Podrás reabrirla si el proceso lo permite."
+      description="La candidatura pasará a Descartados. Podrás reabrirla si el proceso lo permite."
       onCancel={() => setConfirmDiscard(false)}
       onConfirm={async () => {
         const saved = await submit("REJECT_CANDIDATE");
@@ -134,8 +134,13 @@ export default function Kanbanboard({
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string; application?: { stage: string | null; disposition: string | null; stateVersion: number; status: string; recruiterInterest: string } }>;
 }) {
   const router = useRouter();
-  const [section, setSection] = useState("ACTIVE");
-  const [outcome, setOutcome] = useState("ALL");
+  const secondaryGroups = [
+    { key: "HIRED", label: "Contratados" }, { key: "WITHDRAWN", label: "Retirados" },
+    { key: "CANCELLED", label: "Cancelados" }, { key: "HOLD", label: "En pausa" },
+    { key: "RECONCILIATION", label: "Requiere conciliación" },
+  ];
+  const mobileColumns = useMemo(() => [...statuses, "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED", "HOLD", "RECONCILIATION"], [statuses]);
+  const columnLabel = (key: string) => key === "REJECTED" ? "Descartados" : secondaryGroups.find(group => group.key === key)?.label ?? statusLabels[key] ?? key;
   const [items, setItems] = useState<AppCard[]>(applications);
   const [mobileSelection, setMobileSelection] = useState({ jobId: "", stage: "" });
   const [isPending, setIsPending] = useState(false);
@@ -149,18 +154,18 @@ export default function Kanbanboard({
 
   useEffect(() => {
     setMobileSelection((current) => {
-      if (current.jobId === jobId && statuses.includes(current.stage)) return current;
+      if (current.jobId === jobId && mobileColumns.includes(current.stage)) return current;
       let saved: string | null = null;
       try {
         saved = window.sessionStorage.getItem(`kanban-stage:${jobId}`);
       } catch {
         // The selector still works when browser storage is unavailable.
       }
-      return { jobId, stage: saved && statuses.includes(saved) ? saved : statuses[0] ?? "" };
+      return { jobId, stage: saved && mobileColumns.includes(saved) ? saved : statuses[0] ?? "" };
     });
-  }, [jobId, statuses]);
+  }, [jobId, statuses, mobileColumns]);
 
-  const selectedStage = mobileSelection.jobId === jobId && statuses.includes(mobileSelection.stage)
+  const selectedStage = mobileSelection.jobId === jobId && mobileColumns.includes(mobileSelection.stage)
     ? mobileSelection.stage : statuses[0] ?? "";
 
   const selectMobileStage = (stage: string) => {
@@ -173,22 +178,23 @@ export default function Kanbanboard({
   };
 
   const isCardWritable = (card: AppCard) =>
-    card.writerCompatibility !== "NONE";
+    card.writerCompatibility !== "NONE" && presentation(card).section === "ACTIVE";
 
   const presentation = (a: AppCard) => getRecruitingPresentation({ ...a, stage: a.stage as RecruiterApplicationReadInput["stage"], disposition: a.disposition as RecruiterApplicationReadInput["disposition"], status: a.applicationStatus, recruiterInterest: a.status }, canonicalRecruiterReadsEnabled);
   const grouped = useMemo(() => {
     const map: Record<string, AppCard[]> = {};
-    for (const st of statuses) map[st] = [];
+    for (const st of mobileColumns) map[st] = [];
     for (const a of items) {
       const p = getRecruitingPresentation({ ...a, stage: a.stage as RecruiterApplicationReadInput["stage"], disposition: a.disposition as RecruiterApplicationReadInput["disposition"], status: a.applicationStatus, recruiterInterest: a.status }, canonicalRecruiterReadsEnabled);
-      if (p.section === "ACTIVE" && p.column) map[p.column]?.push(a);
+      const key = p.section === "ACTIVE" ? p.column : p.section === "CLOSED" ? p.outcome : p.section;
+      if (key) map[key]?.push(a);
     }
     return map;
-  }, [items, statuses, canonicalRecruiterReadsEnabled]);
+  }, [items, mobileColumns, canonicalRecruiterReadsEnabled]);
 
   // Ejecutar acción de mover (drag o quick action)
   const doMove = (appId: string, fromStatus: string, toStatus: string, fromIdx: number, toIdx: number) => {
-    if (moveInFlight.current || fromStatus === toStatus) return;
+    if (moveInFlight.current || fromStatus === toStatus || fromStatus === "REJECTED" || toStatus === "REJECTED" || !statuses.includes(fromStatus) || !statuses.includes(toStatus)) return;
     const moved = (grouped[fromStatus] || [])[fromIdx];
     if (!moved || moved.id !== appId || !isCardWritable(moved)) return;
     const source = { ...moved, stage: moved.stage as RecruiterApplicationReadInput["stage"], disposition: moved.disposition as RecruiterApplicationReadInput["disposition"], status: moved.applicationStatus, recruiterInterest: moved.status };
@@ -261,19 +267,10 @@ export default function Kanbanboard({
 
   return (
     <section className="min-w-0 md:rounded-2xl md:border md:border-zinc-200/70 md:bg-zinc-50/40 md:p-3 dark:md:border-zinc-800 dark:md:bg-zinc-950/20">
-      <p className="mb-2 text-xs text-zinc-600 dark:text-zinc-400">Total de postulaciones: {items.length}</p>
-      <nav aria-label="Procesos de candidatura" className="mb-3 flex flex-wrap gap-2">
-        {([ ["ACTIVE", "Activos"], ["CLOSED", "Cerrados"], ["HOLD", "En pausa"], ["RECONCILIATION", "Requiere conciliación"] ] as const).map(([key, label]) => <button key={key} type="button" aria-pressed={section === key} onClick={() => setSection(key)} className={`min-h-11 rounded-lg border px-3 text-sm ${section === key ? "border-emerald-700 bg-emerald-700 text-white" : "border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"}`}>{label} ({items.filter(a => presentation(a).section === key).length})</button>)}
-      </nav>
-      {section !== "ACTIVE" ? <div className="space-y-3">
-        {section === "CLOSED" && <label className="block text-sm">Resultado <select value={outcome} onChange={e => setOutcome(e.target.value)} className="rounded border bg-[rgb(var(--card))] p-2">{["ALL", "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"].map(key => <option key={key} value={key}>{key === "ALL" ? "Todos" : PIPELINE_LABELS[key]} ({items.filter(a => presentation(a).section === "CLOSED" && (key === "ALL" || presentation(a).outcome === key)).length})</option>)}</select></label>}
-        {items.filter(a => presentation(a).section === section && (section !== "CLOSED" || outcome === "ALL" || presentation(a).outcome === outcome)).map(card => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
-        {items.filter(a => presentation(a).section === section && (section !== "CLOSED" || outcome === "ALL" || presentation(a).outcome === outcome)).length === 0 && <p className="p-4 text-sm">No hay candidaturas en esta sección.</p>}
-      </div> : <>
       <div className="md:hidden">
         <label htmlFor="kanban-stage" className="mb-1.5 block text-sm font-medium">Etapa</label>
         <select id="kanban-stage" className="min-h-11 w-full rounded-lg border border-zinc-300 bg-[rgb(var(--card))] px-3 py-2 text-sm dark:border-zinc-700" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
-          {statuses.map((stage) => <option key={stage} value={stage}>{statusLabels[stage] ?? stage} ({grouped[stage]?.length ?? 0})</option>)}
+          {mobileColumns.map((stage) => <option key={stage} value={stage}>{columnLabel(stage)} ({grouped[stage]?.length ?? 0})</option>)}
         </select>
         <div className="mt-2.5 space-y-2.5" aria-live="polite">
           {(grouped[selectedStage] ?? []).map((card) => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
@@ -313,7 +310,7 @@ export default function Kanbanboard({
               >
                 {(droppableProvided, droppableSnapshot) => (
                   <Column
-                    title={statusLabels[st] ?? st}
+                    title={columnLabel(st)}
                     count={cards.length}
                     isLoading={isPending}
                     isDraggingOver={droppableSnapshot.isDraggingOver}
@@ -351,17 +348,28 @@ export default function Kanbanboard({
               </Droppable>
             );
           })}
+          <Column title="Descartados" count={grouped.REJECTED?.length ?? 0} accent={COLUMN_ACCENT.REJECTED} innerRef={() => {}} droppableProps={{}} staticColumn>
+            {(grouped.REJECTED ?? []).map(card => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
+          </Column>
         </div>
       </DragDropContext>
       </div>
-      </>}
+      <div className="mt-3 hidden space-y-2 md:block">
+        {secondaryGroups.map(group => <details key={group.key} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <summary className="cursor-pointer rounded text-sm font-medium text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200">{group.label} ({grouped[group.key]?.length ?? 0})</summary>
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            {(grouped[group.key] ?? []).map(card => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
+            {!grouped[group.key]?.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay candidaturas en esta categoría.</p>}
+          </div>
+        </details>)}
+      </div>
     </section>
   );
 
   /* ============ Column ============ */
 
   function Column({
-    title, count, isLoading, isDraggingOver, accent, innerRef, droppableProps, children,
+    title, count, isLoading, isDraggingOver, accent, innerRef, droppableProps, children, staticColumn = false,
   }: {
     title: string;
     count: number;
@@ -371,6 +379,7 @@ export default function Kanbanboard({
     innerRef: (element: HTMLDivElement | null) => void;
     droppableProps: any;
     children: React.ReactNode;
+    staticColumn?: boolean;
   }) {
     return (
       <div
@@ -393,9 +402,9 @@ export default function Kanbanboard({
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
           {count === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
-              <span className="text-2xl opacity-30">↓</span>
+              {!staticColumn && <span className="text-2xl opacity-30">↓</span>}
               <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                Arrastra candidatos aquí
+                {staticColumn ? "No hay candidaturas descartadas" : "Arrastra candidatos aquí"}
               </p>
             </div>
           ) : (

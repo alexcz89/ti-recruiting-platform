@@ -24,12 +24,10 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
   const [reasonAction, setReasonAction] = useState<RecruiterStageOption | null>(null);
   const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
   const options = getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled);
-  const stageTone: Record<string, string> = {
-    APPLIED: "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200",
-    REVIEW: "bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200",
-    INTERVIEW: "bg-violet-50 text-violet-800 dark:bg-violet-950/50 dark:text-violet-200",
-    OFFER: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200",
-  };
+  const stageDot: Record<string, string> = { APPLIED: "bg-zinc-400", REVIEW: "bg-blue-500", INTERVIEW: "bg-violet-500", OFFER: "bg-emerald-500" };
+  const controlClass = "inline-flex h-9 w-[160px] max-w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 text-left text-xs font-medium text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+  const label = <><span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${stageDot[presentation.column ?? ""] ?? "bg-zinc-400"}`} /><span className="min-w-0 flex-1 truncate">{pending ? "Guardando…" : presentation.label}</span></>;
+  if (!options.length) return <span className={controlClass}>{label}</span>;
 
   function choose(option: RecruiterStageOption) {
     if (option.requiresReason) setReasonAction(option);
@@ -39,14 +37,14 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
   return <>
     <DropdownMenu>
       <DropdownMenuTrigger disabled={options.length === 0 || pending} aria-label={`Cambiar etapa: ${presentation.label}`}
-        className={`inline-flex h-9 max-w-[180px] items-center justify-between gap-2 rounded-lg px-2.5 text-left text-xs font-medium transition-colors hover:ring-1 hover:ring-current/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-default disabled:opacity-70 ${stageTone[presentation.column ?? ""] ?? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"}`}>
-        <span className="truncate">{pending ? "Guardando…" : presentation.label}</span><ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 opacity-70" />
+        className={`${controlClass} transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-wait`}>
+        {label}<ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
       </DropdownMenuTrigger>
       <DropdownMenuContent compact align="start" collisionPadding={8} onCloseAutoFocus={event => { if (reasonAction) event.preventDefault(); }}
         className="w-[190px]">
         {options.map(option => <DropdownMenuItem key={`${option.intent}:${option.targetStage ?? ""}`}
           compact onSelect={() => choose(option)}>
-          {option.label}{option.requiresReason ? " · requiere motivo" : ""}
+          {option.requiresReason ? "Regresar a " : "Avanzar a "}{option.label}
         </DropdownMenuItem>)}
       </DropdownMenuContent>
     </DropdownMenu>

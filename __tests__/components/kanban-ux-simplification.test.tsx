@@ -4,15 +4,15 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { DropResult } from "@hello-pangea/dnd";
-const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: vi.fn(), drag: vi.fn(), dragStart: vi.fn() }));
+const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: vi.fn(), drag: vi.fn(), dragStart: vi.fn(), targets: vi.fn(), draggables: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/lib/ui/toast", () => ({ toastError: mocks.error }));
 vi.mock("@hello-pangea/dnd", () => ({
   DragDropContext: ({ children, onDragEnd }: { children: React.ReactNode; onDragEnd: (result: DropResult) => void }) => {
     mocks.drag.mockImplementation(onDragEnd); return <>{children}</>;
   },
-  Droppable: ({ children }: { children: (...args: unknown[]) => React.ReactNode }) => children({ innerRef: vi.fn(), droppableProps: {}, placeholder: null }, { isDraggingOver: false }),
-  Draggable: ({ children }: { children: (...args: unknown[]) => React.ReactNode }) => children({ innerRef: vi.fn(), draggableProps: {}, dragHandleProps: { onMouseDown: mocks.dragStart } }, { isDragging: false }),
+  Droppable: ({ children, droppableId }: { children: (...args: unknown[]) => React.ReactNode; droppableId: string }) => { mocks.targets(droppableId); return children({ innerRef: vi.fn(), droppableProps: {}, placeholder: null }, { isDraggingOver: false }); },
+  Draggable: ({ children, draggableId, isDragDisabled }: { children: (...args: unknown[]) => React.ReactNode; draggableId: string; isDragDisabled: boolean }) => { mocks.draggables(draggableId, isDragDisabled); return children({ innerRef: vi.fn(), draggableProps: {}, dragHandleProps: { onMouseDown: mocks.dragStart } }, { isDragging: false }); },
 }));
 import KanbanBoard from "@/app/dashboard/jobs/[id]/KanbanBoard";
 import { ACTIVE_PIPELINE as PRIMARY_RECRUITER_PIPELINE_BUCKETS, PIPELINE_LABELS as RECRUITER_PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
@@ -139,16 +139,16 @@ it.each([true, false])("confirms Kanban discard before changing counters with ca
   fireEvent.click(screen.getByRole("button", { name: "Guardando…" }));
   expect(fetch).toHaveBeenCalledOnce();
   expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body ?? ""))).toMatchObject({ intent: "REJECT_CANDIDATE", expectedVersion: reads ? 1 : 0, commandId: expect.any(String) });
-  expect(screen.getByRole("button", { name: "Activos (1)" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Cerrados (0)" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Por revisar (1)" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Descartados (0)" })).toBeInTheDocument();
   await act(async () => finish(new Response(JSON.stringify({ application: reads
     ? { stage: "CLOSED", disposition: "REJECTED", status: "REJECTED", recruiterInterest: "REJECTED", stateVersion: 2 }
     : { stage: null, disposition: null, status: "REJECTED", recruiterInterest: "REJECTED", stateVersion: 0 },
   }))));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Activos (0)" })).toBeInTheDocument());
-  expect(screen.getByRole("button", { name: "Cerrados (1)" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Cerrados (1)" }));
-  expect(screen.getByRole("link", { name: card.candidate.name })).toBeInTheDocument();
+  await waitFor(() => expect(screen.getByRole("option", { name: "Por revisar (0)" })).toBeInTheDocument());
+  expect(screen.getByRole("option", { name: "Descartados (1)" })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "REJECTED" } });
+  expect(screen.getAllByRole("link", { name: card.candidate.name }).length).toBeGreaterThan(0);
 });
 
 it("keeps Kanban counters and the candidate when discard is rejected", async () => {
@@ -159,8 +159,8 @@ it("keeps Kanban counters and the candidate when discard is rejected", async () 
   fireEvent.click(await screen.findByRole("menuitem", { name: "Descartar candidato" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
-  expect(screen.getByRole("button", { name: "Activos (1)" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Cerrados (0)" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Por revisar (1)" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Descartados (0)" })).toBeInTheDocument();
   expect(screen.getByRole("dialog", { name: "Descartar candidato" })).toBeInTheDocument();
   expect(JSON.stringify(mocks.error.mock.calls)).not.toContain("private metadata");
 });
@@ -184,9 +184,9 @@ it("uses the persisted state to classify a successful response that differs from
   expect(moveAction).toHaveBeenCalledOnce();
   expect(screen.getByRole("option", { name: /Por revisar \(0\)/ })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: /En revisión \(0\)/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Cerrados (1)" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Cerrados (1)" }));
-  expect(screen.getByRole("link", { name: card.candidate.name })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Descartados (1)" })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "REJECTED" } });
+  expect(screen.getAllByRole("link", { name: card.candidate.name }).length).toBeGreaterThan(0);
 });
 it("restores the selected mobile stage after navigating to a profile and returning to the same job", () => {
   const view = render(<KanbanBoard {...props} moveAction={vi.fn()} />);
@@ -206,12 +206,13 @@ it.each([true, false])("keeps canonical and legacy columns distinct with reader 
     { ...card, id: "closed", displayStatus: "CLOSED_OTHER", stage: "CLOSED", disposition: "CANCELLED", status: "REVIEW", candidate: { ...card.candidate, name: "Closed" } },
   ];
   render(<KanbanBoard {...props} statuses={states} statusLabels={RECRUITER_PIPELINE_LABELS} applications={applications} canonicalRecruiterReadsEnabled={reads} moveAction={vi.fn()} />);
-  expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(4);
+  expect(screen.getAllByRole("heading", { level: 3 })).toHaveLength(5);
   expect(screen.getByRole("option", { name: /En revisión \(1\)/ })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: /Por revisar \(1\)/ })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "En pausa (1)" }));
+  fireEvent.click(screen.getByText("En pausa (1)", { selector: "summary" }));
   expect(screen.getByRole("link", { name: "Hold" })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Cerrados (2)" }));
+  fireEvent.click(screen.getByText("Contratados (1)", { selector: "summary" }));
+  fireEvent.click(screen.getByText("Cancelados (1)", { selector: "summary" }));
   expect(screen.getByRole("link", { name: "Hired" })).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Closed" })).toBeInTheDocument();
 });
@@ -271,4 +272,38 @@ it("does not turn a visual Review card from ASSESSMENT into a new review or pres
   await act(async () => mocks.drag(drop("REVIEW", "APPLIED")));
   expect(move).not.toHaveBeenCalled();
   expect(screen.getByRole("option", { name: /En revisión \(1\)/ })).toBeInTheDocument();
+});
+
+it.each([true, false])("keeps rejected legacy/canonical and special outcomes without duplicates with reads=%s", async reads => {
+  const make = (id: string, stage: string | null, disposition: string | null, applicationStatus: string, status: string, version = 1) => ({ ...card, id, stage, disposition, applicationStatus, status, stateVersion: version, candidate: { ...card.candidate, name: id } });
+  const applications = [card,
+    make("Rejected canonical", "CLOSED", "REJECTED", "REJECTED", "REJECTED"),
+    make("Rejected legacy", null, null, "REJECTED", "REJECTED", 0),
+    make("Withdrawn", "CLOSED", "WITHDRAWN", "SUBMITTED", "REVIEW"),
+    make("Hired", "CLOSED", "HIRED", "HIRED", "ACCEPTED"),
+    make("Cancelled", "CLOSED", "CANCELLED", "SUBMITTED", "REVIEW"),
+    make("Paused", "REVIEW", "HOLD", "REVIEWING", "REVIEW"),
+    make("Inconsistent", "APPLIED", "ACTIVE", "HIRED", "ACCEPTED"),
+  ];
+  const move = vi.fn();
+  render(<KanbanBoard {...props} applications={applications} canonicalRecruiterReadsEnabled={reads} moveAction={move} />);
+  expect(screen.queryByRole("navigation", { name: "Procesos de candidatura" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Total de postulaciones/)).not.toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Descartados (2)" })).toBeInTheDocument();
+  for (const name of ["Rejected canonical", "Rejected legacy"]) expect(screen.getAllByRole("link", { name })).toHaveLength(1);
+  expect(mocks.targets.mock.calls.flat()).not.toContain("REJECTED");
+  expect(mocks.draggables.mock.calls.map(call => call[0])).not.toContain("Rejected canonical");
+  await act(async () => mocks.drag({ ...drop("REJECTED", "REVIEW"), draggableId: "Rejected canonical" }));
+  await act(async () => mocks.drag(drop("APPLIED", "REJECTED")));
+  expect(move).not.toHaveBeenCalled();
+  for (const [label, name] of [["Contratados", "Hired"], ["Retirados", "Withdrawn"], ["Cancelados", "Cancelled"], ["En pausa", "Paused"], ["Requiere conciliación", "Inconsistent"]]) {
+    fireEvent.click(screen.getByText(`${label} (1)`, { selector: "summary" }));
+    expect(screen.getAllByRole("link", { name })).toHaveLength(1);
+  }
+  expect(mocks.draggables.mock.calls.find(call => call[0] === "Inconsistent")).toBeUndefined();
+  fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "REJECTED" } });
+  expect(screen.getByRole("combobox", { name: "Etapa" })).toHaveValue("REJECTED");
+  expect(screen.getAllByRole("link", { name: "Rejected legacy" })).toHaveLength(2); // responsive copies, one visible per breakpoint
+  fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "HOLD" } });
+  expect(screen.getByRole("combobox", { name: "Etapa" })).toHaveValue("HOLD");
 });

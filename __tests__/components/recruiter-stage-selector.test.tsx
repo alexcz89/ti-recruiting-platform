@@ -20,7 +20,7 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); refresh.mockClear(); vi.mock
 
 async function choose(current: string, option: string) {
   fireEvent.pointerDown(screen.getByRole("button", { name: `Cambiar etapa: ${current}` }), { button: 0, ctrlKey: false });
-  fireEvent.click(await screen.findByRole("menuitem", { name: option }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: option.includes("requiere motivo") ? `Regresar a ${option.split(" ·")[0]}` : `Avanzar a ${option}` }));
 }
 
 describe("editable recruiter stage", () => {
@@ -94,7 +94,7 @@ describe("editable recruiter stage", () => {
     const trigger = screen.getByRole("button", { name: "Cambiar etapa: Oferta" });
     expect(trigger).toHaveAttribute("aria-haspopup", "menu");
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Entrevista · requiere motivo" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Regresar a Entrevista" }));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     fireEvent.change(screen.getByRole("combobox", { name: "Motivo" }), { target: { value: "PROCESS_CHANGE" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
@@ -141,9 +141,16 @@ describe("editable recruiter stage", () => {
   it("opens the stage menu from the keyboard with a labelled trigger", async () => {
     render(<InterestSelect {...applied} />);
     const trigger = screen.getByRole("button", { name: "Cambiar etapa: Por revisar" });
-    expect(trigger).toHaveClass("h-9", "max-w-[180px]");
+    expect(trigger).toHaveClass("h-9", "w-[160px]");
     trigger.focus();
     fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" });
-    expect(await screen.findByRole("menuitem", { name: "En revisión" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "Avanzar a En revisión" })).toBeInTheDocument();
   });
+});
+
+it.each([true, false])("renders final states as static labels without a chevron with reads=%s", reads => {
+  render(<InterestSelect applicationId="closed" initial="REJECTED" initialStateVersion={reads ? 3 : 0} legacyStatus="REJECTED" canonicalStage={reads ? "CLOSED" : null} canonicalDisposition={reads ? "REJECTED" : null} canonicalRecruiterReadsEnabled={reads} />);
+  expect(screen.getByText("Descartado")).toBeInTheDocument();
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  expect(document.querySelector("svg")).toBeNull();
 });
