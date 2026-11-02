@@ -7,13 +7,16 @@ import type { DropResult } from "@hello-pangea/dnd";
 
 async function selectProcessAction(name: string) {
   const trigger = screen.getByRole("button", {
-    name: "Acciones del proceso",
+    name: /^Cambiar etapa:/,
   });
 
-  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+  fireEvent.pointerDown(trigger, {
+    button: 0,
+    ctrlKey: false,
+  });
 
   const option = await screen.findByRole("menuitem", {
-    name,
+    name: name === "Iniciar revisión" ? "En revisión" : name,
   });
 
   fireEvent.click(option);
@@ -59,7 +62,7 @@ describe("START_REVIEW interactions", () => {
     await selectProcessAction("Iniciar revisión");
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
     rerender(selector(reads, saved));
-    expect(screen.getByRole("button", { name: "Acciones del proceso" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Cambiar etapa:/ })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
   });
 
@@ -90,17 +93,22 @@ describe("START_REVIEW interactions", () => {
     const { rerender } = render(selector());
     await selectProcessAction("Iniciar revisión");
     const trigger = screen.getByRole("button", {
-      name: "Acciones del proceso",
+      name: /^Cambiar etapa:/,
     });
 
     expect(trigger).toBeDisabled();
     fireEvent.click(trigger);
     expect(fetch).toHaveBeenCalledOnce();
-    expect(screen.getByRole("button", { name: "Acciones del proceso" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Cambiar etapa:/ })).toBeDisabled();
     await act(async () => resolve(response()));
-    expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toMatchObject({ intent: "START_REVIEW", expectedVersion: 1, commandId: expect.any(String) });
+    expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toMatchObject({
+      intent: "SET_RECRUITING_STATE",
+      destination: "REVIEW",
+      expectedVersion: 1,
+      commandId: expect.any(String),
+    });
     rerender(selector(true, reviewed));
-    expect(screen.getByRole("button", { name: "Acciones del proceso" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Cambiar etapa:/ })).toBeEnabled();
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
 
@@ -153,14 +161,16 @@ describe("START_REVIEW interactions", () => {
     act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "APPLIED", index: 0 }, destination: { droppableId: "REVIEW", index: 0 } }));
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
     const first = move.mock.calls[0][0] as FormData;
-    expect(first.get("intent")).toBe("START_REVIEW");
+    expect(first.get("intent")).toBe("SET_RECRUITING_STATE");
+    expect(first.get("destination")).toBe("REVIEW");
     expect(first.get("expectedVersion")).toBe("1");
     expect(first.get("commandId")).toEqual(expect.any(String));
     expect(screen.queryByTitle("Mover a Preselecto")).not.toBeInTheDocument();
     act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "REVIEW", index: 0 }, destination: { droppableId: "INTERVIEW", index: 0 } }));
     await waitFor(() => expect(move).toHaveBeenCalledTimes(2));
     expect((move.mock.calls[1][0] as FormData).get("expectedVersion")).toBe("2");
-    expect((move.mock.calls[1][0] as FormData).get("newStatus")).toBe("ACCEPTED");
+    expect((move.mock.calls[1][0] as FormData).get("intent")).toBe("SET_RECRUITING_STATE");
+    expect((move.mock.calls[1][0] as FormData).get("destination")).toBe("INTERVIEW");
   });
 
   it("restores the original column when the Kanban request rejects", async () => {

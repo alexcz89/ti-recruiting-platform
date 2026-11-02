@@ -39,6 +39,7 @@ function createTransactionAdapter(tx: Prisma.TransactionClient): TransitionTrans
         where: { id: applicationId },
         select: {
           id: true,
+          jobId: true,
           stage: true,
           disposition: true,
           stateVersion: true,

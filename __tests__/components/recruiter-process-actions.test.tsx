@@ -62,9 +62,9 @@ describe("secondary recruiter process actions", () => {
       <ActionsMenu {...base} processSource={{ stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", stateVersion: 1 }} />
     </>);
     fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Por revisar" }), { button: 0, ctrlKey: false });
-    expect(await screen.findByRole("menuitem", { name: "Avanzar a En revisión" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "En revisión" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Preseleccionar" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Descartar candidato" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Descartado" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     await openMenu();
     expect(await screen.findByRole("menuitem", { name: "Preseleccionar" })).toBeInTheDocument();

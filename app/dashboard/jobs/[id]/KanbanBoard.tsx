@@ -5,13 +5,12 @@ import * as React from "react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "@/lib/hiring-process/recruiter-read-model";
-import { getRecruitingPresentation, getRecruitingActions } from "@/lib/hiring-process/recruiting-presentation";
+import { getRecruitingPresentation, getRecruiterStageOptions, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { toastError } from "@/lib/ui/toast";
-import { Lock, MapPin, MoreHorizontal, X } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import ProcessReasonDialog from "./applications/ProcessReasonDialog";
-import { useApplicationIntent } from "./applications/useApplicationIntent";
+import { Lock, MapPin } from "lucide-react";
+import { RecruiterStateDialog, type ReasonCode } from "./applications/ProcessReasonDialog";
+import InterestSelect from "./applications/InterestSelect";
 import type { PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
 import {
   DragDropContext,
@@ -51,48 +50,6 @@ type AppCard = {
   _assessments?: AssessmentMeta[];
   candidate: Candidate;
 };
-
-function KanbanCardActions({ card, reads, disabled, onConfirmed }: {
-  card: AppCard;
-  reads: boolean;
-  disabled: boolean;
-  onConfirmed: (source: PresentationSource) => void;
-}) {
-  const initialSource: PresentationSource = {
-    stage: card.stage as RecruiterApplicationReadInput["stage"],
-    disposition: card.disposition as RecruiterApplicationReadInput["disposition"],
-    status: card.applicationStatus,
-    recruiterInterest: card.status,
-    stateVersion: card.stateVersion,
-  };
-  const { source, pending, submit } = useApplicationIntent(card.id, initialSource, onConfirmed);
-  const [confirmDiscard, setConfirmDiscard] = useState(false);
-  const canDiscard = getRecruitingActions(source, reads).includes("REJECT_CANDIDATE") && card.writerCompatibility !== "NONE";
-  if (!canDiscard && !confirmDiscard) return null;
-  return <>
-    {canDiscard && <DropdownMenu>
-      <DropdownMenuTrigger aria-label={`Acciones de ${card.candidate.name}`} disabled={pending || disabled}
-        onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}
-        onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()}
-        onClick={event => event.stopPropagation()}
-        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 dark:text-zinc-400 dark:hover:bg-zinc-800">
-        <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent compact align="end" collisionPadding={8} onCloseAutoFocus={event => { if (confirmDiscard) event.preventDefault(); }} className="w-[210px]">
-        <DropdownMenuItem compact onSelect={() => setConfirmDiscard(true)} className="text-rose-700 dark:text-rose-300">
-          <X className="h-3.5 w-3.5" />Descartar candidato
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>}
-    {confirmDiscard && <ProcessReasonDialog title="Descartar candidato" pending={pending} confirmationOnly
-      description="La candidatura pasará a Descartados. Podrás reabrirla si el proceso lo permite."
-      onCancel={() => setConfirmDiscard(false)}
-      onConfirm={async () => {
-        const saved = await submit("REJECT_CANDIDATE");
-        if (saved) setConfirmDiscard(false);
-      }} />}
-  </>;
-}
 
 // Colores por etapa del pipeline
 const COLUMN_ACCENT: Record<string, { header: string; badge: string; drag: string }> = {
@@ -144,9 +101,12 @@ export default function Kanbanboard({
   const [items, setItems] = useState<AppCard[]>(applications);
   const [mobileSelection, setMobileSelection] = useState({ jobId: "", stage: "" });
   const [isPending, setIsPending] = useState(false);
-  const [dragSourceStatus, setDragSourceStatus] = useState<string | null>(null);
   const moveInFlight = React.useRef(false);
-  const reviewCommand = React.useRef<{ key: string; id: string } | null>(null);
+  const moveCommand = React.useRef<{ key: string; id: string } | null>(null);
+  const [requestedMove, setRequestedMove] = useState<{ card: AppCard; option: RecruiterStageOption } | null>(null);
+  const [selectorBusy, setSelectorBusy] = useState(false);
+  const selectorBusyRef = React.useRef(false);
+  const onSelectorBusy = React.useCallback((busy: boolean) => { selectorBusyRef.current = busy; setSelectorBusy(busy); }, []);
 
   useEffect(() => {
     setItems(applications);
@@ -178,7 +138,7 @@ export default function Kanbanboard({
   };
 
   const isCardWritable = (card: AppCard) =>
-    card.writerCompatibility !== "NONE" && presentation(card).section === "ACTIVE";
+    card.writerCompatibility !== "NONE" && presentation(card).section !== "RECONCILIATION";
 
   const presentation = (a: AppCard) => getRecruitingPresentation({ ...a, stage: a.stage as RecruiterApplicationReadInput["stage"], disposition: a.disposition as RecruiterApplicationReadInput["disposition"], status: a.applicationStatus, recruiterInterest: a.status }, canonicalRecruiterReadsEnabled);
   const grouped = useMemo(() => {
@@ -194,36 +154,35 @@ export default function Kanbanboard({
 
   // Ejecutar acción de mover (drag o quick action)
   const doMove = (appId: string, fromStatus: string, toStatus: string, fromIdx: number, toIdx: number) => {
-    if (moveInFlight.current || fromStatus === toStatus || fromStatus === "REJECTED" || toStatus === "REJECTED" || !statuses.includes(fromStatus) || !statuses.includes(toStatus)) return;
+    if (moveInFlight.current || selectorBusyRef.current || requestedMove || fromStatus === toStatus || !statuses.includes(fromStatus) || !statuses.includes(toStatus)) return;
     const moved = (grouped[fromStatus] || [])[fromIdx];
     if (!moved || moved.id !== appId || !isCardWritable(moved)) return;
     const source = { ...moved, stage: moved.stage as RecruiterApplicationReadInput["stage"], disposition: moved.disposition as RecruiterApplicationReadInput["disposition"], status: moved.applicationStatus, recruiterInterest: moved.status };
-    const intent = toStatus === "REVIEW" && fromStatus === "APPLIED" ? "START_REVIEW"
-      : toStatus === "INTERVIEW" ? "MOVE_TO_INTERVIEW" : toStatus === "OFFER" ? "MOVE_TO_OFFER" : null;
-    if (!intent || !getRecruitingActions(source, canonicalRecruiterReadsEnabled).includes(intent)) return;
-    const writerStatus = intent === "START_REVIEW" ? "REVIEW" : "ACCEPTED";
-    const startsReview = intent === "START_REVIEW";
+    const option = getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled).find(option => option.destination === toStatus && !option.current);
+    if (!option) return;
+    if (option.requiresReason || option.requiresConfirmation) { setRequestedMove({ card: moved, option }); return; }
+    void submitMove(moved, option);
+  };
+
+  async function submitMove(moved: AppCard, option: RecruiterStageOption, reason?: { reasonCode: ReasonCode; reasonText?: string }) {
+    if (moveInFlight.current || selectorBusyRef.current) return;
     const fd = new FormData();
-    fd.set("appId", appId);
-    fd.set("newStatus", writerStatus);
-    fd.set("intent", intent);
+    fd.set("appId", moved.id);
+    fd.set("intent", "SET_RECRUITING_STATE");
+    fd.set("destination", option.destination);
+    if (reason) { fd.set("reasonCode", reason.reasonCode); if (reason.reasonText) fd.set("reasonText", reason.reasonText); }
     {
       fd.set("expectedVersion", String(moved.stateVersion));
-      if (startsReview) {
-        const key = `${appId}:${moved.stateVersion}`;
-        if (reviewCommand.current?.key !== key) reviewCommand.current = { key, id: crypto.randomUUID() };
-        fd.set("commandId", reviewCommand.current.id);
-      } else {
-        fd.set("commandId", crypto.randomUUID());
-      }
+      const key = JSON.stringify({ id: moved.id, version: moved.stateVersion, destination: option.destination, reason });
+      if (moveCommand.current?.key !== key) moveCommand.current = { key, id: crypto.randomUUID() };
+      fd.set("commandId", moveCommand.current.id);
     }
 
     moveInFlight.current = true;
     setIsPending(true);
-    void (async () => {
       try {
         const res = await moveAction(fd);
-        if (!res.ok) throw new Error("No se pudo mover");
+        if (!res.ok || !res.application || !Number.isInteger(res.application.stateVersion)) throw new Error("No se pudo mover");
         if (res.application) {
           const saved = res.application;
           const confirmedBucket = getRecruiterApplicationReadModel({
@@ -232,13 +191,15 @@ export default function Kanbanboard({
             status: saved.status,
             recruiterInterest: saved.recruiterInterest,
           }, { canonicalReadsEnabled: canonicalRecruiterReadsEnabled }).bucket;
-          setItems((current) => current.map((item) => item.id === appId ? {
+          setItems((current) => current.map((item) => item.id === moved.id ? {
             ...item, stage: saved.stage, disposition: saved.disposition,
             stateVersion: saved.stateVersion, applicationStatus: saved.status,
             status: saved.recruiterInterest,
             displayStatus: confirmedBucket,
+            writerCompatibility: saved.stage && saved.disposition ? "CANONICAL" : item.writerCompatibility,
           } : item));
         }
+        setRequestedMove(null);
         router.refresh();
       } catch {
         toastError("No se pudo mover el candidato. Actualiza la página e intenta de nuevo.");
@@ -247,8 +208,7 @@ export default function Kanbanboard({
         moveInFlight.current = false;
         setIsPending(false);
       }
-    })();
-  };
+  }
 
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -262,26 +222,27 @@ export default function Kanbanboard({
     setItems(current => current.map(item => item.id === appId ? {
       ...item, stage: saved.stage, disposition: saved.disposition, stateVersion: saved.stateVersion,
       applicationStatus: saved.status, status: saved.recruiterInterest, displayStatus: confirmedBucket,
+      writerCompatibility: saved.stage && saved.disposition ? "CANONICAL" : item.writerCompatibility,
     } : item));
   };
 
   return (
     <section className="min-w-0 md:rounded-2xl md:border md:border-zinc-200/70 md:bg-zinc-50/40 md:p-3 dark:md:border-zinc-800 dark:md:bg-zinc-950/20">
+      {requestedMove && <RecruiterStateDialog option={requestedMove.option} pending={isPending} onCancel={() => setRequestedMove(null)}
+        onConfirm={reason => { void submitMove(requestedMove.card, requestedMove.option, reason); }} />}
       <div className="md:hidden">
         <label htmlFor="kanban-stage" className="mb-1.5 block text-sm font-medium">Etapa</label>
         <select id="kanban-stage" className="min-h-11 w-full rounded-lg border border-zinc-300 bg-[rgb(var(--card))] px-3 py-2 text-sm dark:border-zinc-700" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
           {mobileColumns.map((stage) => <option key={stage} value={stage}>{columnLabel(stage)} ({grouped[stage]?.length ?? 0})</option>)}
         </select>
         <div className="mt-2.5 space-y-2.5" aria-live="polite">
-          {(grouped[selectedStage] ?? []).map((card) => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
+          {(grouped[selectedStage] ?? []).map((card) => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
           {(grouped[selectedStage] ?? []).length === 0 && <p className="py-6 text-center text-sm text-zinc-600 dark:text-zinc-400">No hay candidatos en esta etapa.</p>}
         </div>
       </div>
       <div className="hidden overflow-x-auto md:block">
       <DragDropContext
-        onDragStart={(start) => setDragSourceStatus(start.source.droppableId)}
         onDragEnd={(result) => {
-          setDragSourceStatus(null);
           handleDragEnd(result);
         }}
       >
@@ -294,16 +255,13 @@ export default function Kanbanboard({
                 key={st}
                 droppableId={st}
                 type="APPLICATION"
-                isDropDisabled={
-                  dragSourceStatus !== null &&
-                  !((dragSourceStatus === "APPLIED" && st === "REVIEW") || (dragSourceStatus === "REVIEW" && st === "INTERVIEW") || (dragSourceStatus === "INTERVIEW" && st === "OFFER"))
-                }
+                isDropDisabled={isPending || selectorBusy || requestedMove !== null}
                 renderClone={(provided, _snapshot, rubric) => {
                   const card = (grouped[rubric.source.droppableId] || [])[rubric.source.index];
                   if (!card) return null;
                   return (
                     <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} className="pointer-events-none">
-                      <Card card={card} jobId={jobId} dragging hasMatchSignals={hasMatchSignals} />
+                      {renderCard({ card, jobId, dragging: true, hasMatchSignals })}
                     </div>
                   );
                 }}
@@ -323,7 +281,7 @@ export default function Kanbanboard({
                         key={card.id}
                         draggableId={card.id}
                         index={index}
-                        isDragDisabled={isPending || !isCardWritable(card)}
+                        isDragDisabled={isPending || selectorBusy || requestedMove !== null || !isCardWritable(card)}
                       >
                         {(draggableProvided, draggableSnapshot) => (
                           <div
@@ -332,12 +290,7 @@ export default function Kanbanboard({
                             {...draggableProvided.dragHandleProps}
                             className={draggableSnapshot.isDragging ? "opacity-30 transition-opacity" : "opacity-100 transition-opacity"}
                           >
-                            <Card
-                              card={card}
-                              jobId={jobId}
-                              dragging={draggableSnapshot.isDragging}
-                              hasMatchSignals={hasMatchSignals}
-                            />
+                            {renderCard({ card, jobId, dragging: draggableSnapshot.isDragging, hasMatchSignals })}
                           </div>
                         )}
                       </Draggable>
@@ -349,7 +302,7 @@ export default function Kanbanboard({
             );
           })}
           <Column title="Descartados" count={grouped.REJECTED?.length ?? 0} accent={COLUMN_ACCENT.REJECTED} innerRef={() => {}} droppableProps={{}} staticColumn>
-            {(grouped.REJECTED ?? []).map(card => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
+            {(grouped.REJECTED ?? []).map(card => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
           </Column>
         </div>
       </DragDropContext>
@@ -358,13 +311,132 @@ export default function Kanbanboard({
         {secondaryGroups.map(group => <details key={group.key} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
           <summary className="cursor-pointer rounded text-sm font-medium text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200">{group.label} ({grouped[group.key]?.length ?? 0})</summary>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            {(grouped[group.key] ?? []).map(card => <Card key={card.id} card={card} jobId={jobId} dragging={false} hasMatchSignals={hasMatchSignals} />)}
+            {(grouped[group.key] ?? []).map(card => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
             {!grouped[group.key]?.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay candidaturas en esta categoría.</p>}
           </div>
         </details>)}
       </div>
     </section>
   );
+
+  /* ============ Card ============ */
+
+  function renderCard({
+    card, jobId, dragging, hasMatchSignals,
+  }: {
+    card: AppCard;
+    jobId: string;
+    dragging: boolean;
+    hasMatchSignals?: boolean;
+  }) {
+    const now = Date.now();
+    const createdMs = card.createdAt ? new Date(card.createdAt).getTime() : null;
+    const isNew = createdMs !== null && now - createdMs < 48 * 60 * 60 * 1000;
+    const submittedMs = card.submittedAt
+      ? new Date(card.submittedAt).getTime()
+      : null;
+    const daysPendingReview =
+      submittedMs !== null && Number.isFinite(submittedMs)
+        ? Math.floor((now - submittedMs) / 86_400_000)
+        : null;
+    const processState = presentation(card);
+    const isStale =
+      processState.section === "ACTIVE" &&
+      processState.column === "APPLIED" &&
+      daysPendingReview !== null &&
+      daysPendingReview >= 5;
+    const score = card._score;
+    const locked = card._locked;
+
+    return (
+      <article
+        className={[
+          "group rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs transition-colors",
+          "dark:border-zinc-800 dark:bg-zinc-900",
+          dragging ? "ring-2 ring-emerald-500/50" : "hover:border-zinc-300 dark:hover:border-zinc-700",
+          isStale ? "border-l-2 border-l-amber-400" : "",
+        ].join(" ")}
+      >
+        {/* Header: nombre + badges + score */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h4 className="min-w-0 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
+                <CandidateProfileLink applicationId={card.id} jobId={jobId} source={{ stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], stateVersion: card.stateVersion, status: card.applicationStatus, recruiterInterest: card.status }} enabled={autoReviewEnabled} href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} className="break-words text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</CandidateProfileLink>
+              </h4>
+              {isNew && (
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  Nueva
+                </span>
+              )}
+            </div>
+            {card.candidate.city && (
+              <p className="mt-0.5 flex max-w-[170px] items-center gap-0.5 truncate text-[11px] text-zinc-600 dark:text-zinc-400">
+                <MapPin className="h-2.5 w-2.5 shrink-0" />
+                {card.candidate.city}
+              </p>
+            )}
+          </div>
+
+          {/* AI Match y acción contextual */}
+          <div className="flex shrink-0 items-start gap-1">
+            {hasMatchSignals && (
+              locked ? (
+                <div className="flex items-center gap-0.5 rounded-md border border-zinc-200 px-1.5 py-0.5 dark:border-zinc-700">
+                  <Lock className="h-2.5 w-2.5 text-zinc-400" />
+                  <span className="text-[9px] text-zinc-400">Pro</span>
+                </div>
+              ) : score !== null && score !== undefined ? (
+                <span className={`text-sm font-black leading-none ${scoreColor(score)}`}>
+                  {score}%
+                </span>
+              ) : null
+            )}
+          </div>
+        </div>
+
+        {!dragging && isCardWritable(card) && <div className="mt-2" onPointerDown={event => event.stopPropagation()}
+          onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+          <InterestSelect applicationId={card.id} initial={card.status as "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED"}
+            initialStateVersion={card.stateVersion} legacyStatus={card.applicationStatus}
+            canonicalStage={card.stage as RecruiterApplicationReadInput["stage"]} canonicalDisposition={card.disposition as RecruiterApplicationReadInput["disposition"]}
+            canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled} disabled={isPending || selectorBusy || requestedMove !== null}
+            accessibleLabel={`Mover a: ${card.candidate.name}`} onBusyChange={onSelectorBusy} onConfirmed={saved => applyConfirmedCard(card.id, saved)} />
+        </div>}
+
+        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
+          {presentation(card).section !== "ACTIVE" && <span>{presentation(card).label}</span>}
+          {presentation(card).preselected && <span className="rounded bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-900 dark:text-amber-100">Preselecto</span>}
+          {presentation(card).assessmentStage && <span>Evaluación técnica</span>}
+        </div>
+        {/* Barra de match */}
+        {hasMatchSignals && !locked && score !== null && score !== undefined && (
+          <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
+            <div className={`h-1 rounded-full transition-all ${scoreBg(score)}`} style={{ width: `${score}%` }} />
+          </div>
+        )}
+
+        {/* Badges de assessments (uno por template enviado) */}
+        {(card._assessments ?? []).length > 0 && (
+          <div className="mt-2 flex flex-col gap-1.5">
+            {(card._assessments!).map((a, i) => (
+              <AssessmentBadge key={i} assessment={a} />
+            ))}
+          </div>
+        )}
+
+        {/* Alerta de candidato estancado */}
+        {isStale && (
+          <div className="mt-2 flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+            <span>⚠</span>
+            <span>Pendiente de revisión desde hace {daysPendingReview} días</span>
+          </div>
+        )}
+
+      </article>
+    );
+  }
+}
 
   /* ============ Column ============ */
 
@@ -529,115 +601,3 @@ export default function Kanbanboard({
 
     return null;
   }
-
-  /* ============ Card ============ */
-
-  function Card({
-    card, jobId, dragging, hasMatchSignals,
-  }: {
-    card: AppCard;
-    jobId: string;
-    dragging: boolean;
-    hasMatchSignals?: boolean;
-  }) {
-    const now = Date.now();
-    const createdMs = card.createdAt ? new Date(card.createdAt).getTime() : null;
-    const isNew = createdMs !== null && now - createdMs < 48 * 60 * 60 * 1000;
-    const submittedMs = card.submittedAt
-      ? new Date(card.submittedAt).getTime()
-      : null;
-    const daysPendingReview =
-      submittedMs !== null && Number.isFinite(submittedMs)
-        ? Math.floor((now - submittedMs) / 86_400_000)
-        : null;
-    const processState = presentation(card);
-    const isStale =
-      processState.section === "ACTIVE" &&
-      processState.column === "APPLIED" &&
-      daysPendingReview !== null &&
-      daysPendingReview >= 5;
-    const score = card._score;
-    const locked = card._locked;
-
-    return (
-      <article
-        className={[
-          "group rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs transition-colors",
-          "dark:border-zinc-800 dark:bg-zinc-900",
-          dragging ? "ring-2 ring-emerald-500/50" : "hover:border-zinc-300 dark:hover:border-zinc-700",
-          isStale ? "border-l-2 border-l-amber-400" : "",
-        ].join(" ")}
-      >
-        {/* Header: nombre + badges + score */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <h4 className="min-w-0 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
-                <CandidateProfileLink applicationId={card.id} jobId={jobId} source={{ stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], stateVersion: card.stateVersion, status: card.applicationStatus, recruiterInterest: card.status }} enabled={autoReviewEnabled} href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} className="break-words text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</CandidateProfileLink>
-              </h4>
-              {isNew && (
-                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                  Nueva
-                </span>
-              )}
-            </div>
-            {card.candidate.city && (
-              <p className="mt-0.5 flex max-w-[170px] items-center gap-0.5 truncate text-[11px] text-zinc-600 dark:text-zinc-400">
-                <MapPin className="h-2.5 w-2.5 shrink-0" />
-                {card.candidate.city}
-              </p>
-            )}
-          </div>
-
-          {/* AI Match y acción contextual */}
-          <div className="flex shrink-0 items-start gap-1">
-            {hasMatchSignals && (
-              locked ? (
-                <div className="flex items-center gap-0.5 rounded-md border border-zinc-200 px-1.5 py-0.5 dark:border-zinc-700">
-                  <Lock className="h-2.5 w-2.5 text-zinc-400" />
-                  <span className="text-[9px] text-zinc-400">Pro</span>
-                </div>
-              ) : score !== null && score !== undefined ? (
-                <span className={`text-sm font-black leading-none ${scoreColor(score)}`}>
-                  {score}%
-                </span>
-              ) : null
-            )}
-            {!dragging && <KanbanCardActions card={card} reads={canonicalRecruiterReadsEnabled} disabled={isPending}
-              onConfirmed={saved => applyConfirmedCard(card.id, saved)} />}
-          </div>
-        </div>
-
-        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
-          {presentation(card).section !== "ACTIVE" && <span>{presentation(card).label}</span>}
-          {presentation(card).preselected && <span className="rounded bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-900 dark:text-amber-100">Preselecto</span>}
-          {presentation(card).assessmentStage && <span>Evaluación técnica</span>}
-        </div>
-        {/* Barra de match */}
-        {hasMatchSignals && !locked && score !== null && score !== undefined && (
-          <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <div className={`h-1 rounded-full transition-all ${scoreBg(score)}`} style={{ width: `${score}%` }} />
-          </div>
-        )}
-
-        {/* Badges de assessments (uno por template enviado) */}
-        {(card._assessments ?? []).length > 0 && (
-          <div className="mt-2 flex flex-col gap-1.5">
-            {(card._assessments!).map((a, i) => (
-              <AssessmentBadge key={i} assessment={a} />
-            ))}
-          </div>
-        )}
-
-        {/* Alerta de candidato estancado */}
-        {isStale && (
-          <div className="mt-2 flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-            <span>⚠</span>
-            <span>Pendiente de revisión desde hace {daysPendingReview} días</span>
-          </div>
-        )}
-
-      </article>
-    );
-  }
-}

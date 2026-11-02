@@ -4,10 +4,13 @@ import { applicationEventVisibility, eventTypeForTransition } from "./event-poli
 
 import {
   projectCanonicalStateToLegacy,
+  classifyLegacyApplicationState,
   type LegacyApplicationInterest,
   type LegacyApplicationStatus,
 } from "./legacy-mapping";
-import { planApplicationTransition } from "./rules";
+import { InvalidApplicationTransitionError, planApplicationTransition, planRecruiterStateChange } from "./rules";
+import { getRecruitingPresentation } from "./recruiting-presentation";
+import type { RecruitingState } from "./recruiter-state";
 import type {
   ApplicationActorTypeValue,
   ApplicationDispositionValue,
@@ -65,6 +68,7 @@ export type TransitionActor = {
 
 export type TransitionApplicationRecord = {
   id: string;
+  jobId?: string;
   companyId: string;
   stage: ApplicationStageValue | null;
   disposition: ApplicationDispositionValue | null;
@@ -113,7 +117,11 @@ type ApplicationUpdate = Partial<
     | "rejectedAt"
     | "rejectionEmailSent"
   >
->;
+> & {
+  rejectionEmailLeaseUntil?: Date | null;
+  rejectionEmailLeaseToken?: string | null;
+  rejectionEmailAttemptStartedAt?: Date | null;
+};
 
 export type TransitionTransaction = {
   findApplication(applicationId: string): Promise<TransitionApplicationRecord | null>;
@@ -152,9 +160,12 @@ export type TransitionApplicationInput = {
     recruiterInterest: LegacyApplicationInterest;
   };
   allowReopen?: boolean;
+  /** Server-selected mode used exclusively by SET_RECRUITING_STATE. */
+  recruitingDestination?: RecruitingState;
 };
 
 type TransitionApplicationResult = {
+  jobId?: string;
   state: {
     stage: ApplicationStageValue;
     disposition: ApplicationDispositionValue;
@@ -166,7 +177,9 @@ type TransitionApplicationResult = {
   timestamps: {
     offerAt: Date | null;
     hiredAt: Date | null;
+    rejectedAt?: Date | null;
   };
+  legacy?: { status: LegacyApplicationStatus; recruiterInterest: LegacyApplicationInterest; stateVersion: number };
 };
 
 async function authorize(
@@ -249,6 +262,7 @@ function commandFingerprint(
         reasonText: input.reasonText ?? null,
         legacyProjectionOverride: input.legacyProjectionOverride ?? null,
         allowReopen: input.allowReopen ?? false,
+        ...(input.recruitingDestination ? { recruitingDestination: input.recruitingDestination } : {}),
       }),
     )
     .digest("hex");
@@ -267,6 +281,7 @@ function replayResult(
   const disposition = event.toDisposition;
   if (!stage || !disposition) throw new CanonicalStateUnavailableError();
   return {
+    jobId: application.jobId,
     state: {
       stage,
       disposition,
@@ -275,6 +290,8 @@ function replayResult(
     event,
     replayed: true,
     legacyProjectionApplied: metadata.legacyProjectionApplied,
+    ...(typeof event.metadata === "object" && event.metadata !== null && "resultingLegacy" in event.metadata
+      ? { legacy: event.metadata.resultingLegacy as TransitionApplicationResult["legacy"] } : {}),
     timestamps: {
       offerAt: application.offerAt,
       hiredAt: application.hiredAt,
@@ -294,6 +311,9 @@ async function executeTransition(
   const application = await tx.findApplication(input.applicationId);
   if (!application) throw new ApplicationNotFoundError();
   await authorize(tx, input.actor, application.companyId);
+  if (input.recruitingDestination && (input.actor.type !== "RECRUITER" && input.actor.type !== "ADMIN")) {
+    throw new UnauthorizedApplicationTransitionError();
+  }
 
   if (idempotencyKey) {
     const priorEvent = await tx.findEventByIdempotencyKey(
@@ -304,7 +324,7 @@ async function executeTransition(
     if (priorEvent) return replayResult(priorEvent, fingerprint, application);
   }
 
-  if (!application.stage || !application.disposition) {
+  if ((!application.stage || !application.disposition) && !input.recruitingDestination) {
     throw new CanonicalStateUnavailableError();
   }
   if (application.stateVersion !== input.expectedVersion) {
@@ -314,8 +334,32 @@ async function executeTransition(
   // Runs on the same serializable snapshot as the write, after command replay.
   assertSource?.(application);
 
-  const planned = planApplicationTransition(
-    { stage: application.stage, disposition: application.disposition },
+  let sourceStage = application.stage;
+  let sourceDisposition = application.disposition;
+  if (input.recruitingDestination) {
+    if (getRecruitingPresentation(application, true).section === "RECONCILIATION") throw new CanonicalStateUnavailableError();
+    if (!sourceStage || !sourceDisposition) {
+      if (sourceStage !== null || sourceDisposition !== null || application.stateVersion !== 0) throw new CanonicalStateUnavailableError();
+      const mapping = classifyLegacyApplicationState(application.status, application.recruiterInterest);
+      if (!mapping.autoApplicable || !mapping.suggestedStage || !mapping.suggestedDisposition) throw new CanonicalStateUnavailableError();
+      sourceStage = mapping.suggestedStage;
+      sourceDisposition = mapping.suggestedDisposition;
+    }
+    const projection = projectCanonicalStateToLegacy({ stage: sourceStage, disposition: sourceDisposition === "HOLD" ? "ACTIVE" : sourceDisposition });
+    // Preselection is a separate valid REVIEW projection. Other contradictions require reconciliation.
+    if (projection && (projection.status !== application.status ||
+        (projection.recruiterInterest !== application.recruiterInterest && !(sourceStage === "REVIEW" && application.recruiterInterest === "MAYBE")))) {
+      throw new CanonicalStateUnavailableError();
+    }
+    if ((sourceDisposition === "ACTIVE" || sourceDisposition === "HOLD") && (application.hiredAt || application.rejectedAt || application.rejectionEmailSent || application.status === "HIRED" || application.status === "REJECTED" || application.recruiterInterest === "REJECTED")) {
+      throw new InvalidApplicationTransitionError("La fuente activa contiene footprints terminales");
+    }
+  }
+  if (!sourceStage || !sourceDisposition) throw new CanonicalStateUnavailableError();
+  const planned = input.recruitingDestination
+    ? planRecruiterStateChange({ stage: sourceStage, disposition: sourceDisposition }, input.recruitingDestination, reasonCode)
+    : planApplicationTransition(
+    { stage: sourceStage, disposition: sourceDisposition },
     {
       targetStage: input.targetStage,
       targetDisposition: input.targetDisposition,
@@ -326,6 +370,9 @@ async function executeTransition(
   );
   const legacyProjection =
     input.legacyProjectionOverride ?? projectCanonicalStateToLegacy(planned);
+  if (input.recruitingDestination && legacyProjection && sourceStage === "REVIEW" && planned.stage === "REVIEW" && application.recruiterInterest === "MAYBE") {
+    legacyProjection.recruiterInterest = "MAYBE";
+  }
   const changes: ApplicationUpdate = {
     stage: planned.stage,
     disposition: planned.disposition,
@@ -341,6 +388,27 @@ async function executeTransition(
       ? { rejectedAt: null, rejectionEmailSent: false }
       : {}),
   };
+  if (input.recruitingDestination) {
+    // HOLD keeps its real stage and projection; WITHDRAWN/CANCELLED have no legacy enum.
+    // Retain that historical projection rather than fabricating REJECTED/HIRED.
+    if (planned.disposition !== "HIRED") changes.hiredAt = null;
+    if (planned.disposition !== "REJECTED") { changes.rejectedAt = null; changes.rejectionEmailSent = false; }
+    if (planned.stage === "APPLIED") { changes.offerAt = null; changes.interviewAt = null; }
+    if (planned.disposition === "HOLD" && sourceStage === "CLOSED") {
+      Object.assign(changes, projectCanonicalStateToLegacy({ stage: "REVIEW", disposition: "ACTIVE" }));
+    }
+  }
+
+  // Reiniciar el control de notificación cuando cambia
+  // el periodo de rechazo.
+  if (
+    planned.disposition !== "REJECTED" ||
+    application.disposition !== "REJECTED"
+  ) {
+    changes.rejectionEmailLeaseUntil = null;
+    changes.rejectionEmailLeaseToken = null;
+    changes.rejectionEmailAttemptStartedAt = null;
+  }
 
   const updated = await tx.updateApplicationIfVersion({
     applicationId: application.id,
@@ -350,7 +418,7 @@ async function executeTransition(
   if (!updated) throw new ConcurrentApplicationTransitionError();
 
   const type = eventTypeForTransition(
-    application.stage,
+    sourceStage,
     planned.stage,
     planned.disposition,
   );
@@ -374,12 +442,26 @@ async function executeTransition(
       resultingStateVersion: application.stateVersion + 1,
       commandFingerprint: fingerprint,
       reasonTextProvided: Boolean(input.reasonText?.trim()),
+      ...(input.recruitingDestination ? {
+        operation: "SET_RECRUITING_STATE", destination: input.recruitingDestination,
+        legacyImported: application.stage === null,
+        previousState: {
+          stage: application.stage, disposition: application.disposition, status: application.status,
+          recruiterInterest: application.recruiterInterest, stateVersion: application.stateVersion,
+          reviewingAt: application.reviewingAt?.toISOString() ?? null, interviewAt: application.interviewAt?.toISOString() ?? null,
+          offerAt: application.offerAt?.toISOString() ?? null, hiredAt: application.hiredAt?.toISOString() ?? null,
+          rejectedAt: application.rejectedAt?.toISOString() ?? null, rejectionEmailSent: application.rejectionEmailSent,
+        },
+        resultingLegacy: { status: changes.status ?? application.status, recruiterInterest: changes.recruiterInterest ?? application.recruiterInterest, stateVersion: application.stateVersion + 1 },
+        reasonText: input.reasonText ?? null,
+      } : {}),
     },
     happenedAt,
     idempotencyKey: idempotencyKey ?? null,
   });
 
   return {
+    jobId: application.jobId,
     state: {
       stage: planned.stage,
       disposition: planned.disposition,
@@ -389,9 +471,11 @@ async function executeTransition(
     replayed: false,
     legacyProjectionApplied: Boolean(legacyProjection),
     timestamps: {
-      offerAt: changes.offerAt ?? application.offerAt,
-      hiredAt: changes.hiredAt ?? application.hiredAt,
+      offerAt: changes.offerAt !== undefined ? changes.offerAt : application.offerAt,
+      hiredAt: changes.hiredAt !== undefined ? changes.hiredAt : application.hiredAt,
+      rejectedAt: changes.rejectedAt !== undefined ? changes.rejectedAt : application.rejectedAt,
     },
+    legacy: { status: changes.status ?? application.status, recruiterInterest: changes.recruiterInterest ?? application.recruiterInterest, stateVersion: application.stateVersion + 1 },
   };
 }
 

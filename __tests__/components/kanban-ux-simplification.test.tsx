@@ -71,7 +71,7 @@ it("shows the same authorized essentials on desktop and mobile, with a stage sel
   expect(screen.getAllByText(/85%/).length).toBeGreaterThan(0);
   expect(screen.queryByText("Ubicación ambigua")).not.toBeInTheDocument();
   expect(screen.queryByText("Ver perfil")).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: /Mover a/ })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: /Mover a/ })).toHaveLength(2);
   const selector = screen.getByRole("combobox", { name: "Etapa" });
   fireEvent.change(selector, { target: { value: "REVIEW" } });
   expect(screen.getByText("No hay candidatos en esta etapa.")).toBeInTheDocument();
@@ -124,13 +124,13 @@ it.each([true, false])("confirms Kanban discard before changing counters with ca
   const sourceCard = reads ? card : { ...card, stage: null, disposition: null, stateVersion: 0,
     writerCompatibility: "LEGACY" as const };
   render(<KanbanBoard {...props} applications={[sourceCard]} canonicalRecruiterReadsEnabled={reads} moveAction={vi.fn()} />);
-  const menuButton = screen.getAllByRole("button", { name: `Acciones de ${card.candidate.name}` })[0];
+  const menuButton = screen.getAllByRole("button", { name: `Mover a: ${card.candidate.name}` })[0];
   fireEvent.mouseDown(menuButton);
   expect(mocks.dragStart).not.toHaveBeenCalled();
   fireEvent.pointerDown(menuButton, { button: 0, ctrlKey: false });
-  expect(await screen.findByRole("menuitem", { name: "Descartar candidato" })).toBeInTheDocument();
+  expect(await screen.findByRole("menuitem", { name: "Descartado" })).toBeInTheDocument();
   expect(screen.queryByRole("menuitem", { name: "Contratar" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("menuitem", { name: "Descartar candidato" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Descartado" }));
   expect(screen.getByRole("dialog", { name: "Descartar candidato" })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus());
   expect(fetch).not.toHaveBeenCalled();
@@ -138,7 +138,7 @@ it.each([true, false])("confirms Kanban discard before changing counters with ca
   expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
   fireEvent.click(screen.getByRole("button", { name: "Guardando…" }));
   expect(fetch).toHaveBeenCalledOnce();
-  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body ?? ""))).toMatchObject({ intent: "REJECT_CANDIDATE", expectedVersion: reads ? 1 : 0, commandId: expect.any(String) });
+  expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body ?? ""))).toMatchObject({ intent: "SET_RECRUITING_STATE", destination: "REJECTED", expectedVersion: reads ? 1 : 0, commandId: expect.any(String) });
   expect(screen.getByRole("option", { name: "Por revisar (1)" })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: "Descartados (0)" })).toBeInTheDocument();
   await act(async () => finish(new Response(JSON.stringify({ application: reads
@@ -155,8 +155,8 @@ it("keeps Kanban counters and the candidate when discard is rejected", async () 
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "private metadata" }), { status: 409 }));
   vi.stubGlobal("fetch", fetch);
   render(<KanbanBoard {...props} moveAction={vi.fn()} />);
-  fireEvent.pointerDown(screen.getAllByRole("button", { name: `Acciones de ${card.candidate.name}` })[0], { button: 0, ctrlKey: false });
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Descartar candidato" }));
+  fireEvent.pointerDown(screen.getAllByRole("button", { name: `Mover a: ${card.candidate.name}` })[0], { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Descartado" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   expect(screen.getByRole("option", { name: "Por revisar (1)" })).toBeInTheDocument();
@@ -165,13 +165,14 @@ it("keeps Kanban counters and the candidate when discard is rejected", async () 
   expect(JSON.stringify(mocks.error.mock.calls)).not.toContain("private metadata");
 });
 
-it("does not offer discard for terminal or incompatible cards", () => {
+it("offers audited moves for terminal cards but none for incompatible cards", () => {
   const terminal = { ...card, id: "closed", stage: "CLOSED", disposition: "REJECTED", applicationStatus: "REJECTED", status: "REJECTED",
     candidate: { ...card.candidate, name: "Closed" } };
   const incompatible = { ...card, id: "invalid", writerCompatibility: "NONE" as const, candidate: { ...card.candidate, name: "Invalid" } };
   render(<KanbanBoard {...props} applications={[terminal, incompatible]} moveAction={vi.fn()} />);
-  expect(screen.queryByRole("button", { name: "Acciones de Closed" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Acciones de Invalid" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "REJECTED" } });
+  expect(screen.getAllByRole("button", { name: "Mover a: Closed" })[0]).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Mover a: Invalid" })).not.toBeInTheDocument();
 });
 
 it("uses the persisted state to classify a successful response that differs from the requested column", async () => {
@@ -262,9 +263,67 @@ it("confirms Interview to Offer using the existing intent and saved version", as
   render(<KanbanBoard {...props} applications={[interview]} moveAction={move} />);
   await act(async () => mocks.drag(drop("INTERVIEW", "OFFER")));
   expect(move).toHaveBeenCalledOnce();
-  expect((move.mock.calls[0][0] as FormData).get("intent")).toBe("MOVE_TO_OFFER");
+  expect((move.mock.calls[0][0] as FormData).get("intent")).toBe("SET_RECRUITING_STATE");
   expect((move.mock.calls[0][0] as FormData).get("expectedVersion")).toBe("1");
   expect(screen.getByRole("option", { name: /Oferta \(1\)/ })).toBeInTheDocument();
+});
+it.each([true, false])("moves REVIEW → OFFER directly by drag and OFFER → REVIEW after a reason, reads=%s", async reads => {
+  const review = { ...card, stage: "REVIEW", applicationStatus: "REVIEWING", status: "REVIEW", displayStatus: "REVIEW" };
+  const move = vi.fn().mockResolvedValueOnce({ ok: true, application: { stage: "OFFER", disposition: "ACTIVE", stateVersion: 2, status: "OFFER", recruiterInterest: "ACCEPTED" } })
+    .mockResolvedValueOnce({ ok: true, application: { stage: "REVIEW", disposition: "ACTIVE", stateVersion: 3, status: "REVIEWING", recruiterInterest: "REVIEW" } });
+  render(<KanbanBoard {...props} applications={[review]} canonicalRecruiterReadsEnabled={reads} moveAction={move} />);
+  await act(async () => mocks.drag(drop("REVIEW", "OFFER")));
+  expect(move).toHaveBeenCalledOnce();
+  expect(move.mock.calls[0][0].get("destination")).toBe("OFFER");
+  expect(screen.getByRole("option", { name: "Oferta (1)" })).toBeInTheDocument();
+  act(() => mocks.drag(drop("OFFER", "REVIEW")));
+  expect(screen.getByRole("dialog", { name: "Regresar a En revisión" })).toBeInTheDocument();
+  expect(move).toHaveBeenCalledOnce();
+  expect(screen.getByRole("option", { name: "Oferta (1)" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+  expect(move).toHaveBeenCalledOnce();
+  fireEvent.change(screen.getByRole("combobox", { name: "Motivo" }), { target: { value: "CORRECTION" } });
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+  await waitFor(() => expect(move).toHaveBeenCalledTimes(2));
+  expect(Object.fromEntries(move.mock.calls[1][0].entries())).toMatchObject({ intent: "SET_RECRUITING_STATE", destination: "REVIEW", expectedVersion: "2", reasonCode: "CORRECTION", commandId: expect.any(String) });
+  await waitFor(() => expect(screen.getByRole("option", { name: "En revisión (1)" })).toBeInTheDocument());
+  expect(screen.getByRole("option", { name: "Oferta (0)" })).toBeInTheDocument();
+});
+it("allows APPLIED → OFFER and INTERVIEW → APPLIED without intermediate writes", async () => {
+  const move = vi.fn().mockResolvedValueOnce({ ok: true, application: { stage: "OFFER", disposition: "ACTIVE", stateVersion: 2, status: "OFFER", recruiterInterest: "ACCEPTED" } });
+  const view = render(<KanbanBoard {...props} moveAction={move} />);
+  await act(async () => mocks.drag(drop("APPLIED", "OFFER")));
+  expect(move).toHaveBeenCalledOnce();
+  expect(move.mock.calls[0][0].get("destination")).toBe("OFFER");
+  view.rerender(<KanbanBoard {...props} applications={[{ ...card, stage: "INTERVIEW", applicationStatus: "INTERVIEW", status: "ACCEPTED" }]} moveAction={move} />);
+  act(() => mocks.drag(drop("INTERVIEW", "APPLIED")));
+  expect(screen.getByRole("dialog", { name: "Regresar a Por revisar" })).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Motivo" }), { target: { value: "PROCESS_CHANGE" } });
+  move.mockResolvedValueOnce({ ok: true, application: { stage: "APPLIED", disposition: "ACTIVE", stateVersion: 2, status: "SUBMITTED", recruiterInterest: "REVIEW" } });
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+  await waitFor(() => expect(move).toHaveBeenCalledTimes(2));
+  expect(move.mock.calls[1][0].get("destination")).toBe("APPLIED");
+});
+it.each(["REVIEW", "OFFER"])("reopens a discarded candidate through the mobile card control directly to %s", async destination => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ application: { stage: destination, disposition: "ACTIVE", stateVersion: 3,
+    status: destination === "OFFER" ? "OFFER" : "REVIEWING", recruiterInterest: destination === "OFFER" ? "ACCEPTED" : "REVIEW" } })));
+  vi.stubGlobal("fetch", fetch);
+  const closed = { ...card, stage: "CLOSED", disposition: "REJECTED", applicationStatus: "REJECTED", status: "REJECTED", stateVersion: 2 };
+  render(<KanbanBoard {...props} applications={[closed]} moveAction={vi.fn()} />);
+  fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "REJECTED" } });
+  const mobile = screen.getByRole("combobox", { name: "Etapa" }).parentElement!;
+  const trigger = within(mobile).getByRole("button", { name: `Mover a: ${card.candidate.name}` });
+  trigger.focus(); fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" });
+  fireEvent.click(await screen.findByRole("menuitem", { name: destination === "OFFER" ? "Oferta" : "En revisión" }));
+  expect(fetch).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Motivo" }), { target: { value: "RECONSIDERED" } });
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ intent: "SET_RECRUITING_STATE", destination, expectedVersion: 2, reasonCode: "RECONSIDERED" });
+  await waitFor(() => expect(screen.getByRole("option", { name: "Descartados (0)" })).toBeInTheDocument());
+  expect(screen.getByRole("option", { name: `${destination === "OFFER" ? "Oferta" : "En revisión"} (1)` })).toBeInTheDocument();
+  expect(mocks.refresh).toHaveBeenCalledOnce();
 });
 it("does not turn a visual Review card from ASSESSMENT into a new review or preselection", async () => {
   const move = vi.fn();

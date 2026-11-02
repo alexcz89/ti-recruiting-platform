@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { getRecruitingPresentation, getRecruiterStageOptions, type PresentationSource, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 import type { ApplicationStageValue, ApplicationDispositionValue } from "@/lib/hiring-process/types";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import ProcessReasonDialog from "./ProcessReasonDialog";
+import { RecruiterStateDialog } from "./ProcessReasonDialog";
 import { useApplicationIntent } from "./useApplicationIntent";
 
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
 
-export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false }: {
+export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false, disabled = false, onConfirmed, onBusyChange, accessibleLabel }: {
   applicationId: string;
   initial: InterestKey;
   initialStateVersion: number;
@@ -18,11 +18,18 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
   canonicalStage?: ApplicationStageValue | null;
   canonicalDisposition?: ApplicationDispositionValue | null;
   canonicalRecruiterReadsEnabled?: boolean;
+  disabled?: boolean;
+  onConfirmed?: (source: PresentationSource) => void;
+  onBusyChange?: (busy: boolean) => void;
+  accessibleLabel?: string;
 }) {
   const initialSource: PresentationSource = { stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion };
-  const { source, pending, submit } = useApplicationIntent(applicationId, initialSource);
-  const [reasonAction, setReasonAction] = useState<RecruiterStageOption | null>(null);
-  const [confirmationAction, setConfirmationAction] = useState<RecruiterStageOption | null>(null);
+  const { source, pending, submit } = useApplicationIntent(applicationId, initialSource, onConfirmed);
+  const [dialogAction, setDialogAction] = useState<RecruiterStageOption | null>(null);
+  useEffect(() => {
+    onBusyChange?.(pending || dialogAction !== null);
+    return () => onBusyChange?.(false);
+  }, [pending, dialogAction, onBusyChange]);
   const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
   const options = getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled);
   const stageDot: Record<string, string> = { APPLIED: "bg-zinc-400", REVIEW: "bg-blue-500", INTERVIEW: "bg-violet-500", OFFER: "bg-emerald-500" };
@@ -31,37 +38,30 @@ export default function InterestSelect({ applicationId, initial, initialStateVer
   if (!options.length) return <span className={controlClass}>{label}</span>;
 
   function choose(option: RecruiterStageOption) {
-    if (option.requiresReason) setReasonAction(option);
-    else if (option.requiresConfirmation) setConfirmationAction(option);
-    else void submit(option.intent);
+    if (option.current || disabled || pending) return;
+    if (option.requiresReason || option.requiresConfirmation) setDialogAction(option);
+    else void submit(option.intent, { destination: option.destination });
   }
 
   return <>
     <DropdownMenu>
-      <DropdownMenuTrigger disabled={options.length === 0 || pending} aria-label={`Cambiar etapa: ${presentation.label}`}
+      <DropdownMenuTrigger disabled={disabled || pending} aria-label={accessibleLabel ?? `Cambiar etapa: ${presentation.label}`}
         className={`${controlClass} transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-wait`}>
         {label}<ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent compact align="start" collisionPadding={8} onCloseAutoFocus={event => { if (reasonAction || confirmationAction) event.preventDefault(); }}
+      <DropdownMenuContent compact align="start" collisionPadding={8} onCloseAutoFocus={event => { if (dialogAction) event.preventDefault(); }}
         className="w-[190px]">
-        {options.map(option => <DropdownMenuItem key={`${option.intent}:${option.targetStage ?? ""}`}
+        {options.map(option => <DropdownMenuItem key={option.destination} disabled={option.current} aria-current={option.current ? "step" : undefined}
           compact onSelect={() => choose(option)}>
-          {option.requiresConfirmation ? "" : option.requiresReason ? "Regresar a " : "Avanzar a "}{option.label}
+          {option.label}{option.current && <span aria-hidden="true">✓</span>}
         </DropdownMenuItem>)}
       </DropdownMenuContent>
     </DropdownMenu>
-    {confirmationAction && <ProcessReasonDialog title={confirmationAction.label} pending={pending} confirmationOnly
-      description={confirmationAction.intent === "HIRE_CANDIDATE" ? "La candidatura se marcará como contratada y el proceso quedará cerrado." : "La candidatura pasará a Descartados. Podrás reabrirla si el proceso lo permite."}
-      onCancel={() => setConfirmationAction(null)}
-      onConfirm={async () => {
-        const success = await submit(confirmationAction.intent);
-        if (success) setConfirmationAction(null);
-      }} />}
-    {reasonAction && <ProcessReasonDialog title={`Regresar a ${reasonAction.label}`} pending={pending}
-      onCancel={() => setReasonAction(null)}
+    {dialogAction && <RecruiterStateDialog option={dialogAction} pending={pending}
+      onCancel={() => setDialogAction(null)}
       onConfirm={async reason => {
-        const success = await submit(reasonAction.intent, { targetStage: reasonAction.targetStage, ...reason });
-        if (success) setReasonAction(null);
+        const success = await submit(dialogAction.intent, { destination: dialogAction.destination, ...reason });
+        if (success) setDialogAction(null);
       }} />}
   </>;
 }

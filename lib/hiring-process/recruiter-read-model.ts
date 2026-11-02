@@ -131,10 +131,17 @@ export function getRecruiterApplicationReadModel(
 ): RecruiterApplicationReadModel {
   const hasCompleteCanonicalState =
     input.stage !== null && input.disposition !== null;
+// Estos estados no tienen una representación legacy equivalente.
+  const requiresCanonicalRead =
+     input.disposition === "HOLD" ||
+     input.disposition === "WITHDRAWN" ||
+     input.disposition === "CANCELLED";
+
   const source: RecruiterReadModelSource =
-    options.canonicalReadsEnabled && hasCompleteCanonicalState
-      ? "CANONICAL"
-      : "LEGACY_FALLBACK";
+     hasCompleteCanonicalState &&
+     (options.canonicalReadsEnabled || requiresCanonicalRead)
+       ? "CANONICAL"
+       : "LEGACY_FALLBACK";
   const isLegacyReview = options.canonicalReadsEnabled &&
     input.stage === null && input.disposition === null &&
     input.status === "REVIEWING" && input.recruiterInterest === "REVIEW";

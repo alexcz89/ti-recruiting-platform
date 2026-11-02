@@ -113,17 +113,60 @@ describe("recruiter reader surfaces", () => {
   });
   it.each([true, false])("does not offer transitions for inconsistent rows with reads=%s", reads => {
     render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
-    expect(screen.getByRole("button", { name: "Cambiar etapa: Requiere conciliación" })).toBeDisabled();
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Cambiar etapa: Requiere conciliación",
+      })
+    ).not.toBeInTheDocument();
   });
-  it("keeps hired terminal and separates stage changes from closing actions", async () => {
-    const view = render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={4} legacyStatus="OFFER" canonicalStage="OFFER" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled />);
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Oferta" }), { button: 0, ctrlKey: false });
-    expect(await screen.findByRole("menuitem", { name: "Entrevista · requiere motivo" })).toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Descartar" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("menuitem", { name: "Contratar" })).not.toBeInTheDocument();
+  it("allows direct stage changes from OFFER and reopening HIRED", async () => {
+    const view = render(
+      <InterestSelect
+        applicationId="app"
+        initial="ACCEPTED"
+        initialStateVersion={4}
+        legacyStatus="OFFER"
+        canonicalStage="OFFER"
+        canonicalDisposition="ACTIVE"
+        canonicalRecruiterReadsEnabled
+      />
+    );
+
+    fireEvent.pointerDown(
+      screen.getByRole("button", { name: "Cambiar etapa: Oferta" }),
+      { button: 0, ctrlKey: false }
+    );
+
+    expect(
+      await screen.findByRole("menuitem", { name: "Entrevista" })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("menuitem", { name: "Descartado" })
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getByRole("menuitem", { name: "Contratado" })
+    ).toBeInTheDocument();
+
     view.unmount();
-    render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={5} legacyStatus="HIRED" canonicalStage="CLOSED" canonicalDisposition="HIRED" canonicalRecruiterReadsEnabled />);
-    expect(screen.getByRole("button", { name: "Cambiar etapa: Contratado" })).toBeDisabled();
+
+    render(
+      <InterestSelect
+        applicationId="app"
+        initial="ACCEPTED"
+        initialStateVersion={5}
+        legacyStatus="HIRED"
+        canonicalStage="CLOSED"
+        canonicalDisposition="HIRED"
+        canonicalRecruiterReadsEnabled
+      />
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Cambiar etapa: Contratado" })
+    ).toBeEnabled();
   });
   it.each([true, false])("uses the same process label in list and profile with reads=%s", reads => {
     const cases = [

@@ -26,46 +26,27 @@ describe.each([true, false])("recruiting presentation, canonical reads=%s", read
     expect(getRecruitingActions({ ...source, disposition: "HOLD" }, reads)).toEqual([]);
     expect(getRecruitingActions({ ...source, status: "HIRED" }, reads)).toEqual([]);
   });
-  it("offers only writer-compatible forward and backward stage choices", () => {
-    expect(getRecruiterStageOptions(source, reads).map(option => option.intent)).toContain("START_REVIEW");
-    expect(getRecruiterStageOptions({ ...source, stage: "REVIEW", status: "REVIEWING" }, reads).some(option => option.label === "Por revisar")).toBe(false);
-    const interview = { ...source, stage: "INTERVIEW" as const, status: "INTERVIEW", recruiterInterest: "ACCEPTED" };
-    expect(getRecruiterStageOptions(interview, reads).filter(option => !option.requiresConfirmation)).toMatchObject([
-      { intent: "MOVE_TO_OFFER", label: "Oferta", requiresReason: false },
-      { intent: "MOVE_BACKWARD", targetStage: "REVIEW", requiresReason: true },
-    ]);
-    const offer = { ...interview, stage: "OFFER" as const, status: "OFFER" };
-    expect(getRecruiterStageOptions(offer, reads).filter(option => option.intent === "MOVE_BACKWARD").map(option => option.targetStage)).toEqual(["INTERVIEW", "REVIEW"]);
-    expect(getRecruiterStageOptions({ ...offer, stage: null, disposition: null, stateVersion: 0 }, reads).filter(option => option.intent === "MOVE_BACKWARD")).toHaveLength(2);
-    expect(getRecruiterStageOptions({ ...offer, status: "HIRED" }, reads)).toEqual([]);
-    expect(getRecruiterStageOptions({ ...offer, disposition: "HOLD" }, reads)).toEqual([]);
-    expect(getRecruiterStageOptions({ ...offer, stage: null, disposition: null, stateVersion: 2 }, reads)).toEqual([]);
+  it.each(LEGACY_APPLICATION_STATE_MATRIX.filter(m => m.autoApplicable))("offers all nine destinations for deterministic legacy $key", mapping => {
+    const options = getRecruiterStageOptions({ stage: null, disposition: null, stateVersion: 0, status: mapping.status, recruiterInterest: mapping.recruiterInterest }, reads);
+    expect(options.map(o => o.destination)).toEqual(["APPLIED", "REVIEW", "INTERVIEW", "OFFER", "REJECTED", "HIRED", "HOLD", "WITHDRAWN", "CANCELLED"]);
+    expect(options.filter(o => o.current)).toHaveLength(1);
+    expect(options.every(o => o.intent === "SET_RECRUITING_STATE")).toBe(true);
+    expect(options.some(o => o.label === "Preselecto" || o.label === "Evaluación")).toBe(false);
+    expect(options.find(o => o.destination === "HIRED")).toMatchObject({ requiresConfirmation: true });
+  });
+  it("allows forward skips, backward moves, pause and audited reopening", () => {
+    const review = { ...source, stage: "REVIEW" as const, status: "REVIEWING" };
+    expect(getRecruiterStageOptions(review, reads).find(o => o.destination === "OFFER")).toMatchObject({ requiresReason: false, requiresConfirmation: false });
+    const offer = { ...source, stage: "OFFER" as const, status: "OFFER", recruiterInterest: "ACCEPTED" };
+    expect(getRecruiterStageOptions(offer, reads).find(o => o.destination === "REVIEW")).toMatchObject({ requiresReason: true });
+    expect(getRecruiterStageOptions({ ...review, disposition: "HOLD" }, reads)).toHaveLength(9);
+    expect(getRecruiterStageOptions({ ...source, stage: "CLOSED", disposition: "REJECTED", status: "REJECTED", recruiterInterest: "REJECTED" }, reads).find(o => o.destination === "OFFER"))
+      .toMatchObject({ requiresReason: true, requiresConfirmation: true });
   });
   it.each([
-    { stage: "APPLIED", status: "SUBMITTED", recruiterInterest: "REVIEW" },
-    { stage: "REVIEW", status: "REVIEWING", recruiterInterest: "MAYBE" },
-    { stage: "ASSESSMENT", status: "REVIEWING", recruiterInterest: "REVIEW" },
-    { stage: "INTERVIEW", status: "INTERVIEW", recruiterInterest: "ACCEPTED" },
-    { stage: "OFFER", status: "OFFER", recruiterInterest: "ACCEPTED" },
-  ] as const)("offers confirmed discard from active $stage and hire only from OFFER", active => {
-    for (const canonical of [true, false]) {
-      const input = { ...source, ...active, ...(canonical ? {} : { stage: null, disposition: null, stateVersion: 0 }) };
-      const options = getRecruiterStageOptions(input, reads);
-      expect(options).toContainEqual({ label: "Descartar candidato", intent: "REJECT_CANDIDATE", requiresReason: false, requiresConfirmation: true });
-      expect(options.filter(option => option.intent === "HIRE_CANDIDATE")).toEqual(active.stage === "OFFER"
-        ? [{ label: "Contratar candidato", intent: "HIRE_CANDIDATE", requiresReason: false, requiresConfirmation: true }] : []);
-      expect(options.some(option => ["MARK_PRESELECTED", "CLEAR_PRESELECTED", "REOPEN_REJECTED"].includes(option.intent))).toBe(false);
-    }
-  });
-  it.each([
-    { disposition: "HOLD" },
-    { stage: "CLOSED", disposition: "HIRED", status: "HIRED" },
-    { stage: "CLOSED", disposition: "REJECTED", status: "REJECTED", recruiterInterest: "REJECTED" },
     { status: "HIRED" }, { status: "REJECTED" }, { recruiterInterest: "REJECTED" },
-    { recruiterInterest: "REVIEW" }, { status: "INTERVIEW" },
     { stage: null }, { stage: null, disposition: null, stateVersion: 2 },
-    { stage: null, disposition: null, stateVersion: 0, recruiterInterest: "MAYBE" },
-  ] as const)("offers no stage or closure actions for incompatible source %j", invalid => {
-    expect(getRecruiterStageOptions({ ...source, stage: "OFFER", status: "OFFER", recruiterInterest: "ACCEPTED", ...invalid }, reads)).toEqual([]);
+  ] as const)("offers no destinations for inconsistent source %j", invalid => {
+    expect(getRecruiterStageOptions({ ...source, ...invalid }, reads)).toEqual([]);
   });
 });

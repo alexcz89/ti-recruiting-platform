@@ -1,6 +1,7 @@
 import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "./recruiter-read-model";
 import { LEGACY_APPLICATION_STATE_MATRIX } from "./legacy-mapping";
 import { canStartReview } from "./start-review-eligibility";
+import { RECRUITING_STATES, RECRUITING_STATE_LABELS, recruitingStateRequirements, type RecruitingState } from "./recruiter-state";
 export const ACTIVE_PIPELINE = ["APPLIED", "REVIEW", "INTERVIEW", "OFFER"] as const;
 export const PIPELINE_LABELS: Record<string, string> = { APPLIED: "Por revisar", REVIEW: "En revisión", INTERVIEW: "Entrevista", OFFER: "Oferta", REJECTED: "Descartado", HIRED: "Contratado", WITHDRAWN: "Retirado", CANCELLED: "Cancelado", OTHER: "Otros cierres" };
 export type PresentationSource = RecruiterApplicationReadInput & {
@@ -73,8 +74,9 @@ export function getRecruitingActions(input: PresentationSource, reads: boolean) 
 
 export type RecruiterStageOption = {
     label: string;
-    intent: "START_REVIEW" | "MOVE_TO_INTERVIEW" | "MOVE_TO_OFFER" | "MOVE_BACKWARD" | "HIRE_CANDIDATE" | "REJECT_CANDIDATE";
-    targetStage?: "REVIEW" | "INTERVIEW";
+    intent: "SET_RECRUITING_STATE";
+    destination: RecruitingState;
+    current: boolean;
     requiresReason: boolean;
     requiresConfirmation?: boolean;
 };
@@ -82,29 +84,12 @@ export type RecruiterStageOption = {
 /** Display choices only. The intent writer validates ownership, state and version again. */
 export function getRecruiterStageOptions(input: PresentationSource, reads: boolean): RecruiterStageOption[] {
     const presentation = getRecruitingPresentation(input, reads);
-    if (presentation.section !== "ACTIVE") return [];
-    const actions = getRecruitingActions(input, reads);
-    const options: RecruiterStageOption[] = [];
-    if (actions.includes("START_REVIEW")) options.push({ label: "En revisión", intent: "START_REVIEW", requiresReason: false });
-    if (actions.includes("MOVE_TO_INTERVIEW")) options.push({ label: "Entrevista", intent: "MOVE_TO_INTERVIEW", requiresReason: false });
-    if (actions.includes("MOVE_TO_OFFER")) options.push({ label: "Oferta", intent: "MOVE_TO_OFFER", requiresReason: false });
-
-    // These source/target pairs are the ones accepted by MOVE_BACKWARD in the writer.
-    const compatibleCanonical = input.disposition === "ACTIVE" &&
-        ((input.stage === "INTERVIEW" && input.status === "INTERVIEW") ||
-         (input.stage === "OFFER" && input.status === "OFFER")) &&
-        input.recruiterInterest === "ACCEPTED";
-    const compatibleLegacy = input.stage === null && input.disposition === null && input.stateVersion === 0 &&
-        (input.status === "INTERVIEW" || input.status === "OFFER") && input.recruiterInterest === "ACCEPTED";
-    if (compatibleCanonical || compatibleLegacy) {
-        if (presentation.column === "OFFER") options.push({ label: "Entrevista", intent: "MOVE_BACKWARD", targetStage: "INTERVIEW", requiresReason: true });
-        if (presentation.column === "OFFER" || presentation.column === "INTERVIEW") options.push({ label: "En revisión", intent: "MOVE_BACKWARD", targetStage: "REVIEW", requiresReason: true });
-    }
-    if (presentation.column === "OFFER" && (compatibleCanonical || compatibleLegacy)) {
-        options.push({ label: "Contratar candidato", intent: "HIRE_CANDIDATE", requiresReason: false, requiresConfirmation: true });
-    }
-    if (actions.includes("REJECT_CANDIDATE")) {
-        options.push({ label: "Descartar candidato", intent: "REJECT_CANDIDATE", requiresReason: false, requiresConfirmation: true });
-    }
-    return options;
+    if (presentation.section === "RECONCILIATION") return [];
+    const legacy = input.stage === null ? LEGACY_APPLICATION_STATE_MATRIX.find(m => m.status === input.status && m.recruiterInterest === input.recruiterInterest) : null;
+    const stage = input.stage ?? legacy?.suggestedStage;
+    const disposition = input.disposition ?? legacy?.suggestedDisposition;
+    if (!stage || !disposition) return [];
+    const current = presentation.section === "ACTIVE" ? presentation.column : presentation.section === "CLOSED" ? presentation.outcome : "HOLD";
+    return RECRUITING_STATES.map(destination => ({ label: RECRUITING_STATE_LABELS[destination], intent: "SET_RECRUITING_STATE",
+        destination, current: destination === current, ...recruitingStateRequirements({ stage, disposition }, destination) }));
 }

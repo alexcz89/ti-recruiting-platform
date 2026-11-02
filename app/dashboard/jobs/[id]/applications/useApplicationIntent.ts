@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
 import { toastError } from "@/lib/ui/toast";
+import type { RecruitingState } from "@/lib/hiring-process/recruiter-state";
 
 type IntentExtra = {
+  destination?: RecruitingState;
   targetStage?: "REVIEW" | "INTERVIEW";
   reasonCode?: string;
   reasonText?: string;

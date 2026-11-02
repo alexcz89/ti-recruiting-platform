@@ -327,8 +327,11 @@ model Application {
   disposition        ApplicationDisposition?
   stateVersion       Int                     @default(0)
   createdAt          DateTime                @default(now())
-  rejectedAt         DateTime?
-  rejectionEmailSent Boolean                 @default(false)
+  rejectedAt                     DateTime?
+  rejectionEmailLeaseUntil       DateTime?
+  rejectionEmailLeaseToken       String?
+  rejectionEmailAttemptStartedAt DateTime?
+  rejectionEmailSent             Boolean @default(false)
   recruiterInterest  ApplicationInterest     @default(REVIEW)
   updatedAt          DateTime                @default(now()) @updatedAt
   assignedAt         DateTime?

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getServerSession } from "next-auth";
 import { ZodError } from "zod";
 
@@ -55,6 +56,11 @@ export async function POST(
       command,
       actor: { type: role, id: actorId, companyId },
     });
+    if (command.intent === "SET_RECRUITING_STATE" && "jobId" in result && result.jobId) {
+      const path = `/dashboard/jobs/${encodeURIComponent(result.jobId)}`;
+      revalidatePath(path);
+      revalidatePath(`${path}/applications`);
+    }
 
     return jsonNoStore({
       application: {
@@ -66,6 +72,7 @@ export async function POST(
         offerAt: result.timestamps.offerAt?.toISOString() ?? null,
         hiredAt: result.timestamps.hiredAt?.toISOString() ?? null,
         ...(command.intent === "REOPEN_REJECTED" ? { rejectedAt: null } : {}),
+        ...(command.intent === "SET_RECRUITING_STATE" && "rejectedAt" in result.timestamps ? { rejectedAt: result.timestamps.rejectedAt?.toISOString() ?? null } : {}),
       },
       replayed: result.replayed,
     });

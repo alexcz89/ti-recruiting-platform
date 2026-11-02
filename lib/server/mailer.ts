@@ -44,7 +44,7 @@ async function getResend(): Promise<Resend | null> {
 export type SendResult =
   | { ok: true; id?: string }
   | { skipped: true; reason?: string }
-  | { error: string };
+  | { error: string; deliveryUncertain?: true };
 
 function normalizeIdempotencyKey(key?: string) {
   if (!key) return undefined;
@@ -103,22 +103,16 @@ export async function sendEmail(opts: {
       idempotencyKey ? { idempotencyKey } : undefined
     );
 
-    if (error) return { error: error.message || "send failed" };
-    return { ok: true, id: (data as any)?.id };
-  } catch (e1: any) {
-    try {
-      const { data, error } = await (client.emails.send as any)({
-        ...payload,
-        headers: idempotencyKey
-          ? { "Idempotency-Key": idempotencyKey }
-          : undefined,
-      });
-
-      if (error) return { error: error.message || "send failed" };
-      return { ok: true, id: (data as any)?.id };
-    } catch (e2: any) {
-      return { error: e2?.message || e1?.message || "send failed" };
+    if (error) {
+      return { error: error.message || "send failed" };
     }
+
+    return { ok: true, id: (data as any)?.id };
+  } catch (e: unknown) {
+    return {
+      error: e instanceof Error ? e.message : "send failed",
+      deliveryUncertain: true,
+    };
   }
 }
 
@@ -532,7 +526,16 @@ export async function sendRejectionEmail(params: {
   candidateName?: string;
   jobTitle: string;
   companyName?: string;
+  applicationId: string;
+  rejectedAt: Date | null;
 }) {
+
+  const rejectionPeriod = params.rejectedAt?.toISOString();
+
+  if (!rejectionPeriod) {
+    return { error: "Missing rejection timestamp" };
+  }
+
   const subject = `Resultado de tu candidatura — ${params.jobTitle}${
     params.companyName ? " · " + params.companyName : ""
   }`;
@@ -564,7 +567,7 @@ export async function sendRejectionEmail(params: {
     subject,
     html,
     text,
-    dedupeKey: `rejection:${params.jobTitle}:${params.to}`,
+    dedupeKey: `rejection:${params.applicationId}:${rejectionPeriod}`,
   });
 }
 

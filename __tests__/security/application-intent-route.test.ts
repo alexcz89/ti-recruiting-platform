@@ -1,6 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ session: vi.fn(), companyId: vi.fn(), execute: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), companyId: vi.fn(), execute: vi.fn(), revalidate: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidate }));
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }));
 vi.mock("@/lib/server/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/server/session", () => ({ getSessionCompanyId: mocks.companyId }));
@@ -28,6 +29,7 @@ describe("application intent route contract and permissions", () => {
     mocks.session.mockResolvedValue({ user: { id: "recruiter-a", role: "RECRUITER" } });
     mocks.companyId.mockResolvedValue("company-a");
     mocks.execute.mockResolvedValue({
+      jobId: "job-a",
       state: { stage: "REVIEW", disposition: "ACTIVE" },
       legacy: { stateVersion: 9, status: "REVIEWING", recruiterInterest: "REVIEW" },
       timestamps: { offerAt: null, hiredAt: null }, replayed: false,
@@ -82,5 +84,24 @@ describe("application intent route contract and permissions", () => {
     expect(response.status).toBe(200);
     expect(mocks.execute).toHaveBeenCalledWith(expect.objectContaining({ actor: { type: "ADMIN", id: "admin", companyId: null } }));
     expect(mocks.companyId).not.toHaveBeenCalled();
+  });
+  it.each(["APPLIED", "REVIEW", "INTERVIEW", "OFFER", "REJECTED", "HIRED", "HOLD", "WITHDRAWN", "CANCELLED"])("validates and scopes the explicit destination %s", async destination => {
+    const command = { intent: "SET_RECRUITING_STATE", destination, expectedVersion: 6, commandId: `move-${destination}`, reasonCode: "CORRECTION" };
+    const response = await POST(request(command), { params: { id: "application-a" } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(mocks.execute).toHaveBeenCalledWith({ applicationId: "application-a", command,
+      actor: { type: "RECRUITER", id: "recruiter-a", companyId: "company-a" } });
+    expect(mocks.revalidate.mock.calls).toEqual([["/dashboard/jobs/job-a"], ["/dashboard/jobs/job-a/applications"]]);
+  });
+  it.each([
+    { destination: "RECONCILIATION" }, { destination: "ASSESSMENT" }, { destination: "PRESELECTED" },
+    { destination: "OFFER", expectedVersion: -1 }, { destination: "OFFER", companyId: "company-b" },
+    { destination: "OFFER", reasonCode: "OTHER" },
+  ])("rejects invalid destination commands before any writer: %j", patch => {
+    return (async () => {
+      const response = await POST(request({ intent: "SET_RECRUITING_STATE", expectedVersion: 6, commandId: "new-move", ...patch }), { params: { id: "application-a" } });
+      expect(response.status).toBe(400); expect(mocks.execute).not.toHaveBeenCalled();
+    })();
   });
 });

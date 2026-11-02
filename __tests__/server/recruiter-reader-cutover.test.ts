@@ -169,9 +169,9 @@ describe("recruiter reader OFF -> ON -> OFF cutover", () => {
       }, {});
     };
 
-    expect(pendingByJob(false)).toEqual({ "job-a": 1, "job-b": 1, "job-c": 3 });
+    expect(pendingByJob(false)).toEqual({ "job-a": 1, "job-b": 1, "job-c": 2 });
     expect(pendingByJob(true)).toEqual({ "job-a": 1, "job-c": 1 });
-    expect(pendingByJob(false)).toEqual({ "job-a": 1, "job-b": 1, "job-c": 3 });
+    expect(pendingByJob(false)).toEqual({ "job-a": 1, "job-b": 1, "job-c": 2 });
   });
 
   it("keeps legacy URL aliases conservative throughout cutover", () => {

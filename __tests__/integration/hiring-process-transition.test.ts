@@ -7,6 +7,7 @@ import {
   transitionApplication,
 } from "@/lib/hiring-process/transition-application";
 import { collectApplicationDivergenceReport } from "@/lib/hiring-process/divergence-report";
+import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const safeDatabase =
@@ -91,6 +92,69 @@ async function createFixtures() {
 }
 
 describeDatabase("transitionApplication with PostgreSQL", () => {
+  it("deduplicates concurrent identical explicit commands during legacy conversion", async () => {
+    await prisma.application.update({ where: { id: ids.application }, data: { stage: null, disposition: null } });
+    const input = { applicationId: ids.application, actor, command: { intent: "SET_RECRUITING_STATE" as const, destination: "OFFER" as const, expectedVersion: 0, commandId: "same-concurrent-command" } };
+    const outcomes = await Promise.all([executeApplicationIntent(input), executeApplicationIntent(input)]);
+    expect(outcomes.filter(result => result.replayed)).toHaveLength(1);
+    expect(await prisma.applicationEvent.count({ where: { applicationId: ids.application } })).toBe(1);
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: ids.application } })).stateVersion).toBe(1);
+  });
+  it("changes a hired closure to rejected with its own timestamp, then cancels without leaving an email pending", async () => {
+    const hiredAt = new Date("2026-10-01T00:00:00Z");
+    await prisma.application.update({ where: { id: ids.application }, data: { stage: "CLOSED", disposition: "HIRED", status: "HIRED", recruiterInterest: "ACCEPTED", hiredAt } });
+    await executeApplicationIntent({ applicationId: ids.application, actor, command: { intent: "SET_RECRUITING_STATE", destination: "REJECTED", expectedVersion: 0, commandId: "correct-closure", reasonCode: "CORRECTION" } });
+    const rejected = await prisma.application.findUniqueOrThrow({ where: { id: ids.application } });
+    expect(rejected).toMatchObject({ status: "REJECTED", disposition: "REJECTED", hiredAt: null, rejectionEmailSent: false });
+    expect(rejected.rejectedAt).toBeInstanceOf(Date);
+    await executeApplicationIntent({ applicationId: ids.application, actor, command: { intent: "SET_RECRUITING_STATE", destination: "CANCELLED", expectedVersion: 1, commandId: "cancel-closure", reasonCode: "CORRECTION" } });
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: ids.application } })).rejectedAt).toBeNull();
+    const history = await prisma.applicationEvent.findMany({ where: { applicationId: ids.application }, orderBy: { recordedAt: "asc" } });
+    expect(history).toHaveLength(2);
+    expect(history[0].metadata).toMatchObject({ previousState: { hiredAt: hiredAt.toISOString() } });
+    expect(history[1].metadata).toMatchObject({ previousState: { rejectedAt: rejected.rejectedAt!.toISOString() } });
+  });
+  it("persists REVIEW → OFFER → REVIEW through the public intent contract without intermediate stages", async () => {
+    await prisma.application.update({ where: { id: ids.application }, data: { stage: "REVIEW", status: "REVIEWING" } });
+    const first = await executeApplicationIntent({ applicationId: ids.application, actor, command: {
+      intent: "SET_RECRUITING_STATE", destination: "OFFER", expectedVersion: 0, commandId: "direct-offer",
+    } });
+    expect(first.state).toMatchObject({ stage: "OFFER", disposition: "ACTIVE", stateVersion: 1 });
+    const second = await executeApplicationIntent({ applicationId: ids.application, actor, command: {
+      intent: "SET_RECRUITING_STATE", destination: "REVIEW", expectedVersion: 1, commandId: "direct-review", reasonCode: "PROCESS_CHANGE",
+    } });
+    expect(second.state).toMatchObject({ stage: "REVIEW", stateVersion: 2 });
+    const row = await prisma.application.findUniqueOrThrow({ where: { id: ids.application }, include: { events: { orderBy: { recordedAt: "asc" } } } });
+    expect(row).toMatchObject({ stage: "REVIEW", status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 2 });
+    expect(row.events).toHaveLength(2);
+    expect(row.events.map(e => [e.fromStage, e.toStage])).toEqual([["REVIEW", "OFFER"], ["OFFER", "REVIEW"]]);
+    expect(row.events[1]).toMatchObject({ actorId: actor.id, reasonCode: "PROCESS_CHANGE" });
+  });
+  it("audits and deduplicates on-demand legacy conversion and terminal reopening", async () => {
+    const hiredAt = new Date("2026-10-01T00:00:00Z");
+    await prisma.application.update({ where: { id: ids.application }, data: {
+      stage: null, disposition: null, status: "HIRED", recruiterInterest: "ACCEPTED", hiredAt,
+    } });
+    const command = { intent: "SET_RECRUITING_STATE" as const, destination: "OFFER" as const, expectedVersion: 0, commandId: "reopen-hired", reasonCode: "CORRECTION" as const };
+    await executeApplicationIntent({ applicationId: ids.application, actor, command });
+    const replay = await executeApplicationIntent({ applicationId: ids.application, actor, command });
+    expect(replay.replayed).toBe(true);
+    const row = await prisma.application.findUniqueOrThrow({ where: { id: ids.application }, include: { events: true } });
+    expect(row).toMatchObject({ stage: "OFFER", disposition: "ACTIVE", status: "OFFER", recruiterInterest: "ACCEPTED", hiredAt: null, stateVersion: 1 });
+    expect(row.events).toHaveLength(1);
+    expect(row.events[0].metadata).toMatchObject({ legacyImported: true, transitionClass: "REOPEN", previousState: { hiredAt: hiredAt.toISOString(), status: "HIRED" } });
+  });
+  it("arbitrates concurrent explicit destinations and legacy conversion with one version and event", async () => {
+    await prisma.application.update({ where: { id: ids.application }, data: { stage: null, disposition: null } });
+    const results = await Promise.allSettled((["OFFER", "HIRED"] as const).map(destination => executeApplicationIntent({ applicationId: ids.application, actor,
+      command: { intent: "SET_RECRUITING_STATE", destination, expectedVersion: 0, commandId: `concurrent-${destination}` } })));
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    const failure = results.find(result => result.status === "rejected") as PromiseRejectedResult;
+    expect(failure.reason).toBeInstanceOf(ConcurrentApplicationTransitionError);
+    const row = await prisma.application.findUniqueOrThrow({ where: { id: ids.application }, include: { events: true } });
+    expect(row.stateVersion).toBe(1); expect(row.events).toHaveLength(1);
+    expect(["OFFER", "CLOSED"]).toContain(row.stage);
+  });
   beforeAll(() => {
     vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", "true");
   });

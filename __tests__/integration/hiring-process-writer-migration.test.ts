@@ -17,8 +17,8 @@ import { InvalidApplicationTransitionError } from "@/lib/hiring-process/rules";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const safeDatabase =
-  databaseUrl.includes("127.0.0.1:55433") &&
-  databaseUrl.includes("taskio_canonical_hiring_qa");
+  databaseUrl.includes("[::1]:55433") &&
+  databaseUrl.includes("/taskio_canonical_hiring_qa");
 const runDatabaseTests =
   process.env.RUN_HIRING_PROCESS_DB_TESTS === "true" && safeDatabase;
 const describeDatabase = runDatabaseTests ? describe : describe.skip;
@@ -154,6 +154,102 @@ describeDatabase("canonical hiring process writer migration", () => {
     await prisma.$disconnect();
     vi.unstubAllEnvs();
   });
+
+  it("permite una sola reserva concurrente de correo de rechazo", async () => {
+    const app = await createApplication();
+
+    const rejectedAt = new Date("2026-10-30T12:00:00.000Z");
+    const now = new Date("2026-11-02T13:00:00.000Z");
+    const leaseUntil = new Date(now.getTime() + 10 * 60 * 1000);
+
+    const rejected = await prisma.application.update({
+      where: { id: app.id },
+      data: {
+        stage: "CLOSED",
+        disposition: "REJECTED",
+        status: "REJECTED",
+        recruiterInterest: "REJECTED",
+        rejectedAt,
+        rejectionEmailSent: false,
+        rejectionEmailLeaseUntil: null,
+        rejectionEmailLeaseToken: null,
+        rejectionEmailAttemptStartedAt: null,
+      },
+    });
+
+    const claim = (token: string, attemptAt = now) =>
+      prisma.application.updateMany({
+        where: {
+          id: app.id,
+          stateVersion: rejected.stateVersion,
+          status: "REJECTED",
+          rejectedAt,
+          rejectionEmailSent: false,
+          rejectionEmailAttemptStartedAt: null,
+          OR: [
+            { stage: null, disposition: null },
+            { stage: "CLOSED", disposition: "REJECTED" },
+          ],
+          AND: [
+            {
+              OR: [
+                { rejectionEmailLeaseUntil: null },
+                { rejectionEmailLeaseUntil: { lte: attemptAt } },
+              ],
+            },
+          ],
+        },
+        data: {
+          rejectionEmailLeaseUntil: new Date(
+            attemptAt.getTime() + 10 * 60 * 1000
+          ),
+          rejectionEmailLeaseToken: token,
+          rejectionEmailAttemptStartedAt: attemptAt,
+        },
+      });
+
+    // Ambas operaciones compiten por la misma candidatura.
+    const [first, second] = await Promise.all([
+      claim("qa-lease-first"),
+      claim("qa-lease-second"),
+    ]);
+
+    // Exactamente una ejecución debe obtener la reserva.
+    expect([first.count, second.count].sort()).toEqual([0, 1]);
+
+    const stored = await prisma.application.findUniqueOrThrow({
+      where: { id: app.id },
+    });
+
+    expect([
+      "qa-lease-first",
+      "qa-lease-second",
+    ]).toContain(stored.rejectionEmailLeaseToken);
+
+    expect(stored.rejectionEmailLeaseUntil).toEqual(leaseUntil);
+    expect(stored.rejectionEmailSent).toBe(false);
+
+    expect(stored.rejectionEmailAttemptStartedAt).toEqual(now);
+
+    // Simular que la reserva de 10 minutos ya venció.
+    const afterLeaseExpiry = new Date(leaseUntil.getTime() + 1000);
+
+    // No debe poder iniciar otro intento del mismo rechazo.
+    const third = await claim("qa-lease-after-expiry", afterLeaseExpiry);
+    expect(third.count).toBe(0);
+
+    // Verificar que PostgreSQL conserva el intento original.
+    const afterThird = await prisma.application.findUniqueOrThrow({
+      where: { id: app.id },
+    });
+
+    expect(afterThird.rejectionEmailAttemptStartedAt).toEqual(now);
+    expect(afterThird.rejectionEmailLeaseToken).toBe(
+      stored.rejectionEmailLeaseToken
+    );
+
+  });
+
 
   it("preserves coexisting cohorts and command replay throughout OFF -> ON -> OFF", async () => {
     const create = (candidateId: string) =>

@@ -50,16 +50,18 @@ describe("recruiter overview canonical reads", () => {
     });
 
     expect(counts).toMatchObject({
-      APPLIED: 39,
+      APPLIED: 28,
       PRESELECTED: 17,
-      INTERVIEW: 26,
+      INTERVIEW: 16,
       REJECTED: 8,
       REVIEW: 0,
       OFFER: 0,
       HIRED: 0,
+      HOLD: 10,
+      CLOSED_OTHER: 11,
     });
     expect(sumRecruiterPipelineCounts(counts)).toBe(90);
-    expect(countActiveRecruiterPipelineApplications(counts)).toBe(82);
+    expect(countActiveRecruiterPipelineApplications(counts)).toBe(71);
   });
 
   it("selects only canonical APPLIED plus legacy-fallback REVIEW for pending", () => {

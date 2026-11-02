@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { CLOSURE_CONFIRMATIONS } from "@/lib/hiring-process/recruiter-state";
+import type { RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 
 export type ReasonCode = "CORRECTION" | "PROCESS_CHANGE" | "ADDITIONAL_REVIEW" | "NEW_INFORMATION" | "RECONSIDERED" | "OTHER";
 
@@ -12,6 +14,21 @@ const reasons: Array<{ value: ReasonCode; label: string }> = [
   { value: "RECONSIDERED", label: "Reconsideración" },
   { value: "OTHER", label: "Otro" },
 ];
+
+export function RecruiterStateDialog({ option, pending, onCancel, onConfirm }: {
+  option: RecruiterStageOption;
+  pending: boolean;
+  onCancel: () => void;
+  onConfirm: (reason?: { reasonCode: ReasonCode; reasonText?: string }) => void;
+}) {
+  const title = option.requiresReason ? `${option.requiresConfirmation ? "Reabrir en" : "Regresar a"} ${option.label}`
+    : CLOSURE_CONFIRMATIONS[option.destination] ?? `Mover a ${option.label}`;
+  return option.requiresReason
+    ? <ProcessReasonDialog title={title} pending={pending} onCancel={onCancel} onConfirm={onConfirm}
+        description="Confirma el cambio. El motivo y el estado anterior quedarán registrados en el historial." />
+    : <ProcessReasonDialog title={title} pending={pending} onCancel={onCancel} confirmationOnly
+        description={`Confirma el cambio a ${option.label}. El estado anterior quedará registrado en el historial.`} onConfirm={() => onConfirm()} />;
+}
 
 type DialogProps = {
   title: string;

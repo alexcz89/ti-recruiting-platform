@@ -100,23 +100,32 @@ describe("recruiter reader surface cutover", () => {
 
     const view = render(<InterestSelect {...props} />);
 
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Cambiar etapa: Requiere conciliación" })
-    ).toBeDisabled();
+      screen.queryByRole("button", {
+        name: "Cambiar etapa: Requiere conciliación",
+      })
+    ).not.toBeInTheDocument();
 
     view.rerender(
       <InterestSelect {...props} canonicalRecruiterReadsEnabled />
     );
 
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Cambiar etapa: Requiere conciliación" })
-    ).toBeDisabled();
+      screen.queryByRole("button", {
+        name: "Cambiar etapa: Requiere conciliación",
+      })
+    ).not.toBeInTheDocument();
 
     view.rerender(<InterestSelect {...props} />);
 
+    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Cambiar etapa: Requiere conciliación" })
-    ).toBeDisabled();
+      screen.queryByRole("button", {
+        name: "Cambiar etapa: Requiere conciliación",
+      })
+    ).not.toBeInTheDocument();
 
     expect(fetch).not.toHaveBeenCalled();
   });

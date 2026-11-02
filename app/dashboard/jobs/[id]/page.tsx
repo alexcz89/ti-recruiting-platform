@@ -2,6 +2,7 @@ import { ACTIVE_PIPELINE, PIPELINE_LABELS } from "@/lib/hiring-process/recruitin
 import { resolveCandidateLocation } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/jobs/[id]/page.tsx
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
@@ -11,7 +12,7 @@ import { isAssessmentExpired } from '@/lib/assessments/expiration';
 import { getAssessmentTemplateVisibilityWhere } from '@/lib/assessments/access';
 import Kanbanboard from "./KanbanBoard";
 import { ApplicationInterest } from "@prisma/client";
-import { executeApplicationIntent } from "@/lib/hiring-process/application-intents";
+import { applicationIntentSchema, executeApplicationIntent } from "@/lib/hiring-process/application-intents";
 import { hasCanonicalApplicationOffer } from "@/lib/hiring-process/offer-footprint";
 import { hasApplicationHiredFootprint } from "@/lib/hiring-process/hired-footprint";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
@@ -292,13 +293,14 @@ export default async function JobPipelinePage({ params }: PageProps) {
     }
 
     const appId = String(fd.get("appId") || "");
+    const explicitDestination = fd.get("intent") === "SET_RECRUITING_STATE";
     const newStatusStr = String(fd.get("newStatus") || "") as ApplicationInterest;
 
-    if (!appId || !newStatusStr) {
+    if (!appId || (!explicitDestination && !newStatusStr)) {
       return { ok: false, message: "Faltan datos" };
     }
 
-    if (!INTEREST_STATUSES.includes(newStatusStr)) {
+    if (!explicitDestination && !INTEREST_STATUSES.includes(newStatusStr)) {
       return { ok: false, message: "Estado inválido" };
     }
 
@@ -317,6 +319,28 @@ export default async function JobPipelinePage({ params }: PageProps) {
 
     if (!app) {
       return { ok: false, message: "No tienes acceso a esta postulación" };
+    }
+
+    if (explicitDestination) {
+      const role = String(s.user.role ?? "").toUpperCase();
+      if (role !== "RECRUITER" && role !== "ADMIN") return { ok: false, message: "No autorizado" };
+      const parsed = applicationIntentSchema.safeParse({
+        intent: "SET_RECRUITING_STATE", destination: fd.get("destination"),
+        expectedVersion: fd.has("expectedVersion") ? Number(fd.get("expectedVersion")) : undefined,
+        commandId: fd.get("commandId"),
+        ...(fd.has("reasonCode") ? { reasonCode: fd.get("reasonCode") } : {}),
+        ...(fd.has("reasonText") ? { reasonText: fd.get("reasonText") } : {}),
+      });
+      if (!parsed.success) return { ok: false, message: "Comando inválido" };
+      try {
+        const result = await executeApplicationIntent({ applicationId: app.id, command: parsed.data,
+          actor: { type: role, id: s.user.id ? String(s.user.id) : null, companyId: companyId2 } });
+        revalidatePath(`/dashboard/jobs/${params.id}`);
+        revalidatePath(`/dashboard/jobs/${params.id}/applications`);
+        return { ok: true, application: { stage: result.state?.stage ?? null, disposition: result.state?.disposition ?? null, ...result.legacy } };
+      } catch {
+        return { ok: false, message: "No se pudo actualizar el estado del candidato" };
+      }
     }
 
     if (hasApplicationHiredFootprint(app)) {

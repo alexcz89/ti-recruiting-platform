@@ -111,12 +111,12 @@ describe("recruiter reader architecture", () => {
     expect(board).toContain("isCardWritable");
     expect(board).toContain('card.writerCompatibility !== "NONE"');
     expect(board).not.toContain("canonicalHiringProcessEnabled");
-    expect(board).toContain("isDragDisabled={isPending || !isCardWritable(card)}");
+    expect(board).toContain("isDragDisabled={isPending || selectorBusy || requestedMove !== null || !isCardWritable(card)}");
     expect(board).toContain("getRecruitingPresentation");
-    expect(board).toContain("getRecruitingActions");
-    expect(board).toContain('toStatus === "REVIEW" && fromStatus === "APPLIED"');
-    expect(board).toContain('toStatus === "OFFER"');
-    expect(board).toContain('toStatus === "INTERVIEW"');
+    expect(board).toContain("getRecruiterStageOptions");
+    expect(board).toContain('fd.set("intent", "SET_RECRUITING_STATE")');
+    expect(board).toContain('fd.set("destination", option.destination)');
+    expect(board).toContain("InterestSelect");
     expect(board).not.toContain('onMoveNext={');
 
     expect(page).not.toContain('intent: "MOVE_TO_OFFER"');

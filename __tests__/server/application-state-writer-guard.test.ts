@@ -35,6 +35,10 @@ const requiredDynamicMaybeGuards = new Map<string, RegExp>([
 const allowedProductionWriters = new Map<string, string>([
   ["lib/hiring-process/create-application.ts", "canonical atomic creation"],
   ["lib/hiring-process/prisma-transition-store.ts", "canonical transition CAS"],
+  [
+    "app/api/cron/rejections/route.ts",
+    "rejection email delivery bookkeeping: atomic lease, attempt and sent marker only",
+  ],
   ["lib/hiring-process/reconcile-legacy-applications.ts", "approved one-time reconciliation"],
   ["lib/hiring-process/application-intents.ts", "feature-flag OFF legacy fallback"],
   ["app/dashboard/overview/actions.ts", "temporary flag-OFF review pilot"],
