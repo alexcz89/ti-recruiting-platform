@@ -21,8 +21,10 @@ function authOk(req: Request) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
 
-  const headerSecret = req.headers.get("x-cron-secret");
-  return headerSecret === secret;
+  return (
+    req.headers.get("authorization") === `Bearer ${secret}` ||
+    req.headers.get("x-cron-secret") === secret
+  );
 }
 
 export async function GET(req: Request) {
@@ -30,7 +32,7 @@ export async function GET(req: Request) {
     return jsonNoStore({ error: "Unauthorized" }, 401);
   }
 
-  // Exactamente 72 horas desde la última entrada a Rechazado.
+  // Procesar rechazos con al menos 72 horas de antigüedad.
   const cutoff = new Date(Date.now() - LOOKBACK_MS);
 
   try {

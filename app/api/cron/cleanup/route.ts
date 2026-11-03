@@ -13,11 +13,20 @@ const SUMMARY_CACHE_MAX_DAYS   = 60; // días de vida de CandidateSummaryCache
 const CV_PARSER_CURRENT_VERSION = "cv-v4"; // debe coincidir con CACHE_VERSION en analyzeCv.ts
 
 export async function GET(req: NextRequest) {
-  const secret = req.headers.get("x-cron-secret")
-    ?? new URL(req.url).searchParams.get("secret");
+  const secret = process.env.CRON_SECRET;
 
-  if (secret !== process.env.CRON_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const authorized =
+    !!secret &&
+    (
+      req.headers.get("authorization") === `Bearer ${secret}` ||
+      req.headers.get("x-cron-secret") === secret
+    );
+
+  if (!authorized) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
   }
 
   const now = new Date();

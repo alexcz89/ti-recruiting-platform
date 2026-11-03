@@ -60,6 +60,44 @@ describe("Cron de rechazos", () => {
     delete process.env.CRON_SECRET;
   });
 
+  it("autoriza solicitudes con Bearer de Vercel", async () => {
+    const response = await GET(
+      new Request("http://localhost/api/cron/rejections", {
+        headers: {
+          authorization: "Bearer test-cron-secret",
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.findMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("rechaza solicitudes con un secreto incorrecto", async () => {
+    const response = await GET(
+      new Request("http://localhost/api/cron/rejections", {
+        headers: {
+          authorization: "Bearer incorrect-secret",
+          "x-cron-secret": "incorrect-secret",
+        },
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.sendRejectionEmail).not.toHaveBeenCalled();
+  });
+
+  it("rechaza solicitudes si CRON_SECRET no esta configurado", async () => {
+    delete process.env.CRON_SECRET;
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(401);
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.sendRejectionEmail).not.toHaveBeenCalled();
+  });
+
   it("utiliza exactamente 72 horas como tiempo de espera", async () => {
     const response = await GET(request());
 
