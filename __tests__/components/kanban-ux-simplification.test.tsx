@@ -71,11 +71,30 @@ it("shows the same authorized essentials on desktop and mobile, with a stage sel
   expect(screen.getAllByText(/85%/).length).toBeGreaterThan(0);
   expect(screen.queryByText("Ubicación ambigua")).not.toBeInTheDocument();
   expect(screen.queryByText("Ver perfil")).not.toBeInTheDocument();
-  expect(screen.getAllByRole("button", { name: /Mover a/ })).toHaveLength(2);
+  expect(screen.getAllByRole("button", { name: /Cambiar etapa de/ })).toHaveLength(2);
   const selector = screen.getByRole("combobox", { name: "Etapa" });
   fireEvent.change(selector, { target: { value: "REVIEW" } });
   expect(screen.getByText("No hay candidatos en esta etapa.")).toBeInTheDocument();
   expect(selector).toHaveValue("REVIEW");
+});
+
+it("uses icon-only card actions and flexible columns without removing information or adding a rejected drop target", () => {
+  render(<KanbanBoard {...props} moveAction={vi.fn()} />);
+  const triggers = screen.getAllByRole("button", { name: `Cambiar etapa de ${card.candidate.name}` });
+  for (const trigger of triggers) {
+    expect(trigger).toHaveClass("h-11", "w-11");
+    expect(trigger).not.toHaveClass("w-[160px]");
+    expect(trigger.textContent).toBe("");
+    expect(trigger.closest("article")).toHaveTextContent(card.candidate.name);
+  }
+  const rejected = screen.getByRole("region", { name: "Descartados" });
+  expect(rejected).toHaveClass("min-w-0", "w-full", "col-span-4", "xl:col-span-1");
+  const grid = rejected.parentElement!;
+  expect(grid).toHaveClass("grid", "grid-cols-4", "xl:grid-cols-5");
+  expect(grid).not.toHaveClass("w-max");
+  expect(grid.parentElement).not.toHaveClass("overflow-x-auto");
+  expect(mocks.targets.mock.calls.flat()).not.toContain("REJECTED");
+  expect(screen.getAllByRole("link", { name: "Ver resultados de Prueba técnica" })).toHaveLength(2);
 });
 it("omits missing city and locked score without inventing a location", () => {
   render(<KanbanBoard {...props} applications={[{ ...card, candidate: { ...card.candidate, city: null }, _score: null, _locked: true, _assessments: [] }]} moveAction={vi.fn()} />);
@@ -87,9 +106,18 @@ it("omits missing city and locked score without inventing a location", () => {
 it("keeps long candidate names and assessment titles readable with a results focus target", () => {
   const title = "Evaluación técnica de arquitectura y programación con un nombre especialmente largo";
   render(<KanbanBoard {...props} applications={[{ ...card, _assessments: [{ ...card._assessments[0], templateTitle: title }] }]} moveAction={vi.fn()} />);
-  expect(screen.getAllByRole("link", { name: card.candidate.name })[0]).toHaveClass("break-words", "text-zinc-900", "dark:text-zinc-50");
+  expect(screen.getAllByRole("link", { name: card.candidate.name })[0]).toHaveClass(
+    "[overflow-wrap:anywhere]",
+    "text-zinc-900",
+    "dark:text-zinc-50"
+  );
   expect(screen.getAllByText(title)).toHaveLength(2);
-  expect(screen.getAllByText(title)[0]).toHaveClass("line-clamp-2", "text-[11px]");
+  expect(screen.getAllByText(title)[0]).toHaveClass(
+    "[overflow-wrap:anywhere]",
+    "text-xs",
+    "leading-5"
+  );
+  expect(screen.getAllByText(title)[0]).not.toHaveClass("line-clamp-2");
   expect(screen.queryByText(`${title.slice(0, 21)}…`)).not.toBeInTheDocument();
   expect(screen.getAllByRole("link", { name: `Ver resultados de ${title}` })[0]).toHaveClass("focus-visible:outline");
 });
@@ -124,7 +152,7 @@ it.each([true, false])("confirms Kanban discard before changing counters with ca
   const sourceCard = reads ? card : { ...card, stage: null, disposition: null, stateVersion: 0,
     writerCompatibility: "LEGACY" as const };
   render(<KanbanBoard {...props} applications={[sourceCard]} canonicalRecruiterReadsEnabled={reads} moveAction={vi.fn()} />);
-  const menuButton = screen.getAllByRole("button", { name: `Mover a: ${card.candidate.name}` })[0];
+  const menuButton = screen.getAllByRole("button", { name: `Cambiar etapa de ${card.candidate.name}` })[0];
   fireEvent.mouseDown(menuButton);
   expect(mocks.dragStart).not.toHaveBeenCalled();
   fireEvent.pointerDown(menuButton, { button: 0, ctrlKey: false });
@@ -155,7 +183,7 @@ it("keeps Kanban counters and the candidate when discard is rejected", async () 
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "private metadata" }), { status: 409 }));
   vi.stubGlobal("fetch", fetch);
   render(<KanbanBoard {...props} moveAction={vi.fn()} />);
-  fireEvent.pointerDown(screen.getAllByRole("button", { name: `Mover a: ${card.candidate.name}` })[0], { button: 0, ctrlKey: false });
+  fireEvent.pointerDown(screen.getAllByRole("button", { name: `Cambiar etapa de ${card.candidate.name}` })[0], { button: 0, ctrlKey: false });
   fireEvent.click(await screen.findByRole("menuitem", { name: "Descartado" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
@@ -171,8 +199,8 @@ it("offers audited moves for terminal cards but none for incompatible cards", ()
   const incompatible = { ...card, id: "invalid", writerCompatibility: "NONE" as const, candidate: { ...card.candidate, name: "Invalid" } };
   render(<KanbanBoard {...props} applications={[terminal, incompatible]} moveAction={vi.fn()} />);
   fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "REJECTED" } });
-  expect(screen.getAllByRole("button", { name: "Mover a: Closed" })[0]).toBeEnabled();
-  expect(screen.queryByRole("button", { name: "Mover a: Invalid" })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("button", { name: "Cambiar etapa de Closed" })[0]).toBeEnabled();
+  expect(screen.queryByRole("button", { name: "Cambiar etapa de Invalid" })).not.toBeInTheDocument();
 });
 
 it("uses the persisted state to classify a successful response that differs from the requested column", async () => {
@@ -312,7 +340,7 @@ it.each(["REVIEW", "OFFER"])("reopens a discarded candidate through the mobile c
   render(<KanbanBoard {...props} applications={[closed]} moveAction={vi.fn()} />);
   fireEvent.change(screen.getByRole("combobox", { name: "Etapa" }), { target: { value: "REJECTED" } });
   const mobile = screen.getByRole("combobox", { name: "Etapa" }).parentElement!;
-  const trigger = within(mobile).getByRole("button", { name: `Mover a: ${card.candidate.name}` });
+  const trigger = within(mobile).getByRole("button", { name: `Cambiar etapa de ${card.candidate.name}` });
   trigger.focus(); fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" });
   fireEvent.click(await screen.findByRole("menuitem", { name: destination === "OFFER" ? "Oferta" : "En revisión" }));
   expect(fetch).not.toHaveBeenCalled();

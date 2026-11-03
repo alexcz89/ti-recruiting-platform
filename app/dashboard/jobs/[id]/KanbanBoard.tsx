@@ -227,10 +227,10 @@ export default function Kanbanboard({
   };
 
   return (
-    <section className="min-w-0 md:rounded-2xl md:border md:border-zinc-200/70 md:bg-zinc-50/40 md:p-3 dark:md:border-zinc-800 dark:md:bg-zinc-950/20">
+    <section aria-label="Tablero de candidaturas" className="min-w-0 lg:rounded-2xl lg:border lg:border-zinc-200/70 lg:bg-zinc-50/40 lg:p-3 dark:lg:border-zinc-800 dark:lg:bg-zinc-950/20">
       {requestedMove && <RecruiterStateDialog option={requestedMove.option} pending={isPending} onCancel={() => setRequestedMove(null)}
         onConfirm={reason => { void submitMove(requestedMove.card, requestedMove.option, reason); }} />}
-      <div className="md:hidden">
+      <div className="mx-auto max-w-2xl lg:hidden">
         <label htmlFor="kanban-stage" className="mb-1.5 block text-sm font-medium">Etapa</label>
         <select id="kanban-stage" className="min-h-11 w-full rounded-lg border border-zinc-300 bg-[rgb(var(--card))] px-3 py-2 text-sm dark:border-zinc-700" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
           {mobileColumns.map((stage) => <option key={stage} value={stage}>{columnLabel(stage)} ({grouped[stage]?.length ?? 0})</option>)}
@@ -240,13 +240,13 @@ export default function Kanbanboard({
           {(grouped[selectedStage] ?? []).length === 0 && <p className="py-6 text-center text-sm text-zinc-600 dark:text-zinc-400">No hay candidatos en esta etapa.</p>}
         </div>
       </div>
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden min-w-0 lg:block">
       <DragDropContext
         onDragEnd={(result) => {
           handleDragEnd(result);
         }}
       >
-        <div className="flex w-max gap-3 pb-1">
+        <div className="grid min-w-0 grid-cols-4 items-start gap-3 xl:grid-cols-5">
           {statuses.map((st) => {
             const cards = grouped[st] || [];
             const accent = COLUMN_ACCENT[st] ?? COLUMN_ACCENT.REVIEW;
@@ -307,7 +307,7 @@ export default function Kanbanboard({
         </div>
       </DragDropContext>
       </div>
-      <div className="mt-3 hidden space-y-2 md:block">
+      <div className="mt-3 hidden space-y-2 lg:block">
         {secondaryGroups.map(group => <details key={group.key} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
           <summary className="cursor-pointer rounded text-sm font-medium text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200">{group.label} ({grouped[group.key]?.length ?? 0})</summary>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
@@ -351,7 +351,7 @@ export default function Kanbanboard({
     return (
       <article
         className={[
-          "group rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-xs transition-colors",
+          "group min-w-0 rounded-xl border border-zinc-200 bg-white p-3 text-sm transition-colors",
           "dark:border-zinc-800 dark:bg-zinc-900",
           dragging ? "ring-2 ring-emerald-500/50" : "hover:border-zinc-300 dark:hover:border-zinc-700",
           isStale ? "border-l-2 border-l-amber-400" : "",
@@ -361,54 +361,52 @@ export default function Kanbanboard({
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <h4 className="min-w-0 text-sm font-semibold leading-snug text-zinc-900 dark:text-zinc-50">
-                <CandidateProfileLink applicationId={card.id} jobId={jobId} source={{ stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], stateVersion: card.stateVersion, status: card.applicationStatus, recruiterInterest: card.status }} enabled={autoReviewEnabled} href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} className="break-words text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</CandidateProfileLink>
+              <h4 className="min-w-0 text-base font-semibold leading-snug text-zinc-900 lg:text-sm dark:text-zinc-50">
+                <CandidateProfileLink applicationId={card.id} jobId={jobId} source={{ stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], stateVersion: card.stateVersion, status: card.applicationStatus, recruiterInterest: card.status }} enabled={autoReviewEnabled} href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} className="[overflow-wrap:anywhere] text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</CandidateProfileLink>
               </h4>
               {isNew && (
-                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
                   Nueva
                 </span>
               )}
             </div>
             {card.candidate.city && (
-              <p className="mt-0.5 flex max-w-[170px] items-center gap-0.5 truncate text-[11px] text-zinc-600 dark:text-zinc-400">
-                <MapPin className="h-2.5 w-2.5 shrink-0" />
-                {card.candidate.city}
+              <p className="mt-1 flex items-start gap-1 text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+                <MapPin aria-hidden="true" className="mt-1 h-3 w-3 shrink-0" />
+                <span className="min-w-0 [overflow-wrap:anywhere]">{card.candidate.city}</span>
               </p>
             )}
           </div>
 
           {/* AI Match y acción contextual */}
-          <div className="flex shrink-0 items-start gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             {hasMatchSignals && (
               locked ? (
-                <div className="flex items-center gap-0.5 rounded-md border border-zinc-200 px-1.5 py-0.5 dark:border-zinc-700">
-                  <Lock className="h-2.5 w-2.5 text-zinc-400" />
-                  <span className="text-[9px] text-zinc-400">Pro</span>
+                <div className="flex items-center gap-1 rounded-md border border-zinc-200 px-1.5 py-1 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300">
+                  <Lock aria-hidden="true" className="h-3 w-3" />
+                  <span className="text-[11px] font-medium">Pro</span>
                 </div>
               ) : score !== null && score !== undefined ? (
-                <span className={`text-sm font-black leading-none ${scoreColor(score)}`}>
+                <span className={`text-sm font-bold tabular-nums ${scoreColor(score)}`}>
                   {score}%
                 </span>
               ) : null
             )}
+            {!dragging && isCardWritable(card) && <div onPointerDown={event => event.stopPropagation()}
+              onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+              <InterestSelect variant="icon" applicationId={card.id} initial={card.status as "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED"}
+                initialStateVersion={card.stateVersion} legacyStatus={card.applicationStatus}
+                canonicalStage={card.stage as RecruiterApplicationReadInput["stage"]} canonicalDisposition={card.disposition as RecruiterApplicationReadInput["disposition"]}
+                canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled} disabled={isPending || selectorBusy || requestedMove !== null}
+                accessibleLabel={`Cambiar etapa de ${card.candidate.name}`} onBusyChange={onSelectorBusy} onConfirmed={saved => applyConfirmedCard(card.id, saved)} />
+            </div>}
           </div>
         </div>
 
-        {!dragging && isCardWritable(card) && <div className="mt-2" onPointerDown={event => event.stopPropagation()}
-          onMouseDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
-          <InterestSelect applicationId={card.id} initial={card.status as "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED"}
-            initialStateVersion={card.stateVersion} legacyStatus={card.applicationStatus}
-            canonicalStage={card.stage as RecruiterApplicationReadInput["stage"]} canonicalDisposition={card.disposition as RecruiterApplicationReadInput["disposition"]}
-            canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled} disabled={isPending || selectorBusy || requestedMove !== null}
-            accessibleLabel={`Mover a: ${card.candidate.name}`} onBusyChange={onSelectorBusy} onConfirmed={saved => applyConfirmedCard(card.id, saved)} />
+        {(processState.preselected || processState.assessmentStage) && <div className="mt-2 flex flex-wrap gap-1 text-xs">
+          {processState.preselected && <span className="rounded bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-900 dark:text-amber-100">Preselecto</span>}
+          {processState.assessmentStage && <span>Evaluación técnica</span>}
         </div>}
-
-        <div className="mt-2 flex flex-wrap gap-1 text-[11px]">
-          {presentation(card).section !== "ACTIVE" && <span>{presentation(card).label}</span>}
-          {presentation(card).preselected && <span className="rounded bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-900 dark:text-amber-100">Preselecto</span>}
-          {presentation(card).assessmentStage && <span>Evaluación técnica</span>}
-        </div>
         {/* Barra de match */}
         {hasMatchSignals && !locked && score !== null && score !== undefined && (
           <div className="mt-1.5 h-1 w-full rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -418,7 +416,7 @@ export default function Kanbanboard({
 
         {/* Badges de assessments (uno por template enviado) */}
         {(card._assessments ?? []).length > 0 && (
-          <div className="mt-2 flex flex-col gap-1.5">
+          <div className="mt-3 flex flex-col gap-2 border-t border-zinc-100 pt-1 dark:border-zinc-800">
             {(card._assessments!).map((a, i) => (
               <AssessmentBadge key={i} assessment={a} />
             ))}
@@ -427,7 +425,7 @@ export default function Kanbanboard({
 
         {/* Alerta de candidato estancado */}
         {isStale && (
-          <div className="mt-2 flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[10px] text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+          <div className="mt-3 flex items-start gap-1 rounded-lg bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
             <span>⚠</span>
             <span>Pendiente de revisión desde hace {daysPendingReview} días</span>
           </div>
@@ -455,15 +453,18 @@ export default function Kanbanboard({
   }) {
     return (
       <div
+        role="region"
+        aria-label={title}
         ref={innerRef}
         {...(droppableProps as any)}
         className={[
-          "w-[310px] shrink-0 rounded-xl border border-zinc-200/70 bg-white/70 flex flex-col max-h-[72vh] transition-colors dark:border-zinc-800 dark:bg-zinc-900/70",
+          "min-w-0 w-full rounded-xl border border-zinc-200/70 bg-white/70 flex flex-col max-h-[72vh] transition-colors dark:border-zinc-800 dark:bg-zinc-900/70",
+          staticColumn ? "col-span-4 xl:col-span-1" : "",
           isDraggingOver ? accent.drag : "",
         ].join(" ")}
       >
         <div className="sticky top-0 z-10 bg-[rgb(var(--card))] border-b border-zinc-100 px-3 pt-3 pb-2 flex items-center justify-between gap-2 dark:border-zinc-800">
-          <h3 className={`text-xs font-semibold uppercase tracking-wide ${accent.header}`}>
+          <h3 className={`min-w-0 text-xs font-semibold uppercase tracking-wide ${accent.header}`}>
             {title}
           </h3>
           <span className={`inline-flex h-6 min-w-[1.75rem] items-center justify-center rounded-full text-[11px] font-semibold ${accent.badge}`}>
@@ -471,9 +472,9 @@ export default function Kanbanboard({
           </span>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+        <div className={`min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-2 py-2 ${staticColumn ? "grid grid-cols-3 items-start gap-2 xl:grid-cols-1" : "space-y-2"}`}>
           {count === 0 ? (
-            <div className="flex flex-col items-center justify-center py-6 gap-2 text-center">
+            <div className="col-span-full flex flex-col items-center justify-center py-6 gap-2 text-center">
               {!staticColumn && <span className="text-2xl opacity-30">↓</span>}
               <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
                 {staticColumn ? "No hay candidaturas descartadas" : "Arrastra candidatos aquí"}
@@ -484,7 +485,7 @@ export default function Kanbanboard({
           )}
         </div>
 
-        <div className="px-3 pb-3 pt-2 border-t border-zinc-100 text-[10px] text-zinc-400 text-center dark:border-zinc-800">
+        <div className="px-3 pb-3 pt-2 border-t border-zinc-100 text-[11px] text-zinc-600 text-center dark:border-zinc-800 dark:text-zinc-400">
           {isLoading ? "Guardando…" : `${count} candidato${count !== 1 ? "s" : ""}`}
         </div>
       </div>
@@ -495,7 +496,7 @@ export default function Kanbanboard({
 
   function AssessmentBadge({ assessment }: { assessment: AssessmentMeta }) {
     const rawTitle = assessment.templateTitle ?? "";
-    const titleClass = "line-clamp-2 break-words text-[11px] font-medium leading-4 text-zinc-600 dark:text-zinc-300";
+    const titleClass = "[overflow-wrap:anywhere] text-xs font-medium leading-5 text-zinc-600 dark:text-zinc-300";
 
     if (assessment.state === "COMPLETED") {
       const hasScore = typeof assessment.score === "number";
@@ -520,7 +521,7 @@ export default function Kanbanboard({
       const label = passed === true ? "Aprobó" : passed === false ? "No aprobó" : "Completado";
 
       const badge = (
-        <span className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${colorClass} ${assessment.attemptId ? hoverClass + " cursor-pointer transition-colors" : ""}`}>
+        <span className={`inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${colorClass} ${assessment.attemptId ? hoverClass + " cursor-pointer transition-colors" : ""}`}>
           <span>{icon}</span>
           {hasScore ? (
             <>

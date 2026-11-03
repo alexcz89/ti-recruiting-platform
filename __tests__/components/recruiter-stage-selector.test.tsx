@@ -271,6 +271,34 @@ it("hires directly from REVIEW only after confirmation", async () => {
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ intent: "SET_RECRUITING_STATE", destination: "HIRED" });
 });
 
+it("offers the same destinations from a labelled icon with no visible stage and preserves keyboard access", async () => {
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  render(<InterestSelect {...applied} variant="icon" accessibleLabel="Cambiar etapa de Ana" />);
+  const trigger = screen.getByRole("button", { name: "Cambiar etapa de Ana" });
+  expect(trigger).toHaveClass("h-11", "w-11");
+  expect(trigger).not.toHaveClass("w-[160px]");
+  expect(trigger).toHaveTextContent("");
+  expect(screen.queryByText("Por revisar")).not.toBeInTheDocument();
+  trigger.focus(); fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" });
+  const current = await screen.findByRole("menuitem", { name: "Por revisar" });
+  expect(current).toHaveAttribute("aria-disabled", "true");
+  expect(current).toHaveAttribute("aria-current", "step");
+  expect(screen.getAllByRole("menuitem")).toHaveLength(9);
+  expect(screen.getByRole("menuitem", { name: "Descartado" })).toHaveClass("min-h-11");
+  fireEvent.click(screen.getByRole("menuitem", { name: "Descartado" }));
+  expect(screen.getByRole("dialog", { name: "Descartar candidato" })).toBeInTheDocument();
+  expect(fetch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("hides the icon rather than exposing a fallback control for incompatible records", () => {
+  render(<InterestSelect {...applied} variant="icon" legacyStatus="HIRED" initial="ACCEPTED" />);
+  expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  expect(screen.queryByText("Requiere conciliación")).not.toBeInTheDocument();
+});
+
 it.each([true, false])("allows reopening final states with a confirmed reason with reads=%s", reads => {
   render(<InterestSelect applicationId="closed" initial="REJECTED" initialStateVersion={reads ? 3 : 0} legacyStatus="REJECTED" canonicalStage={reads ? "CLOSED" : null} canonicalDisposition={reads ? "REJECTED" : null} canonicalRecruiterReadsEnabled={reads} />);
   expect(screen.getByText("Descartado")).toBeInTheDocument();
