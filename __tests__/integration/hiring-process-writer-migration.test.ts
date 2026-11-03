@@ -16,9 +16,27 @@ import {
 import { InvalidApplicationTransitionError } from "@/lib/hiring-process/rules";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
-const safeDatabase =
-  databaseUrl.includes("[::1]:55433") &&
-  databaseUrl.includes("/taskio_canonical_hiring_qa");
+const safeDatabase = (() => {
+  try {
+    const url = new URL(databaseUrl);
+
+    const isQaDatabase =
+      url.pathname === "/taskio_canonical_hiring_qa" &&
+      url.port === "55433";
+
+    const isLocalDocker = url.hostname === "[::1]";
+
+    const isGitHubActionsDocker =
+      process.env.CI === "true" &&
+      process.env.GITHUB_ACTIONS === "true" &&
+      url.hostname === "127.0.0.1";
+
+    return isQaDatabase && (isLocalDocker || isGitHubActionsDocker);
+  } catch {
+    return false;
+  }
+})();
+
 const runDatabaseTests =
   process.env.RUN_HIRING_PROCESS_DB_TESTS === "true" && safeDatabase;
 const describeDatabase = runDatabaseTests ? describe : describe.skip;
