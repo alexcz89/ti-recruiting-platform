@@ -32,6 +32,29 @@ export async function GET(req: Request) {
     return jsonNoStore({ error: "Unauthorized" }, 401);
   }
 
+  const activationRaw = process.env.REJECTION_EMAIL_ACTIVATION_AT;
+
+  const validActivation =
+    !!activationRaw &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(
+      activationRaw
+    ) &&
+    !Number.isNaN(Date.parse(activationRaw));
+
+  if (!validActivation) {
+    console.warn(
+      "[cron/rejections] Automatic rejection emails are not activated"
+    );
+
+    return jsonNoStore({
+      ok: true,
+      skipped: "not_activated",
+    });
+  }
+
+  const activationAt = new Date(activationRaw);
+
+
   // Procesar rechazos con al menos 72 horas de antigüedad.
   const cutoff = new Date(Date.now() - LOOKBACK_MS);
 
@@ -41,7 +64,11 @@ export async function GET(req: Request) {
         status: "REJECTED",
         rejectionEmailSent: false,
         rejectionEmailAttemptStartedAt: null,
-        rejectedAt: { lte: cutoff },
+        rejectedAt: {
+          gte: activationAt,
+          lte: cutoff,
+        },
+
         OR: [
           { stage: null, disposition: null },
           { stage: "CLOSED", disposition: "REJECTED" },

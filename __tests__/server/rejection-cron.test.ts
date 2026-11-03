@@ -52,12 +52,44 @@ describe("Cron de rechazos", () => {
     vi.setSystemTime(NOW);
 
     process.env.CRON_SECRET = "test-cron-secret";
+		process.env.REJECTION_EMAIL_ACTIVATION_AT =
+			"2026-10-01T00:00:00.000Z";
     mocks.findMany.mockResolvedValue([]);
   });
 
   afterEach(() => {
     vi.useRealTimers();
     delete process.env.CRON_SECRET;
+		delete process.env.REJECTION_EMAIL_ACTIVATION_AT;
+  });
+
+  it("no procesa rechazos sin fecha de activacion", async () => {
+    delete process.env.REJECTION_EMAIL_ACTIVATION_AT;
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true,
+      skipped: "not_activated",
+    });
+
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.sendRejectionEmail).not.toHaveBeenCalled();
+  });
+
+  it("no procesa rechazos con fecha de activacion invalida", async () => {
+    process.env.REJECTION_EMAIL_ACTIVATION_AT = "invalid-date";
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      skipped: "not_activated",
+    });
+
+    expect(mocks.findMany).not.toHaveBeenCalled();
+    expect(mocks.sendRejectionEmail).not.toHaveBeenCalled();
   });
 
   it("autoriza solicitudes con Bearer de Vercel", async () => {
@@ -109,6 +141,7 @@ describe("Cron de rechazos", () => {
           status: "REJECTED",
           rejectionEmailSent: false,
           rejectedAt: {
+						gte: new Date("2026-10-01T00:00:00.000Z"),
             lte: new Date("2026-10-30T18:00:00.000Z"),
           },
         }),
