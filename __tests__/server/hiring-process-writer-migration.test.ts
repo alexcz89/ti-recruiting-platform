@@ -145,12 +145,13 @@ describe("canonical hiring process writer migration", () => {
       "InterestSelect.tsx",
     );
 
-    expect(interestSelect).toContain("getRecruitingActions");
+    expect(interestSelect).toContain("getRecruiterStageOptions");
     expect(interestSelect).not.toContain('ACCEPTED: "OFFER"');
   });
 
   it("routes every visible Preselecto writer through one explicit command", () => {
     const interestSelect = read("app", "dashboard", "jobs", "[id]", "applications", "InterestSelect.tsx");
+    const actionsMenu = read("app", "dashboard", "jobs", "[id]", "applications", "ActionsMenu.tsx");
     const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
     const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
     const kanbanAction = read("app", "dashboard", "jobs", "[id]", "page.tsx");
@@ -159,10 +160,12 @@ describe("canonical hiring process writer migration", () => {
       expect(source).toContain('"MARK_PRESELECTED"');
       expect(source).toContain('"CLEAR_PRESELECTED"');
     }
+    expect(actionsMenu).toContain('"MARK_PRESELECTED"');
+    expect(actionsMenu).toContain('"CLEAR_PRESELECTED"');
     expect(interestSelect).not.toContain('/status`');
     expect(interestSelect).not.toMatch(/recruiterInterest:\s*next/);
     expect(candidateShell).not.toMatch(/canonicalIntent \? "intent" : "interest"/);
-    expect(kanban).toContain("getRecruitingActions");
+    expect(kanban).toContain("getRecruiterStageOptions");
     expect(kanban).not.toContain('toStatus === "PRESELECTED"');
     expect(kanbanAction).not.toContain("prisma.application.updateMany({");
   });
@@ -200,19 +203,21 @@ describe("canonical hiring process writer migration", () => {
   });
 
   it("routes every visible rejection surface through one explicit intent", () => {
-    const interestSelect = read("app", "dashboard", "jobs", "[id]", "applications", "InterestSelect.tsx");
+    const actionsMenu = read("app", "dashboard", "jobs", "[id]", "applications", "ActionsMenu.tsx");
+    const sharedIntent = read("app", "dashboard", "jobs", "[id]", "applications", "useApplicationIntent.ts");
     const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
     const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
     const jobPage = read("app", "dashboard", "jobs", "[id]", "page.tsx");
     const overviewButtons = read("app", "dashboard", "overview", "QuickActionButtons.tsx");
     const overviewActions = read("app", "dashboard", "overview", "actions.ts");
 
-    expect(interestSelect).toContain("getRecruitingActions");
-    expect(interestSelect).toContain("/intent");
+    expect(actionsMenu).toContain("getRecruitingActions");
+    expect(actionsMenu).toContain('"REJECT_CANDIDATE"');
+    expect(sharedIntent).toContain("/intent");
     expect(candidateShell).toContain('? "REJECT_CANDIDATE"');
     expect(candidateShell).toContain('if (currentInterest === "REJECTED") return;');
-    expect(kanban).toContain('toStatus === "INTERVIEW"');
-    expect(kanban).toContain("getRecruitingActions");
+    expect(kanban).toContain('fd.set("intent", "SET_RECRUITING_STATE")');
+    expect(kanban).toContain("getRecruiterStageOptions");
     expect(jobPage).toContain('"REJECT_CANDIDATE"');
     expect(overviewButtons).toContain('commandId: crypto.randomUUID()');
     expect(overviewActions).toContain('intent: "REJECT_CANDIDATE"');
@@ -283,15 +288,16 @@ describe("canonical hiring process writer migration", () => {
     const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
     const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
 
-    expect(interestSelect).toContain("getRecruitingActions");
+    expect(interestSelect).toContain("getRecruiterStageOptions");
+    expect(read("app", "dashboard", "jobs", "[id]", "applications", "ActionsMenu.tsx")).toContain("getRecruitingActions");
     expect(applicationsPage).toContain("canonicalStage={a.stage}");
     expect(applicationsPage).toContain("canonicalDisposition={a.disposition}");
     expect(candidateShell).toContain("blockedByCanonicalOffer");
-    expect(kanban).toContain("getRecruitingActions");
+    expect(kanban).toContain("getRecruiterStageOptions");
     expect(kanban).toContain("getRecruitingPresentation");
   });
 
-  it("keeps backward and reopen commands in the explicit CandidateReviewShell path", () => {
+  it("keeps backward and reopen commands on audited intent paths", () => {
     const helper = read("lib", "hiring-process", "backward-transition-footprint.ts");
     expect(helper).toContain('application.stage === "INTERVIEW"');
     expect(helper).toContain('application.disposition === "ACTIVE"');
@@ -327,11 +333,17 @@ describe("canonical hiring process writer migration", () => {
       "applications",
       "InterestSelect.tsx",
     );
+    const actionsMenu = read("app", "dashboard", "jobs", "[id]", "applications", "ActionsMenu.tsx");
+    const sharedIntent = read("app", "dashboard", "jobs", "[id]", "applications", "useApplicationIntent.ts");
     const kanbanAction = read("app", "dashboard", "jobs", "[id]", "page.tsx");
-    for (const source of [interestSelect, kanbanAction]) {
-      expect(source).not.toContain('"MOVE_BACKWARD"');
-      expect(source).not.toContain('"REOPEN_REJECTED"');
-    }
+    expect(interestSelect).toContain("getRecruiterStageOptions");
+    expect(interestSelect).toContain("ProcessReasonDialog");
+    expect(interestSelect).not.toContain('"REOPEN_REJECTED"');
+    expect(actionsMenu).toContain('"REOPEN_REJECTED"');
+    expect(sharedIntent).toContain("expectedVersion: source.stateVersion");
+    expect(sharedIntent).toContain("/intent");
+    expect(kanbanAction).not.toContain('"MOVE_BACKWARD"');
+    expect(kanbanAction).not.toContain('"REOPEN_REJECTED"');
   });
 
   it("routes hire through one explicit command and protects the terminal footprint", () => {
@@ -367,8 +379,8 @@ describe("canonical hiring process writer migration", () => {
       expect(source).toContain("hasApplicationHiredFootprint");
       expect(source).toContain("APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE");
     }
-    expect(kanban).toContain("getRecruitingActions");
-    expect(interestSelect).toContain("getRecruitingActions");
+    expect(kanban).toContain("getRecruiterStageOptions");
+    expect(interestSelect).toContain("getRecruiterStageOptions");
 
     const intentRoute = read("app", "api", "applications", "[id]", "intent", "route.ts");
     expect(intentRoute).toContain("result.timestamps.hiredAt");

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/server/prisma";
 import { InvalidApplicationTransitionError } from "./rules";
 import { getApplicationWriterCompatibility } from "./writer-compatibility";
 import { canStartReview } from "./start-review-eligibility";
+import { RECRUITING_STATES } from "./recruiter-state";
 import {
   APPLICATION_WITHOUT_REJECTION_FOOTPRINT_WHERE,
   hasApplicationRejectionFootprint,
@@ -27,6 +28,7 @@ import {
 } from "./transition-application";
 
 export const APPLICATION_INTENTS = [
+  "SET_RECRUITING_STATE",
   "START_REVIEW",
   "MOVE_TO_INTERVIEW",
   "MOVE_TO_OFFER",
@@ -61,6 +63,13 @@ const reasonShape = {
 
 export const applicationIntentSchema = z.discriminatedUnion("intent", [
   z.object({
+    intent: z.literal("SET_RECRUITING_STATE"),
+    ...baseCommandShape,
+    destination: z.enum(RECRUITING_STATES),
+    reasonCode: reasonShape.reasonCode.optional(),
+    reasonText: reasonShape.reasonText,
+  }).strict(),
+  z.object({
     intent: z.enum([
       "START_REVIEW",
       "MOVE_TO_INTERVIEW",
@@ -85,7 +94,7 @@ export const applicationIntentSchema = z.discriminatedUnion("intent", [
   }).strict(),
 ]).superRefine((command, context) => {
   if (
-    (command.intent === "MOVE_BACKWARD" || command.intent === "REOPEN_REJECTED") &&
+    (command.intent === "MOVE_BACKWARD" || command.intent === "REOPEN_REJECTED" || command.intent === "SET_RECRUITING_STATE") &&
     command.reasonCode === "OTHER" &&
     !command.reasonText?.trim()
   ) {
@@ -117,6 +126,7 @@ export function applicationIntentTarget(intent: ApplicationIntent) {
     case "REOPEN_REJECTED":
       return { targetStage: "REVIEW" as const, targetDisposition: "ACTIVE" as const };
     case "MOVE_BACKWARD":
+    case "SET_RECRUITING_STATE":
       throw new InvalidApplicationTransitionError(
         "MOVE_BACKWARD requiere targetStage explícito",
       );
@@ -142,6 +152,7 @@ function legacyProjectionForIntent(intent: ApplicationIntent) {
     case "REOPEN_REJECTED":
       return { status: "REVIEWING" as const, recruiterInterest: "REVIEW" as const };
     case "MOVE_BACKWARD":
+    case "SET_RECRUITING_STATE":
       throw new InvalidApplicationTransitionError(
         "MOVE_BACKWARD requiere targetStage explícito",
       );
@@ -200,6 +211,18 @@ export async function executeApplicationIntent(input: {
   actor: TransitionActor;
 }) {
   const { applicationId, command, actor } = input;
+
+  if (command.intent === "SET_RECRUITING_STATE") {
+    if (!actor.id || (actor.type !== "RECRUITER" && actor.type !== "ADMIN")) throw new UnauthorizedApplicationTransitionError();
+    // Actor, tenant, source integrity, version, legacy conversion and event are
+    // checked together by the existing serializable transition store.
+    const result = await transitionApplication({
+      applicationId, actor, expectedVersion: command.expectedVersion, idempotencyKey: command.commandId,
+      recruitingDestination: command.destination, reasonCode: command.reasonCode, reasonText: command.reasonText,
+    });
+    if (!result.legacy) throw new CanonicalStateUnavailableError();
+    return { ...result, legacy: result.legacy };
+  }
 
   if (command.intent === "START_REVIEW") {
     await assertPersistedPrivilegedActor(actor);
@@ -867,15 +890,23 @@ export async function executeApplicationIntent(input: {
               hasPartialLegacyRejection && application.rejectedAt
                 ? application.rejectedAt
                 : happenedAt,
-            ...(hasPartialLegacyRejection
-              ? {}
-              : { rejectionEmailSent: false }),
+              ...(hasPartialLegacyRejection
+                ? {}
+                : {
+                    rejectionEmailSent: false,
+                    rejectionEmailLeaseUntil: null,
+                    rejectionEmailLeaseToken: null,
+                    rejectionEmailAttemptStartedAt: null,
+                  }),
           }
         : {}),
       ...(command.intent === "REOPEN_REJECTED"
         ? {
             rejectedAt: null,
             rejectionEmailSent: false,
+            rejectionEmailLeaseUntil: null,
+            rejectionEmailLeaseToken: null,
+            rejectionEmailAttemptStartedAt: null,
             reviewingAt: application.reviewingAt ?? happenedAt,
           }
         : {}),

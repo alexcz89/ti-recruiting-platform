@@ -20,13 +20,15 @@ vi.mock("resend", () => ({
 }));
 
 let sendAssessmentInviteEmail: typeof import("@/lib/server/mailer")["sendAssessmentInviteEmail"];
+let sendRejectionEmail: typeof import("@/lib/server/mailer")["sendRejectionEmail"];
 
 beforeAll(async () => {
   vi.stubEnv("EMAIL_ENABLED", "true");
   vi.stubEnv("RESEND_API_KEY", "re_test");
   vi.stubEnv("RESEND_FROM", "qa@example.com");
   vi.resetModules();
-  ({ sendAssessmentInviteEmail } = await import("@/lib/server/mailer"));
+  ({ sendAssessmentInviteEmail, sendRejectionEmail } =
+    await import("@/lib/server/mailer"));
 });
 
 afterAll(() => {
@@ -81,4 +83,71 @@ describe("assessment email provider idempotency", () => {
     expect(secondKey).toBeTruthy();
     expect(secondKey).not.toBe(firstKey);
   });
+
+describe("rejection email provider idempotency", () => {
+  const params = {
+    applicationId: "application-rejection-qa",
+    rejectedAt: new Date("2026-10-25T12:00:00.000Z"),
+    to: "candidate@example.com",
+    candidateName: "Candidato QA",
+    jobTitle: "Backend Developer",
+    companyName: "QA Company",
+  };
+
+  it("no realiza un segundo envío si Resend lanza una excepción", async () => {
+    const callsBefore = mocks.send.mock.calls.length;
+
+    mocks.send.mockRejectedValueOnce(
+      new Error("connection timeout")
+    );
+
+    const result = await sendRejectionEmail(params);
+
+    expect(result).toEqual({
+      error: "connection timeout",
+      deliveryUncertain: true,
+    });
+
+    // Debe existir exactamente una llamada adicional a Resend.
+    expect(mocks.send.mock.calls).toHaveLength(callsBefore + 1);
+
+    const call = mocks.send.mock.calls[callsBefore];
+
+    expect(call[0]).toEqual(
+      expect.objectContaining({
+        to: params.to,
+      })
+    );
+
+    // La clave identifica la candidatura y su periodo de rechazo.
+    expect(call[1]).toEqual({
+      idempotencyKey:
+        "rejection:application-rejection-qa:2026-10-25T12:00:00.000Z",
+    });
+  });
+
+  it("conserva la clave dentro del mismo periodo y la cambia en otro rechazo", async () => {
+    const callsBefore = mocks.send.mock.calls.length;
+
+    await sendRejectionEmail(params);
+    await sendRejectionEmail(params);
+
+    await sendRejectionEmail({
+      ...params,
+      rejectedAt: new Date("2026-10-28T12:00:00.000Z"),
+    });
+
+    const calls = mocks.send.mock.calls.slice(callsBefore);
+
+    expect(calls).toHaveLength(3);
+
+    const firstKey = calls[0][1]?.idempotencyKey;
+    const secondKey = calls[1][1]?.idempotencyKey;
+    const thirdKey = calls[2][1]?.idempotencyKey;
+
+    expect(firstKey).toBeTruthy();
+    expect(secondKey).toBe(firstKey);
+    expect(thirdKey).not.toBe(firstKey);
+  });
+});
 });

@@ -1,62 +1,67 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import StartReviewButton from "@/components/dashboard/StartReviewButton";
-import { getRecruitingPresentation, getRecruitingActions, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
+
+import React, { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
+import { getRecruitingPresentation, getRecruiterStageOptions, type PresentationSource, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 import type { ApplicationStageValue, ApplicationDispositionValue } from "@/lib/hiring-process/types";
-import { toastError } from "@/lib/ui/toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { RecruiterStateDialog } from "./ProcessReasonDialog";
+import { useApplicationIntent } from "./useApplicationIntent";
+
 type InterestKey = "REVIEW" | "MAYBE" | "ACCEPTED" | "REJECTED";
-const labels: Record<string, string> = { MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección", MOVE_TO_INTERVIEW: "Pasar a entrevista", MOVE_TO_OFFER: "Mover a oferta", REJECT_CANDIDATE: "Descartar" };
-export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false }: {
-    applicationId: string;
-    initial: InterestKey;
-    initialStateVersion: number;
-    legacyStatus?: string;
-    canonicalStage?: ApplicationStageValue | null;
-    canonicalDisposition?: ApplicationDispositionValue | null;
-    canonicalRecruiterReadsEnabled?: boolean;
+
+export default function InterestSelect({ applicationId, initial, initialStateVersion, legacyStatus = "", canonicalStage = null, canonicalDisposition = null, canonicalRecruiterReadsEnabled = false, disabled = false, onConfirmed, onBusyChange, accessibleLabel }: {
+  applicationId: string;
+  initial: InterestKey;
+  initialStateVersion: number;
+  legacyStatus?: string;
+  canonicalStage?: ApplicationStageValue | null;
+  canonicalDisposition?: ApplicationDispositionValue | null;
+  canonicalRecruiterReadsEnabled?: boolean;
+  disabled?: boolean;
+  onConfirmed?: (source: PresentationSource) => void;
+  onBusyChange?: (busy: boolean) => void;
+  accessibleLabel?: string;
 }) {
-    const router = useRouter();
-    const [source, setSource] = useState<PresentationSource>({ stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion });
-    useEffect(() => { setSource({ stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion }); }, [applicationId, initial, initialStateVersion, legacyStatus, canonicalStage, canonicalDisposition]);
-    const [pending, setPending] = useState(false);
-    const inFlight = useRef(false);
-    const command = useRef<{
-        intent: string;
-        version: number;
-        id: string;
-    } | null>(null);
-    const p = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
-    async function execute(intent: string) {
-        if (!intent || inFlight.current)
-            return;
-        inFlight.current = true;
-        setPending(true);
-        if (!command.current || command.current.intent !== intent || command.current.version !== source.stateVersion)
-            command.current = { intent, version: source.stateVersion, id: crypto.randomUUID() };
-        try {
-            const response = await fetch(`/api/applications/${applicationId}/intent`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ intent, expectedVersion: source.stateVersion, commandId: command.current.id }) });
-            if (!response.ok)
-                throw new Error("Transition failed");
-            const data = await response.json();
-            setSource(data.application);
-            router.refresh();
-        }
-        catch {
-            toastError("No se pudo actualizar. Actualiza la página e intenta de nuevo.");
-            router.refresh();
-        }
-        finally {
-            inFlight.current = false;
-            setPending(false);
-        }
-    }
-    const actions = getRecruitingActions(source, canonicalRecruiterReadsEnabled).filter(a => a !== "START_REVIEW");
-    return <div className="flex flex-col gap-1 text-xs">
-    <span className="font-medium">{p.label}</span>
-    {p.preselected && <span className="text-amber-700 dark:text-amber-300">Preselecto</span>}
-    {p.assessmentStage && <span>Evaluación técnica</span>}
-    {<StartReviewButton applicationId={applicationId} application={source} disabled={pending} onPendingChange={setPending} onSuccess={setSource}/>}
-    {actions.length > 0 && <select aria-label="Acciones de candidatura" disabled={pending} value="" onChange={e => { void execute(e.target.value); }} className="min-h-11 max-w-full rounded-lg border bg-[rgb(var(--card))] px-2"><option value="">Acciones…</option>{actions.map(intent => <option key={intent} value={intent}>{labels[intent]}</option>)}</select>}
-  </div>;
+  const initialSource: PresentationSource = { stage: canonicalStage, disposition: canonicalDisposition, status: legacyStatus, recruiterInterest: initial, stateVersion: initialStateVersion };
+  const { source, pending, submit } = useApplicationIntent(applicationId, initialSource, onConfirmed);
+  const [dialogAction, setDialogAction] = useState<RecruiterStageOption | null>(null);
+  useEffect(() => {
+    onBusyChange?.(pending || dialogAction !== null);
+    return () => onBusyChange?.(false);
+  }, [pending, dialogAction, onBusyChange]);
+  const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
+  const options = getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled);
+  const stageDot: Record<string, string> = { APPLIED: "bg-zinc-400", REVIEW: "bg-blue-500", INTERVIEW: "bg-violet-500", OFFER: "bg-emerald-500" };
+  const controlClass = "inline-flex h-9 w-[160px] max-w-full items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 text-left text-xs font-medium text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100";
+  const label = <><span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${stageDot[presentation.column ?? ""] ?? "bg-zinc-400"}`} /><span className="min-w-0 flex-1 truncate">{pending ? "Guardando…" : presentation.label}</span></>;
+  if (!options.length) return <span className={controlClass}>{label}</span>;
+
+  function choose(option: RecruiterStageOption) {
+    if (option.current || disabled || pending) return;
+    if (option.requiresReason || option.requiresConfirmation) setDialogAction(option);
+    else void submit(option.intent, { destination: option.destination });
+  }
+
+  return <>
+    <DropdownMenu>
+      <DropdownMenuTrigger disabled={disabled || pending} aria-label={accessibleLabel ?? `Cambiar etapa: ${presentation.label}`}
+        className={`${controlClass} transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:cursor-wait`}>
+        {label}<ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent compact align="start" collisionPadding={8} onCloseAutoFocus={event => { if (dialogAction) event.preventDefault(); }}
+        className="w-[190px]">
+        {options.map(option => <DropdownMenuItem key={option.destination} disabled={option.current} aria-current={option.current ? "step" : undefined}
+          compact onSelect={() => choose(option)}>
+          {option.label}{option.current && <span aria-hidden="true">✓</span>}
+        </DropdownMenuItem>)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+    {dialogAction && <RecruiterStateDialog option={dialogAction} pending={pending}
+      onCancel={() => setDialogAction(null)}
+      onConfirm={async reason => {
+        const success = await submit(dialogAction.intent, { destination: dialogAction.destination, ...reason });
+        if (success) setDialogAction(null);
+      }} />}
+  </>;
 }

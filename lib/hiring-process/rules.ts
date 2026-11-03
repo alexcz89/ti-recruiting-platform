@@ -6,6 +6,7 @@ import {
   type CanonicalApplicationState,
   type PlannedApplicationTransition,
 } from "./types";
+import { recruitingStateRequirements, recruitingStateTarget, type RecruitingState } from "./recruiter-state";
 
 export class InvalidApplicationTransitionError extends Error {
   readonly code = "INVALID_APPLICATION_TRANSITION";
@@ -137,4 +138,20 @@ export function planApplicationTransition(
         ? "FORWARD_SKIP"
         : "NORMAL",
   };
+}
+
+/** Explicit recruiter command only; existing commands retain their own contracts. */
+export function planRecruiterStateChange(current: CanonicalApplicationState, destination: RecruitingState, reasonCode?: string): PlannedApplicationTransition {
+  assertCanonicalApplicationState(current);
+  const target = recruitingStateTarget(current, destination);
+  const requirements = recruitingStateRequirements(current, destination);
+  if (requirements.requiresReason && !reasonCode?.trim()) {
+    throw new InvalidApplicationTransitionError("El retroceso o reapertura requiere un motivo explícito");
+  }
+  if (current.stage === target.stage && current.disposition === target.disposition) {
+    throw new InvalidApplicationTransitionError("La transición no cambia el estado");
+  }
+  return { ...target, transitionClass: current.stage === "CLOSED" ? (target.stage === "CLOSED" ? "DISPOSITION_ONLY" : "REOPEN")
+    : requirements.requiresReason ? "BACKWARD" : current.stage === target.stage ? "DISPOSITION_ONLY"
+    : APPLICATION_STAGES.indexOf(target.stage) - APPLICATION_STAGES.indexOf(current.stage) > 1 && target.stage !== "CLOSED" ? "FORWARD_SKIP" : "NORMAL" };
 }

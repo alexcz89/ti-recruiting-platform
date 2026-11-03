@@ -4,6 +4,24 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DropResult } from "@hello-pangea/dnd";
+
+async function selectProcessAction(name: string) {
+  const trigger = screen.getByRole("button", {
+    name: /^Cambiar etapa:/,
+  });
+
+  fireEvent.pointerDown(trigger, {
+    button: 0,
+    ctrlKey: false,
+  });
+
+  const option = await screen.findByRole("menuitem", {
+    name: name === "Iniciar revisión" ? "En revisión" : name,
+  });
+
+  fireEvent.click(option);
+}
+
 const mocks = vi.hoisted(() => ({ refresh: vi.fn(), error: vi.fn(), drag: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
 vi.mock("@/lib/ui/toast", () => ({ toastError: mocks.error, toastSuccess: vi.fn() }));
@@ -41,10 +59,10 @@ describe("START_REVIEW interactions", () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify({ application: saved })));
     vi.stubGlobal("fetch", fetch);
     const { rerender } = render(selector(reads, legacy));
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+    await selectProcessAction("Iniciar revisión");
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
     rerender(selector(reads, saved));
-    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Cambiar etapa:/ })).toBeEnabled();
     expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
   });
 
@@ -73,14 +91,24 @@ describe("START_REVIEW interactions", () => {
     const fetch = vi.fn((_url: string, _options: RequestInit) => new Promise<Response>((done) => { resolve = done; }));
     vi.stubGlobal("fetch", fetch);
     const { rerender } = render(selector());
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
-    fireEvent.click(screen.getByRole("button", { name: "Iniciando revisión…" }));
+    await selectProcessAction("Iniciar revisión");
+    const trigger = screen.getByRole("button", {
+      name: /^Cambiar etapa:/,
+    });
+
+    expect(trigger).toBeDisabled();
+    fireEvent.click(trigger);
     expect(fetch).toHaveBeenCalledOnce();
-    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Cambiar etapa:/ })).toBeDisabled();
     await act(async () => resolve(response()));
-    expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toMatchObject({ intent: "START_REVIEW", expectedVersion: 1, commandId: expect.any(String) });
+    expect(JSON.parse(String(fetch.mock.calls[0][1].body))).toMatchObject({
+      intent: "SET_RECRUITING_STATE",
+      destination: "REVIEW",
+      expectedVersion: 1,
+      commandId: expect.any(String),
+    });
     rerender(selector(true, reviewed));
-    expect(screen.getByRole("combobox", { name: "Acciones de candidatura" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: /^Cambiar etapa:/ })).toBeEnabled();
     expect(mocks.refresh).toHaveBeenCalledOnce();
   });
 
@@ -91,23 +119,40 @@ describe("START_REVIEW interactions", () => {
     fetch.mockResolvedValueOnce(response());
     vi.stubGlobal("fetch", fetch);
     render(selector());
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+    await selectProcessAction("Iniciar revisión");
     await waitFor(() => expect(mocks.error).toHaveBeenCalledOnce());
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+    await selectProcessAction("Iniciar revisión");
     await waitFor(() => expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument());
     expect(JSON.parse(fetch.mock.calls[0][1].body).commandId).toBe(JSON.parse(fetch.mock.calls[1][1].body).commandId);
   });
 
   it("refreshes the profile activity without losing unsaved notes", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => response()));
+
     const { rerender } = render(profile());
-    fireEvent.change(screen.getByPlaceholderText("Escribe tus notas sobre este candidato..."), { target: { value: "Local draft" } });
-    fireEvent.click(screen.getByRole("button", { name: "Iniciar revisión" }));
+
+    fireEvent.change(
+      screen.getByPlaceholderText("Escribe tus notas sobre este candidato..."),
+      { target: { value: "Local draft" } }
+    );
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Iniciar revisión" })
+    );
+
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
+
     rerender(profile(reviewed));
+
     expect(screen.getAllByText("En revisión")[0]).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")).toHaveValue("Local draft");
-    expect(screen.queryByRole("button", { name: "Iniciar revisión" })).not.toBeInTheDocument();
+
+    expect(
+      screen.getByPlaceholderText("Escribe tus notas sobre este candidato...")
+    ).toHaveValue("Local draft");
+
+    expect(
+      screen.queryByRole("button", { name: "Iniciar revisión" })
+    ).not.toBeInTheDocument();
   });
 
   it("supports dragging to Review then Interview with the saved version", async () => {
@@ -116,14 +161,16 @@ describe("START_REVIEW interactions", () => {
     act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "APPLIED", index: 0 }, destination: { droppableId: "REVIEW", index: 0 } }));
     await waitFor(() => expect(mocks.refresh).toHaveBeenCalledOnce());
     const first = move.mock.calls[0][0] as FormData;
-    expect(first.get("intent")).toBe("START_REVIEW");
+    expect(first.get("intent")).toBe("SET_RECRUITING_STATE");
+    expect(first.get("destination")).toBe("REVIEW");
     expect(first.get("expectedVersion")).toBe("1");
     expect(first.get("commandId")).toEqual(expect.any(String));
     expect(screen.queryByTitle("Mover a Preselecto")).not.toBeInTheDocument();
     act(() => mocks.drag({ draggableId: "app-a", source: { droppableId: "REVIEW", index: 0 }, destination: { droppableId: "INTERVIEW", index: 0 } }));
     await waitFor(() => expect(move).toHaveBeenCalledTimes(2));
     expect((move.mock.calls[1][0] as FormData).get("expectedVersion")).toBe("2");
-    expect((move.mock.calls[1][0] as FormData).get("newStatus")).toBe("ACCEPTED");
+    expect((move.mock.calls[1][0] as FormData).get("intent")).toBe("SET_RECRUITING_STATE");
+    expect((move.mock.calls[1][0] as FormData).get("destination")).toBe("INTERVIEW");
   });
 
   it("restores the original column when the Kanban request rejects", async () => {

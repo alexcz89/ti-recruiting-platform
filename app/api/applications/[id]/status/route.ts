@@ -192,6 +192,9 @@ async function updateStatus(id: string, status: string) {
       status: newStatus,
       rejectedAt: null,
       rejectionEmailSent: false,
+      rejectionEmailLeaseUntil: null,
+      rejectionEmailLeaseToken: null,
+      rejectionEmailAttemptStartedAt: null,
     },
   });
   if (result.count !== 1) {

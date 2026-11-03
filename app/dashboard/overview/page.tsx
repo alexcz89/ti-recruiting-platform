@@ -33,15 +33,10 @@ import QuickActionButtons from "./QuickActionButtons";
 import { type BillingPlan } from "@/lib/ai/matchScore";
 import { buildRecruiterMatchJob, computeRecruiterMatch, getRecruiterMatchAccessIds, recruiterMatchCandidateSelect, recruiterMatchJobSelect } from "@/lib/ai/recruiter-match";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
+import { ACTIVE_PIPELINE, PIPELINE_LABELS, getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
+import { countRecruiterPresentationGroupedRows } from "@/lib/hiring-process/recruiter-list";
 import {
-  PRIMARY_RECRUITER_PIPELINE_BUCKETS,
-  RECRUITER_PIPELINE_LABELS,
-  buildRecruiterApplicationReadRows,
-  countActiveRecruiterPipelineApplications,
-  countRecruiterPipelineGroupedRows,
   getRecruiterApplicationReadModel,
-  sumRecruiterPipelineCounts,
-  type RecruiterPipelineBucket,
 } from "@/lib/hiring-process/recruiter-read-model";
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
@@ -156,7 +151,7 @@ export default async function OverviewPage() {
     // Minimal grouped state tuple; the centralized reader resolves canonical
     // authority and legacy fallback without loading full application rows.
     prisma.application.groupBy({
-      by: ["stage", "disposition", "status", "recruiterInterest"],
+      by: ["stage", "disposition", "status", "recruiterInterest", "stateVersion"],
       where: { job: { companyId } },
       _count: { _all: true },
     }),
@@ -234,44 +229,25 @@ export default async function OverviewPage() {
     }),
   ]);
 
-  const funnel = countRecruiterPipelineGroupedRows(funnelRaw, {
-    canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
-  });
-  const funnelTotal = sumRecruiterPipelineCounts(funnel);
+  const funnel = countRecruiterPresentationGroupedRows(funnelRaw, canonicalRecruiterReadsEnabled);
+  const funnelTotal = Object.values(funnel).reduce((sum, count) => sum + count, 0);
   const appsPending = funnel.APPLIED;
   const pendingShare = appsTotal > 0 ? Math.round((appsPending / appsTotal) * 100) : 0;
-  const activePipeline = countActiveRecruiterPipelineApplications(funnel);
+  const activePipeline = ACTIVE_PIPELINE.reduce((sum, key) => sum + funnel[key], 0);
   const activePipelineShare = funnelTotal > 0 ? Math.round((activePipeline / funnelTotal) * 100) : 0;
-  const recentWithReadModel = buildRecruiterApplicationReadRows(recent, {
-    canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
-  });
-  const funnelRows = canonicalRecruiterReadsEnabled
-    ? [
-        ...PRIMARY_RECRUITER_PIPELINE_BUCKETS,
-        ...(funnel.HOLD > 0 ? (["HOLD"] as const) : []),
-        ...(funnel.CLOSED_OTHER > 0 ? (["CLOSED_OTHER"] as const) : []),
-      ]
-    : (["APPLIED", "PRESELECTED", "INTERVIEW", "REJECTED"] as const);
-  const funnelColors: Record<
-    RecruiterPipelineBucket,
-    { color: string; textColor: string }
-  > = {
+  const recentWithReadModel = recent.map((application) => ({
+    ...application,
+    _presentation: getRecruitingPresentation(application, canonicalRecruiterReadsEnabled),
+  }));
+  const funnelRows = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"] as const;
+  const funnelColors = {
     APPLIED: { color: "bg-amber-400", textColor: "text-amber-700 dark:text-amber-300" },
     REVIEW: { color: "bg-blue-400", textColor: "text-blue-700 dark:text-blue-300" },
-    PRESELECTED: { color: "bg-sky-400", textColor: "text-sky-700 dark:text-sky-300" },
-    ASSESSMENT: { color: "bg-violet-400", textColor: "text-violet-700 dark:text-violet-300" },
     INTERVIEW: { color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-300" },
     OFFER: { color: "bg-teal-500", textColor: "text-teal-700 dark:text-teal-300" },
-    REJECTED: { color: "bg-red-400", textColor: "text-red-700 dark:text-red-300" },
-    HIRED: { color: "bg-green-600", textColor: "text-green-700 dark:text-green-300" },
+    CLOSED: { color: "bg-red-400", textColor: "text-red-700 dark:text-red-300" },
     HOLD: { color: "bg-zinc-400", textColor: "text-zinc-700 dark:text-zinc-300" },
-    CLOSED_OTHER: { color: "bg-slate-400", textColor: "text-slate-700 dark:text-slate-300" },
-  };
-  const legacyFunnelLabels: Partial<Record<RecruiterPipelineBucket, string>> = {
-    APPLIED: "Sin revisar",
-    PRESELECTED: "En duda",
-    INTERVIEW: "Aceptados",
-    REJECTED: "Rechazados",
+    RECONCILIATION: { color: "bg-slate-400", textColor: "text-slate-700 dark:text-slate-300" },
   };
 
   // Process top jobs with match scores
@@ -424,9 +400,7 @@ export default async function OverviewPage() {
             value={nf(activePipeline)}
             tone="blue"
             description={
-              canonicalRecruiterReadsEnabled
-                ? `${nf(activePipeline)} procesos activos`
-                : `${nf(funnel.APPLIED)} sin revisar - ${nf(funnel.PRESELECTED)} en duda - ${nf(funnel.INTERVIEW)} aceptados`
+              `${nf(activePipeline)} procesos activos`
             }
             metricLabel="Activo"
             metricValue={funnelTotal > 0 ? `${activePipelineShare}% del total` : "Sin datos"}
@@ -467,6 +441,7 @@ export default async function OverviewPage() {
                 {nf(funnelTotal)} total
               </span>
             </div>
+            <p className="mb-3 text-[11px] text-zinc-500 dark:text-zinc-400">Todas las postulaciones de la empresa, incluidas las de vacantes no abiertas.</p>
 
             {funnelTotal === 0 ? (
               <p className="py-4 text-center text-sm text-zinc-400">
@@ -475,9 +450,7 @@ export default async function OverviewPage() {
             ) : (
               <div className="space-y-3">
                 {funnelRows.map((key) => {
-                  const label = canonicalRecruiterReadsEnabled
-                    ? RECRUITER_PIPELINE_LABELS[key]
-                    : legacyFunnelLabels[key] ?? RECRUITER_PIPELINE_LABELS[key];
+                  const label = PIPELINE_LABELS[key] ?? ({ CLOSED: "Cerrados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key];
                   const { color, textColor } = funnelColors[key];
                   const count = funnel[key];
                   const width = funnelTotal > 0 ? (count / funnelTotal) * 100 : 0;
@@ -660,22 +633,10 @@ export default async function OverviewPage() {
                         </p>
                       </Link>
                       <div className="flex shrink-0 items-center gap-1.5">
-                        {canonicalRecruiterReadsEnabled ? (
-                          <span className="whitespace-nowrap rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-700 dark:border-zinc-500/40 dark:bg-zinc-900/30 dark:text-zinc-100 sm:text-[11px]">
-                            {r._recruiterRead.label}
-                          </span>
-                        ) : r.status === "SUBMITTED" ? (
-                          <span className="whitespace-nowrap rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/30 dark:text-amber-100 sm:text-[11px]">
-                            Nuevo
-                          </span>
-                        ) : r.status === "REVIEWING" ? (
-                          <span className="whitespace-nowrap rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/30 dark:text-blue-100 sm:text-[11px]">
-                            En revisión
-                          </span>
-                        ) : null}
-                        {(canonicalRecruiterReadsEnabled
-                          ? r._recruiterRead.bucket === "APPLIED"
-                          : r.status === "SUBMITTED") && (
+                        <span className="whitespace-nowrap rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-700 dark:border-zinc-500/40 dark:bg-zinc-900/30 dark:text-zinc-100 sm:text-[11px]">
+                          {r._presentation.label}
+                        </span>
+                        {r._presentation.column === "APPLIED" && (
                           <QuickActionButtons
                             applicationId={r.id}
                             stateVersion={r.stateVersion}

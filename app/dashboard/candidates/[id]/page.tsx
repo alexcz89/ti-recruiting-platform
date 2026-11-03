@@ -1,4 +1,5 @@
 import { getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
+import { resolveCandidateLocation } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/candidates/[id]/page.tsx
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
@@ -136,6 +137,9 @@ export default async function CandidateDetailPage({
       email: true,
       phone: true,
       location: true,
+      city: true,
+      admin1: true,
+      country: true,
       birthdate: true,
       linkedin: true,
       github: true,
@@ -383,7 +387,7 @@ export default async function CandidateDetailPage({
         recruiterInterest: true,
         stateVersion: true,
         starred: true,
-        candidate: { select: { id: true, name: true, seniority: true, location: true } },
+        candidate: { select: { id: true, name: true, seniority: true, location: true, city: true, admin1: true, country: true } },
       },
     });
     navList = jobApps.map((a) => ({
@@ -391,7 +395,7 @@ export default async function CandidateDetailPage({
       applicationId: a.id,
       name: a.candidate.name ?? "Candidato",
       seniority: a.candidate.seniority ?? null,
-      location: a.candidate.location ?? null,
+      location: resolveCandidateLocation(a.candidate).compact,
       presentation: getRecruitingPresentation(a, canonicalRecruiterReadsEnabled),
       starred: a.starred,
     }));
@@ -683,7 +687,7 @@ export default async function CandidateDetailPage({
             { label: "Nombre", value: candidate.name },
             { label: "Email", value: candidate.email },
             { label: "Teléfono", value: candidate.phone },
-            { label: "Ubicación", value: candidate.location },
+            { label: "Ubicación", value: resolveCandidateLocation(candidate).full },
             { label: "Fecha de nacimiento", value: candidate.birthdate ? new Date(candidate.birthdate).toLocaleDateString() : null },
             { label: "Seniority", value: candidate.seniority ? (SENIORITY_LABEL[candidate.seniority as string] ?? candidate.seniority) : null },
             { label: "Años de experiencia", value: candidate.yearsExperience != null ? `${candidate.yearsExperience} años` : null },
@@ -933,7 +937,7 @@ export default async function CandidateDetailPage({
       candidateId={candidate.id}
       candidateName={candidate.name}
       candidateSeniority={candidate.seniority ?? null}
-      candidateLocation={candidate.location ?? null}
+      candidateLocation={resolveCandidateLocation(candidate).full}
       resumeUrl={candidate.resumeUrl ?? null}
       waHref={waHref}
       fromJobId={fromJobId ?? null}

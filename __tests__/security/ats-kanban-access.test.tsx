@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/server/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/server/session", () => ({ getSessionCompanyId: mocks.companyId }));
 vi.mock("@/lib/server/prisma", () => ({
@@ -32,7 +33,8 @@ vi.mock("@/lib/server/prisma", () => ({
     assessmentAttempt: { findMany: mocks.attempts },
   },
 }));
-vi.mock("@/lib/hiring-process/application-intents", () => ({
+vi.mock("@/lib/hiring-process/application-intents", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/hiring-process/application-intents")>(),
   executeApplicationIntent: mocks.intent,
 }));
 vi.mock("next/navigation", () => ({
@@ -135,6 +137,20 @@ function moveForm(appId: string) {
 }
 
 describe("ATS Kanban tenant and job boundaries", () => {
+  it.each(["REVIEW", "OFFER", "APPLIED", "HIRED", "REJECTED", "WITHDRAWN", "CANCELLED", "HOLD"])("dispatches explicit %s through the same scoped writer", async destination => {
+    const action = (await board()).moveAction as (form: FormData) => Promise<{ ok: boolean }>;
+    const form = moveForm("app-a"); form.set("intent", "SET_RECRUITING_STATE"); form.set("destination", destination); form.set("reasonCode", "CORRECTION");
+    expect((await action(form)).ok).toBe(true);
+    expect(mocks.intent).toHaveBeenCalledWith(expect.objectContaining({ applicationId: "app-a", command: {
+      intent: "SET_RECRUITING_STATE", destination, expectedVersion: 1, commandId: "command-app-a", reasonCode: "CORRECTION",
+    } }));
+    expect(mocks.application.mock.calls[0][0].where).toEqual({ id: "app-a", jobId: "job-a", job: { companyId: "company-a" } });
+  });
+  it.each(["app-other-job", "app-other-company", "unknown"])("does not dispatch a flexible move for unauthorized %s", async appId => {
+    const action = (await board()).moveAction as (form: FormData) => Promise<{ ok: boolean }>;
+    const form = moveForm(appId); form.set("intent", "SET_RECRUITING_STATE"); form.set("destination", "HIRED");
+    expect((await action(form)).ok).toBe(false); expect(mocks.intent).not.toHaveBeenCalled();
+  });
   it("requires the explicit START_REVIEW version even for a legacy command", async () => {
     const action = (await board()).moveAction as (form: FormData) => Promise<{ ok: boolean }>;
     const form = moveForm("app-a");

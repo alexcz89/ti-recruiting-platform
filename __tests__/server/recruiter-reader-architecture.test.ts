@@ -18,9 +18,11 @@ describe("recruiter reader architecture", () => {
     const page = read("app", "dashboard", "jobs", "[id]", "applications", "page.tsx");
 
     expect(page).toContain("buildRecruiterApplicationReadRows");
-    expect(page).toContain("countRecruiterPipelineBuckets");
-    expect(page).toContain("filterRecruiterPipelineRows");
-    expect(page).toContain("RECRUITER_PIPELINE_LABELS");
+    expect(page).toContain("countRecruiterPresentationRows");
+    expect(page).toContain("matchesRecruiterListFilters");
+    expect(page).toContain("<InterestSelect");
+    expect(page).toContain("canonicalStage={a.stage}");
+    expect(page).toContain("canonicalDisposition={a.disposition}");
     expect(page).not.toContain("function getAppInterest");
     expect(page).not.toContain("INTEREST_LABEL");
   });
@@ -46,8 +48,9 @@ describe("recruiter reader architecture", () => {
       "InterestSelect.tsx",
     );
 
-    expect(select).toContain("getRecruitingPresentation");
-    expect(select).toContain("p.label");
+    const badges = read("app", "dashboard", "jobs", "[id]", "applications", "ApplicationStatusBadges.tsx");
+    expect(select).toContain("getRecruiterStageOptions");
+    expect(badges).toContain("presentation.label");
     expect(select).not.toContain("/status");
     expect(select).not.toContain("/interest");
   });
@@ -66,9 +69,9 @@ describe("recruiter reader architecture", () => {
   it("keeps overview aggregation and current labels on the centralized read model", () => {
     const page = read("app", "dashboard", "overview", "page.tsx");
 
-    expect(page).toContain("countRecruiterPipelineGroupedRows");
+    expect(page).toContain("countRecruiterPresentationGroupedRows");
     expect(page).toContain("getRecruiterApplicationReadModel");
-    expect(page).toContain('by: ["stage", "disposition", "status", "recruiterInterest"]');
+    expect(page).toContain('by: ["stage", "disposition", "status", "recruiterInterest", "stateVersion"]');
     expect(page).not.toContain("for (const row of funnelRaw)");
   });
 
@@ -108,12 +111,12 @@ describe("recruiter reader architecture", () => {
     expect(board).toContain("isCardWritable");
     expect(board).toContain('card.writerCompatibility !== "NONE"');
     expect(board).not.toContain("canonicalHiringProcessEnabled");
-    expect(board).toContain("isDragDisabled={isPending || !isCardWritable(card)}");
+    expect(board).toContain("isDragDisabled={isPending || selectorBusy || requestedMove !== null || !isCardWritable(card)}");
     expect(board).toContain("getRecruitingPresentation");
-    expect(board).toContain("getRecruitingActions");
-    expect(board).toContain('toStatus === "REVIEW" && fromStatus === "APPLIED"');
-    expect(board).toContain('toStatus === "OFFER"');
-    expect(board).toContain('toStatus === "INTERVIEW"');
+    expect(board).toContain("getRecruiterStageOptions");
+    expect(board).toContain('fd.set("intent", "SET_RECRUITING_STATE")');
+    expect(board).toContain('fd.set("destination", option.destination)');
+    expect(board).toContain("InterestSelect");
     expect(board).not.toContain('onMoveNext={');
 
     expect(page).not.toContain('intent: "MOVE_TO_OFFER"');

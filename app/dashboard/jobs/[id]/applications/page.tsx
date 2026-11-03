@@ -1,5 +1,6 @@
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { getRecruitingPresentation, ACTIVE_PIPELINE, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
+import { buildRecruiterListHref, compareRecruiterListRows, countRecruiterPresentationRows, matchesRecruiterListFilters, matchScoreLevel, resolveCandidateLocation, resolveProcessActivity, type RecruiterListAssessment, type RecruiterListQuery, type RecruiterListSort, type SortDirection } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/jobs/[id]/applications/page.tsx
 import Link from "next/link";
 import { prisma } from "@/lib/server/prisma";
@@ -23,7 +24,6 @@ import {
   scoreToLabel,
   type BillingPlan,
 } from "@/lib/ai/matchScore";
-import { badgeLevelLabel } from "@/lib/badges";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import {
   buildRecruiterApplicationReadRows,
@@ -35,13 +35,6 @@ import {
   type RecruiterPipelineBucket,
 } from "@/lib/hiring-process/recruiter-read-model";
 import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
-
-const LANGUAGE_LEVEL_LABEL: Record<string, string> = {
-  NATIVE: "Nativo",
-  PROFESSIONAL: "Profesional",
-  CONVERSATIONAL: "Conversacional",
-  BASIC: "Básico",
-};
 
 const PROFILE_TYPE_LABEL: Record<string, string> = {
   ENGINEERING: "Engineering",
@@ -64,14 +57,39 @@ const LEGACY_RECRUITER_TABS = [
   { bucket: "REJECTED", query: "REJECTED" },
 ] as const;
 
-type SortKey = "match" | "recent" | "name";
 type MatchFilter = "ALL" | "HIGH" | "MED" | "LOW";
 type CvFilter = "ALL" | "YES" | "NO";
+const LIST_SECTIONS = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"] as const;
 
-function scoreToRange(score: number): "HIGH" | "MED" | "LOW" {
-  if (score >= 70) return "HIGH";
-  if (score >= 40) return "MED";
-  return "LOW";
+// Presentation only: consumes the authorized state already resolved below.
+function AssessmentSummary({ states, detailHref }: { states: Array<{ title: string; state: string; score: number | null; attemptId: string | null }>; detailHref?: string }) {
+  const associated = states.filter(state => state.state !== "NONE");
+  if (!associated.length) return null;
+  const completed = associated.filter(state => state.state === "COMPLETED").length;
+  if (associated.length > 1) return <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+    {associated.length} evaluaciones · {completed} completada{completed === 1 ? "" : "s"}
+    {detailHref && <a href={detailHref} className="ml-1 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">Ver detalle</a>}
+  </p>;
+  const state = associated[0];
+  const label = state.state === "COMPLETED" ? "Evaluación completada" : state.state === "STARTED" ? "Evaluación en progreso" : state.state === "EXPIRED" ? "Evaluación vencida" : "Evaluación enviada · Pendiente";
+  return <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+    {label}{state.state === "COMPLETED" && typeof state.score === "number" ? ` · ${state.score}%` : ""}
+    {state.state === "COMPLETED" && state.attemptId
+      ? <a href={`/dashboard/assessments/attempts/${encodeURIComponent(state.attemptId)}/results`} aria-label={`Ver resultado de ${state.title}`} className="ml-1 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">Ver resultado</a>
+      : detailHref && <a href={detailHref} aria-label={`Ver detalle de ${state.title}`} className="ml-1 underline underline-offset-2 focus-visible:outline focus-visible:outline-2">Ver detalle</a>}
+  </p>;
+}
+
+function MatchedSkills({ details }: { details: Array<{ label: string; matched: boolean }> }) {
+  // Preserve the deterministic order produced by the shared match engine; no new ranking.
+  const matched = details.filter(detail => detail.matched).slice(0, 5);
+  if (!matched.length) return null;
+  return <div className="mt-1 max-w-[230px] text-xs text-zinc-600 dark:text-zinc-300">
+    <p className="break-words">{matched.slice(0, 3).map(detail => detail.label).join(" · ")}</p>
+    {matched.length > 3 && <details className="mt-0.5"><summary className="cursor-pointer rounded text-zinc-500 underline underline-offset-2 focus-visible:outline focus-visible:outline-2 dark:text-zinc-400">+{matched.length - 3} coincidencias</summary>
+      <p className="mt-1">{matched.slice(3).map(detail => detail.label).join(" · ")}</p>
+    </details>}
+  </div>;
 }
 
 export default async function JobApplicationsPage({
@@ -83,9 +101,13 @@ export default async function JobApplicationsPage({
     interest?: InterestKey | "ALL";
     pipeline?: string;
     q?: string;
-    sort?: SortKey | string;
+    sort?: string;
+    dir?: string;
     match?: MatchFilter | string;
     cv?: CvFilter | string;
+    preselected?: string;
+    assessment?: string;
+    outcome?: string;
   };
 }) {
   const canonicalRecruiterReadsEnabled =
@@ -170,6 +192,9 @@ export default async function JobApplicationsPage({
           resumeUrl: true,
           phone: true,
           location: true,
+          city: true,
+          admin1: true,
+          country: true,
           certifications: true,
           seniority: true,
           yearsExperience: true,
@@ -325,8 +350,15 @@ export default async function JobApplicationsPage({
     canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
   });
   const presentationOf = (a: typeof allApps[number]) => getRecruitingPresentation(a, canonicalRecruiterReadsEnabled);
-  const counters = Object.fromEntries([...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"].map(key => [key, allApps.filter(a => { const p = presentationOf(a); return p.column === key || p.section === key; }).length]));
+  // Etapas: universo de la vacante antes de búsqueda y filtros secundarios.
+  const counters = countRecruiterPresentationRows(allApps, canonicalRecruiterReadsEnabled);
   const total = allApps.length;
+  const activityEvents = allApps.length ? await prisma.applicationEvent.groupBy({
+    by: ["applicationId"],
+    where: { companyId, applicationId: { in: allApps.map((a) => a.id) } },
+    _max: { happenedAt: true },
+  }) : [];
+  const lastEventByApp = new Map(activityEvents.map((row) => [row.applicationId, row._max.happenedAt]));
 
   const interestParam = searchParams?.interest as string | undefined;
   const pipelineParam = searchParams?.pipeline as string | undefined;
@@ -339,12 +371,20 @@ export default async function JobApplicationsPage({
 
   const qParam = (searchParams?.q ?? "").toString();
   const q = qParam.trim().toLowerCase();
-  const sortParamRaw = (searchParams?.sort as string | undefined) ?? "match";
-  const sortKey: SortKey = sortParamRaw === "recent" || sortParamRaw === "name" ? sortParamRaw : "match";
+  const sortParamRaw = searchParams?.sort ?? "match";
+  const sortKey: RecruiterListSort = sortParamRaw === "recent" ? "activity" : sortParamRaw === "name" ? "candidate"
+    : ["candidate", "match", "status", "activity", "location"].includes(sortParamRaw) ? sortParamRaw as RecruiterListSort : "match";
+  const sortDirection: SortDirection = searchParams?.dir === "asc" || searchParams?.dir === "desc"
+    ? searchParams.dir : sortKey === "match" || sortKey === "activity" ? "desc" : "asc";
   const matchParam = (searchParams?.match as string | undefined) ?? "ALL";
   const matchFilter: MatchFilter = ["HIGH", "MED", "LOW"].includes(matchParam) ? (matchParam as MatchFilter) : "ALL";
   const cvParam = (searchParams?.cv as string | undefined) ?? "ALL";
   const cvFilter: CvFilter = cvParam === "YES" || cvParam === "NO" ? (cvParam as CvFilter) : "ALL";
+  const preselectedFilter = searchParams?.preselected === "1";
+  const assessmentFilter: RecruiterListAssessment = ["NONE", "SENT", "STARTED", "COMPLETED", "EXPIRED"].includes(searchParams?.assessment ?? "")
+    ? searchParams!.assessment as RecruiterListAssessment : "ALL";
+  const outcomeFilter = chosenPipeline === "CLOSED" && ["REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"].includes(searchParams?.outcome ?? "")
+    ? searchParams!.outcome : undefined;
 
   const matchAccess = getRecruiterMatchAccessIds(allApps, plan);
   let enriched = recruiterRows.map((a) => {
@@ -364,8 +404,11 @@ export default async function JobApplicationsPage({
       _gatedFinalScore: match?.finalScore ?? null,
       _locked: match === null,
       _fullName: fullName,
-      _lastActivity: a.createdAt,
+      _activity: resolveProcessActivity(a.submittedAt, lastEventByApp.get(a.id)),
+      _location: resolveCandidateLocation(a.candidate),
       _hasCV: Boolean(a.candidate?.resumeUrl),
+      _presentation: presentationOf(a),
+      _assessmentState: (assessmentByAppId.get(a.id)?.state ?? "NONE") as RecruiterListAssessment,
     };
   });
 
@@ -377,31 +420,23 @@ export default async function JobApplicationsPage({
     enriched = enriched.filter((a) => {
       const skills = (a.candidate?.candidateSkills ?? []).map((cs: any) => cs.term.label).join(" ");
       const profileTypeLabel = PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? "";
-      const haystack = [a._fullName, a.candidate?.email ?? "", a.candidate?.location ?? "", skills, profileTypeLabel]
+      const haystack = [a._fullName, a.candidate?.email ?? "", a._location.full ?? "", skills, profileTypeLabel]
         .join(" ")
         .toLowerCase();
       return haystack.includes(q);
     });
   }
 
-  const sorted = [...enriched].sort((a, b) => {
-    if (sortKey === "recent") return new Date(b._lastActivity).getTime() - new Date(a._lastActivity).getTime();
-    if (sortKey === "name") return (a._fullName || "").localeCompare(b._fullName || "", "es", { sensitivity: "base" });
-    if (a._locked !== b._locked) return a._locked ? 1 : -1;
-    return (b._gatedFinalScore ?? 0) - (a._gatedFinalScore ?? 0) ||
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() || a.id.localeCompare(b.id);
+  const toListRow = (a: typeof enriched[number]) => ({
+    id: a.id, name: a._fullName, score: hasMatchSignals ? a._gatedFinalScore : null,
+    presentation: a._presentation, activityAt: a._activity.at,
+    location: a._location.full, hasCV: a._hasCV, assessment: a._assessmentState,
   });
-  const withGate = sorted;
-
-  const apps = withGate.filter((a) => {
-    if (matchFilter !== "ALL" && hasMatchSignals) {
-      if (a._locked) return false;
-      if (scoreToRange(a._gatedFinalScore ?? 0) !== matchFilter) return false;
-    }
-    if (cvFilter === "YES" && !a._hasCV) return false;
-    if (cvFilter === "NO" && a._hasCV) return false;
-    return true;
-  });
+  const withGate = enriched;
+  const apps = enriched.filter((a) => matchesRecruiterListFilters(toListRow(a), {
+    preselected: preselectedFilter, assessment: assessmentFilter, outcome: outcomeFilter,
+    match: hasMatchSignals ? matchFilter : "ALL", cv: cvFilter,
+  })).sort((a, b) => compareRecruiterListRows(toListRow(a), toListRow(b), sortKey, sortDirection));
 
   const lockedCount = withGate.filter((a) => a._locked).length;
 
@@ -409,31 +444,33 @@ export default async function JobApplicationsPage({
   for (const a of withGate) {
     matchCounts.ALL++;
     if (!a._locked && hasMatchSignals) {
-      matchCounts[scoreToRange(a._gatedFinalScore ?? 0)]++;
+      matchCounts[matchScoreLevel(a._gatedFinalScore!)]++;
     }
   }
 
-  function buildHref(overrides: { pipeline?: string; interest?: string; q?: string; sort?: string; match?: string; cv?: string }) {
-    const usp = new URLSearchParams();
-    const stateFilter = { key: "pipeline", value: "pipeline" in overrides ? overrides.pipeline : chosenPipeline };
-    const qv = "q" in overrides ? overrides.q : qParam;
-    const sv = "sort" in overrides ? overrides.sort : sortKey;
-    const mv = "match" in overrides ? overrides.match : matchFilter !== "ALL" ? matchFilter : undefined;
-    const cv = "cv" in overrides ? overrides.cv : cvFilter !== "ALL" ? cvFilter : undefined;
+  const currentQuery: RecruiterListQuery = {
+    pipeline: chosenPipeline, q: qParam, sort: sortKey, dir: sortDirection,
+    match: matchFilter !== "ALL" ? matchFilter : undefined,
+    cv: cvFilter !== "ALL" ? cvFilter : undefined,
+    preselected: preselectedFilter ? "1" : undefined,
+    assessment: assessmentFilter !== "ALL" ? assessmentFilter : undefined,
+    outcome: outcomeFilter,
+  };
+  function buildHref(overrides: RecruiterListQuery) {
+    return buildRecruiterListHref(params.id, currentQuery, overrides);
+  }
 
-    if (stateFilter.value) usp.set(stateFilter.key, stateFilter.value);
-    if (qv) usp.set("q", qv);
-    if (sv) usp.set("sort", sv);
-    if (mv) usp.set("match", mv);
-    if (cv) usp.set("cv", cv);
-
-    return `/dashboard/jobs/${params.id}/applications${usp.toString() ? `?${usp.toString()}` : ""}`;
+  function sortHref(key: RecruiterListSort) {
+    const nextDirection = sortKey === key ? (sortDirection === "asc" ? "desc" : "asc")
+      : key === "match" || key === "activity" ? "desc" : "asc";
+    return buildHref({ sort: key, dir: nextDirection });
   }
 
   const headerBtnClasses =
     "inline-flex items-center whitespace-nowrap rounded-full border border-zinc-200 bg-white/80 px-4 py-2 text-xs font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-200 dark:hover:bg-zinc-900";
 
-  const activeFiltersCount = (matchFilter !== "ALL" ? 1 : 0) + (cvFilter !== "ALL" ? 1 : 0);
+  const activeFiltersCount = (matchFilter !== "ALL" ? 1 : 0) + (cvFilter !== "ALL" ? 1 : 0)
+    + (preselectedFilter ? 1 : 0) + (assessmentFilter !== "ALL" ? 1 : 0) + (outcomeFilter ? 1 : 0);
 
   const seniorityLabel = job.seniority
     ? { JUNIOR: "Junior", MID: "Mid", SENIOR: "Senior", LEAD: "Lead" }[job.seniority] ?? job.seniority
@@ -506,7 +543,7 @@ export default async function JobApplicationsPage({
           </div>
         </header>
 
-        {lockedCount > 0 && (
+        {hasMatchSignals && lockedCount > 0 && (
           <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-700/40 dark:bg-amber-950/30 sm:flex-row sm:items-center sm:justify-between sm:px-5">
             <div className="flex items-start gap-3">
               <Lock className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -538,8 +575,9 @@ export default async function JobApplicationsPage({
               label={`Todos (${total})`}
               count={total}
             />
-            {[...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"].map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${PIPELINE_LABELS[key] ?? ({ CLOSED: "Cerrados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key]} (${counters[key]})`} count={counters[key]} />)}
+            {LIST_SECTIONS.map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${PIPELINE_LABELS[key] ?? ({ CLOSED: "Cerrados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key]} (${counters[key]})`} count={counters[key]} />)}
           </div>
+          <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Los conteos incluyen todas las postulaciones de esta vacante, antes de los filtros secundarios.</p>
         </section>
 
 
@@ -565,7 +603,7 @@ export default async function JobApplicationsPage({
               )}
             </div>
             {activeFiltersCount > 0 ? (
-              <Link href={buildHref({ match: undefined, cv: undefined })}
+              <Link href={buildHref({ match: undefined, cv: undefined, preselected: undefined, assessment: undefined, outcome: undefined })}
                 className="inline-block text-sm text-emerald-600 underline hover:no-underline">
                 Limpiar filtros
               </Link>
@@ -583,8 +621,12 @@ export default async function JobApplicationsPage({
                   {pipelineParam && <input type="hidden" name="pipeline" value={pipelineParam} />}
                   {interestParam && <input type="hidden" name="interest" value={interestParam} />}
                   {sortKey && <input type="hidden" name="sort" value={sortKey} />}
+                  <input type="hidden" name="dir" value={sortDirection} />
                   {matchFilter !== "ALL" && <input type="hidden" name="match" value={matchFilter} />}
                   {cvFilter !== "ALL" && <input type="hidden" name="cv" value={cvFilter} />}
+                  {preselectedFilter && <input type="hidden" name="preselected" value="1" />}
+                  {assessmentFilter !== "ALL" && <input type="hidden" name="assessment" value={assessmentFilter} />}
+                  {outcomeFilter && <input type="hidden" name="outcome" value={outcomeFilter} />}
                   <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
                   <input
                     name="q"
@@ -594,12 +636,13 @@ export default async function JobApplicationsPage({
                   />
                 </form>
 
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs sm:hidden">
                   <span className="shrink-0 text-zinc-500">Ordenar:</span>
-                  <div className="inline-flex rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
-                    <SortPill href={buildHref({ sort: "match" })} active={sortKey === "match"}>Match</SortPill>
-                    <SortPill href={buildHref({ sort: "recent" })} active={sortKey === "recent"}>Reciente</SortPill>
-                    <SortPill href={buildHref({ sort: "name" })} active={sortKey === "name"}>Nombre</SortPill>
+                  <div className="flex flex-wrap rounded-full bg-zinc-100/60 p-0.5 dark:bg-zinc-900/70">
+                    <SortPill href={sortHref("match")} active={sortKey === "match"}>Match</SortPill>
+                    <SortPill href={sortHref("activity")} active={sortKey === "activity"}>Actividad</SortPill>
+                    <SortPill href={sortHref("candidate")} active={sortKey === "candidate"}>Nombre</SortPill>
+                    <SortPill href={sortHref("status")} active={sortKey === "status"}>Estado</SortPill>
                   </div>
                 </div>
               </div>
@@ -657,10 +700,34 @@ export default async function JobApplicationsPage({
                   </div>
                 </div>
 
+                <Link href={buildHref({ preselected: preselectedFilter ? undefined : "1" })}
+                  aria-pressed={preselectedFilter}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${preselectedFilter ? "border-amber-500 bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
+                  Solo preselectos
+                </Link>
+                {(assessmentEnabled || assessmentFilter !== "ALL") && <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] text-zinc-500">Evaluación:</span>
+                  {(["ALL", "NONE", "SENT", "STARTED", "COMPLETED", "EXPIRED"] as RecruiterListAssessment[]).map((state) =>
+                    <Link key={state} href={buildHref({ assessment: state === "ALL" ? undefined : state })}
+                      aria-current={assessmentFilter === state ? "true" : undefined}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] ${assessmentFilter === state ? "border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-900/30 dark:text-teal-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
+                      {({ ALL: "Todas", NONE: "Sin evaluación", SENT: "Enviada", STARTED: "Iniciada", COMPLETED: "Completada", EXPIRED: "Vencida" } as Record<string, string>)[state]}
+                    </Link>)}
+                </div>}
+                {chosenPipeline === "CLOSED" && <div className="flex flex-wrap items-center gap-1">
+                  <span className="text-[11px] text-zinc-500">Resultado:</span>
+                  {(["ALL", "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"] as const).map((outcome) =>
+                    <Link key={outcome} href={buildHref({ outcome: outcome === "ALL" ? undefined : outcome })}
+                      aria-current={(outcomeFilter ?? "ALL") === outcome ? "true" : undefined}
+                      className={`rounded-full border px-2 py-0.5 text-[11px] ${(outcomeFilter ?? "ALL") === outcome ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
+                      {({ ALL: "Todos", REJECTED: "Descartado", HIRED: "Contratado", WITHDRAWN: "Retirado", CANCELLED: "Cancelado" } as Record<string, string>)[outcome]}
+                    </Link>)}
+                </div>}
+
                 <div className="ml-auto flex items-center gap-3">
                   {activeFiltersCount > 0 && (
                     <Link
-                      href={buildHref({ match: undefined, cv: undefined })}
+                      href={buildHref({ match: undefined, cv: undefined, preselected: undefined, assessment: undefined, outcome: undefined })}
                       className="text-[11px] text-zinc-400 underline underline-offset-2 hover:text-zinc-600 whitespace-nowrap"
                     >
                       Limpiar
@@ -698,7 +765,8 @@ export default async function JobApplicationsPage({
                         ) : (
                           <span className="text-sm font-semibold">{a._fullName}</span>
                         )}
-                        <p className="truncate text-xs text-zinc-500">{a.candidate?.location ?? "—"}</p>
+                        <p className="truncate text-xs text-zinc-500">{a._location.full ?? "—"}</p>
+                        <AssessmentSummary states={assessMeta?.perTemplateState ?? []} detailHref={candidateHref} />
                         {(a.candidate as any)?.desiredSalaryMin != null && (
                           <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
                             💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes
@@ -743,28 +811,10 @@ export default async function JobApplicationsPage({
                       />
                     )}
 
-                    {!locked && hasJobSkills && matchResult.details.filter((d: any) => d.matched).length > 0 && (
-                      <div className="flex flex-wrap gap-1">
-                        {matchResult.details.filter((d: any) => d.matched).slice(0, 3).map((d: any) => (
-                          <span
-                            key={d.termId}
-                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                              d.must
-                                ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
-                            }`}
-                          >
-                            {d.label}
-                          </span>
-                        ))}
-                        {matchResult.matchedCount > 3 && (
-                          <span className="text-[10px] text-zinc-400">+{matchResult.matchedCount - 3}</span>
-                        )}
-                      </div>
-                    )}
+                    {!locked && hasMatchSignals && <MatchedSkills details={matchResult.details} />}
 
                     <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0 max-w-[160px]">
+                      <div className="min-w-0 flex-1 space-y-1.5">
                         <InterestSelect
                           applicationId={a.id}
                           initial={a.recruiterInterest as InterestKey}
@@ -774,6 +824,7 @@ export default async function JobApplicationsPage({
                           canonicalDisposition={a.disposition}
                           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                         />
+                        {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Preselecto</span>}
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -796,6 +847,8 @@ export default async function JobApplicationsPage({
                         <ActionsMenu
                           applicationId={a.id}
                           jobId={job.id}
+                          processSource={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }}
+                          canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                           candidateHref={candidateHref}
                           resumeUrl={resumeUrl ?? null}
                           candidateEmail={a.candidate?.email ?? ""}
@@ -808,7 +861,10 @@ export default async function JobApplicationsPage({
                             assessmentEnabled && chosenTemplateId
                               ? ({
                                   enabled: true,
-                                  templateId: chosenTemplateId,
+                                  templateId: assessMeta?.templateId ?? chosenTemplateId,
+                                  templateIds: allJobTemplateIds,
+                                  templateTitles: jobTemplateTitles,
+                                  perTemplateState: assessMeta?.perTemplateState,
                                   state: (assessMeta?.state ?? "NONE") as any,
                                   token: assessMeta?.token ?? null,
                                   attemptId: assessMeta?.attemptId ?? null,
@@ -818,47 +874,21 @@ export default async function JobApplicationsPage({
                         />
                       </div>
                     </div>
-
-                    {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                      <div className="flex flex-wrap gap-1">
-                        {(assessMeta.perTemplateState?.filter(t => t.state === "COMPLETED") ?? []).length > 0
-                          ? assessMeta.perTemplateState!.filter(t => t.state === "COMPLETED").map(t => (
-                              <span key={t.templateId} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200">
-                                {t.title.length > 18 ? t.title.slice(0, 18) + "…" : t.title}
-                                {typeof t.score === "number" && <span className="ml-1 font-bold">{t.score}%</span>}
-                              </span>
-                            ))
-                          : (
-                              <span className={[
-                                "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
-                                  : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                  : "border-teal-200 bg-teal-50 text-teal-700",
-                              ].join(" ")}>
-                                {assessMeta.state === "STARTED" ? "Assessment: iniciado"
-                                  : assessMeta.state === "EXPIRED" ? "Assessment: expirado"
-                                  : "Assessment: enviado"}
-                              </span>
-                            )
-                        }
-                      </div>
-                    )}
                   </div>
                 );
               })}
             </div>
 
             <div className="hidden overflow-x-auto sm:block">
-              <table className="w-full text-sm">
+              <table className="w-full min-w-[940px] text-sm">
                 <thead className="bg-zinc-50 text-left text-xs text-zinc-500 dark:bg-zinc-900/40 dark:text-zinc-400">
                   <tr>
-                    <th className="px-3 py-2.5 font-medium">Candidato</th>
-                    <th className="px-3 py-2.5 font-medium">
-                      {hasMatchSignals ? "AI Match" : <span className="text-zinc-400">AI Match <span className="font-normal">(sin señales)</span></span>}
+                    <th scope="col" aria-sort={sortKey === "candidate" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("candidate")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Candidato {sortKey === "candidate" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
+                    <th scope="col" aria-sort={sortKey === "match" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium">
+                      <Link href={sortHref("match")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">AI Match / Skills {sortKey === "match" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link>{!hasMatchSignals && <span className="ml-1 font-normal text-zinc-400">(sin señales)</span>}
                     </th>
-                    <th className="px-3 py-2.5 font-medium">Skills</th>
-                    <th className="px-3 py-2.5 font-medium">Estado</th>
-                    <th className="px-3 py-2.5 font-medium">Actividad</th>
+                    <th scope="col" aria-sort={sortKey === "status" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("status")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Etapa {sortKey === "status" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
+                    <th scope="col" aria-sort={sortKey === "activity" ? sortDirection === "asc" ? "ascending" : "descending" : "none"} className="px-3 py-2.5 font-medium"><Link href={sortHref("activity")} className="rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Última actividad {sortKey === "activity" ? sortDirection === "asc" ? "↑" : "↓" : "↕"}</Link></th>
                     <th className="px-3 py-2.5 font-medium">Acciones</th>
                   </tr>
                 </thead>
@@ -867,146 +897,32 @@ export default async function JobApplicationsPage({
                     const matchResult = a._matchResult!; // Used only inside authorized match branches.
                     const gatedFinalScore: number | null = a._gatedFinalScore;
                     const locked: boolean = a._locked;
-                    const matchedDetails = (matchResult?.details ?? []).filter((d: any) => d.matched).slice(0, 4);
-                    const hiddenCount = Math.max(0, (matchResult?.matchedCount ?? 0) - matchedDetails.length);
                     const candidateHref = a.candidate?.id
                       ? `/dashboard/candidates/${a.candidate.id}?jobId=${job.id}&applicationId=${a.id}`
                       : undefined;
                     const phone = a.candidate?.phone as string | undefined;
                     const resumeUrl = a.candidate?.resumeUrl as string | undefined;
-                    const hasWhatsApp = phone?.trim().startsWith("+52");
                     const assessMeta = assessmentEnabled && chosenTemplateId ? assessmentByAppId.get(a.id) ?? null : null;
-                    const languages = a.candidate?.candidateLanguages ?? [];
-                    const profileTypeLabel =
-                      PROFILE_TYPE_LABEL[String(a._profileType ?? "").toUpperCase()] ?? null;
 
                     return (
-                      <tr key={a.id} className="align-top border-t border-zinc-100 transition-colors hover:bg-zinc-50/40 dark:border-zinc-800 dark:hover:bg-zinc-900/20">
+                      <tr key={a.id} className="align-middle border-t border-zinc-100 transition-colors hover:bg-zinc-50/70 dark:border-zinc-800 dark:hover:bg-zinc-900/40">
                         <td className="px-3 py-2.5">
                           <div className="flex flex-col gap-0.5">
                             {candidateHref ? (
-                              <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref} className="font-medium hover:underline">{a._fullName}</CandidateProfileLink>
+                              <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref} className="block max-w-[240px] truncate font-semibold text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-100" title={a._fullName}>{a._fullName}</CandidateProfileLink>
                             ) : (
                               <span className="font-medium">{a._fullName}</span>
                             )}
 
-                            <span className="text-xs text-zinc-500">{a.candidate?.location ?? "—"}</span>
+                            {a._location.full && <span className="max-w-[240px] truncate text-xs text-zinc-500" title={a._location.full}>{a._location.full}</span>}
 
-                            {((a.candidate as any)?.candidateBadges?.length ?? 0) > 0 && (
-                              <span className="flex flex-wrap gap-1">
-                                {(
-                                  (a.candidate as any).candidateBadges as {
-                                    level: number;
-                                    slug: string;
-                                    term: { label: string };
-                                  }[]
-                                )
-                                  .slice(0, 3)
-                                  .map((badge) => (
-                                    <Link
-                                      key={badge.slug}
-                                      href={"/badge/" + badge.slug}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="inline-flex items-center gap-0.5 rounded bg-teal-100 px-1.5 py-0.5 text-[10px] font-semibold text-teal-700 hover:bg-teal-200 dark:bg-teal-900/40 dark:text-teal-300 dark:hover:bg-teal-900/60"
-                                      title="Abrir credencial Taskio vigente"
-                                    >
-                                      ✓ {badge.term.label} ·{" "}
-                                      {badgeLevelLabel(badge.level)}
-                                    </Link>
-                                  ))}
-                              </span>
-                            )}
-
-                            {(a.candidate as any)?.desiredSalaryMin != null && (
-                              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-600/40 dark:bg-emerald-950/30 dark:text-emerald-300">
-                                💰 {new Intl.NumberFormat("es-MX", { style: "currency", currency: "MXN", maximumFractionDigits: 0 }).format((a.candidate as any).desiredSalaryMin)}/mes
-                              </span>
-                            )}
-
-                            {profileTypeLabel && (
-                              <div className="mt-0.5">
-                                <span className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300">
-                                  {profileTypeLabel}
-                                </span>
-                              </div>
-                            )}
-
-                            {languages.length > 0 && (
-                              <div className="mt-0.5 flex flex-wrap gap-1">
-                                {languages.slice(0, 2).map((l: any) => (
-                                  <span
-                                    key={`${l.term.label}-${l.level}`}
-                                    className="inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-900/60 dark:text-zinc-300"
-                                  >
-                                    {l.term.label} {LANGUAGE_LEVEL_LABEL[l.level] ?? l.level}
-                                  </span>
-                                ))}
-                                {languages.length > 2 && <span className="text-[10px] text-zinc-400">+{languages.length - 2}</span>}
-                              </div>
-                            )}
-
-                            <div className="mt-1 flex flex-wrap items-center gap-1">
-                              {phone && (
-                                <a
-                                  href={`tel:${phone}`}
-                                  title={phone}
-                                  className="inline-flex items-center gap-1 rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900/70 dark:text-zinc-400 transition-colors"
-                                >
-                                  <Phone className="h-3 w-3 shrink-0" />
-                                  Tel
-                                </a>
-                              )}
-                              {resumeUrl && (
-                                <a
-                                  href={resumeUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  title="Ver CV"
-                                  className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 transition-colors"
-                                >
-                                  <FileTextIcon className="h-3 w-3 shrink-0" />
-                                  CV
-                                </a>
-                              )}
-                              {hasWhatsApp && (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200">
-                                  <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0 fill-current" aria-hidden><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.558 4.121 1.532 5.851L.057 23.997l6.305-1.655A11.956 11.956 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.003-1.366l-.359-.213-3.742.982.999-3.648-.234-.374A9.785 9.785 0 012.182 12C2.182 6.579 6.579 2.182 12 2.182S21.818 6.579 21.818 12 17.421 21.818 12 21.818z"/></svg>
-                                  WA
-                                </span>
-                              )}
-                            </div>
-
-                            {assessMeta?.enabled && assessMeta.state !== "NONE" && (
-                              <div className="mt-0.5 flex flex-wrap gap-1">
-                                {(assessMeta.perTemplateState?.filter(t => t.state === "COMPLETED") ?? []).length > 0
-                                  ? assessMeta.perTemplateState!.filter(t => t.state === "COMPLETED").map(t => (
-                                      <span key={t.templateId} className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-200">
-                                        {t.title.length > 16 ? t.title.slice(0, 16) + "…" : t.title}
-                                        {typeof t.score === "number" && <span className="ml-1 font-bold">{t.score}%</span>}
-                                      </span>
-                                    ))
-                                  : (
-                                      <span className={[
-                                        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium",
-                                        assessMeta.state === "STARTED" ? "border-sky-200 bg-sky-50 text-sky-700"
-                                          : assessMeta.state === "EXPIRED" ? "border-amber-200 bg-amber-50 text-amber-800"
-                                          : "border-teal-200 bg-teal-50 text-teal-700",
-                                      ].join(" ")}>
-                                        {assessMeta.state === "STARTED" ? "Iniciado"
-                                          : assessMeta.state === "EXPIRED" ? "Expirado"
-                                          : "Enviado"}
-                                      </span>
-                                    )
-                                }
-                              </div>
-                            )}
+                            <AssessmentSummary states={assessMeta?.perTemplateState ?? []} detailHref={candidateHref} />
                           </div>
                         </td>
 
                         <td className="px-3 py-2.5">
                           {!hasMatchSignals ? (
-                            <span className="text-xs text-zinc-400">—</span>
+                            <span className="text-xs text-zinc-400">Sin análisis</span>
                           ) : locked ? (
                             <div className="group relative inline-flex cursor-pointer items-center gap-1.5">
                               <div className="flex h-8 w-20 items-center justify-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40">
@@ -1039,36 +955,11 @@ export default async function JobApplicationsPage({
                               jobId={job.id}
                             />
                           )}
+                          {!locked && hasMatchSignals && <MatchedSkills details={matchResult.details} />}
                         </td>
 
-                        <td className="px-3 py-2.5">
-                          {locked ? (
-                            <span className="text-xs text-zinc-400">—</span>
-                          ) : matchedDetails.length ? (
-                            <div className="flex flex-wrap items-center gap-1">
-                              {matchedDetails.map((d: any, i: number) => (
-                                <span
-                                  key={`${d.termId}-${i}`}
-                                  title={d.must ? "Requerida" : "Deseable"}
-                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
-                                    d.must
-                                      ? "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-600/40 dark:bg-emerald-900/20 dark:text-emerald-200"
-                                      : "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300"
-                                  }`}
-                                >
-                                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${d.must ? "bg-emerald-500" : "bg-zinc-400"}`} />
-                                  {d.label}
-                                </span>
-                              ))}
-                              {hiddenCount > 0 && <span className="text-[10px] text-zinc-400">+{hiddenCount}</span>}
-                            </div>
-                          ) : (
-                            <span className="text-zinc-400">—</span>
-                          )}
-                        </td>
-
-                        <td className="px-3 py-2.5">
-                          <div className="inline-flex min-w-[130px] max-w-[150px]">
+                        <td className="min-w-[145px] px-3 py-2.5">
+                          <div className="space-y-1.5">
                             <InterestSelect
                               applicationId={a.id}
                               initial={a.recruiterInterest as InterestKey}
@@ -1078,31 +969,24 @@ export default async function JobApplicationsPage({
                               canonicalDisposition={a.disposition}
                               canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                             />
+                            {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Preselecto</span>}
                           </div>
                         </td>
 
-                        <td className="px-3 py-2.5" title={new Date(a._lastActivity).toLocaleString()}>
+                        <td className="px-3 py-2.5" title={a._activity.at.toISOString()}>
                           <span className="block text-[10px] text-zinc-400">
-                            {Math.abs(new Date(a.createdAt).getTime() - new Date(a.updatedAt).getTime()) < 5000
-                              ? "Nueva"
-                              : "Actualizada"}
+                            {a._activity.kind === "APPLICATION" ? "Postulación" : "Actividad del proceso"}
                           </span>
-                          <span className="text-xs text-zinc-500">{fromNow(a._lastActivity)}</span>
+                          <span className="text-xs text-zinc-500">{fromNow(a._activity.at)}</span>
                         </td>
 
-                        <td className="px-3 py-2.5 align-top">
+                        <td className="px-3 py-2.5 align-middle">
                           <div className="flex items-center gap-1.5">
-                            {candidateHref && (
-                              <CandidateProfileLink
-                                applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref}
-                                className="inline-flex items-center rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-700 whitespace-nowrap transition-colors hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-emerald-700/40 dark:hover:text-emerald-200"
-                              >
-                                Ver perfil
-                              </CandidateProfileLink>
-                            )}
                             <ActionsMenu
                               applicationId={a.id}
                               jobId={job.id}
+                              processSource={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }}
+                              canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
                               candidateHref={candidateHref}
                               resumeUrl={resumeUrl ?? null}
                               candidateEmail={a.candidate?.email ?? ""}

@@ -5,6 +5,20 @@ import "@testing-library/jest-dom/vitest";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+async function selectProcessAction(name: string) {
+  const trigger = screen.getByRole("button", {
+    name: "Acciones de la postulación",
+  });
+
+  fireEvent.keyDown(trigger, { key: "ArrowDown" });
+
+  const option = await screen.findByRole("menuitem", {
+    name,
+  });
+
+  fireEvent.click(option);
+}
+
 const mocks = vi.hoisted(() => ({
   refresh: vi.fn(),
   toastSuccess: vi.fn(),
@@ -22,6 +36,7 @@ vi.mock("@/lib/ui/toast", () => ({
 }));
 
 import InterestSelect from "@/app/dashboard/jobs/[id]/applications/InterestSelect";
+import ActionsMenu from "@/app/dashboard/jobs/[id]/applications/ActionsMenu";
 import CandidateReviewShell, {
   type AppState,
 } from "@/components/dashboard/CandidateReviewShell";
@@ -97,7 +112,7 @@ describe("canonical rejection surfaces", () => {
     vi.unstubAllGlobals();
   });
 
-  it("sends one MARK_PRESELECTED command from InterestSelect", async () => {
+  it("sends one MARK_PRESELECTED command from the secondary list menu", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
       application: {
         stage: "REVIEW",
@@ -108,15 +123,9 @@ describe("canonical rejection surfaces", () => {
       },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
-    render(<InterestSelect
-      applicationId="application-1"
-      initial="REVIEW"
-      initialStateVersion={1}
-      legacyStatus="SUBMITTED"
-      canonicalStage="APPLIED"
-      canonicalDisposition="ACTIVE"
-    />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "MARK_PRESELECTED" } });
+    render(<ActionsMenu applicationId="application-1" jobId="job-1" candidateEmail="candidate@qa.invalid" canonicalRecruiterReadsEnabled assessment={{ enabled: false }}
+      processSource={appliedApplication} />);
+    await selectProcessAction("Preseleccionar");
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = vi.mocked(fetch).mock.calls[0];
@@ -128,7 +137,7 @@ describe("canonical rejection surfaces", () => {
     });
   });
 
-  it("sends one CLEAR_PRESELECTED command from InterestSelect", async () => {
+  it("sends one CLEAR_PRESELECTED command from the secondary list menu", async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
       application: {
         stage: "REVIEW",
@@ -139,15 +148,9 @@ describe("canonical rejection surfaces", () => {
       },
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
-    render(<InterestSelect
-      applicationId="application-1"
-      initial="MAYBE"
-      initialStateVersion={2}
-      legacyStatus="REVIEWING"
-      canonicalStage="REVIEW"
-      canonicalDisposition="ACTIVE"
-    />);
-    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "CLEAR_PRESELECTED" } });
+    render(<ActionsMenu applicationId="application-1" jobId="job-1" candidateEmail="candidate@qa.invalid" canonicalRecruiterReadsEnabled assessment={{ enabled: false }}
+      processSource={{ ...appliedApplication, stage: "REVIEW", status: "REVIEWING", recruiterInterest: "MAYBE", stateVersion: 2 }} />);
+    await selectProcessAction("Quitar preselección");
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body))).toMatchObject({
@@ -216,11 +219,12 @@ describe("canonical rejection surfaces", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("sends one REJECT_CANDIDATE command from InterestSelect", async () => {
+  it("sends one explicit discard command from InterestSelect after confirmation", async () => {
     vi.mocked(fetch).mockResolvedValue(
       new Response(
         JSON.stringify({
           application: {
+            stage: "CLOSED", disposition: "REJECTED",
             status: "REJECTED",
             recruiterInterest: "REJECTED",
             stateVersion: 2,
@@ -237,14 +241,17 @@ describe("canonical rejection surfaces", () => {
         initialStateVersion={1}
       />,
     );
-    fireEvent.change(screen.getByRole("combobox", { name: "Acciones de candidatura" }), { target: { value: "REJECT_CANDIDATE" } });
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Por revisar" }), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Descartado" }));
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     const [url, init] = vi.mocked(fetch).mock.calls[0];
     expect(url).toBe("/api/applications/application-1/intent");
     expect(init?.method).toBe("POST");
     expect(JSON.parse(String(init?.body))).toMatchObject({
-      intent: "REJECT_CANDIDATE",
+      intent: "SET_RECRUITING_STATE", destination: "REJECTED",
       expectedVersion: 1,
     });
   });
