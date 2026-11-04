@@ -64,7 +64,7 @@ describe("secondary recruiter process actions", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Por revisar" }), { button: 0, ctrlKey: false });
     expect(await screen.findByRole("menuitem", { name: "En revisión" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Preseleccionar" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Descartado" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Descartar candidato" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     await openMenu();
     expect(await screen.findByRole("menuitem", { name: "Preseleccionar" })).toBeInTheDocument();

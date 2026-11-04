@@ -78,6 +78,14 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("recruiter match surface consistency and plan boundaries", () => {
+  it.each(["true", "false"])("orders finalized List filters consistently without changing their URLs, canonical reads=%s", async reads => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED", reads);
+    mocks.apps.mockResolvedValue(cohort.map(app => ({ ...app, stage: "CLOSED", disposition: "REJECTED", status: "REJECTED", recruiterInterest: "REJECTED" })));
+    const tree = await ListPage({ params: { id: "job-a" }, searchParams: { pipeline: "CLOSED", interest: "ALL" } });
+    const outcomes = nodes(tree).filter(node => typeof node.props.href === "string" && new URL(node.props.href, "https://example.test").searchParams.has("outcome"));
+    expect(outcomes.map(node => node.props.children)).toEqual(["Contratados", "Descartados", "Retirados", "Cancelados"]);
+    expect(outcomes.map(node => new URL(String(node.props.href), "https://example.test").searchParams.get("outcome"))).toEqual(["HIRED", "REJECTED", "WITHDRAWN", "CANCELLED"]);
+  });
   it.each(["FREE", "STARTER", "PRO", "BUSINESS"])("limits Overview averages to visible %s scores", async (plan) => {
     mocks.company.mockResolvedValue({ billingPlan: plan, name: "Company A" });
     mocks.apps.mockResolvedValue([]);

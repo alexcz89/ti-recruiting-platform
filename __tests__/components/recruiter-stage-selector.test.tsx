@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -18,6 +18,44 @@ const applied = { applicationId: "app", initial: "REVIEW" as const, initialState
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); refresh.mockClear(); vi.mocked(toastError).mockClear(); });
 
+it.each(["default", "icon"] as const)("groups stages, closures and other actions in the %s menu without duplicating destinations", async variant => {
+  render(<InterestSelect {...applied} variant={variant} />);
+  fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+  const stages = await screen.findByRole("group", { name: "Cambiar etapa" });
+  expect(within(stages).getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Por revisar", "En revisión", "Entrevista", "Oferta"]);
+  const finals = screen.getByRole("group", { name: "Finalizar candidatura" });
+  expect(within(finals).getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Contratar candidato", "Descartar candidato", "Registrar retiro", "Cancelar proceso"]);
+  expect(within(screen.getByRole("group", { name: "Otras acciones" })).getAllByRole("menuitem")).toHaveLength(1);
+  expect(screen.queryByRole("menuitem", { name: /Preselecto|Evaluación/ })).not.toBeInTheDocument();
+  expect(screen.getAllByRole("menuitem")).toHaveLength(9);
+});
+
+it.each([true, false])("resumes a paused process using its persisted stage and the existing versioned command, reads=%s", async reads => {
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ application: {
+    stage: "INTERVIEW", disposition: "ACTIVE", status: "INTERVIEW", recruiterInterest: "ACCEPTED", stateVersion: 5,
+  } })));
+  vi.stubGlobal("fetch", fetch);
+  render(<InterestSelect {...applied} canonicalRecruiterReadsEnabled={reads} canonicalStage="INTERVIEW" canonicalDisposition="HOLD" legacyStatus="INTERVIEW" initial="ACCEPTED" initialStateVersion={4} />);
+  fireEvent.keyDown(screen.getByRole("button", { name: "Cambiar etapa: En pausa" }), { key: "Enter" });
+  const other = await screen.findByRole("group", { name: "Otras acciones" });
+  expect(within(other).getByRole("menuitem", { name: "En pausa" })).toHaveAttribute("aria-current", "step");
+  expect(screen.queryByRole("menuitem", { name: "Entrevista" })).not.toBeInTheDocument();
+  fireEvent.click(within(other).getByRole("menuitem", { name: "Reanudar proceso" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ intent: "SET_RECRUITING_STATE", destination: "INTERVIEW", expectedVersion: 4, commandId: expect.any(String) });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Cambiar etapa: Entrevista" })).toBeEnabled());
+});
+
+it("does not disguise a persisted ASSESSMENT change as resuming the same stage", async () => {
+  render(<InterestSelect {...applied} canonicalStage="ASSESSMENT" canonicalDisposition="HOLD" legacyStatus="REVIEWING" />);
+  fireEvent.keyDown(screen.getByRole("button"), { key: "Enter" });
+  expect(await screen.findByRole("menuitem", { name: "En revisión" })).toBeInTheDocument();
+  expect(screen.queryByRole("menuitem", { name: "Reanudar proceso" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("menuitem", { name: "En revisión" }));
+  expect(screen.getByRole("dialog", { name: "Regresar a En revisión" })).toBeInTheDocument();
+  expect(screen.getByRole("combobox", { name: "Motivo" })).toBeInTheDocument();
+});
+
 async function choose(current: string, option: string) {
   fireEvent.pointerDown(screen.getByRole("button", { name: `Cambiar etapa: ${current}` }), { button: 0, ctrlKey: false });
   fireEvent.click(await screen.findByRole("menuitem", { name: option.split(" ·")[0] }));
@@ -25,7 +63,7 @@ async function choose(current: string, option: string) {
 
 async function chooseClosure(label: string) {
   fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Oferta" }), { button: 0, ctrlKey: false });
-  fireEvent.click(await screen.findByRole("menuitem", { name: label == "Contratar candidato" ? "Contratado" : "Descartado" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: label }));
 }
 
 describe.each([true, false])("confirmed stage closures, canonical reads=%s", reads => {
@@ -62,7 +100,8 @@ describe.each([true, false])("confirmed stage closures, canonical reads=%s", rea
       } }))));
       expect(screen.getByText(scenario.finalLabel)).toBeInTheDocument();
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: `Cambiar etapa: ${scenario.finalLabel}` })).toBeEnabled();
+      if (scenario.outcome === "HIRED") expect(screen.queryByRole("button", { name: "Cambiar etapa: Contratado" })).not.toBeInTheDocument();
+      else expect(screen.getByRole("button", { name: `Cambiar etapa: ${scenario.finalLabel}` })).toBeEnabled();
       expect(refresh).toHaveBeenCalledOnce();
     });
   });
@@ -237,7 +276,7 @@ it.each([true, false])("shows all destinations, marks the current state and does
   expect(current).toHaveAttribute("aria-current", "step");
   expect(current).toHaveAttribute("aria-disabled", "true");
   expect(screen.getAllByRole("menuitem")).toHaveLength(9);
-  for (const label of ["En revisión", "Entrevista", "Oferta", "Descartado", "Contratado", "En pausa", "Retirado", "Cancelado"]) expect(screen.getByRole("menuitem", { name: label })).toBeInTheDocument();
+  for (const label of ["En revisión", "Entrevista", "Oferta", "Descartar candidato", "Contratar candidato", "Poner en pausa", "Registrar retiro", "Cancelar proceso"]) expect(screen.getByRole("menuitem", { name: label })).toBeInTheDocument();
   expect(screen.queryByRole("menuitem", { name: "Requiere conciliación" })).not.toBeInTheDocument();
   fireEvent.click(current); expect(fetch).not.toHaveBeenCalled();
 });
@@ -264,7 +303,7 @@ it("hires directly from REVIEW only after confirmation", async () => {
   const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ application: { stage: "CLOSED", disposition: "HIRED", status: "HIRED", recruiterInterest: "ACCEPTED", stateVersion: 2 } })));
   vi.stubGlobal("fetch", fetch);
   render(<InterestSelect {...applied} canonicalStage="REVIEW" legacyStatus="REVIEWING" />);
-  await choose("En revisión", "Contratado");
+  await choose("En revisión", "Contratar candidato");
   expect(screen.getByRole("dialog", { name: "Contratar candidato" })).toBeInTheDocument(); expect(fetch).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
@@ -277,15 +316,15 @@ it("offers the same destinations from a labelled icon with no visible stage and 
   const trigger = screen.getByRole("button", { name: "Cambiar etapa de Ana" });
   expect(trigger).toHaveClass("h-11", "w-11");
   expect(trigger).not.toHaveClass("w-[160px]");
-  expect(trigger).toHaveTextContent("");
+  expect(trigger.textContent).toBe("");
   expect(screen.queryByText("Por revisar")).not.toBeInTheDocument();
   trigger.focus(); fireEvent.keyDown(trigger, { key: "Enter", code: "Enter" });
   const current = await screen.findByRole("menuitem", { name: "Por revisar" });
   expect(current).toHaveAttribute("aria-disabled", "true");
   expect(current).toHaveAttribute("aria-current", "step");
   expect(screen.getAllByRole("menuitem")).toHaveLength(9);
-  expect(screen.getByRole("menuitem", { name: "Descartado" })).toHaveClass("min-h-11");
-  fireEvent.click(screen.getByRole("menuitem", { name: "Descartado" }));
+  expect(screen.getByRole("menuitem", { name: "Descartar candidato" })).toHaveClass("min-h-11");
+  fireEvent.click(screen.getByRole("menuitem", { name: "Descartar candidato" }));
   expect(screen.getByRole("dialog", { name: "Descartar candidato" })).toBeInTheDocument();
   expect(fetch).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
@@ -297,6 +336,20 @@ it("hides the icon rather than exposing a fallback control for incompatible reco
   render(<InterestSelect {...applied} variant="icon" legacyStatus="HIRED" initial="ACCEPTED" />);
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
   expect(screen.queryByText("Requiere conciliación")).not.toBeInTheDocument();
+});
+
+describe.each([true, false])("hired UI, reads=%s", reads => {
+  it.each([true, false])("keeps the list label and removes the Kanban action for canonical source=%s", canonical => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    const hiredProps = { ...applied, initial: "ACCEPTED" as const, legacyStatus: "HIRED", canonicalStage: canonical ? "CLOSED" as const : null,
+      canonicalDisposition: canonical ? "HIRED" as const : null, initialStateVersion: canonical ? 3 : 0, canonicalRecruiterReadsEnabled: reads };
+    const view = render(<InterestSelect {...hiredProps} />);
+    expect(screen.getByText("Contratado")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    view.rerender(<InterestSelect {...hiredProps} variant="icon" />);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
 });
 
 it.each([true, false])("allows reopening final states with a confirmed reason with reads=%s", reads => {

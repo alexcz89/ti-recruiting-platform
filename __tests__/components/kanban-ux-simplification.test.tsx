@@ -87,10 +87,12 @@ it("uses icon-only card actions and flexible columns without removing informatio
     expect(trigger.textContent).toBe("");
     expect(trigger.closest("article")).toHaveTextContent(card.candidate.name);
   }
-  const rejected = screen.getByRole("region", { name: "Descartados" });
-  expect(rejected).toHaveClass("min-w-0", "w-full", "col-span-4", "xl:col-span-1");
-  const grid = rejected.parentElement!;
-  expect(grid).toHaveClass("grid", "grid-cols-4", "xl:grid-cols-5");
+  const finalized = screen.getByRole("region", { name: "Finalizados" });
+  expect(within(finalized).getByText("Descartados (0)")).toBeInTheDocument();
+  const grid = screen.getByRole("region", { name: "Por revisar" }).parentElement!;
+  expect(grid).toHaveClass("grid", "grid-cols-4");
+  expect(grid.children).toHaveLength(4);
+  expect(grid).not.toContainElement(finalized);
   expect(grid).not.toHaveClass("w-max");
   expect(grid.parentElement).not.toHaveClass("overflow-x-auto");
   expect(mocks.targets.mock.calls.flat()).not.toContain("REJECTED");
@@ -156,9 +158,9 @@ it.each([true, false])("confirms Kanban discard before changing counters with ca
   fireEvent.mouseDown(menuButton);
   expect(mocks.dragStart).not.toHaveBeenCalled();
   fireEvent.pointerDown(menuButton, { button: 0, ctrlKey: false });
-  expect(await screen.findByRole("menuitem", { name: "Descartado" })).toBeInTheDocument();
+  expect(await screen.findByRole("menuitem", { name: "Descartar candidato" })).toBeInTheDocument();
   expect(screen.queryByRole("menuitem", { name: "Contratar" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("menuitem", { name: "Descartado" }));
+  fireEvent.click(screen.getByRole("menuitem", { name: "Descartar candidato" }));
   expect(screen.getByRole("dialog", { name: "Descartar candidato" })).toBeInTheDocument();
   await waitFor(() => expect(screen.getByRole("button", { name: "Cancelar" })).toHaveFocus());
   expect(fetch).not.toHaveBeenCalled();
@@ -184,7 +186,7 @@ it("keeps Kanban counters and the candidate when discard is rejected", async () 
   vi.stubGlobal("fetch", fetch);
   render(<KanbanBoard {...props} moveAction={vi.fn()} />);
   fireEvent.pointerDown(screen.getAllByRole("button", { name: `Cambiar etapa de ${card.candidate.name}` })[0], { button: 0, ctrlKey: false });
-  fireEvent.click(await screen.findByRole("menuitem", { name: "Descartado" }));
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Descartar candidato" }));
   fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
   expect(screen.getByRole("option", { name: "Por revisar (1)" })).toBeInTheDocument();
@@ -243,6 +245,7 @@ it.each([true, false])("keeps canonical and legacy columns distinct with reader 
   fireEvent.click(screen.getByText("Contratados (1)", { selector: "summary" }));
   fireEvent.click(screen.getByText("Cancelados (1)", { selector: "summary" }));
   expect(screen.getByRole("link", { name: "Hired" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Cambiar etapa de Hired" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Closed" })).toBeInTheDocument();
 });
 
@@ -361,6 +364,25 @@ it("does not turn a visual Review card from ASSESSMENT into a new review or pres
   expect(screen.getByRole("option", { name: /En revisión \(1\)/ })).toBeInTheDocument();
 });
 
+it.each([true, false])("keeps ASSESSMENT in Review and updates evaluation feedback without moving the persisted process, reads=%s", reads => {
+  const move = vi.fn();
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  const assessmentCard = { ...card, stage: "ASSESSMENT", applicationStatus: "REVIEWING", displayStatus: "ASSESSMENT",
+    _assessments: [{ ...card._assessments[0], state: "STARTED" as const, score: null, passed: null, attemptId: null }] };
+  const view = render(<KanbanBoard {...props} canonicalRecruiterReadsEnabled={reads} applications={[assessmentCard]} moveAction={move} />);
+  expect(screen.getByRole("option", { name: "En revisión (1)" })).toBeInTheDocument();
+  expect(screen.queryByRole("option", { name: /^Evaluación/ })).not.toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "En revisión" })).toHaveTextContent("En progreso");
+  expect(screen.queryByText("Evaluación técnica", { exact: true })).not.toBeInTheDocument();
+  view.rerender(<KanbanBoard {...props} canonicalRecruiterReadsEnabled={reads} applications={[{ ...assessmentCard,
+    _assessments: [{ ...card._assessments[0], score: 0, passed: false }] }]} moveAction={move} />);
+  expect(screen.getByRole("option", { name: "En revisión (1)" })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "En revisión" })).toHaveTextContent("0%· No aprobó");
+  expect(screen.getAllByRole("link", { name: "Ver resultados de Prueba técnica" })).toHaveLength(1);
+  expect(move).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+});
+
 it.each([true, false])("keeps rejected legacy/canonical and special outcomes without duplicates with reads=%s", async reads => {
   const make = (id: string, stage: string | null, disposition: string | null, applicationStatus: string, status: string, version = 1) => ({ ...card, id, stage, disposition, applicationStatus, status, stateVersion: version, candidate: { ...card.candidate, name: id } });
   const applications = [card,
@@ -377,6 +399,20 @@ it.each([true, false])("keeps rejected legacy/canonical and special outcomes wit
   expect(screen.queryByRole("navigation", { name: "Procesos de candidatura" })).not.toBeInTheDocument();
   expect(screen.queryByText(/Total de postulaciones/)).not.toBeInTheDocument();
   expect(screen.getByRole("option", { name: "Descartados (2)" })).toBeInTheDocument();
+  const finalized = screen.getByRole("region", { name: "Finalizados" });
+  expect(within(finalized).getByRole("heading", { name: "Finalizados (5)" })).toBeInTheDocument();
+  expect(Array.from(finalized.querySelectorAll("summary")).map(summary => summary.textContent)).toEqual([
+    "Contratados (1)", "Descartados (2)", "Retirados (1)", "Cancelados (1)",
+  ]);
+  expect(Array.from(screen.getByRole("combobox", { name: "Etapa" }).querySelectorAll('optgroup[label="Finalizados"] option')).map(option => option.textContent)).toEqual([
+    "Contratados (1)", "Descartados (2)", "Retirados (1)", "Cancelados (1)",
+  ]);
+  for (const [label, count] of [["Contratados", 1], ["Descartados", 2], ["Retirados", 1], ["Cancelados", 1]]) {
+    expect(within(finalized).getByText(`${label} (${count})`, { selector: "summary" })).toBeInTheDocument();
+  }
+  expect(within(finalized).queryByText(/En pausa|Requiere conciliación/, { selector: "summary" })).not.toBeInTheDocument();
+  expect(mocks.targets.mock.calls.flat()).toEqual(expect.arrayContaining([...PRIMARY_RECRUITER_PIPELINE_BUCKETS]));
+  for (const key of ["HIRED", "WITHDRAWN", "CANCELLED", "HOLD", "RECONCILIATION"]) expect(mocks.targets.mock.calls.flat()).not.toContain(key);
   for (const name of ["Rejected canonical", "Rejected legacy"]) expect(screen.getAllByRole("link", { name })).toHaveLength(1);
   expect(mocks.targets.mock.calls.flat()).not.toContain("REJECTED");
   expect(mocks.draggables.mock.calls.map(call => call[0])).not.toContain("Rejected canonical");

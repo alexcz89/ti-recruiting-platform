@@ -221,7 +221,7 @@ describe("explicit recruiter destination transaction", () => {
     // Los tres movimientos deben quedar auditados.
     expect(store.events).toHaveLength(3);
   });
-  it.each(RECRUITING_STATES.flatMap(from => RECRUITING_STATES.filter(to => to !== from).map(to => ({ from, to }))))("moves $from directly to $to with one audited write", async ({ from, to }) => {
+  it.each(RECRUITING_STATES.filter(from => from !== "HIRED").flatMap(from => RECRUITING_STATES.filter(to => to !== from).map(to => ({ from, to }))))("moves $from directly to $to with one audited write", async ({ from, to }) => {
     const store = new MemoryTransitionStore(application(stateRows[from]));
     const before = { ...store.current };
     const input = { applicationId: before.id, actor: recruiter, expectedVersion: 0, idempotencyKey: `${from}-${to}`, recruitingDestination: to, reasonCode: "CORRECTION", reasonText: "Cambio de prueba" };
@@ -245,12 +245,41 @@ describe("explicit recruiter destination transaction", () => {
     expect(store.events).toHaveLength(1);
   });
 
-  it.each(["APPLIED", "REVIEW", "INTERVIEW", "OFFER", "REJECTED", "HIRED"] as const)("imports only the touched deterministic legacy $%s row, atomically", async from => {
+  it.each(["APPLIED", "REVIEW", "INTERVIEW", "OFFER", "REJECTED"] as const)("imports only the touched deterministic legacy $%s row, atomically", async from => {
     const store = new MemoryTransitionStore(application({ ...stateRows[from], stage: null, disposition: null }));
     const to = from === "OFFER" ? "REVIEW" : "OFFER";
     await transitionApplication({ applicationId: store.current.id, actor: recruiter, expectedVersion: 0, recruitingDestination: to, reasonCode: "RECONSIDERED", idempotencyKey: "legacy-move" }, { store });
     expect(store.current).toMatchObject({ stage: to, disposition: "ACTIVE", stateVersion: 1 });
     expect(store.events[0]).toMatchObject({ fromStage: null, fromDisposition: null, metadata: { legacyImported: true } });
+  });
+
+  describe.each([true, false])("HIRED terminal, canonical source=%s", canonical => {
+    it.each(RECRUITING_STATES)("rejects a new command to %s without changing state or audit history", async destination => {
+      for (const actor of [recruiter, { type: "ADMIN" as const, id: "admin-1" }]) {
+        const store = new MemoryTransitionStore(application({ ...stateRows.HIRED, ...(canonical ? {} : { stage: null, disposition: null }) }));
+        const before = { ...store.current };
+        await expect(transitionApplication({ applicationId: before.id, actor, expectedVersion: 0,
+          recruitingDestination: destination, reasonCode: "CORRECTION", idempotencyKey: `hired-${destination}` }, { store }))
+          .rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+        expect(store.current).toEqual(before);
+        expect(store.events).toEqual([]);
+      }
+    });
+  });
+
+  it("keeps hiring command replay authorized and idempotent after HIRED becomes terminal", async () => {
+    const store = new MemoryTransitionStore(application(stateRows.OFFER));
+    const command = { applicationId: store.current.id, actor: recruiter, expectedVersion: 0,
+      recruitingDestination: "HIRED" as const, idempotencyKey: "hire-once" };
+    await transitionApplication(command, { store });
+    const hired = { ...store.current };
+    expect((await transitionApplication(command, { store })).replayed).toBe(true);
+    await expect(transitionApplication({ ...command, actor: { ...recruiter, companyId: "other-company" } }, { store })).rejects.toBeInstanceOf(UnauthorizedApplicationTransitionError);
+    await expect(transitionApplication({ ...command, recruitingDestination: "REVIEW", reasonCode: "CORRECTION" }, { store })).rejects.toBeInstanceOf(IdempotencyKeyConflictError);
+    await expect(transitionApplication({ ...command, idempotencyKey: "stale-command" }, { store })).rejects.toBeInstanceOf(ConcurrentApplicationTransitionError);
+    await expect(transitionApplication({ ...command, expectedVersion: 1, idempotencyKey: "new-command", recruitingDestination: "REVIEW", reasonCode: "CORRECTION" }, { store })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    expect(store.current).toEqual(hired);
+    expect(store.events).toHaveLength(1);
   });
 
   it.each([

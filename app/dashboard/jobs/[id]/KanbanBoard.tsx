@@ -5,10 +5,10 @@ import * as React from "react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "@/lib/hiring-process/recruiter-read-model";
-import { getRecruitingPresentation, getRecruiterStageOptions, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
+import { FINALIZED_OUTCOMES, getRecruitingPresentation, getRecruiterStageOptions, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { toastError } from "@/lib/ui/toast";
-import { Lock, MapPin } from "lucide-react";
+import { AlertTriangle, Check, ClipboardList, Lock, MapPin, X } from "lucide-react";
 import { RecruiterStateDialog, type ReasonCode } from "./applications/ProcessReasonDialog";
 import InterestSelect from "./applications/InterestSelect";
 import type { PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
@@ -61,9 +61,9 @@ const COLUMN_ACCENT: Record<string, { header: string; badge: string; drag: strin
 
 // Colores del score de match
 function scoreColor(score: number) {
-  if (score >= 70) return "text-emerald-600 dark:text-emerald-400";
-  if (score >= 40) return "text-amber-600 dark:text-amber-400";
-  return "text-rose-500 dark:text-rose-400";
+  if (score >= 70) return "text-emerald-700 dark:text-emerald-400";
+  if (score >= 40) return "text-amber-700 dark:text-amber-400";
+  return "text-rose-600 dark:text-rose-400";
 }
 function scoreBg(score: number) {
   if (score >= 70) return "bg-emerald-500";
@@ -91,13 +91,10 @@ export default function Kanbanboard({
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string; application?: { stage: string | null; disposition: string | null; stateVersion: number; status: string; recruiterInterest: string } }>;
 }) {
   const router = useRouter();
-  const secondaryGroups = [
-    { key: "HIRED", label: "Contratados" }, { key: "WITHDRAWN", label: "Retirados" },
-    { key: "CANCELLED", label: "Cancelados" }, { key: "HOLD", label: "En pausa" },
-    { key: "RECONCILIATION", label: "Requiere conciliación" },
-  ];
-  const mobileColumns = useMemo(() => [...statuses, "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED", "HOLD", "RECONCILIATION"], [statuses]);
-  const columnLabel = (key: string) => key === "REJECTED" ? "Descartados" : secondaryGroups.find(group => group.key === key)?.label ?? statusLabels[key] ?? key;
+  const secondaryGroups = FINALIZED_OUTCOMES;
+  const auxiliaryGroups = [{ key: "HOLD", label: "En pausa" }, { key: "RECONCILIATION", label: "Requiere conciliación" }];
+  const mobileColumns = useMemo(() => [...statuses, ...FINALIZED_OUTCOMES.map(group => group.key), "HOLD", "RECONCILIATION"], [statuses]);
+  const columnLabel = (key: string) => [...secondaryGroups, ...auxiliaryGroups].find(group => group.key === key)?.label ?? statusLabels[key] ?? key;
   const [items, setItems] = useState<AppCard[]>(applications);
   const [mobileSelection, setMobileSelection] = useState({ jobId: "", stage: "" });
   const [isPending, setIsPending] = useState(false);
@@ -233,7 +230,9 @@ export default function Kanbanboard({
       <div className="mx-auto max-w-2xl lg:hidden">
         <label htmlFor="kanban-stage" className="mb-1.5 block text-sm font-medium">Etapa</label>
         <select id="kanban-stage" className="min-h-11 w-full rounded-lg border border-zinc-300 bg-[rgb(var(--card))] px-3 py-2 text-sm dark:border-zinc-700" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
-          {mobileColumns.map((stage) => <option key={stage} value={stage}>{columnLabel(stage)} ({grouped[stage]?.length ?? 0})</option>)}
+          <optgroup label="Etapas activas">{statuses.map(stage => <option key={stage} value={stage}>{columnLabel(stage)} ({grouped[stage]?.length ?? 0})</option>)}</optgroup>
+          <optgroup label="Finalizados">{secondaryGroups.map(({ key }) => <option key={key} value={key}>{columnLabel(key)} ({grouped[key]?.length ?? 0})</option>)}</optgroup>
+          <optgroup label="Otros estados">{auxiliaryGroups.map(({ key }) => <option key={key} value={key}>{columnLabel(key)} ({grouped[key]?.length ?? 0})</option>)}</optgroup>
         </select>
         <div className="mt-2.5 space-y-2.5" aria-live="polite">
           {(grouped[selectedStage] ?? []).map((card) => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
@@ -246,7 +245,7 @@ export default function Kanbanboard({
           handleDragEnd(result);
         }}
       >
-        <div className="grid min-w-0 grid-cols-4 items-start gap-3 xl:grid-cols-5">
+        <div className="grid min-w-0 grid-cols-4 items-start gap-3">
           {statuses.map((st) => {
             const cards = grouped[st] || [];
             const accent = COLUMN_ACCENT[st] ?? COLUMN_ACCENT.REVIEW;
@@ -301,23 +300,28 @@ export default function Kanbanboard({
               </Droppable>
             );
           })}
-          <Column title="Descartados" count={grouped.REJECTED?.length ?? 0} accent={COLUMN_ACCENT.REJECTED} innerRef={() => {}} droppableProps={{}} staticColumn>
-            {(grouped.REJECTED ?? []).map(card => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
-          </Column>
         </div>
       </DragDropContext>
       </div>
       <div className="mt-3 hidden space-y-2 lg:block">
-        {secondaryGroups.map(group => <details key={group.key} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+        <section aria-label="Finalizados" className="space-y-2">
+          <h3 className="px-1 pt-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Finalizados <span className="font-normal tabular-nums">({secondaryGroups.reduce((total, group) => total + (grouped[group.key]?.length ?? 0), 0)})</span></h3>
+          {secondaryGroups.map(renderSecondaryGroup)}
+        </section>
+        {auxiliaryGroups.map(renderSecondaryGroup)}
+      </div>
+    </section>
+  );
+
+  function renderSecondaryGroup(group: { key: string; label: string }) {
+    return <details key={group.key} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
           <summary className="cursor-pointer rounded text-sm font-medium text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200">{group.label} ({grouped[group.key]?.length ?? 0})</summary>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
             {(grouped[group.key] ?? []).map(card => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
             {!grouped[group.key]?.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay candidaturas en esta categoría.</p>}
           </div>
-        </details>)}
-      </div>
-    </section>
-  );
+        </details>;
+  }
 
   /* ============ Card ============ */
 
@@ -351,7 +355,7 @@ export default function Kanbanboard({
     return (
       <article
         className={[
-          "group min-w-0 rounded-xl border border-zinc-200 bg-white p-3 text-sm transition-colors",
+          "group min-w-0 rounded-xl border border-zinc-200 bg-white p-3 text-sm transition-colors duration-150 motion-reduce:transition-none",
           "dark:border-zinc-800 dark:bg-zinc-900",
           dragging ? "ring-2 ring-emerald-500/50" : "hover:border-zinc-300 dark:hover:border-zinc-700",
           isStale ? "border-l-2 border-l-amber-400" : "",
@@ -405,7 +409,7 @@ export default function Kanbanboard({
 
         {(processState.preselected || processState.assessmentStage) && <div className="mt-2 flex flex-wrap gap-1 text-xs">
           {processState.preselected && <span className="rounded bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-900 dark:text-amber-100">Preselecto</span>}
-          {processState.assessmentStage && <span>Evaluación técnica</span>}
+          {processState.assessmentStage && !(card._assessments ?? []).some(assessment => assessment.state !== "NONE") && <span>Evaluación técnica</span>}
         </div>}
         {/* Barra de match */}
         {hasMatchSignals && !locked && score !== null && score !== undefined && (
@@ -426,7 +430,7 @@ export default function Kanbanboard({
         {/* Alerta de candidato estancado */}
         {isStale && (
           <div className="mt-3 flex items-start gap-1 rounded-lg bg-amber-50 px-2 py-1.5 text-xs leading-5 text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-            <span>⚠</span>
+            <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />
             <span>Pendiente de revisión desde hace {daysPendingReview} días</span>
           </div>
         )}
@@ -439,7 +443,7 @@ export default function Kanbanboard({
   /* ============ Column ============ */
 
   function Column({
-    title, count, isLoading, isDraggingOver, accent, innerRef, droppableProps, children, staticColumn = false,
+    title, count, isLoading, isDraggingOver, accent, innerRef, droppableProps, children,
   }: {
     title: string;
     count: number;
@@ -449,7 +453,6 @@ export default function Kanbanboard({
     innerRef: (element: HTMLDivElement | null) => void;
     droppableProps: any;
     children: React.ReactNode;
-    staticColumn?: boolean;
   }) {
     return (
       <div
@@ -459,7 +462,6 @@ export default function Kanbanboard({
         {...(droppableProps as any)}
         className={[
           "min-w-0 w-full rounded-xl border border-zinc-200/70 bg-white/70 flex flex-col max-h-[72vh] transition-colors dark:border-zinc-800 dark:bg-zinc-900/70",
-          staticColumn ? "col-span-4 xl:col-span-1" : "",
           isDraggingOver ? accent.drag : "",
         ].join(" ")}
       >
@@ -472,12 +474,12 @@ export default function Kanbanboard({
           </span>
         </div>
 
-        <div className={`min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain px-2 py-2 ${staticColumn ? "grid grid-cols-3 items-start gap-2 xl:grid-cols-1" : "space-y-2"}`}>
+        <div className="min-h-0 min-w-0 flex-1 space-y-2 overflow-y-auto overscroll-y-contain px-2 py-2">
           {count === 0 ? (
             <div className="col-span-full flex flex-col items-center justify-center py-6 gap-2 text-center">
-              {!staticColumn && <span className="text-2xl opacity-30">↓</span>}
+              <span aria-hidden="true" className="text-2xl opacity-30">↓</span>
               <p className="text-[11px] text-zinc-600 dark:text-zinc-400">
-                {staticColumn ? "No hay candidaturas descartadas" : "Arrastra candidatos aquí"}
+                Arrastra candidatos aquí
               </p>
             </div>
           ) : (
@@ -517,16 +519,16 @@ export default function Kanbanboard({
           ? "hover:bg-rose-100 dark:hover:bg-rose-900/40"
           : "hover:bg-teal-100 dark:hover:bg-teal-900/40";
 
-      const icon = passed === true ? "✓" : passed === false ? "✗" : "📊";
+      const Icon = passed === true ? Check : passed === false ? X : ClipboardList;
       const label = passed === true ? "Aprobó" : passed === false ? "No aprobó" : "Completado";
 
       const badge = (
         <span className={`inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-semibold ${colorClass} ${assessment.attemptId ? hoverClass + " cursor-pointer transition-colors" : ""}`}>
-          <span>{icon}</span>
+          <Icon aria-hidden="true" className="h-3.5 w-3.5" />
           {hasScore ? (
             <>
               <span className="font-black">{pct}%</span>
-              <span className="font-normal opacity-70">· {label}</span>
+              <span className="font-normal">· {label}</span>
             </>
           ) : (
             <span>{label}</span>
@@ -565,7 +567,7 @@ export default function Kanbanboard({
           )}
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-medium text-sky-700 dark:border-sky-500/30 dark:bg-sky-900/20 dark:text-sky-300">
             <span className="relative flex h-1.5 w-1.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75" />
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-400 opacity-75 motion-reduce:animate-none" />
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-sky-500" />
             </span>
             En progreso
@@ -581,7 +583,7 @@ export default function Kanbanboard({
             <p className={titleClass} title={rawTitle}>{rawTitle}</p>
           )}
           <span className="inline-flex w-fit items-center gap-1 rounded border border-teal-200 bg-teal-50 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:border-teal-500/30 dark:bg-teal-900/20 dark:text-teal-300">
-            📋 Enviada · pendiente
+            <ClipboardList aria-hidden="true" className="h-3 w-3" /> Evaluación enviada
           </span>
         </div>
       );
@@ -594,7 +596,7 @@ export default function Kanbanboard({
             <p className={titleClass} title={rawTitle}>{rawTitle}</p>
           )}
           <span className="inline-flex w-fit items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300">
-            ⚠ Expirada
+            <AlertTriangle aria-hidden="true" className="h-3 w-3" /> Vencida
           </span>
         </div>
       );

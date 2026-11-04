@@ -26,13 +26,20 @@ describe.each([true, false])("recruiting presentation, canonical reads=%s", read
     expect(getRecruitingActions({ ...source, disposition: "HOLD" }, reads)).toEqual([]);
     expect(getRecruitingActions({ ...source, status: "HIRED" }, reads)).toEqual([]);
   });
-  it.each(LEGACY_APPLICATION_STATE_MATRIX.filter(m => m.autoApplicable))("offers all nine destinations for deterministic legacy $key", mapping => {
+  it.each(LEGACY_APPLICATION_STATE_MATRIX.filter(m => m.autoApplicable && m.suggestedDisposition !== "HIRED"))("offers all nine destinations for non-hired deterministic legacy $key", mapping => {
     const options = getRecruiterStageOptions({ stage: null, disposition: null, stateVersion: 0, status: mapping.status, recruiterInterest: mapping.recruiterInterest }, reads);
     expect(options.map(o => o.destination)).toEqual(["APPLIED", "REVIEW", "INTERVIEW", "OFFER", "REJECTED", "HIRED", "HOLD", "WITHDRAWN", "CANCELLED"]);
     expect(options.filter(o => o.current)).toHaveLength(1);
     expect(options.every(o => o.intent === "SET_RECRUITING_STATE")).toBe(true);
     expect(options.some(o => o.label === "Preselecto" || o.label === "Evaluación")).toBe(false);
     expect(options.find(o => o.destination === "HIRED")).toMatchObject({ requiresConfirmation: true });
+  });
+  it.each([true, false])("exposes no ordinary destinations from HIRED, canonical source=%s", canonical => {
+    const hired: PresentationSource = { stage: canonical ? "CLOSED" : null, disposition: canonical ? "HIRED" : null,
+      status: "HIRED", recruiterInterest: "ACCEPTED", stateVersion: canonical ? 1 : 0 };
+    expect(present(hired, reads)).toMatchObject({ section: "CLOSED", outcome: "HIRED", label: "Contratado" });
+    expect(getRecruiterStageOptions(hired, reads)).toEqual([]);
+    expect(getRecruitingActions(hired, reads)).toEqual([]);
   });
   it("allows forward skips, backward moves, pause and audited reopening", () => {
     const review = { ...source, stage: "REVIEW" as const, status: "REVIEWING" };

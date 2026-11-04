@@ -1,5 +1,5 @@
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
-import { getRecruitingPresentation, ACTIVE_PIPELINE, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
+import { getRecruitingPresentation, ACTIVE_PIPELINE, FINALIZED_OUTCOMES, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
 import { buildRecruiterListHref, compareRecruiterListRows, countRecruiterPresentationRows, matchesRecruiterListFilters, matchScoreLevel, resolveCandidateLocation, resolveProcessActivity, type RecruiterListAssessment, type RecruiterListQuery, type RecruiterListSort, type SortDirection } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/jobs/[id]/applications/page.tsx
 import Link from "next/link";
@@ -575,7 +575,7 @@ export default async function JobApplicationsPage({
               label={`Todos (${total})`}
               count={total}
             />
-            {LIST_SECTIONS.map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${PIPELINE_LABELS[key] ?? ({ CLOSED: "Cerrados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key]} (${counters[key]})`} count={counters[key]} />)}
+            {LIST_SECTIONS.map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${PIPELINE_LABELS[key] ?? ({ CLOSED: "Finalizados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key]} (${counters[key]})`} count={counters[key]} />)}
           </div>
           <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Los conteos incluyen todas las postulaciones de esta vacante, antes de los filtros secundarios.</p>
         </section>
@@ -716,11 +716,11 @@ export default async function JobApplicationsPage({
                 </div>}
                 {chosenPipeline === "CLOSED" && <div className="flex flex-wrap items-center gap-1">
                   <span className="text-[11px] text-zinc-500">Resultado:</span>
-                  {(["ALL", "REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"] as const).map((outcome) =>
+                  {[{ key: "ALL", label: "Todos" }, ...FINALIZED_OUTCOMES].map(({ key: outcome, label }) =>
                     <Link key={outcome} href={buildHref({ outcome: outcome === "ALL" ? undefined : outcome })}
                       aria-current={(outcomeFilter ?? "ALL") === outcome ? "true" : undefined}
                       className={`rounded-full border px-2 py-0.5 text-[11px] ${(outcomeFilter ?? "ALL") === outcome ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
-                      {({ ALL: "Todos", REJECTED: "Descartado", HIRED: "Contratado", WITHDRAWN: "Retirado", CANCELLED: "Cancelado" } as Record<string, string>)[outcome]}
+                      {label}
                     </Link>)}
                 </div>}
 

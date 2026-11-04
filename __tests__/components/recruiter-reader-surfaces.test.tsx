@@ -120,7 +120,7 @@ describe("recruiter reader surfaces", () => {
       })
     ).not.toBeInTheDocument();
   });
-  it("allows direct stage changes from OFFER and reopening HIRED", async () => {
+  it("allows direct stage changes from OFFER but keeps HIRED read-only", async () => {
     const view = render(
       <InterestSelect
         applicationId="app"
@@ -143,11 +143,11 @@ describe("recruiter reader surfaces", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("menuitem", { name: "Descartado" })
+      screen.getByRole("menuitem", { name: "Descartar candidato" })
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("menuitem", { name: "Contratado" })
+      screen.getByRole("menuitem", { name: "Contratar candidato" })
     ).toBeInTheDocument();
 
     view.unmount();
@@ -165,8 +165,9 @@ describe("recruiter reader surfaces", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Cambiar etapa: Contratado" })
-    ).toBeEnabled();
+      screen.queryByRole("button", { name: "Cambiar etapa: Contratado" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Contratado")).toBeInTheDocument();
   });
   it.each([true, false])("uses the same process label in list and profile with reads=%s", reads => {
     const cases = [

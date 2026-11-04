@@ -3,6 +3,10 @@ import { LEGACY_APPLICATION_STATE_MATRIX } from "./legacy-mapping";
 import { canStartReview } from "./start-review-eligibility";
 import { RECRUITING_STATES, RECRUITING_STATE_LABELS, recruitingStateRequirements, type RecruitingState } from "./recruiter-state";
 export const ACTIVE_PIPELINE = ["APPLIED", "REVIEW", "INTERVIEW", "OFFER"] as const;
+export const FINALIZED_OUTCOMES = [
+    { key: "HIRED", label: "Contratados" }, { key: "REJECTED", label: "Descartados" },
+    { key: "WITHDRAWN", label: "Retirados" }, { key: "CANCELLED", label: "Cancelados" },
+] as const;
 export const PIPELINE_LABELS: Record<string, string> = { APPLIED: "Por revisar", REVIEW: "En revisión", INTERVIEW: "Entrevista", OFFER: "Oferta", REJECTED: "Descartado", HIRED: "Contratado", WITHDRAWN: "Retirado", CANCELLED: "Cancelado", OTHER: "Otros cierres" };
 export type PresentationSource = RecruiterApplicationReadInput & {
     stateVersion: number;
@@ -84,7 +88,7 @@ export type RecruiterStageOption = {
 /** Display choices only. The intent writer validates ownership, state and version again. */
 export function getRecruiterStageOptions(input: PresentationSource, reads: boolean): RecruiterStageOption[] {
     const presentation = getRecruitingPresentation(input, reads);
-    if (presentation.section === "RECONCILIATION") return [];
+    if (presentation.section === "RECONCILIATION" || presentation.outcome === "HIRED") return [];
     const legacy = input.stage === null ? LEGACY_APPLICATION_STATE_MATRIX.find(m => m.status === input.status && m.recruiterInterest === input.recruiterInterest) : null;
     const stage = input.stage ?? legacy?.suggestedStage;
     const disposition = input.disposition ?? legacy?.suggestedDisposition;
