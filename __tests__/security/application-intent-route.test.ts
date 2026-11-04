@@ -11,6 +11,8 @@ vi.mock("@/lib/hiring-process/application-intents", async importOriginal => ({
 }));
 
 import { ApplicationNotFoundError, ConcurrentApplicationTransitionError } from "@/lib/hiring-process/transition-application";
+import { planRecruiterStateChange } from "@/lib/hiring-process/rules";
+import { RECRUITING_STATES } from "@/lib/hiring-process/recruiter-state";
 
 let POST: typeof import("@/app/api/applications/[id]/intent/route")["POST"];
 beforeAll(async () => { ({ POST } = await import("@/app/api/applications/[id]/intent/route")); });
@@ -76,6 +78,20 @@ describe("application intent route contract and permissions", () => {
     const conflict = await POST(request(reopen), { params: { id: "application-a" } });
     expect(conflict.status).toBe(409);
     expect(conflict.headers.get("cache-control")).toContain("no-store");
+  });
+
+  it.each(RECRUITING_STATES)("returns a non-disclosing 422 for a new HIRED → %s command rejected by the domain", async destination => {
+    // Transactional state/history invariants are exercised by hiring-process-transition.test.ts.
+    // Here the real domain rejection must retain the existing HTTP error contract.
+    mocks.execute.mockImplementation(async ({ command }) => planRecruiterStateChange(
+      { stage: "CLOSED", disposition: "HIRED" }, command.destination, command.reasonCode,
+    ));
+    const response = await POST(request({ intent: "SET_RECRUITING_STATE", destination,
+      expectedVersion: 6, commandId: `hired-${destination}`, reasonCode: "CORRECTION" }), { params: { id: "application-a" } });
+    expect(response.status).toBe(422);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(await response.json()).toEqual({ error: "INVALID_APPLICATION_TRANSITION" });
+    expect(mocks.revalidate).not.toHaveBeenCalled();
   });
 
   it("allows an administrator explicitly without trusting a client company", async () => {

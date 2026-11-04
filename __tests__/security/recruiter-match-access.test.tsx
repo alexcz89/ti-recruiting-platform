@@ -18,6 +18,8 @@ import ListPage from "@/app/dashboard/jobs/[id]/applications/page";
 import ProfilePage from "@/app/dashboard/candidates/[id]/page";
 import OverviewPage from "@/app/dashboard/overview/page";
 import MatchScorePopover from "@/components/dashboard/MatchScorePopover";
+import InterestSelect from "@/app/dashboard/jobs/[id]/applications/InterestSelect";
+import ActionsMenu from "@/app/dashboard/jobs/[id]/applications/ActionsMenu";
 import { GET, POST } from "@/app/api/ai/match-explanation/route";
 import { computeRecruiterMatch, recruiterMatchCandidateSelect, recruiterMatchJobSelect } from "@/lib/ai/recruiter-match";
 import type { NextRequest } from "next/server";
@@ -78,6 +80,37 @@ beforeEach(() => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("recruiter match surface consistency and plan boundaries", () => {
+  it.each(["true", "false"])("keeps List rows visible, closure data unchanged and integrity exceptions uncounted, reads=%s", async reads => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED", reads);
+    const records = [
+      { ...cohort[0], stage: "OFFER", status: "OFFER", recruiterInterest: "ACCEPTED" },
+      { ...cohort[1], stage: "CLOSED", disposition: "WITHDRAWN" },
+      { ...cohort[2], status: "HIRED", recruiterInterest: "ACCEPTED" },
+    ];
+    const before = structuredClone(records);
+    mocks.apps.mockResolvedValue(records);
+    const tree = await ListPage({ params: { id: "job-a" }, searchParams: { interest: "ALL" } });
+    expect(rows(tree)).toEqual(expect.arrayContaining(records.map(record => record.id)));
+    const selectors = nodes(tree).filter(node => node.type === InterestSelect);
+    const invalidSelectors = selectors.filter(node => node.props.applicationId === records[2].id);
+    expect(invalidSelectors).toHaveLength(2);
+    expect(invalidSelectors.every(node => node.props.integrityIssue === true)).toBe(true);
+    const secondaryMenus = nodes(tree).filter(node => node.type === ActionsMenu);
+    expect(secondaryMenus.every(node => node.props.stageActionsInSelector === true)).toBe(true);
+    expect(secondaryMenus.filter(node => node.props.applicationId === records[2].id).every(node => node.props.integrityIssue === true)).toBe(true);
+    const labels = nodes(tree).filter(node => typeof node.props.label === "string").map(node => node.props.label);
+    expect(labels).toEqual(expect.arrayContaining(["Por revisar (0)", "En revisión (0)", "Entrevista (1)", "Contratado (0)", "Descartado (1)"]));
+    expect(records).toEqual(before);
+  });
+  it.each(["true", "false"])("shows exactly five List state filters and accepts legacy closure URLs, reads=%s", async reads => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED", reads);
+    mocks.apps.mockResolvedValue(cohort.map(app => ({ ...app, stage: "CLOSED", disposition: "REJECTED", status: "REJECTED", recruiterInterest: "REJECTED" })));
+    const tree = await ListPage({ params: { id: "job-a" }, searchParams: { pipeline: "CLOSED", outcome: "REJECTED", interest: "ALL" } });
+    const pills = nodes(tree).filter(node => typeof node.props.label === "string" && typeof node.props.href === "string" && new URL(node.props.href, "https://example.test").searchParams.has("pipeline"));
+    expect(pills.map(node => String(node.props.label).replace(/ \(.*$/, ""))).toEqual(["Por revisar", "En revisión", "Entrevista", "Contratado", "Descartado"]);
+    expect(pills.map(node => new URL(String(node.props.href), "https://example.test").searchParams.get("pipeline"))).toEqual(["APPLIED", "REVIEW", "INTERVIEW", "HIRED", "REJECTED"]);
+    expect(rows(tree)).toHaveLength(cohort.length);
+  });
   it.each(["FREE", "STARTER", "PRO", "BUSINESS"])("limits Overview averages to visible %s scores", async (plan) => {
     mocks.company.mockResolvedValue({ billingPlan: plan, name: "Company A" });
     mocks.apps.mockResolvedValue([]);

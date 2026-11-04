@@ -143,6 +143,9 @@ export function planApplicationTransition(
 /** Explicit recruiter command only; existing commands retain their own contracts. */
 export function planRecruiterStateChange(current: CanonicalApplicationState, destination: RecruitingState, reasonCode?: string): PlannedApplicationTransition {
   assertCanonicalApplicationState(current);
+  if (current.disposition === "HIRED") {
+    throw new InvalidApplicationTransitionError("HIRED es terminal y no admite cambios ordinarios");
+  }
   const target = recruitingStateTarget(current, destination);
   const requirements = recruitingStateRequirements(current, destination);
   if (requirements.requiresReason && !reasonCode?.trim()) {

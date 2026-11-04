@@ -145,7 +145,10 @@ describe("canonical hiring process writer migration", () => {
       "InterestSelect.tsx",
     );
 
-    expect(interestSelect).toContain("getRecruiterStageOptions");
+    const pipelinePresentation = read("lib", "hiring-process", "recruiting-presentation.ts");
+    expect(pipelinePresentation).toContain("const options = getRecruiterStageOptions(input, reads)");
+    expect(pipelinePresentation).toContain("if (presentation.integrityIssue) return []");
+    expect(interestSelect).toContain("getRecruiterPipelineOptions");
     expect(interestSelect).not.toContain('ACCEPTED: "OFFER"');
   });
 
@@ -165,7 +168,7 @@ describe("canonical hiring process writer migration", () => {
     expect(interestSelect).not.toContain('/status`');
     expect(interestSelect).not.toMatch(/recruiterInterest:\s*next/);
     expect(candidateShell).not.toMatch(/canonicalIntent \? "intent" : "interest"/);
-    expect(kanban).toContain("getRecruiterStageOptions");
+    expect(kanban).toContain("getRecruiterPipelineOptions");
     expect(kanban).not.toContain('toStatus === "PRESELECTED"');
     expect(kanbanAction).not.toContain("prisma.application.updateMany({");
   });
@@ -217,7 +220,7 @@ describe("canonical hiring process writer migration", () => {
     expect(candidateShell).toContain('? "REJECT_CANDIDATE"');
     expect(candidateShell).toContain('if (currentInterest === "REJECTED") return;');
     expect(kanban).toContain('fd.set("intent", "SET_RECRUITING_STATE")');
-    expect(kanban).toContain("getRecruiterStageOptions");
+    expect(kanban).toContain("getRecruiterPipelineOptions");
     expect(jobPage).toContain('"REJECT_CANDIDATE"');
     expect(overviewButtons).toContain('commandId: crypto.randomUUID()');
     expect(overviewActions).toContain('intent: "REJECT_CANDIDATE"');
@@ -288,13 +291,13 @@ describe("canonical hiring process writer migration", () => {
     const candidateShell = read("components", "dashboard", "CandidateReviewShell.tsx");
     const kanban = read("app", "dashboard", "jobs", "[id]", "KanbanBoard.tsx");
 
-    expect(interestSelect).toContain("getRecruiterStageOptions");
+    expect(interestSelect).toContain("getRecruiterPipelineOptions");
     expect(read("app", "dashboard", "jobs", "[id]", "applications", "ActionsMenu.tsx")).toContain("getRecruitingActions");
     expect(applicationsPage).toContain("canonicalStage={a.stage}");
     expect(applicationsPage).toContain("canonicalDisposition={a.disposition}");
     expect(candidateShell).toContain("blockedByCanonicalOffer");
-    expect(kanban).toContain("getRecruiterStageOptions");
-    expect(kanban).toContain("getRecruitingPresentation");
+    expect(kanban).toContain("getRecruiterPipelineOptions");
+    expect(kanban).toContain("getRecruiterPipelinePresentation");
   });
 
   it("keeps backward and reopen commands on audited intent paths", () => {
@@ -336,7 +339,7 @@ describe("canonical hiring process writer migration", () => {
     const actionsMenu = read("app", "dashboard", "jobs", "[id]", "applications", "ActionsMenu.tsx");
     const sharedIntent = read("app", "dashboard", "jobs", "[id]", "applications", "useApplicationIntent.ts");
     const kanbanAction = read("app", "dashboard", "jobs", "[id]", "page.tsx");
-    expect(interestSelect).toContain("getRecruiterStageOptions");
+    expect(interestSelect).toContain("getRecruiterPipelineOptions");
     expect(interestSelect).toContain("ProcessReasonDialog");
     expect(interestSelect).not.toContain('"REOPEN_REJECTED"');
     expect(actionsMenu).toContain('"REOPEN_REJECTED"');
@@ -379,8 +382,8 @@ describe("canonical hiring process writer migration", () => {
       expect(source).toContain("hasApplicationHiredFootprint");
       expect(source).toContain("APPLICATION_WITHOUT_HIRED_FOOTPRINT_WHERE");
     }
-    expect(kanban).toContain("getRecruiterStageOptions");
-    expect(interestSelect).toContain("getRecruiterStageOptions");
+    expect(kanban).toContain("getRecruiterPipelineOptions");
+    expect(interestSelect).toContain("getRecruiterPipelineOptions");
 
     const intentRoute = read("app", "api", "applications", "[id]", "intent", "route.ts");
     expect(intentRoute).toContain("result.timestamps.hiredAt");

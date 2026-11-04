@@ -113,14 +113,16 @@ describe("recruiter reader surfaces", () => {
   });
   it.each([true, false])("does not offer transitions for inconsistent rows with reads=%s", reads => {
     render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Advertencia de integridad: etapa no verificable. Cambios bloqueados.");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "Cambiar etapa: Requiere conciliación",
       })
     ).not.toBeInTheDocument();
   });
-  it("allows direct stage changes from OFFER and reopening HIRED", async () => {
+  it("allows direct stage changes from OFFER but keeps HIRED read-only", async () => {
     const view = render(
       <InterestSelect
         applicationId="app"
@@ -134,7 +136,7 @@ describe("recruiter reader surfaces", () => {
     );
 
     fireEvent.pointerDown(
-      screen.getByRole("button", { name: "Cambiar etapa: Oferta" }),
+      screen.getByRole("button", { name: "Cambiar etapa: Entrevista" }),
       { button: 0, ctrlKey: false }
     );
 
@@ -165,8 +167,9 @@ describe("recruiter reader surfaces", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Cambiar etapa: Contratado" })
-    ).toBeEnabled();
+      screen.queryByRole("button", { name: "Cambiar etapa: Contratado" })
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Contratado")).toBeInTheDocument();
   });
   it.each([true, false])("uses the same process label in list and profile with reads=%s", reads => {
     const cases = [

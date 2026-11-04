@@ -18,7 +18,7 @@ describe("recruiter reader architecture", () => {
     const page = read("app", "dashboard", "jobs", "[id]", "applications", "page.tsx");
 
     expect(page).toContain("buildRecruiterApplicationReadRows");
-    expect(page).toContain("countRecruiterPresentationRows");
+    expect(page).toContain("countRecruiterPipelineRows");
     expect(page).toContain("matchesRecruiterListFilters");
     expect(page).toContain("<InterestSelect");
     expect(page).toContain("canonicalStage={a.stage}");
@@ -49,7 +49,7 @@ describe("recruiter reader architecture", () => {
     );
 
     const badges = read("app", "dashboard", "jobs", "[id]", "applications", "ApplicationStatusBadges.tsx");
-    expect(select).toContain("getRecruiterStageOptions");
+    expect(select).toContain("getRecruiterPipelineOptions");
     expect(badges).toContain("presentation.label");
     expect(select).not.toContain("/status");
     expect(select).not.toContain("/interest");
@@ -101,8 +101,8 @@ describe("recruiter reader architecture", () => {
 
     expect(page).toContain("buildRecruiterApplicationReadRows");
     expect(page).toContain("displayStatus: canonicalRecruiterReadsEnabled");
-    expect(page).toContain("statuses={[...ACTIVE_PIPELINE]}");
-    expect(page).toContain("statusLabels={PIPELINE_LABELS}");
+    expect(page).toContain("statuses={[...RECRUITER_PIPELINE]}");
+    expect(page).toContain("statusLabels={RECRUITER_PIPELINE_STATE_LABELS}");
     expect(page).toContain("getApplicationWriterCompatibility");
     expect(page).toContain("writerCompatibility: getApplicationWriterCompatibility(a)");
     expect(page).not.toContain("canonicalHiringProcessEnabled");
@@ -112,8 +112,8 @@ describe("recruiter reader architecture", () => {
     expect(board).toContain('card.writerCompatibility !== "NONE"');
     expect(board).not.toContain("canonicalHiringProcessEnabled");
     expect(board).toContain("isDragDisabled={isPending || selectorBusy || requestedMove !== null || !isCardWritable(card)}");
-    expect(board).toContain("getRecruitingPresentation");
-    expect(board).toContain("getRecruiterStageOptions");
+    expect(board).toContain("getRecruiterPipelinePresentation");
+    expect(board).toContain("getRecruiterPipelineOptions");
     expect(board).toContain('fd.set("intent", "SET_RECRUITING_STATE")');
     expect(board).toContain('fd.set("destination", option.destination)');
     expect(board).toContain("InterestSelect");

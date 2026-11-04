@@ -100,7 +100,8 @@ describe("recruiter reader surface cutover", () => {
 
     const view = render(<InterestSelect {...props} />);
 
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Advertencia de integridad: etapa no verificable. Cambios bloqueados.");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "Cambiar etapa: Requiere conciliación",
@@ -111,7 +112,8 @@ describe("recruiter reader surface cutover", () => {
       <InterestSelect {...props} canonicalRecruiterReadsEnabled />
     );
 
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Advertencia de integridad: etapa no verificable. Cambios bloqueados.");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "Cambiar etapa: Requiere conciliación",
@@ -120,7 +122,8 @@ describe("recruiter reader surface cutover", () => {
 
     view.rerender(<InterestSelect {...props} />);
 
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Advertencia de integridad: etapa no verificable. Cambios bloqueados.");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "Cambiar etapa: Requiere conciliación",

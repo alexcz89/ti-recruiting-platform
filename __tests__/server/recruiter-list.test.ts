@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRecruiterListHref, compareRecruiterListRows, countRecruiterPresentationGroupedRows, countRecruiterPresentationRows, matchesRecruiterListFilters, resolveCandidateLocation, resolveProcessActivity, type RecruiterListRow } from "@/lib/hiring-process/recruiter-list";
+import { buildRecruiterListHref, compareRecruiterListRows, countRecruiterPresentationGroupedRows, countRecruiterPresentationRows, countRecruiterPipelineRows, matchesRecruiterListFilters, resolveCandidateLocation, resolveProcessActivity, type RecruiterListRow } from "@/lib/hiring-process/recruiter-list";
 import { getRecruitingPresentation, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
 
 const applied: PresentationSource = { stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", stateVersion: 1 };
@@ -73,4 +73,24 @@ describe("recruiter list shared data", () => {
     expect(cleared.searchParams.has("outcome")).toBe(false);
     expect(cleared.searchParams.get("q")).toBe("typescript");
   });
+});
+
+it.each([true, false])("counts five-state rows without losing or misclassifying integrity exceptions, reads=%s", reads => {
+  const sources: PresentationSource[] = [applied, review, closed,
+    { ...review, disposition: "HOLD" },
+    { ...applied, stage: "CLOSED", disposition: "WITHDRAWN" },
+    { ...applied, stage: "OFFER", status: "OFFER", recruiterInterest: "ACCEPTED" },
+    { ...applied, stage: null },
+  ];
+  const result = countRecruiterPipelineRows(sources, reads);
+  expect(result).toEqual({ counts: { APPLIED: 1, REVIEW: 2, INTERVIEW: 1, HIRED: 0, REJECTED: 2 }, integrityCount: 1 });
+  expect(Object.values(result.counts).reduce((total, count) => total + count, 0) + result.integrityCount).toBe(sources.length);
+});
+
+it.each([true, false])("does not count contradictory non-hired closures as normal discarded or hired records, reads=%s", reads => {
+  const sources: PresentationSource[] = (["WITHDRAWN", "CANCELLED"] as const).flatMap(disposition => [
+    { ...applied, stage: "CLOSED" as const, disposition, status: "HIRED", recruiterInterest: "ACCEPTED" },
+    { ...applied, stage: "CLOSED" as const, disposition, status: "OFFER", recruiterInterest: "ACCEPTED", hiredAt: "2026-10-01T00:00:00Z" },
+  ]);
+  expect(countRecruiterPipelineRows(sources, reads)).toEqual({ counts: { APPLIED: 0, REVIEW: 0, INTERVIEW: 0, HIRED: 0, REJECTED: 0 }, integrityCount: 4 });
 });

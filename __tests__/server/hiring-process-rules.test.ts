@@ -3,9 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   InvalidApplicationTransitionError,
   planApplicationTransition,
+  planRecruiterStateChange,
 } from "@/lib/hiring-process/rules";
+import { RECRUITING_STATES } from "@/lib/hiring-process/recruiter-state";
 
 describe("canonical hiring process transition rules", () => {
+  it.each(RECRUITING_STATES)("rejects the explicit recruiter destination %s from HIRED even with a correction reason", destination => {
+    expect(() => planRecruiterStateChange({ stage: "CLOSED", disposition: "HIRED" }, destination, "CORRECTION"))
+      .toThrow(InvalidApplicationTransitionError);
+  });
   it.each([
     ["APPLIED", "REVIEW"],
     ["REVIEW", "ASSESSMENT"],
