@@ -1,4 +1,4 @@
-import { ACTIVE_PIPELINE, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
+import { RECRUITER_PIPELINE, RECRUITER_PIPELINE_STATE_LABELS, getRecruiterPipelinePresentation } from "@/lib/hiring-process/recruiting-presentation";
 import { resolveCandidateLocation } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/jobs/[id]/page.tsx
 import Link from "next/link";
@@ -265,6 +265,7 @@ export default async function JobPipelinePage({ params }: PageProps) {
       createdAt: a.createdAt,
       submittedAt: a.submittedAt,
       updatedAt: (a as any).updatedAt ?? a.createdAt,
+      integrityIssue: getRecruiterPipelinePresentation(a, canonicalRecruiterReadsEnabled).integrityIssue,
       _score: gatedScore,
       _locked: gatedScore === null,
       _assessments: assessMetas,
@@ -464,8 +465,8 @@ export default async function JobPipelinePage({ params }: PageProps) {
         <Kanbanboard
           autoReviewEnabled={session.user?.role === "RECRUITER"}
           jobId={job.id}
-          statuses={[...ACTIVE_PIPELINE]}
-          statusLabels={PIPELINE_LABELS}
+          statuses={[...RECRUITER_PIPELINE]}
+          statusLabels={RECRUITER_PIPELINE_STATE_LABELS}
           applications={appCards}
           hasMatchSignals={hasMatchSignals}
           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}

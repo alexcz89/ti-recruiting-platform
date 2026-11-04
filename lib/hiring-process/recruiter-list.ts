@@ -1,8 +1,11 @@
 import {
   ACTIVE_PIPELINE,
   getRecruitingPresentation,
+  getRecruiterPipelinePresentation,
+  RECRUITER_PIPELINE,
   type PresentationSource,
   type RecruitingPresentation,
+  type RecruiterPipelinePresentation,
 } from "./recruiting-presentation";
 
 export type RecruiterListSort = "candidate" | "match" | "status" | "activity" | "location";
@@ -39,7 +42,7 @@ export type RecruiterListRow = {
   id: string;
   name: string;
   score: number | null;
-  presentation: RecruitingPresentation;
+  presentation: RecruitingPresentation | RecruiterPipelinePresentation;
   activityAt: Date;
   location: string | null;
   hasCV: boolean;
@@ -50,6 +53,9 @@ const statusOrder = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"] as 
 const outcomeOrder = ["REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"];
 
 function statusRank(row: RecruiterListRow) {
+  if ("pipelineState" in row.presentation) {
+    return row.presentation.pipelineState ? RECRUITER_PIPELINE.indexOf(row.presentation.pipelineState) : RECRUITER_PIPELINE.length;
+  }
   const key = row.presentation.section === "ACTIVE" ? row.presentation.column : row.presentation.section;
   const rank = statusOrder.indexOf(key as typeof statusOrder[number]);
   const secondary = row.presentation.section === "CLOSED"
@@ -102,7 +108,7 @@ export function buildRecruiterListHref(jobId: string, current: RecruiterListQuer
   for (const key of ["pipeline", "q", "sort", "dir", "match", "cv", "preselected", "assessment"] as const) {
     if (next[key]) params.set(key, next[key]);
   }
-  if (next.pipeline === "CLOSED" && next.outcome) params.set("outcome", next.outcome);
+  if (["CLOSED", "HIRED", "REJECTED"].includes(next.pipeline ?? "") && next.outcome) params.set("outcome", next.outcome);
   const query = params.toString();
   return `/dashboard/jobs/${encodeURIComponent(jobId)}/applications${query ? `?${query}` : ""}`;
 }
@@ -113,7 +119,7 @@ export function matchScoreLevel(score: number): "HIGH" | "MED" | "LOW" {
 
 export function matchesRecruiterListFilters(row: RecruiterListRow, filters: RecruiterListFilters) {
   const p = row.presentation;
-  if (filters.pipeline && (p.section === "ACTIVE" ? p.column : p.section) !== filters.pipeline) return false;
+  if (filters.pipeline && ("pipelineState" in p ? p.pipelineState : p.section === "ACTIVE" ? p.column : p.section) !== filters.pipeline) return false;
   if (filters.preselected && !p.preselected) return false;
   if (filters.assessment && filters.assessment !== "ALL" && row.assessment !== filters.assessment) return false;
   if (filters.outcome && p.outcome !== filters.outcome) return false;
@@ -141,4 +147,16 @@ export function countRecruiterPresentationGroupedRows(rows: readonly (Presentati
     if (key && key in counts) counts[key as typeof statusOrder[number]] += row._count._all;
   }
   return counts;
+}
+
+/** Integrity exceptions are counted separately, never guessed into a normal stage. */
+export function countRecruiterPipelineRows(rows: readonly PresentationSource[], reads: boolean) {
+  const counts = Object.fromEntries(RECRUITER_PIPELINE.map(key => [key, 0])) as Record<typeof RECRUITER_PIPELINE[number], number>;
+  let integrityCount = 0;
+  for (const row of rows) {
+    const presentation = getRecruiterPipelinePresentation(row, reads);
+    if (presentation.pipelineState) counts[presentation.pipelineState]++;
+    else integrityCount++;
+  }
+  return { counts, integrityCount };
 }

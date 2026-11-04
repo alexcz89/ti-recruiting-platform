@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -28,6 +28,121 @@ async function openMenu() {
 }
 
 describe("secondary recruiter process actions", () => {
+  it.each(["REVIEW", "MAYBE"] as const)("keeps %s preselection actionable in the List variant without duplicating discard or reopen", async interest => {
+    const nextInterest = interest === "REVIEW" ? "MAYBE" : "REVIEW";
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ application: {
+      stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: nextInterest, stateVersion: 3,
+    } })));
+    vi.stubGlobal("fetch", fetch);
+    render(<ActionsMenu {...base} stageActionsInSelector processSource={{ stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: interest, stateVersion: 2 }} />);
+    await openMenu();
+    const label = interest === "REVIEW" ? "Preseleccionar" : "Quitar preselección";
+    expect(await screen.findByRole("menuitem", { name: label })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Descartar candidato|Descartado|Reabrir proceso/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: label }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledOnce());
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ intent: interest === "REVIEW" ? "MARK_PRESELECTED" : "CLEAR_PRESELECTED", expectedVersion: 2, commandId: expect.any(String) });
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  });
+
+  it("confirms pause, blocks duplicate submission and keeps the persisted underlying stage", async () => {
+    let finish!: (response: Response) => void;
+    const fetch = vi.fn((_url: string, _init?: RequestInit) => new Promise<Response>(resolve => { finish = resolve; }));
+    vi.stubGlobal("fetch", fetch);
+    render(<ActionsMenu {...base} stageActionsInSelector processSource={offer} />);
+    await openMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Poner en pausa" }));
+    expect(screen.getByRole("dialog", { name: "Mover a En pausa" })).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    expect(screen.getByRole("button", { name: "Guardando…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Guardando…" }));
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ intent: "SET_RECRUITING_STATE", destination: "HOLD", expectedVersion: 6, commandId: expect.any(String) });
+    await act(async () => finish(new Response(JSON.stringify({ application: { ...offer, disposition: "HOLD", stateVersion: 7 } }))));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(refresh).toHaveBeenCalledOnce();
+    await openMenu();
+    expect(screen.queryByRole("menuitem", { name: "Poner en pausa" })).not.toBeInTheDocument();
+  });
+
+  it("keeps List preselection unconfirmed after an authorization failure without disclosing private details", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "private company metadata" }), { status: 403 }));
+    vi.stubGlobal("fetch", fetch);
+    render(<ActionsMenu {...base} stageActionsInSelector processSource={{ stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 2 }} />);
+    await openMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Preseleccionar" }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+    expect(JSON.stringify(vi.mocked(toastError).mock.calls)).not.toContain("private company metadata");
+    await openMenu();
+    expect(await screen.findByRole("menuitem", { name: "Preseleccionar" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Quitar preselección" })).not.toBeInTheDocument();
+  });
+
+  it("cancels pause without a write", async () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    render(<ActionsMenu {...base} stageActionsInSelector processSource={offer} />);
+    await openMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Poner en pausa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["REJECTED", "WITHDRAWN", "CANCELLED"] as const)("does not offer pause for CLOSED / %s with either reader flag", async disposition => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    for (const reads of [true, false]) {
+      const closed = disposition === "REJECTED" ? rejected : { ...offer, stage: "CLOSED" as const, disposition };
+      const view = render(<ActionsMenu {...base} stageActionsInSelector canonicalRecruiterReadsEnabled={reads} processSource={closed} />);
+      await openMenu();
+      await screen.findByRole("menuitem", { name: "Eliminar" });
+      expect(screen.queryByRole("menuitem", { name: "Poner en pausa" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      view.unmount();
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("offers pause again only after the server supplies a reopened active state", async () => {
+    const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+    const view = render(<ActionsMenu {...base} stageActionsInSelector processSource={rejected} />);
+    await openMenu();
+    await screen.findByRole("menuitem", { name: "Eliminar" });
+    expect(screen.queryByRole("menuitem", { name: "Poner en pausa" })).not.toBeInTheDocument();
+    view.rerender(<ActionsMenu {...base} stageActionsInSelector processSource={{ stage: "REVIEW", disposition: "ACTIVE", status: "REVIEWING", recruiterInterest: "REVIEW", stateVersion: 9 }} />);
+    expect(await screen.findByRole("menuitem", { name: "Poner en pausa" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Poner en pausa" }));
+    expect(screen.getByRole("dialog", { name: "Mover a En pausa" })).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([403, 409, 422, "network"])("keeps pause unconfirmed on %s and preserves the retry command", async failure => {
+    const fetch = failure === "network" ? vi.fn().mockRejectedValue(new Error("private metadata"))
+      : vi.fn().mockImplementation(async () => new Response(JSON.stringify({ error: "private metadata" }), { status: failure as number }));
+    vi.stubGlobal("fetch", fetch);
+    render(<ActionsMenu {...base} stageActionsInSelector processSource={offer} />);
+    await openMenu();
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Poner en pausa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledOnce());
+    expect(screen.getByRole("dialog", { name: "Mover a En pausa" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual(JSON.parse(fetch.mock.calls[0][1].body));
+    expect(JSON.stringify(vi.mocked(toastError).mock.calls)).not.toContain("private metadata");
+  });
+
+  it.each([
+    { source: { ...offer, stage: "CLOSED" as const, disposition: "HIRED" as const, status: "HIRED" }, integrity: false },
+    { source: { ...offer, stage: "REVIEW" as const, status: "REVIEWING", recruiterInterest: "ACCEPTED" }, integrity: false },
+    { source: { ...offer, stage: "REVIEW" as const, status: "REVIEWING", recruiterInterest: "REVIEW" }, integrity: true },
+  ])("keeps terminal and inconsistent List records free of stage-changing secondary actions: %j", async scenario => {
+    render(<ActionsMenu {...base} stageActionsInSelector integrityIssue={scenario.integrity} processSource={scenario.source} />);
+    await openMenu();
+    await screen.findByRole("menuitem", { name: "Eliminar" });
+    expect(screen.queryByRole("menuitem", { name: /Poner en pausa|Preseleccionar|Quitar preselección|Descartar candidato|Reabrir proceso/ })).not.toBeInTheDocument();
+  });
   it.each([["55 1234 5678", "525512345678"], ["+52 1 55 1234 5678", "525512345678"], ["+1 415 555 2671", "14155552671"]])("opens a validated WhatsApp conversation for %s", async (phone, digits) => {
     const open = vi.spyOn(window, "open").mockImplementation(() => null);
     render(<ActionsMenu {...base} candidatePhone={phone} processSource={offer} />);
@@ -64,7 +179,7 @@ describe("secondary recruiter process actions", () => {
     fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Por revisar" }), { button: 0, ctrlKey: false });
     expect(await screen.findByRole("menuitem", { name: "En revisión" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Preseleccionar" })).not.toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Descartar candidato" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Descartado" })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: "Escape" });
     await openMenu();
     expect(await screen.findByRole("menuitem", { name: "Preseleccionar" })).toBeInTheDocument();

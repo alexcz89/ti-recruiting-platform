@@ -1,6 +1,6 @@
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
-import { getRecruitingPresentation, ACTIVE_PIPELINE, FINALIZED_OUTCOMES, PIPELINE_LABELS } from "@/lib/hiring-process/recruiting-presentation";
-import { buildRecruiterListHref, compareRecruiterListRows, countRecruiterPresentationRows, matchesRecruiterListFilters, matchScoreLevel, resolveCandidateLocation, resolveProcessActivity, type RecruiterListAssessment, type RecruiterListQuery, type RecruiterListSort, type SortDirection } from "@/lib/hiring-process/recruiter-list";
+import { getRecruiterPipelinePresentation, RECRUITER_PIPELINE, RECRUITER_PIPELINE_STATE_LABELS, resolveRecruiterPipelineFilterKey } from "@/lib/hiring-process/recruiting-presentation";
+import { buildRecruiterListHref, compareRecruiterListRows, countRecruiterPipelineRows, matchesRecruiterListFilters, matchScoreLevel, resolveCandidateLocation, resolveProcessActivity, type RecruiterListAssessment, type RecruiterListQuery, type RecruiterListSort, type SortDirection } from "@/lib/hiring-process/recruiter-list";
 // app/dashboard/jobs/[id]/applications/page.tsx
 import Link from "next/link";
 import { prisma } from "@/lib/server/prisma";
@@ -59,7 +59,7 @@ const LEGACY_RECRUITER_TABS = [
 
 type MatchFilter = "ALL" | "HIGH" | "MED" | "LOW";
 type CvFilter = "ALL" | "YES" | "NO";
-const LIST_SECTIONS = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"] as const;
+const LIST_SECTIONS = RECRUITER_PIPELINE;
 
 // Presentation only: consumes the authorized state already resolved below.
 function AssessmentSummary({ states, detailHref }: { states: Array<{ title: string; state: string; score: number | null; attemptId: string | null }>; detailHref?: string }) {
@@ -349,9 +349,9 @@ export default async function JobApplicationsPage({
   const recruiterRows = buildRecruiterApplicationReadRows(allApps, {
     canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
   });
-  const presentationOf = (a: typeof allApps[number]) => getRecruitingPresentation(a, canonicalRecruiterReadsEnabled);
+  const presentationOf = (a: typeof allApps[number]) => getRecruiterPipelinePresentation(a, canonicalRecruiterReadsEnabled);
   // Etapas: universo de la vacante antes de búsqueda y filtros secundarios.
-  const counters = countRecruiterPresentationRows(allApps, canonicalRecruiterReadsEnabled);
+  const { counts: counters, integrityCount } = countRecruiterPipelineRows(allApps, canonicalRecruiterReadsEnabled);
   const total = allApps.length;
   const activityEvents = allApps.length ? await prisma.applicationEvent.groupBy({
     by: ["applicationId"],
@@ -364,9 +364,7 @@ export default async function JobApplicationsPage({
   const pipelineParam = searchParams?.pipeline as string | undefined;
   const oldFilter = resolveRecruiterPipelineFilter({ pipeline: pipelineParam, interest: interestParam });
   const requested = pipelineParam ?? oldFilter;
-  const chosenPipeline = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"].includes(requested ?? "") ? requested
-    : requested === "PRESELECTED" || requested === "ASSESSMENT" ? "REVIEW"
-    : requested === "REJECTED" || requested === "HIRED" ? "CLOSED" : undefined;
+  const chosenPipeline = resolveRecruiterPipelineFilterKey(requested, searchParams?.outcome);
   const allPipelineSelected = !chosenPipeline;
 
   const qParam = (searchParams?.q ?? "").toString();
@@ -383,7 +381,7 @@ export default async function JobApplicationsPage({
   const preselectedFilter = searchParams?.preselected === "1";
   const assessmentFilter: RecruiterListAssessment = ["NONE", "SENT", "STARTED", "COMPLETED", "EXPIRED"].includes(searchParams?.assessment ?? "")
     ? searchParams!.assessment as RecruiterListAssessment : "ALL";
-  const outcomeFilter = chosenPipeline === "CLOSED" && ["REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"].includes(searchParams?.outcome ?? "")
+  const outcomeFilter = requested === "CLOSED" && ["REJECTED", "HIRED", "WITHDRAWN", "CANCELLED"].includes(searchParams?.outcome ?? "")
     ? searchParams!.outcome : undefined;
 
   const matchAccess = getRecruiterMatchAccessIds(allApps, plan);
@@ -413,7 +411,7 @@ export default async function JobApplicationsPage({
   });
 
   if (chosenPipeline) {
-    enriched = enriched.filter(a => { const p = presentationOf(a); const key = chosenPipeline; return p.column === key || p.section === key; });
+    enriched = enriched.filter(a => { const p = presentationOf(a); const key = chosenPipeline; return p.pipelineState === key; });
   }
 
   if (q) {
@@ -575,8 +573,11 @@ export default async function JobApplicationsPage({
               label={`Todos (${total})`}
               count={total}
             />
-            {LIST_SECTIONS.map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${PIPELINE_LABELS[key] ?? ({ CLOSED: "Finalizados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key]} (${counters[key]})`} count={counters[key]} />)}
+            {LIST_SECTIONS.map(key => <FilterPill key={key} active={chosenPipeline === key} href={buildHref({ pipeline: key })} label={`${RECRUITER_PIPELINE_STATE_LABELS[key]} (${counters[key]})`} count={counters[key]} />)}
           </div>
+          {integrityCount > 0 && <p role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+            Advertencia de integridad: {integrityCount} registro{integrityCount === 1 ? "" : "s"} sin etapa verificable. No se incluyen en los conteos de etapa; visibles en Todos y con cambios bloqueados.
+          </p>}
           <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">Los conteos incluyen todas las postulaciones de esta vacante, antes de los filtros secundarios.</p>
         </section>
 
@@ -593,7 +594,7 @@ export default async function JobApplicationsPage({
                   : total === 0
                     ? "Aún no hay postulaciones."
                     : chosenPipeline
-                      ? `Sin candidatos en ${(PIPELINE_LABELS[chosenPipeline] ?? chosenPipeline)}.`
+                      ? `Sin candidatos en ${(RECRUITER_PIPELINE_STATE_LABELS[chosenPipeline])}.`
                       : "Aún no hay postulaciones."}
               </p>
               {!activeFiltersCount && total === 0 && (
@@ -618,7 +619,7 @@ export default async function JobApplicationsPage({
               {/* Fila 1: Búsqueda + Ordenar */}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <form method="get" className="relative w-full sm:max-w-xs">
-                  {pipelineParam && <input type="hidden" name="pipeline" value={pipelineParam} />}
+                  {chosenPipeline && <input type="hidden" name="pipeline" value={chosenPipeline} />}
                   {interestParam && <input type="hidden" name="interest" value={interestParam} />}
                   {sortKey && <input type="hidden" name="sort" value={sortKey} />}
                   <input type="hidden" name="dir" value={sortDirection} />
@@ -714,15 +715,7 @@ export default async function JobApplicationsPage({
                       {({ ALL: "Todas", NONE: "Sin evaluación", SENT: "Enviada", STARTED: "Iniciada", COMPLETED: "Completada", EXPIRED: "Vencida" } as Record<string, string>)[state]}
                     </Link>)}
                 </div>}
-                {chosenPipeline === "CLOSED" && <div className="flex flex-wrap items-center gap-1">
-                  <span className="text-[11px] text-zinc-500">Resultado:</span>
-                  {[{ key: "ALL", label: "Todos" }, ...FINALIZED_OUTCOMES].map(({ key: outcome, label }) =>
-                    <Link key={outcome} href={buildHref({ outcome: outcome === "ALL" ? undefined : outcome })}
-                      aria-current={(outcomeFilter ?? "ALL") === outcome ? "true" : undefined}
-                      className={`rounded-full border px-2 py-0.5 text-[11px] ${(outcomeFilter ?? "ALL") === outcome ? "border-emerald-500 bg-emerald-50 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-100" : "border-zinc-200 text-zinc-600 dark:border-zinc-700 dark:text-zinc-300"}`}>
-                      {label}
-                    </Link>)}
-                </div>}
+
 
                 <div className="ml-auto flex items-center gap-3">
                   {activeFiltersCount > 0 && (
@@ -759,7 +752,7 @@ export default async function JobApplicationsPage({
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         {candidateHref ? (
-                          <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref} className="block truncate text-sm font-semibold hover:underline">
+                          <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER" && !a._presentation.integrityIssue} href={candidateHref} className="block truncate text-sm font-semibold hover:underline">
                             {a._fullName}
                           </CandidateProfileLink>
                         ) : (
@@ -823,8 +816,9 @@ export default async function JobApplicationsPage({
                           canonicalStage={a.stage}
                           canonicalDisposition={a.disposition}
                           canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
+                          integrityIssue={a._presentation.integrityIssue}
                         />
-                        {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Preselecto</span>}
+                        {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Perfil preseleccionado</span>}
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1.5">
@@ -845,6 +839,8 @@ export default async function JobApplicationsPage({
                           </a>
                         )}
                         <ActionsMenu
+                          stageActionsInSelector
+                          integrityIssue={a._presentation.integrityIssue}
                           applicationId={a.id}
                           jobId={job.id}
                           processSource={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }}
@@ -909,7 +905,7 @@ export default async function JobApplicationsPage({
                         <td className="px-3 py-2.5">
                           <div className="flex flex-col gap-0.5">
                             {candidateHref ? (
-                              <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER"} href={candidateHref} className="block max-w-[240px] truncate font-semibold text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-100" title={a._fullName}>{a._fullName}</CandidateProfileLink>
+                              <CandidateProfileLink applicationId={a.id} jobId={job.id} source={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }} enabled={session?.user?.role === "RECRUITER" && !a._presentation.integrityIssue} href={candidateHref} className="block max-w-[240px] truncate font-semibold text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-100" title={a._fullName}>{a._fullName}</CandidateProfileLink>
                             ) : (
                               <span className="font-medium">{a._fullName}</span>
                             )}
@@ -968,8 +964,9 @@ export default async function JobApplicationsPage({
                               canonicalStage={a.stage}
                               canonicalDisposition={a.disposition}
                               canonicalRecruiterReadsEnabled={canonicalRecruiterReadsEnabled}
+                          integrityIssue={a._presentation.integrityIssue}
                             />
-                            {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Preselecto</span>}
+                            {a._presentation.preselected && <span className="text-[10px] text-amber-700 dark:text-amber-300">Perfil preseleccionado</span>}
                           </div>
                         </td>
 
@@ -983,6 +980,8 @@ export default async function JobApplicationsPage({
                         <td className="px-3 py-2.5 align-middle">
                           <div className="flex items-center gap-1.5">
                             <ActionsMenu
+                          stageActionsInSelector
+                          integrityIssue={a._presentation.integrityIssue}
                               applicationId={a.id}
                               jobId={job.id}
                               processSource={{ stage: a.stage, disposition: a.disposition, status: a.status, recruiterInterest: a.recruiterInterest, stateVersion: a.stateVersion }}

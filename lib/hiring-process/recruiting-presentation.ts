@@ -1,8 +1,14 @@
 import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "./recruiter-read-model";
-import { LEGACY_APPLICATION_STATE_MATRIX } from "./legacy-mapping";
+import { LEGACY_APPLICATION_STATE_MATRIX, projectCanonicalStateToLegacy } from "./legacy-mapping";
 import { canStartReview } from "./start-review-eligibility";
 import { RECRUITING_STATES, RECRUITING_STATE_LABELS, recruitingStateRequirements, type RecruitingState } from "./recruiter-state";
 export const ACTIVE_PIPELINE = ["APPLIED", "REVIEW", "INTERVIEW", "OFFER"] as const;
+/** Recruiter UI destinations; persisted stages and domain validation remain unchanged. */
+export const RECRUITER_PIPELINE = ["APPLIED", "REVIEW", "INTERVIEW", "HIRED", "REJECTED"] as const;
+export type RecruiterPipelineState = typeof RECRUITER_PIPELINE[number];
+export const RECRUITER_PIPELINE_STATE_LABELS: Record<RecruiterPipelineState, string> = {
+    APPLIED: "Por revisar", REVIEW: "En revisión", INTERVIEW: "Entrevista", HIRED: "Contratado", REJECTED: "Descartado",
+};
 export const FINALIZED_OUTCOMES = [
     { key: "HIRED", label: "Contratados" }, { key: "REJECTED", label: "Descartados" },
     { key: "WITHDRAWN", label: "Retirados" }, { key: "CANCELLED", label: "Cancelados" },
@@ -10,6 +16,9 @@ export const FINALIZED_OUTCOMES = [
 export const PIPELINE_LABELS: Record<string, string> = { APPLIED: "Por revisar", REVIEW: "En revisión", INTERVIEW: "Entrevista", OFFER: "Oferta", REJECTED: "Descartado", HIRED: "Contratado", WITHDRAWN: "Retirado", CANCELLED: "Cancelado", OTHER: "Otros cierres" };
 export type PresentationSource = RecruiterApplicationReadInput & {
     stateVersion: number;
+    hiredAt?: Date | string | null;
+    rejectedAt?: Date | string | null;
+    rejectionEmailSent?: boolean;
 };
 export type RecruitingPresentation = {
     section: "ACTIVE" | "CLOSED" | "HOLD" | "RECONCILIATION";
@@ -96,4 +105,64 @@ export function getRecruiterStageOptions(input: PresentationSource, reads: boole
     const current = presentation.section === "ACTIVE" ? presentation.column : presentation.section === "CLOSED" ? presentation.outcome : "HOLD";
     return RECRUITING_STATES.map(destination => ({ label: RECRUITING_STATE_LABELS[destination], intent: "SET_RECRUITING_STATE",
         destination, current: destination === current, ...recruitingStateRequirements({ stage, disposition }, destination) }));
+}
+
+export type RecruiterPipelinePresentation = RecruitingPresentation & {
+    pipelineState: RecruiterPipelineState | null;
+    paused: boolean;
+    integrityIssue: boolean;
+};
+
+/** UI-only projection. Never use this simplified view for writes, audit or notifications. */
+export function getRecruiterPipelinePresentation(input: PresentationSource, reads: boolean): RecruiterPipelinePresentation {
+    const original = getRecruitingPresentation(input, reads);
+    let integrityIssue = original.section === "RECONCILIATION" || !Number.isInteger(input.stateVersion) || input.stateVersion < 0;
+    if (input.stage && input.disposition) {
+        const expected = projectCanonicalStateToLegacy({ stage: input.stage, disposition: input.disposition === "HOLD" ? "ACTIVE" : input.disposition });
+        if (expected && (expected.status !== input.status || (expected.recruiterInterest !== input.recruiterInterest && !(input.stage === "REVIEW" && input.recruiterInterest === "MAYBE")))) integrityIssue = true;
+    }
+    if ((original.section === "ACTIVE" || original.section === "HOLD") && (input.hiredAt || input.rejectedAt || input.rejectionEmailSent || input.status === "HIRED" || input.status === "REJECTED" || input.recruiterInterest === "REJECTED")) integrityIssue = true;
+    // Other closures retain their prior legacy projection, but cannot retain a hiring footprint.
+    if (original.section === "CLOSED" && original.outcome !== "HIRED" && (input.status === "HIRED" || input.hiredAt)) integrityIssue = true;
+    const underlying = original.section === "HOLD" ? input.stage : original.column;
+    const pipelineState: RecruiterPipelineState | null = integrityIssue ? null
+        : original.section === "CLOSED" ? original.outcome === "HIRED" ? "HIRED" : "REJECTED"
+        : underlying === "OFFER" || underlying === "INTERVIEW" ? "INTERVIEW"
+        : underlying === "REVIEW" || underlying === "ASSESSMENT" ? "REVIEW"
+        : underlying === "APPLIED" ? "APPLIED" : null;
+    return { ...original, pipelineState, label: pipelineState ? RECRUITER_PIPELINE_STATE_LABELS[pipelineState] : "—",
+        paused: original.section === "HOLD", integrityIssue: integrityIssue || pipelineState === null };
+}
+
+export type RecruiterPipelineOption = RecruiterStageOption & {
+    pipelineState: RecruiterPipelineState;
+    disabled: boolean;
+    resumesPaused: boolean;
+};
+
+/** A UI subset of existing commands, retaining requirements from the persisted source. */
+export function getRecruiterPipelineOptions(input: PresentationSource, reads: boolean): RecruiterPipelineOption[] {
+    const presentation = getRecruiterPipelinePresentation(input, reads);
+    if (presentation.integrityIssue) return [];
+    const options = getRecruiterStageOptions(input, reads);
+    return RECRUITER_PIPELINE.flatMap(pipelineState => {
+        // Resuming an existing OFFER retains OFFER internally; it is still Entrevista visually.
+        const resume = presentation.paused && presentation.pipelineState === pipelineState
+            ? options.find(option => option.destination === input.stage) : undefined;
+        const option = resume ?? options.find(option => option.destination === pipelineState);
+        if (!option) return [];
+        const current = pipelineState === presentation.pipelineState;
+        return [{ ...option, pipelineState, label: RECRUITER_PIPELINE_STATE_LABELS[pipelineState], current,
+            disabled: current && !presentation.paused, resumesPaused: Boolean(resume) }];
+    });
+}
+
+/** Keep legacy links usable without exposing their internal buckets as UI stages. */
+export function resolveRecruiterPipelineFilterKey(value?: string | null, outcome?: string): RecruiterPipelineState | undefined {
+    if (value && (RECRUITER_PIPELINE as readonly string[]).includes(value)) return value as RecruiterPipelineState;
+    if (value === "OFFER") return "INTERVIEW";
+    if (value === "ASSESSMENT" || value === "PRESELECTED") return "REVIEW";
+    if (value === "WITHDRAWN" || value === "CANCELLED") return "REJECTED";
+    if (value === "CLOSED") return outcome === "HIRED" ? "HIRED" : outcome && ["REJECTED", "WITHDRAWN", "CANCELLED"].includes(outcome) ? "REJECTED" : undefined;
+    return undefined;
 }

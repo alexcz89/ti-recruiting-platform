@@ -5,7 +5,7 @@ import * as React from "react";
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getRecruiterApplicationReadModel, type RecruiterApplicationReadInput } from "@/lib/hiring-process/recruiter-read-model";
-import { FINALIZED_OUTCOMES, getRecruitingPresentation, getRecruiterStageOptions, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
+import { getRecruiterPipelinePresentation, getRecruiterPipelineOptions, type RecruiterStageOption } from "@/lib/hiring-process/recruiting-presentation";
 import CandidateProfileLink from "@/components/dashboard/CandidateProfileLink";
 import { toastError } from "@/lib/ui/toast";
 import { AlertTriangle, Check, ClipboardList, Lock, MapPin, X } from "lucide-react";
@@ -42,6 +42,7 @@ type AppCard = {
   disposition: string | null;
   stateVersion: number;
   writerCompatibility: "CANONICAL" | "LEGACY" | "NONE";
+  integrityIssue?: boolean;
   createdAt?: string | Date | null;
   updatedAt?: string | Date | null;
   submittedAt?: string | Date | null;
@@ -71,6 +72,11 @@ function scoreBg(score: number) {
   return "bg-rose-400";
 }
 
+function cardPresentation(card: AppCard, reads: boolean) {
+  const presentation = getRecruiterPipelinePresentation({ ...card, stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], status: card.applicationStatus, recruiterInterest: card.status }, reads);
+  return card.integrityIssue ? { ...presentation, pipelineState: null, label: "—", integrityIssue: true } : presentation;
+}
+
 export default function Kanbanboard({
   jobId,
   statuses,
@@ -91,10 +97,8 @@ export default function Kanbanboard({
   moveAction: (fd: FormData) => Promise<{ ok: boolean; message?: string; application?: { stage: string | null; disposition: string | null; stateVersion: number; status: string; recruiterInterest: string } }>;
 }) {
   const router = useRouter();
-  const secondaryGroups = FINALIZED_OUTCOMES;
-  const auxiliaryGroups = [{ key: "HOLD", label: "En pausa" }, { key: "RECONCILIATION", label: "Requiere conciliación" }];
-  const mobileColumns = useMemo(() => [...statuses, ...FINALIZED_OUTCOMES.map(group => group.key), "HOLD", "RECONCILIATION"], [statuses]);
-  const columnLabel = (key: string) => [...secondaryGroups, ...auxiliaryGroups].find(group => group.key === key)?.label ?? statusLabels[key] ?? key;
+  const mobileColumns = useMemo(() => [...statuses], [statuses]);
+  const columnLabel = (key: string) => statusLabels[key] ?? key;
   const [items, setItems] = useState<AppCard[]>(applications);
   const [mobileSelection, setMobileSelection] = useState({ jobId: "", stage: "" });
   const [isPending, setIsPending] = useState(false);
@@ -135,19 +139,21 @@ export default function Kanbanboard({
   };
 
   const isCardWritable = (card: AppCard) =>
-    card.writerCompatibility !== "NONE" && presentation(card).section !== "RECONCILIATION";
+    card.writerCompatibility !== "NONE" && !presentation(card).integrityIssue && presentation(card).pipelineState !== "HIRED";
 
-  const presentation = (a: AppCard) => getRecruitingPresentation({ ...a, stage: a.stage as RecruiterApplicationReadInput["stage"], disposition: a.disposition as RecruiterApplicationReadInput["disposition"], status: a.applicationStatus, recruiterInterest: a.status }, canonicalRecruiterReadsEnabled);
+  const presentation = (a: AppCard) => cardPresentation(a, canonicalRecruiterReadsEnabled);
   const grouped = useMemo(() => {
     const map: Record<string, AppCard[]> = {};
     for (const st of mobileColumns) map[st] = [];
     for (const a of items) {
-      const p = getRecruitingPresentation({ ...a, stage: a.stage as RecruiterApplicationReadInput["stage"], disposition: a.disposition as RecruiterApplicationReadInput["disposition"], status: a.applicationStatus, recruiterInterest: a.status }, canonicalRecruiterReadsEnabled);
-      const key = p.section === "ACTIVE" ? p.column : p.section === "CLOSED" ? p.outcome : p.section;
+      const p = cardPresentation(a, canonicalRecruiterReadsEnabled);
+      const key = p.pipelineState;
       if (key) map[key]?.push(a);
     }
     return map;
   }, [items, mobileColumns, canonicalRecruiterReadsEnabled]);
+
+  const integrityItems = items.filter(card => presentation(card).integrityIssue);
 
   // Ejecutar acción de mover (drag o quick action)
   const doMove = (appId: string, fromStatus: string, toStatus: string, fromIdx: number, toIdx: number) => {
@@ -155,7 +161,7 @@ export default function Kanbanboard({
     const moved = (grouped[fromStatus] || [])[fromIdx];
     if (!moved || moved.id !== appId || !isCardWritable(moved)) return;
     const source = { ...moved, stage: moved.stage as RecruiterApplicationReadInput["stage"], disposition: moved.disposition as RecruiterApplicationReadInput["disposition"], status: moved.applicationStatus, recruiterInterest: moved.status };
-    const option = getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled).find(option => option.destination === toStatus && !option.current);
+    const option = getRecruiterPipelineOptions(source, canonicalRecruiterReadsEnabled).find(option => option.pipelineState === toStatus && !option.disabled);
     if (!option) return;
     if (option.requiresReason || option.requiresConfirmation) { setRequestedMove({ card: moved, option }); return; }
     void submitMove(moved, option);
@@ -225,27 +231,29 @@ export default function Kanbanboard({
 
   return (
     <section aria-label="Tablero de candidaturas" className="min-w-0 lg:rounded-2xl lg:border lg:border-zinc-200/70 lg:bg-zinc-50/40 lg:p-3 dark:lg:border-zinc-800 dark:lg:bg-zinc-950/20">
+      {integrityItems.length > 0 && <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/20">
+        <p className="mb-3 text-sm font-medium text-amber-900 dark:text-amber-200">Advertencia de integridad: {integrityItems.length} registro{integrityItems.length === 1 ? "" : "s"} sin etapa verificable. No se incluyen en las columnas; cambios bloqueados.</p>
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{integrityItems.map(card => <li key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</li>)}</ul>
+      </div>}
       {requestedMove && <RecruiterStateDialog option={requestedMove.option} pending={isPending} onCancel={() => setRequestedMove(null)}
         onConfirm={reason => { void submitMove(requestedMove.card, requestedMove.option, reason); }} />}
-      <div className="mx-auto max-w-2xl lg:hidden">
+      <div className="mx-auto max-w-2xl xl:hidden">
         <label htmlFor="kanban-stage" className="mb-1.5 block text-sm font-medium">Etapa</label>
         <select id="kanban-stage" className="min-h-11 w-full rounded-lg border border-zinc-300 bg-[rgb(var(--card))] px-3 py-2 text-sm dark:border-zinc-700" value={selectedStage} onChange={(event) => selectMobileStage(event.target.value)}>
-          <optgroup label="Etapas activas">{statuses.map(stage => <option key={stage} value={stage}>{columnLabel(stage)} ({grouped[stage]?.length ?? 0})</option>)}</optgroup>
-          <optgroup label="Finalizados">{secondaryGroups.map(({ key }) => <option key={key} value={key}>{columnLabel(key)} ({grouped[key]?.length ?? 0})</option>)}</optgroup>
-          <optgroup label="Otros estados">{auxiliaryGroups.map(({ key }) => <option key={key} value={key}>{columnLabel(key)} ({grouped[key]?.length ?? 0})</option>)}</optgroup>
+          {mobileColumns.map(stage => <option key={stage} value={stage}>{columnLabel(stage)} ({grouped[stage]?.length ?? 0})</option>)}
         </select>
         <div className="mt-2.5 space-y-2.5" aria-live="polite">
           {(grouped[selectedStage] ?? []).map((card) => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
           {(grouped[selectedStage] ?? []).length === 0 && <p className="py-6 text-center text-sm text-zinc-600 dark:text-zinc-400">No hay candidatos en esta etapa.</p>}
         </div>
       </div>
-      <div className="hidden min-w-0 lg:block">
+      <div className="hidden min-w-0 xl:block">
       <DragDropContext
         onDragEnd={(result) => {
           handleDragEnd(result);
         }}
       >
-        <div className="grid min-w-0 grid-cols-4 items-start gap-3">
+        <div className="grid min-w-0 grid-cols-5 items-start gap-3">
           {statuses.map((st) => {
             const cards = grouped[st] || [];
             const accent = COLUMN_ACCENT[st] ?? COLUMN_ACCENT.REVIEW;
@@ -303,25 +311,8 @@ export default function Kanbanboard({
         </div>
       </DragDropContext>
       </div>
-      <div className="mt-3 hidden space-y-2 lg:block">
-        <section aria-label="Finalizados" className="space-y-2">
-          <h3 className="px-1 pt-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200">Finalizados <span className="font-normal tabular-nums">({secondaryGroups.reduce((total, group) => total + (grouped[group.key]?.length ?? 0), 0)})</span></h3>
-          {secondaryGroups.map(renderSecondaryGroup)}
-        </section>
-        {auxiliaryGroups.map(renderSecondaryGroup)}
-      </div>
     </section>
   );
-
-  function renderSecondaryGroup(group: { key: string; label: string }) {
-    return <details key={group.key} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-          <summary className="cursor-pointer rounded text-sm font-medium text-zinc-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 dark:text-zinc-200">{group.label} ({grouped[group.key]?.length ?? 0})</summary>
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            {(grouped[group.key] ?? []).map(card => <React.Fragment key={card.id}>{renderCard({ card, jobId, dragging: false, hasMatchSignals })}</React.Fragment>)}
-            {!grouped[group.key]?.length && <p className="text-sm text-zinc-500 dark:text-zinc-400">No hay candidaturas en esta categoría.</p>}
-          </div>
-        </details>;
-  }
 
   /* ============ Card ============ */
 
@@ -345,8 +336,8 @@ export default function Kanbanboard({
         : null;
     const processState = presentation(card);
     const isStale =
-      processState.section === "ACTIVE" &&
-      processState.column === "APPLIED" &&
+      !processState.integrityIssue && !processState.paused &&
+      processState.pipelineState === "APPLIED" &&
       daysPendingReview !== null &&
       daysPendingReview >= 5;
     const score = card._score;
@@ -366,7 +357,7 @@ export default function Kanbanboard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               <h4 className="min-w-0 text-base font-semibold leading-snug text-zinc-900 lg:text-sm dark:text-zinc-50">
-                <CandidateProfileLink applicationId={card.id} jobId={jobId} source={{ stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], stateVersion: card.stateVersion, status: card.applicationStatus, recruiterInterest: card.status }} enabled={autoReviewEnabled} href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} className="[overflow-wrap:anywhere] text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</CandidateProfileLink>
+                <CandidateProfileLink applicationId={card.id} jobId={jobId} source={{ stage: card.stage as RecruiterApplicationReadInput["stage"], disposition: card.disposition as RecruiterApplicationReadInput["disposition"], stateVersion: card.stateVersion, status: card.applicationStatus, recruiterInterest: card.status }} enabled={autoReviewEnabled && !processState.integrityIssue} href={`/dashboard/candidates/${card.candidate.id}?jobId=${jobId}&applicationId=${card.id}`} className="[overflow-wrap:anywhere] text-zinc-900 hover:text-emerald-700 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 dark:text-zinc-50 dark:hover:text-emerald-300">{card.candidate.name}</CandidateProfileLink>
               </h4>
               {isNew && (
                 <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
@@ -407,9 +398,10 @@ export default function Kanbanboard({
           </div>
         </div>
 
-        {(processState.preselected || processState.assessmentStage) && <div className="mt-2 flex flex-wrap gap-1 text-xs">
-          {processState.preselected && <span className="rounded bg-amber-100 px-2 py-1 text-amber-900 dark:bg-amber-900 dark:text-amber-100">Preselecto</span>}
-          {processState.assessmentStage && !(card._assessments ?? []).some(assessment => assessment.state !== "NONE") && <span>Evaluación técnica</span>}
+        {(processState.preselected || processState.paused || processState.integrityIssue) && <div className="mt-2 flex flex-wrap gap-1 text-xs">
+          {processState.preselected && <span className="rounded bg-zinc-100 px-2 py-1 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">Perfil preseleccionado</span>}
+          {processState.paused && <span className="rounded bg-amber-50 px-2 py-1 text-amber-900 dark:bg-amber-950 dark:text-amber-200">En pausa</span>}
+          {processState.integrityIssue && <span className="text-amber-800 dark:text-amber-200">Etapa no verificable · Cambios bloqueados</span>}
         </div>}
         {/* Barra de match */}
         {hasMatchSignals && !locked && score !== null && score !== undefined && (

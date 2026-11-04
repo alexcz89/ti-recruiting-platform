@@ -113,7 +113,9 @@ describe("recruiter reader surfaces", () => {
   });
   it.each([true, false])("does not offer transitions for inconsistent rows with reads=%s", reads => {
     render(<InterestSelect applicationId="app" initial="ACCEPTED" initialStateVersion={2} legacyStatus="REVIEWING" canonicalStage="REVIEW" canonicalDisposition="ACTIVE" canonicalRecruiterReadsEnabled={reads} />);
-    expect(screen.getByText("Requiere conciliación")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Advertencia de integridad: etapa no verificable. Cambios bloqueados.");
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
         name: "Cambiar etapa: Requiere conciliación",
@@ -134,7 +136,7 @@ describe("recruiter reader surfaces", () => {
     );
 
     fireEvent.pointerDown(
-      screen.getByRole("button", { name: "Cambiar etapa: Oferta" }),
+      screen.getByRole("button", { name: "Cambiar etapa: Entrevista" }),
       { button: 0, ctrlKey: false }
     );
 
@@ -143,11 +145,11 @@ describe("recruiter reader surfaces", () => {
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("menuitem", { name: "Descartar candidato" })
+      screen.getByRole("menuitem", { name: "Descartado" })
     ).toBeInTheDocument();
 
     expect(
-      screen.getByRole("menuitem", { name: "Contratar candidato" })
+      screen.getByRole("menuitem", { name: "Contratado" })
     ).toBeInTheDocument();
 
     view.unmount();

@@ -7,8 +7,8 @@ import { toastSuccess, toastError } from "@/lib/ui/toast";
 import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
 import { parsePhoneNumberFromString } from "libphonenumber-js";
 import { buildRecruiterWhatsappHref, normalizeMexicanWhatsappPhone } from "@/lib/whatsapp/recruiter-contact";
-import { getRecruitingActions, getRecruitingPresentation, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
-import ProcessReasonDialog from "./ProcessReasonDialog";
+import { getRecruitingActions, getRecruitingPresentation, getRecruiterPipelinePresentation, getRecruiterStageOptions, type PresentationSource } from "@/lib/hiring-process/recruiting-presentation";
+import ProcessReasonDialog, { RecruiterStateDialog } from "./ProcessReasonDialog";
 import { useApplicationIntent } from "./useApplicationIntent";
 import {
   MoreHorizontal,
@@ -64,6 +64,8 @@ type Props = {
   companyName?: string | null;     // Nombre de la empresa para el mensaje de WhatsApp
   assessment?: AssessmentMeta;
   processSource: PresentationSource;
+  stageActionsInSelector?: boolean;
+  integrityIssue?: boolean;
   canonicalRecruiterReadsEnabled: boolean;
 };
 
@@ -92,6 +94,8 @@ export default function ActionsMenu(props: Props) {
     assessment,
     processSource,
     canonicalRecruiterReadsEnabled,
+    stageActionsInSelector = false,
+    integrityIssue = false,
   } = props;
 
   const router = useRouter();
@@ -99,12 +103,16 @@ export default function ActionsMenu(props: Props) {
   const [showModal, setShowModal] = useState(false);
   const [showReopenReason, setShowReopenReason] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [showPauseConfirm, setShowPauseConfirm] = useState(false);
   const { source, pending: processPending, submit: submitProcess } = useApplicationIntent(applicationId, processSource);
   const presentation = getRecruitingPresentation(source, canonicalRecruiterReadsEnabled);
-  const availableActions = getRecruitingActions(source, canonicalRecruiterReadsEnabled);
+  const hasIntegrityIssue = integrityIssue || getRecruiterPipelinePresentation(source, canonicalRecruiterReadsEnabled).integrityIssue;
+  const availableActions = hasIntegrityIssue ? [] : getRecruitingActions(source, canonicalRecruiterReadsEnabled);
   const processActions = availableActions.filter(action => ["MARK_PRESELECTED", "CLEAR_PRESELECTED"].includes(action));
-  const canDiscard = availableActions.includes("REJECT_CANDIDATE");
-  const canReopen = presentation.section === "CLOSED" && presentation.outcome === "REJECTED" &&
+  const pauseOption = stageActionsInSelector && !hasIntegrityIssue && presentation.section === "ACTIVE"
+    ? getRecruiterStageOptions(source, canonicalRecruiterReadsEnabled).find(option => option.destination === "HOLD" && !option.current) : undefined;
+  const canDiscard = !stageActionsInSelector && availableActions.includes("REJECT_CANDIDATE");
+  const canReopen = !hasIntegrityIssue && !stageActionsInSelector && presentation.section === "CLOSED" && presentation.outcome === "REJECTED" &&
     source.status === "REJECTED" && source.recruiterInterest === "REJECTED";
 
   // Todos los templateIds del job
@@ -297,7 +305,7 @@ export default function ActionsMenu(props: Props) {
           align="end"
           compact
           collisionPadding={8}
-          onCloseAutoFocus={event => { if (showReopenReason || showDiscardConfirm) event.preventDefault(); }}
+          onCloseAutoFocus={event => { if (showReopenReason || showDiscardConfirm || showPauseConfirm) event.preventDefault(); }}
           className="w-[220px]"
         >
           {processActions.map(action => <DropdownMenuItem compact key={action} disabled={processPending}
@@ -306,7 +314,8 @@ export default function ActionsMenu(props: Props) {
             {({ MARK_PRESELECTED: "Preseleccionar", CLEAR_PRESELECTED: "Quitar preselección" } as Record<string, string>)[action]}
           </DropdownMenuItem>)}
           {canReopen && <DropdownMenuItem compact disabled={processPending} onSelect={() => setShowReopenReason(true)}>Reabrir proceso</DropdownMenuItem>}
-          {(processActions.length > 0 || canReopen) && (assessmentCount > 0 || resumeUrl || candidatePhone) && <DropdownMenuSeparator compact />}
+          {pauseOption && <DropdownMenuItem compact disabled={processPending} onSelect={() => setShowPauseConfirm(true)}>Poner en pausa</DropdownMenuItem>}
+          {(processActions.length > 0 || canReopen || pauseOption) && (assessmentCount > 0 || resumeUrl || candidatePhone) && <DropdownMenuSeparator compact />}
           {/* Assessment — un item por template completado, o acción global si no */}
           {hasMultipleCompleted ? (
             <>
@@ -408,7 +417,7 @@ export default function ActionsMenu(props: Props) {
             {!whatsappHref && <span className="text-[10px] text-zinc-500">{candidatePhone ? "Teléfono inválido" : "Sin teléfono registrado"}</span>}
           </DropdownMenuItem>
 
-          {(processActions.length > 0 || canReopen || assessmentCount > 0 || resumeUrl || candidatePhone) && <DropdownMenuSeparator compact />}
+          {(processActions.length > 0 || canReopen || pauseOption || assessmentCount > 0 || resumeUrl || candidatePhone) && <DropdownMenuSeparator compact />}
           {canDiscard && <DropdownMenuItem compact
             onSelect={() => setShowDiscardConfirm(true)} disabled={processPending}
             className="text-rose-700 dark:text-rose-300">
@@ -426,6 +435,12 @@ export default function ActionsMenu(props: Props) {
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {showPauseConfirm && pauseOption && <RecruiterStateDialog option={{ ...pauseOption, requiresConfirmation: true }} pending={processPending}
+        onCancel={() => setShowPauseConfirm(false)}
+        onConfirm={async reason => {
+          const success = await submitProcess("SET_RECRUITING_STATE", { destination: "HOLD", ...reason });
+          if (success) setShowPauseConfirm(false);
+        }} />}
       {showReopenReason && <ProcessReasonDialog title="Reabrir proceso" pending={processPending}
         onCancel={() => setShowReopenReason(false)}
         onConfirm={async reason => {
@@ -433,7 +448,7 @@ export default function ActionsMenu(props: Props) {
           if (success) setShowReopenReason(false);
         }} />}
       {showDiscardConfirm && <ProcessReasonDialog title="Descartar candidato" pending={processPending}
-        confirmationOnly description="La candidatura pasará a Cerrados. Podrás reabrirla si el proceso lo permite."
+        confirmationOnly description="La candidatura se mostrará como Descartado. Podrás reabrirla si el proceso lo permite."
         onCancel={() => setShowDiscardConfirm(false)}
         onConfirm={async () => {
           const success = await submitProcess("REJECT_CANDIDATE");

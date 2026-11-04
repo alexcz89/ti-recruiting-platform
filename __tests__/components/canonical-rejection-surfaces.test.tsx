@@ -242,7 +242,7 @@ describe("canonical rejection surfaces", () => {
       />,
     );
     fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar etapa: Por revisar" }), { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByRole("menuitem", { name: "Descartar candidato" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Descartado" }));
     expect(fetch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
 
