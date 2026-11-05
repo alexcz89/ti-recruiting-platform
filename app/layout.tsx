@@ -72,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
           <main
             id="main-content"
-            className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pb-10"
+            className="mx-auto max-w-7xl 2xl:max-w-screen-2xl px-4 sm:px-6 lg:px-8 pb-10 has-[[data-recruiter-shell]]:max-w-none has-[[data-recruiter-shell]]:px-0 has-[[data-recruiter-shell]]:pb-0 sm:has-[[data-recruiter-shell]]:px-0 lg:has-[[data-recruiter-shell]]:px-0 2xl:has-[[data-recruiter-shell]]:max-w-none"
           >
             {children}
           </main>

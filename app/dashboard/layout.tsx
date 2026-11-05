@@ -5,13 +5,6 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  Briefcase,
-  ClipboardCheck,
-  CreditCard,
-  FileText,
-  Receipt,
-  BookOpen,
   Shield,
   ChevronDown,
   Plus,
@@ -19,73 +12,8 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { MobileDrawer } from "@/components/ui/MobileDrawer";
-
-// ── Tipos ────────────────────────────────────────────────────────────────────
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  match: "exact" | "prefix";
-};
-
-type NavGroup = {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  match: "exact" | "prefix";
-  children?: NavItem[];
-};
-
-// ── Estructura de navegación ──────────────────────────────────────────────────
-
-const NAV: NavGroup[] = [
-  {
-    href: "/dashboard/overview",
-    label: "Panel",
-    icon: LayoutDashboard,
-    match: "exact",
-  },
-  {
-    href: "/dashboard/jobs",
-    label: "Vacantes",
-    icon: Briefcase,
-    match: "prefix",
-  },
-  {
-    href: "/dashboard/assessments",
-    label: "Evaluaciones",
-    icon: ClipboardCheck,
-    match: "exact",
-    children: [
-      { href: "/dashboard/assessments",           label: "Evaluaciones",  icon: ClipboardCheck, match: "exact"  },
-      { href: "/dashboard/assessments/templates", label: "Templates",     icon: BookOpen,       match: "prefix" },
-    ],
-  },
-  {
-    href: "/dashboard/billing",
-    label: "Facturación",
-    icon: CreditCard,
-    match: "exact",
-    children: [
-      { href: "/dashboard/billing",           label: "Plan y facturación", icon: CreditCard, match: "exact"  },
-      { href: "/dashboard/billing/taxdata",   label: "Datos fiscales",     icon: FileText,   match: "exact"  },
-      { href: "/dashboard/invoices",          label: "Facturas",           icon: Receipt,    match: "prefix" },
-    ],
-  },
-];
-
-// ── Helper: is active ─────────────────────────────────────────────────────────
-
-function isActive(pathname: string, item: { href: string; match: "exact" | "prefix" }) {
-  if (item.match === "exact") return pathname === item.href;
-  return pathname === item.href || pathname.startsWith(item.href + "/");
-}
-
-function isGroupActive(pathname: string, group: NavGroup): boolean {
-  if (isActive(pathname, group)) return true;
-  return group.children?.some((c) => isActive(pathname, c)) ?? false;
-}
+import RecruiterNavigation from "@/components/dashboard/RecruiterNavigation";
+import { DASHBOARD_NAV as NAV, isActive, isGroupActive, isRecruiterDashboard, type NavGroup } from "@/components/dashboard/navigation";
 
 // ── Dropdown item ─────────────────────────────────────────────────────────────
 
@@ -185,6 +113,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { data: session } = useSession();
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  if (isRecruiterDashboard(pathname, session?.user?.role)) {
+    return <div data-recruiter-shell className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 bg-white dark:bg-zinc-950">
+      <aside aria-label="Panel del reclutador" className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-52 shrink-0 overflow-y-auto border-r border-zinc-200 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-950 xl:block">
+        <RecruiterNavigation />
+      </aside>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>;
+  }
 
   return (
     <div className="-mx-4 sm:-mx-6 lg:-mx-8 -mt-0">

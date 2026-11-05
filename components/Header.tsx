@@ -12,6 +12,10 @@ import ThemeToggle from "@/components/ThemeToggle";
 import LogoTaskio from "@/components/LogoTaskio";
 import { ANALYTICS_EVENTS } from "@/lib/analytics";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import RecruiterNavigation from "@/components/dashboard/RecruiterNavigation";
+import { isRecruiterDashboard } from "@/components/dashboard/navigation";
+import { MobileDrawer } from "@/components/ui/MobileDrawer";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
   ClipboardList,
   Menu,
@@ -24,7 +28,41 @@ export default function Header() {
   useAssessmentInboxEntryRefresh();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { data: session } = useSession();
+  const recruiterShell = isRecruiterDashboard(pathname, session?.user?.role);
   const isAssessmentMode = /^\/assessments\/[^/]+$/.test(pathname ?? "");
+
+  useEffect(() => {
+    if (recruiterShell) setMobileMenuOpen(false);
+  }, [pathname, recruiterShell]);
+
+  if (recruiterShell) {
+    return <>
+      <a href="#main-content" className="sr-only z-[60] rounded-lg bg-white px-4 py-3 text-zinc-900 focus:not-sr-only focus:fixed focus:left-4 focus:top-2 dark:bg-zinc-900 dark:text-white">Saltar al contenido</a>
+      <header data-recruiter-header className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="flex h-14 items-center justify-between gap-2 px-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-1 sm:gap-3">
+            <button type="button" onClick={() => setMobileMenuOpen(true)}
+              aria-label="Abrir navegación del panel" aria-expanded={mobileMenuOpen} aria-controls="recruiter-navigation-drawer"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-zinc-700 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:focus-visible:outline-emerald-300 xl:hidden">
+              <Menu aria-hidden="true" className="h-5 w-5" />
+            </button>
+            <Link href="/dashboard/overview" aria-label="TaskIO, panel de reclutamiento" className="flex min-h-11 items-center rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:focus-visible:outline-emerald-300">
+              <LogoTaskio className="!h-8 !w-[84px] sm:!w-[140px]" />
+            </Link>
+            <span className="hidden border-l border-zinc-200 pl-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400 lg:block">Panel de reclutamiento</span>
+          </div>
+          <div className="flex shrink-0 items-center gap-1">
+            <AuthArea compact />
+            <ThemeToggle dashboard />
+          </div>
+        </div>
+      </header>
+      <MobileDrawer id="recruiter-navigation-drawer" isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} title="Navegación del panel" desktopBreakpoint="xl">
+        <RecruiterNavigation onNavigate={() => setMobileMenuOpen(false)} />
+      </MobileDrawer>
+    </>;
+  }
 
   if (pathname === "/" || pathname === "/contact") {
     return (
@@ -193,7 +231,7 @@ function DesktopNav() {
 }
 
 /* -------- Avatar Dropdown -------- */
-function AvatarMenu({ user, role }: { user: any; role?: string }) {
+function AvatarMenu({ user, role, compact = false }: { user: any; role?: string; compact?: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -225,6 +263,24 @@ function AvatarMenu({ user, role }: { user: any; role?: string }) {
         .slice(0, 2)
         .toUpperCase()
     : user?.email?.[0]?.toUpperCase() ?? "U";
+
+  if (compact) {
+    return <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" aria-label="Menú de usuario" className="flex h-11 w-11 items-center justify-center rounded-lg text-sm font-semibold text-emerald-800 hover:bg-emerald-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:text-emerald-200 dark:hover:bg-emerald-950 dark:focus-visible:outline-emerald-300">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950">{initials}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent compact align="end" className="w-60">
+        <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-700">
+          <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{user?.name}</p>
+          <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">{user?.email}</p>
+        </div>
+        <DropdownMenuItem compact asChild className="min-h-11 text-sm"><Link href="/dashboard/profile"><User aria-hidden="true" className="h-4 w-4" />Mi perfil</Link></DropdownMenuItem>
+        <DropdownMenuItem compact className="min-h-11 text-sm" onSelect={() => { void signOut({ callbackUrl: "/" }); }}><LogOut aria-hidden="true" className="h-4 w-4" />Cerrar sesión</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>;
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -418,7 +474,7 @@ function NavLink({ href, children }: { href: string; children: React.ReactNode }
 }
 
 /* -------- Auth Area -------- */
-function AuthArea() {
+function AuthArea({ compact = false }: { compact?: boolean }) {
   const { data: session, status } = useSession();
 
   const authData = useMemo(() => {
@@ -451,10 +507,10 @@ function AuthArea() {
       {isCandidate && <CandidateAssessmentsNav />}
 
       {/* 🔔 Notificaciones */}
-      <NotificationBell />
+      <NotificationBell compact={compact} />
 
       {/* Avatar dropdown */}
-      <AvatarMenu user={user} role={authData.role} />
+      <AvatarMenu user={user} role={authData.role} compact={compact} />
     </div>
   );
 }

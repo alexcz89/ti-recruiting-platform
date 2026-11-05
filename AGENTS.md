@@ -2,6 +2,10 @@
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
+## Frontend design
+
+Read [TASKIO_DESIGN_GUIDELINES.md](./TASKIO_DESIGN_GUIDELINES.md) before frontend changes. It complements these instructions; preserve verified behavior, permissions and role boundaries.
+
 ## Project Overview
 
 This is a **TI Recruiting Platform** (IT job board) built for the Mexican market. It's a multi-tenant recruiting system where companies can post jobs, candidates can apply, and recruiters manage applications through an ATS (Applicant Tracking System).
