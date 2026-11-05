@@ -11,7 +11,7 @@ import { NotificationDropdown } from './NotificationDropdown';
  * Usage:
  * <NotificationBell />
  */
-export function NotificationBell() {
+export function NotificationBell({ compact = false }: { compact?: boolean }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,8 +49,9 @@ export function NotificationBell() {
       {/* Bell Icon Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-        aria-label="Notifications"
+        className={compact ? "relative flex h-11 w-11 items-center justify-center rounded-lg text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-white dark:focus-visible:outline-emerald-300" : "relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"}
+        aria-label={compact ? "Notificaciones" : "Notifications"}
+        aria-expanded={compact ? isOpen : undefined}
       >
         <Bell className="w-6 h-6" />
         

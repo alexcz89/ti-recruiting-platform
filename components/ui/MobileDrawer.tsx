@@ -1,7 +1,6 @@
-// components/ui/MobileDrawer.tsx
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useId, useRef } from "react";
 import { X } from "lucide-react";
 
 interface MobileDrawerProps {
@@ -10,84 +9,59 @@ interface MobileDrawerProps {
   title?: string;
   children: React.ReactNode;
   side?: "left" | "right";
+  id?: string;
+  desktopBreakpoint?: "lg" | "xl";
 }
 
-/**
- * ✅ Mobile-optimized drawer modal
- * - Prevents body scroll when open
- * - Touch-friendly close button (44px minimum)
- * - Smooth slide-in animation
- * - Click outside to close
- * - Escape key to close
- */
-export function MobileDrawer({
-  isOpen,
-  onClose,
-  title,
-  children,
-  side = "left",
-}: MobileDrawerProps) {
-  // Prevent body scroll when drawer is open
-  useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = "unset";
-      };
-    }
-  }, [isOpen]);
+export function MobileDrawer({ isOpen, onClose, title, children, side = "left", id, desktopBreakpoint = "lg" }: MobileDrawerProps) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const close = useRef(onClose);
+  const titleId = useId();
+  useEffect(() => { close.current = onClose; }, [onClose]);
 
-  // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const element = dialog.current;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    if (element && typeof element.showModal === "function") element.showModal();
+    else if (element) element.open = true;
+    closeButton.current?.focus();
+    const desktop = window.matchMedia(`(min-width: ${desktopBreakpoint === "xl" ? 1280 : 1024}px)`);
+    const closeOnDesktop = () => { if (desktop.matches) close.current(); };
+    closeOnDesktop();
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => {
+      desktop.removeEventListener("change", closeOnDesktop);
+      if (element?.open && typeof element.close === "function") element.close();
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, desktopBreakpoint]);
 
   if (!isOpen) return null;
-
-  return (
-    <>
-      {/* Overlay - click to close */}
-      <div
-        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Drawer */}
-      <div
-        className={`fixed top-0 z-50 h-full w-full max-w-sm bg-white dark:bg-zinc-950 shadow-lg transition-transform duration-300 lg:hidden ${
-          side === "left"
-            ? `left-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`
-            : `right-0 ${isOpen ? "translate-x-0" : "translate-x-full"}`
-        }`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? "drawer-title" : undefined}
-      >
-        {/* Header */}
-        <div className="sticky top-0 z-50 flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-4">
-          {title && (
-            <h2 id="drawer-title" className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-              {title}
-            </h2>
-          )}
-          <button
-            onClick={onClose}
-            className="ml-auto flex items-center justify-center h-10 w-10 rounded-lg text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors focus-ring"
-            aria-label="Cerrar menú"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="overflow-y-auto h-[calc(100vh-64px)]">{children}</div>
-      </div>
-    </>
-  );
+  return <dialog ref={dialog} id={id} aria-modal="true" aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : "Navegación"}
+    onCancel={event => { event.preventDefault(); close.current(); }}
+    onClick={event => {
+      if (event.target !== event.currentTarget) return;
+      const bounds = event.currentTarget.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) close.current();
+    }}
+    onKeyDown={event => {
+      if (event.key === "Escape") { event.preventDefault(); close.current(); return; }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]'));
+      const first = controls[0]; const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }}
+    className={`fixed inset-y-0 m-0 flex h-dvh max-h-none w-full max-w-sm flex-col border-0 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/50 dark:bg-zinc-950 dark:text-zinc-100 ${side === "left" ? "left-0 mr-auto" : "right-0 ml-auto"}`}>
+    <div className="flex shrink-0 items-center justify-between border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
+      {title && <h2 id={titleId} className="text-base font-semibold">{title}</h2>}
+      <button ref={closeButton} type="button" onClick={onClose} aria-label="Cerrar menú" className="ml-auto flex h-11 w-11 items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:focus-visible:outline-emerald-300"><X aria-hidden="true" className="h-5 w-5" /></button>
+    </div>
+    <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+  </dialog>;
 }
