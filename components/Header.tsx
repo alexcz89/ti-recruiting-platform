@@ -13,7 +13,7 @@ import LogoTaskio from "@/components/LogoTaskio";
 import { ANALYTICS_EVENTS } from "@/lib/analytics";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import RecruiterNavigation from "@/components/dashboard/RecruiterNavigation";
-import { isRecruiterDashboard } from "@/components/dashboard/navigation";
+import { isRecruiterDashboard, isDashboardPath, isDashboardSessionPending } from "@/components/dashboard/navigation";
 import { MobileDrawer } from "@/components/ui/MobileDrawer";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import {
@@ -28,38 +28,47 @@ export default function Header() {
   useAssessmentInboxEntryRefresh();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { data: session } = useSession();
-  const recruiterShell = isRecruiterDashboard(pathname, session?.user?.role);
+  const { data: session, status } = useSession();
+  const role = session?.user?.role;
+  const dashboardPath = isDashboardPath(pathname);
+  const authenticatedSignin = pathname === "/auth/signin" && status === "authenticated" && (role === "RECRUITER" || role === "ADMIN");
+  const dashboardHeader = dashboardPath || authenticatedSignin;
+  const pending = dashboardPath && isDashboardSessionPending(status, role);
+  const recruiterShell = !pending && isRecruiterDashboard(pathname, role);
   const isAssessmentMode = /^\/assessments\/[^/]+$/.test(pathname ?? "");
 
   useEffect(() => {
-    if (recruiterShell) setMobileMenuOpen(false);
-  }, [pathname, recruiterShell]);
+    if (dashboardHeader) setMobileMenuOpen(false);
+  }, [pathname, dashboardHeader]);
 
-  if (recruiterShell) {
+  if (dashboardHeader) {
     return <>
       <a href="#main-content" className="sr-only z-[60] rounded-lg bg-white px-4 py-3 text-zinc-900 focus:not-sr-only focus:fixed focus:left-4 focus:top-2 dark:bg-zinc-900 dark:text-white">Saltar al contenido</a>
-      <header data-recruiter-header className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+      <header data-dashboard-header data-recruiter-header={recruiterShell || undefined} className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
         <div className="flex h-14 items-center justify-between gap-2 px-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-1 sm:gap-3">
-            <button type="button" onClick={() => setMobileMenuOpen(true)}
+            {pending ? <span aria-hidden="true" className="h-11 w-11 shrink-0 rounded-lg bg-zinc-100 motion-safe:animate-pulse dark:bg-zinc-900 xl:hidden" /> : recruiterShell && <button type="button" onClick={() => setMobileMenuOpen(true)}
               aria-label="Abrir navegación del panel" aria-expanded={mobileMenuOpen} aria-controls="recruiter-navigation-drawer"
               className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-zinc-700 hover:bg-zinc-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:text-zinc-200 dark:hover:bg-zinc-800 dark:focus-visible:outline-emerald-300 xl:hidden">
               <Menu aria-hidden="true" className="h-5 w-5" />
-            </button>
-            <Link href="/dashboard/overview" aria-label="TaskIO, panel de reclutamiento" className="flex min-h-11 items-center rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:focus-visible:outline-emerald-300">
+            </button>}
+            <Link href={role === "CANDIDATE" ? "/" : "/dashboard/overview"} aria-label={role === "CANDIDATE" ? "TaskIO" : "TaskIO, panel de reclutamiento"} className="flex min-h-11 items-center rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:focus-visible:outline-emerald-300">
               <LogoTaskio className="!h-8 !w-[84px] sm:!w-[140px]" />
             </Link>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <AuthArea compact />
+            {pending ? <div role="status" className="flex items-center gap-2">
+              <span className="sr-only">Cargando sesión</span>
+              <span aria-hidden="true" className="h-11 w-11 rounded-lg bg-zinc-100 motion-safe:animate-pulse dark:bg-zinc-900" />
+              <span aria-hidden="true" className="h-8 w-8 rounded-full bg-zinc-100 motion-safe:animate-pulse dark:bg-zinc-900" />
+            </div> : <AuthArea compact />}
             <ThemeToggle dashboard />
           </div>
         </div>
       </header>
-      <MobileDrawer id="recruiter-navigation-drawer" isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} title="Navegación del panel" desktopBreakpoint="xl">
+      {recruiterShell && <MobileDrawer id="recruiter-navigation-drawer" isOpen={mobileMenuOpen} onClose={() => setMobileMenuOpen(false)} title="Navegación del panel" desktopBreakpoint="xl">
         <RecruiterNavigation onNavigate={() => setMobileMenuOpen(false)} />
-      </MobileDrawer>
+      </MobileDrawer>}
     </>;
   }
 
@@ -275,7 +284,7 @@ function AvatarMenu({ user, role, compact = false }: { user: any; role?: string;
           <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">{user?.name}</p>
           <p className="truncate text-xs text-zinc-600 dark:text-zinc-400">{user?.email}</p>
         </div>
-        <DropdownMenuItem compact asChild className="min-h-11 text-sm"><Link href="/dashboard/profile"><User aria-hidden="true" className="h-4 w-4" />Mi perfil</Link></DropdownMenuItem>
+        <DropdownMenuItem compact asChild className="min-h-11 text-sm"><Link href={role === "CANDIDATE" ? "/profile/summary" : "/dashboard/profile"}><User aria-hidden="true" className="h-4 w-4" />Mi perfil</Link></DropdownMenuItem>
         <DropdownMenuItem compact className="min-h-11 text-sm" onSelect={() => { void signOut({ callbackUrl: "/" }); }}><LogOut aria-hidden="true" className="h-4 w-4" />Cerrar sesión</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>;

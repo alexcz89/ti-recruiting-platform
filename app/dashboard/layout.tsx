@@ -12,8 +12,8 @@ import {
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { MobileDrawer } from "@/components/ui/MobileDrawer";
-import RecruiterNavigation from "@/components/dashboard/RecruiterNavigation";
-import { DASHBOARD_NAV as NAV, isActive, isGroupActive, isRecruiterDashboard, type NavGroup } from "@/components/dashboard/navigation";
+import RecruiterFrame from "@/components/dashboard/RecruiterFrame";
+import { DASHBOARD_NAV as NAV, isActive, isGroupActive, isRecruiterDashboard, isDashboardSessionPending, type NavGroup } from "@/components/dashboard/navigation";
 
 // ── Dropdown item ─────────────────────────────────────────────────────────────
 
@@ -110,17 +110,13 @@ function NavLink({ item, pathname }: { item: NavGroup; pathname: string }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const isAdmin = (session?.user as any)?.role === "ADMIN";
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  if (isRecruiterDashboard(pathname, session?.user?.role)) {
-    return <div data-recruiter-shell className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 bg-white dark:bg-zinc-950">
-      <aside aria-label="Panel del reclutador" className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] w-52 shrink-0 overflow-y-auto border-r border-zinc-200 bg-zinc-50/60 dark:border-zinc-800 dark:bg-zinc-950 xl:block">
-        <RecruiterNavigation />
-      </aside>
-      <div className="min-w-0 flex-1">{children}</div>
-    </div>;
+  const pending = isDashboardSessionPending(status, session?.user?.role);
+  if (pending || isRecruiterDashboard(pathname, session?.user?.role)) {
+    return <RecruiterFrame pending={pending}>{children}</RecruiterFrame>;
   }
 
   return (
