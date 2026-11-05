@@ -1,6 +1,6 @@
 import React from "react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), companyId: vi.fn(), company: vi.fn(), job: vi.fn(), jobs: vi.fn(), count: vi.fn(), group: vi.fn(), recruiter: vi.fn(), apps: vi.fn(), app: vi.fn(), candidate: vi.fn(), cache: vi.fn(), save: vi.fn(), generate: vi.fn(), invites: vi.fn(), attempts: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), companyId: vi.fn(), company: vi.fn(), job: vi.fn(), jobs: vi.fn(), count: vi.fn(), group: vi.fn(), recruiter: vi.fn(), apps: vi.fn(), app: vi.fn(), candidate: vi.fn(), cache: vi.fn(), save: vi.fn(), generate: vi.fn(), invites: vi.fn(), attempts: vi.fn(), events: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: mocks.session }));
 vi.mock("@/lib/server/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/server/session", () => ({ getSessionCompanyId: mocks.companyId }));
@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({ redirect: () => { throw new Error("REDIRECT"
 vi.mock("@/lib/server/prisma", () => ({ prisma: {
   company: { findUnique: mocks.company }, job: { findFirst: mocks.job, findMany: mocks.jobs, count: mocks.count },
   application: { findMany: mocks.apps, findFirst: mocks.app, count: mocks.count, groupBy: mocks.group }, user: { findUnique: mocks.candidate, findFirst: mocks.candidate },
-  applicationEvent: { groupBy: mocks.group },
+  applicationEvent: { groupBy: mocks.group, findMany: mocks.events },
   recruiterProfile: { findUnique: mocks.recruiter }, assessmentAttempt: { count: mocks.count, findMany: mocks.attempts }, assessmentInvite: { count: mocks.count, findMany: mocks.invites },
   matchExplanationCache: { findFirst: mocks.cache, create: mocks.save, update: mocks.save },
 } }));
@@ -74,7 +74,7 @@ beforeEach(() => {
   mocks.cache.mockResolvedValue(null);
   mocks.count.mockResolvedValue(0);
   mocks.invites.mockResolvedValue([]); mocks.attempts.mockResolvedValue([]);
-  mocks.group.mockResolvedValue([]);
+  mocks.group.mockResolvedValue([]); mocks.events.mockResolvedValue([]);
   mocks.recruiter.mockResolvedValue({ status: "APPROVED", phone: "synthetic" });
   mocks.generate.mockResolvedValue({ summary: "Synthetic", strengths: [], gaps: [], interviewFocus: [], recommendation: "REVIEW", generatedAt: now.toISOString() });
 });

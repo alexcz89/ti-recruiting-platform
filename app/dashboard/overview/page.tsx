@@ -7,37 +7,13 @@ import SetupChecklist from "../components/SetupChecklist";
 import BannerEmailUnverified from "../components/BannerEmailUnverified";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/server/auth";
-import clsx from "clsx";
-import {
-  CheckCircle2,
-  TrendingUp,
-  Users,
-  Sparkles,
-  ArrowRight,
-  Inbox,
-  Briefcase,
-  CalendarDays,
-  ClipboardCheck,
-  Clock,
-  type LucideIcon,
-} from "lucide-react";
-
-const STATUS_LABELS: Record<string, string> = {
-  REVIEWING: "En revisión",
-  INTERVIEW: "A entrevista",
-  OFFER: "Con oferta",
-  HIRED: "Contratado",
-  REJECTED: "Rechazado",
-};
+import type { ApplicationEventType } from "@prisma/client";
 import QuickActionButtons from "./QuickActionButtons";
 import { type BillingPlan } from "@/lib/ai/matchScore";
 import { buildRecruiterMatchJob, computeRecruiterMatch, getRecruiterMatchAccessIds, recruiterMatchCandidateSelect, recruiterMatchJobSelect } from "@/lib/ai/recruiter-match";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
-import { ACTIVE_PIPELINE, PIPELINE_LABELS, getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
-import { countRecruiterPresentationGroupedRows } from "@/lib/hiring-process/recruiter-list";
-import {
-  getRecruiterApplicationReadModel,
-} from "@/lib/hiring-process/recruiter-read-model";
+import { getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
+import { countPendingRecruiterGroupedRows } from "@/lib/hiring-process/recruiter-pending";
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
 const pct = (n: number) => `${Math.round(n)}%`;
@@ -103,7 +79,7 @@ export default async function OverviewPage() {
 
   const matchNow = new Date();
   const matchPlan = (company?.billingPlan ?? "FREE") as BillingPlan;
-  const [openJobs, appsTotal, apps7d, attemptsToReview, staleInvites] = await Promise.all([
+  const [totalJobs, appsTotal, apps7d, attemptsToReview, staleInvites] = await Promise.all([
     prisma.job.count({ where: { companyId } }),
     prisma.application.count({ where: { job: { companyId } } }),
     prisma.application.count({
@@ -140,18 +116,19 @@ export default async function OverviewPage() {
     recent,
     recentActivity,
   ] = await Promise.all([
-    // Count jobs without applications in last 15 days
+    // Open jobs older than 15 days with no applications.
     prisma.job.count({
       where: {
         companyId,
         createdAt: { lt: new Date(Date.now() - d15) },
+        status: "OPEN",
         applications: { none: {} },
       },
     }),
     // Minimal grouped state tuple; the centralized reader resolves canonical
     // authority and legacy fallback without loading full application rows.
     prisma.application.groupBy({
-      by: ["stage", "disposition", "status", "recruiterInterest", "stateVersion"],
+      by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion", "hiredAt", "rejectedAt", "rejectionEmailSent"],
       where: { job: { companyId } },
       _count: { _all: true },
     }),
@@ -210,45 +187,41 @@ export default async function OverviewPage() {
         },
       },
     }),
-    // Recent activity
-    prisma.application.findMany({
-      where: { job: { companyId } },
-      orderBy: { updatedAt: "desc" },
+    // Validate both tenant paths, including historical event relationships.
+    prisma.applicationEvent.findMany({
+      where: {
+        companyId,
+        application: { job: { companyId } },
+        visibility: { in: ["INTERNAL", "BOTH"] },
+        type: { not: "LEGACY_STATE_IMPORTED" },
+      },
+      orderBy: [{ happenedAt: "desc" }, { id: "desc" }],
       take: 5,
       select: {
         id: true,
-        stage: true,
-        disposition: true,
-        status: true,
-        recruiterInterest: true,
-        createdAt: true,
-        updatedAt: true,
-        job: { select: { title: true } },
-        candidate: { select: { name: true } },
+        type: true,
+        happenedAt: true,
+        application: { select: {
+          id: true,
+          job: { select: { id: true, title: true } },
+          candidate: { select: { name: true } },
+        } },
       },
     }),
   ]);
 
-  const funnel = countRecruiterPresentationGroupedRows(funnelRaw, canonicalRecruiterReadsEnabled);
-  const funnelTotal = Object.values(funnel).reduce((sum, count) => sum + count, 0);
-  const appsPending = funnel.APPLIED;
-  const pendingShare = appsTotal > 0 ? Math.round((appsPending / appsTotal) * 100) : 0;
-  const activePipeline = ACTIVE_PIPELINE.reduce((sum, key) => sum + funnel[key], 0);
-  const activePipelineShare = funnelTotal > 0 ? Math.round((activePipeline / funnelTotal) * 100) : 0;
+  const appsPending = countPendingRecruiterGroupedRows(funnelRaw, canonicalRecruiterReadsEnabled);
+  // Reuse the same complete grouped data, never the sampled AI Match cohort.
+  const groupsByJob = new Map<string, typeof funnelRaw>();
+  for (const group of funnelRaw) {
+    const groups = groupsByJob.get(group.jobId) ?? [];
+    groups.push(group);
+    groupsByJob.set(group.jobId, groups);
+  }
   const recentWithReadModel = recent.map((application) => ({
     ...application,
     _presentation: getRecruitingPresentation(application, canonicalRecruiterReadsEnabled),
   }));
-  const funnelRows = [...ACTIVE_PIPELINE, "CLOSED", "HOLD", "RECONCILIATION"] as const;
-  const funnelColors = {
-    APPLIED: { color: "bg-amber-400", textColor: "text-amber-700 dark:text-amber-300" },
-    REVIEW: { color: "bg-blue-400", textColor: "text-blue-700 dark:text-blue-300" },
-    INTERVIEW: { color: "bg-emerald-500", textColor: "text-emerald-700 dark:text-emerald-300" },
-    OFFER: { color: "bg-teal-500", textColor: "text-teal-700 dark:text-teal-300" },
-    CLOSED: { color: "bg-red-400", textColor: "text-red-700 dark:text-red-300" },
-    HOLD: { color: "bg-zinc-400", textColor: "text-zinc-700 dark:text-zinc-300" },
-    RECONCILIATION: { color: "bg-slate-400", textColor: "text-slate-700 dark:text-slate-300" },
-  };
 
   // Process top jobs with match scores
   const topJobs = topJobsRaw.map((job) => {
@@ -264,6 +237,7 @@ export default async function OverviewPage() {
       title: job.title,
       status: job.status,
       appCount: job._count.applications,
+      pendingCount: countPendingRecruiterGroupedRows(groupsByJob.get(job.id) ?? [], canonicalRecruiterReadsEnabled),
       hasSkills: context.jobSkills.length > 0,
       avgMatch,
       createdAt: job.createdAt,
@@ -280,682 +254,126 @@ export default async function OverviewPage() {
         topJobs.filter((j) => j.avgMatch !== null).length
       : null;
 
+  const hasJobs = totalJobs > 0 || topJobs.length > 0;
+  const tasks = [
+    { count: appsPending, label: appsPending === 1 ? "candidato por revisar" : "candidatos por revisar", href: "/dashboard/candidates/pending", cta: "Revisar" },
+    { count: attemptsToReview, label: attemptsToReview === 1 ? "evaluación sin revisar" : "evaluaciones sin revisar", href: "/dashboard/assessments?state=COMPLETED&sort=recent", cta: "Ver resultados" },
+    { count: staleInvites, label: staleInvites === 1 ? "invitación sin respuesta (3+ días)" : "invitaciones sin respuesta (3+ días)", href: "/dashboard/assessments?state=PENDING", cta: "Dar seguimiento" },
+    { count: jobsWithoutApps, label: jobsWithoutApps === 1 ? "vacante sin postulaciones desde hace más de 15 días" : "vacantes sin postulaciones desde hace más de 15 días", href: "/dashboard/jobs", cta: "Ajustar" },
+  ].filter(task => task.count > 0);
+
   return (
-    <main className="w-full">
-      <div className="mx-auto max-w-[1600px] 2xl:max-w-[1800px] space-y-5 px-3 py-3 sm:space-y-8 sm:px-6 sm:py-5 lg:px-10">
-        <div className="flex flex-wrap items-center gap-2.5 pb-1">
-          <h1 className="text-2xl font-bold leading-tight text-default sm:text-3xl">
-            Panel
-          </h1>
-
-          {company && (
-            <span className="badge inline-flex items-center gap-1.5">
-              {company.logoUrl && (
-                <Image
-                  src={company.logoUrl}
-                  alt={company.name}
-                  width={16}
-                  height={16}
-                  className="h-4 w-4 rounded-sm object-contain"
-                />
-              )}
-              <span className="max-w-[140px] truncate text-default sm:max-w-none">
-                {company.name}
-              </span>
-            </span>
-          )}
-
+    <main className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-5 text-zinc-900 dark:text-zinc-100 sm:px-6 lg:px-8">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
+          {company && <p className="mt-1 flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+            {company.logoUrl && <Image src={company.logoUrl} alt="" width={20} height={20} className="h-5 w-5 rounded object-contain" />}
+            <span className="break-words">{company.name}</span>
+          </p>}
         </div>
-
-        {emailUnverified && <BannerEmailUnverified />}
-
-        <SetupChecklist
-          user={{
-            name: dbUser?.name ?? (user?.name as string) ?? null,
-            emailVerified: dbUser?.emailVerified ?? null,
-          }}
-          profile={profile}
-          company={company}
-        />
-
-        {/* Hoy — lista de acción del día */}
-        <TodaySection
-          items={[
-            {
-              count: appsPending,
-              label: appsPending === 1 ? "candidato por revisar" : "candidatos por revisar",
-              icon: Inbox,
-              href: "/dashboard/candidates/pending",
-              cta: "Revisar",
-            },
-            {
-              count: attemptsToReview,
-              label:
-                attemptsToReview === 1
-                  ? "evaluación completada sin revisar"
-                  : "evaluaciones completadas sin revisar",
-              icon: ClipboardCheck,
-              href: "/dashboard/assessments?state=COMPLETED&sort=recent",
-              cta: "Ver resultados",
-            },
-            {
-              count: staleInvites,
-              label:
-                staleInvites === 1
-                  ? "invitación sin respuesta desde hace 3+ días"
-                  : "invitaciones sin respuesta desde hace 3+ días",
-              icon: Clock,
-              href: "/dashboard/assessments?state=PENDING",
-              cta: "Dar seguimiento",
-            },
-            {
-              count: jobsWithoutApps,
-              label:
-                jobsWithoutApps === 1
-                  ? "vacante sin postulaciones en 15 días"
-                  : "vacantes sin postulaciones en 15 días",
-              icon: Briefcase,
-              href: "/dashboard/jobs",
-              cta: "Ajustar",
-            },
-          ]}
-        />
-
-        {/* KPI Cards */}
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
-          <KpiCard
-            icon={Inbox}
-            eyebrow="Pipeline de entrada"
-            label="Candidatos por revisar"
-            value={nf(appsPending)}
-            tone="zinc"
-            description={
-              appsPending > 0
-                ? `${pendingShare}% del pipeline necesita una decision`
-                : "No tienes candidatos pendientes"
-            }
-            metricLabel="Pendientes"
-            metricValue={appsPending > 0 ? `${pendingShare}% del total` : "Al dia"}
-          />
-          <KpiCard
-            icon={Briefcase}
-            eyebrow="Oferta activa"
-            label="Vacantes abiertas"
-            value={nf(openJobs)}
-            tone="teal"
-            description={
-              jobsWithoutApps > 0
-                ? `${jobsWithoutApps} sin postulaciones despues de 15 dias`
-                : "Todas tus vacantes tienen movimiento"
-            }
-            metricLabel="Riesgo"
-            metricValue={jobsWithoutApps > 0 ? `${jobsWithoutApps} ajustar` : "Sin alertas"}
-            linkHref="/dashboard/jobs"
-            linkLabel="Ver vacantes"
-          />
-          <KpiCard
-            icon={Users}
-            eyebrow="Carga operativa"
-            label="Pipeline activo"
-            value={nf(activePipeline)}
-            tone="blue"
-            description={
-              `${nf(activePipeline)} procesos activos`
-            }
-            metricLabel="Activo"
-            metricValue={funnelTotal > 0 ? `${activePipelineShare}% del total` : "Sin datos"}
-            linkHref="/dashboard/overview#pipeline-candidatos"
-            linkLabel="Abrir pipeline"
-          />
-          <KpiCard
-            icon={CalendarDays}
-            eyebrow="Ultimos 7 dias"
-            label="Nuevas entradas"
-            value={nf(apps7d)}
-            tone="zinc"
-            description={
-              apps7d > 0
-                ? "Nueva actividad de candidatos esta semana"
-                : "Sin postulaciones nuevas esta semana"
-            }
-            metricLabel="Ritmo"
-            metricValue={apps7d > 0 ? `${nf(apps7d)} nuevas` : "Bajo"}
-            linkHref="/dashboard/overview#postulaciones-recientes"
-            linkLabel="Ver recientes"
-          />
-        </section>
-
-        <section className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-2">
-          <div
-            id="pipeline-candidatos"
-            className="glass-card scroll-mt-28 rounded-xl p-4 sm:p-5"
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-teal-500" />
-                <h2 className="text-sm font-semibold text-default sm:text-base">
-                  Pipeline de candidatos
-                </h2>
-              </div>
-              <span className="text-xs text-zinc-400">
-                {nf(funnelTotal)} total
-              </span>
-            </div>
-            <p className="mb-3 text-[11px] text-zinc-500 dark:text-zinc-400">Todas las postulaciones de la empresa, incluidas las de vacantes no abiertas.</p>
-
-            {funnelTotal === 0 ? (
-              <p className="py-4 text-center text-sm text-zinc-400">
-                Sin candidatos aún.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {funnelRows.map((key) => {
-                  const label = PIPELINE_LABELS[key] ?? ({ CLOSED: "Cerrados", HOLD: "En pausa", RECONCILIATION: "Requiere conciliación" } as Record<string, string>)[key];
-                  const { color, textColor } = funnelColors[key];
-                  const count = funnel[key];
-                  const width = funnelTotal > 0 ? (count / funnelTotal) * 100 : 0;
-
-                  return (
-                    <div key={key}>
-                      <div className="mb-1 flex items-center justify-between text-xs">
-                        <span className="font-medium text-zinc-600 dark:text-zinc-300">
-                          {label}
-                        </span>
-                        <span className={clsx("font-semibold", textColor)}>
-                          {nf(count)}{" "}
-                          <span className="font-normal text-zinc-400">
-                            ({pct(width)})
-                          </span>
-                        </span>
-                      </div>
-                      <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                        <div
-                          className={clsx(
-                            "h-2 rounded-full transition-all duration-500",
-                            color
-                          )}
-                          style={{
-                            width: `${Math.max(width, count > 0 ? 2 : 0)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            {funnelTotal > 0 && (
-              <div className="mt-4 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                <Link
-                  href="/dashboard/candidates/pending"
-                  className="inline-flex items-center rounded-full border border-zinc-200 bg-white px-3 py-1 text-xs text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-300"
-                >
-                  Ver sin revisar →
-                </Link>
-              </div>
-            )}
-          </div>
-
-          <div className="glass-card rounded-xl p-4 sm:p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-emerald-500" />
-                <h2 className="text-sm font-semibold text-default sm:text-base">
-                  AI Match por vacante
-                </h2>
-              </div>
-              {globalAvgMatch !== null && (
-                <span className="text-xs text-zinc-400">
-                  Promedio global:{" "}
-                  <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                    {pct(globalAvgMatch)}
-                  </span>
-                </span>
-              )}
-            </div>
-
-            {topJobs.length === 0 ? (
-              <p className="py-4 text-center text-sm text-zinc-400">
-                Sin vacantes aún.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {topJobs.map((job) => (
-                  <Link
-                    key={job.id}
-                    href={`/dashboard/jobs/${job.id}/applications`}
-                    className="block rounded-xl border border-zinc-100 bg-zinc-50/60 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/40 dark:border-zinc-800 dark:bg-zinc-900/40 dark:hover:border-emerald-700/40 dark:hover:bg-emerald-950/20"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-default">
-                          {job.title}
-                        </p>
-                        <p className="mt-0.5 text-[11px] text-zinc-400">
-                          {nf(job.appCount)} candidato
-                          {job.appCount !== 1 ? "s" : ""}
-                          {!job.hasSkills && (
-                            <span className="ml-1 text-zinc-300 dark:text-zinc-600">
-                              · sin skills definidas
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                      {job.avgMatch !== null ? (
-                        <div className="shrink-0 text-right">
-                          <span
-                            className={clsx(
-                              "text-base font-black leading-none",
-                              job.avgMatch >= 70
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : job.avgMatch >= 40
-                                ? "text-amber-600 dark:text-amber-400"
-                                : "text-red-500 dark:text-red-400"
-                            )}
-                          >
-                            {pct(job.avgMatch)}
-                          </span>
-                          <p className="text-[10px] text-zinc-400">promedio visible</p>
-                        </div>
-                      ) : (
-                        <span className="shrink-0 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] text-zinc-400 dark:border-zinc-700 dark:bg-zinc-800">
-                          {job.appCount === 0 ? "Sin candidatos" : matchPlan === "FREE" ? "AI Match bloqueado" : "Sin señales"}
-                        </span>
-                      )}
-                    </div>
-
-                    {job.avgMatch !== null && (
-                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-200/60 dark:bg-zinc-700/40">
-                        <div
-                          className={clsx(
-                            "h-1.5 rounded-full transition-all",
-                            job.avgMatch >= 70
-                              ? "bg-emerald-500"
-                              : job.avgMatch >= 40
-                              ? "bg-amber-400"
-                              : "bg-red-400"
-                          )}
-                          style={{ width: `${job.avgMatch}%` }}
-                        />
-                      </div>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="grid grid-cols-1 gap-5 sm:gap-6 lg:grid-cols-12">
-          <div
-            id="postulaciones-recientes"
-            className="glass-card scroll-mt-28 rounded-2xl p-3 sm:p-4 md:p-5 lg:col-span-7"
-          >
-            <div className="mb-3 flex items-center justify-between sm:mb-4">
-              <h2 className="text-sm font-semibold text-default sm:text-base">
-                Postulaciones recientes
-              </h2>
-              <Link
-                href="/dashboard/candidates/pending"
-                className="whitespace-nowrap text-xs text-teal-600 hover:underline dark:text-teal-400 sm:text-sm"
-              >
-                Ver todas →
-              </Link>
-            </div>
-
-            {recent.length === 0 ? (
-              <EmptyState
-                title="Sin postulaciones"
-                body="Cuando lleguen postulaciones las verás aquí."
-              />
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {recentWithReadModel.map((r) => (
-                  <div
-                    key={r.id}
-                    className="rounded-xl border border-zinc-100/80 bg-zinc-50/60 p-2.5 transition hover:border-blue-200 hover:bg-blue-50/60 dark:border-zinc-800/80 dark:bg-zinc-900/40 dark:hover:border-blue-500/40 dark:hover:bg-blue-950/40 sm:p-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <Link
-                        href={`/dashboard/jobs/${r.job.id}/applications`}
-                        className="min-w-0 flex-1"
-                      >
-                        <p className="truncate text-sm font-medium text-default">
-                          {r.candidate?.name || "Candidato sin nombre"}
-                        </p>
-                        <p className="truncate text-xs text-muted">
-                          {r.job?.title ?? "Vacante eliminada"} ·{" "}
-                          {fromNow(r.createdAt)}
-                        </p>
-                        <p className="hidden truncate text-[11px] text-zinc-400 sm:block">
-                          {r.candidate?.email || "—"}
-                        </p>
-                      </Link>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <span className="whitespace-nowrap rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-[10px] font-medium text-zinc-700 dark:border-zinc-500/40 dark:bg-zinc-900/30 dark:text-zinc-100 sm:text-[11px]">
-                          {r._presentation.label}
-                        </span>
-                        {r._presentation.column === "APPLIED" && (
-                          <QuickActionButtons
-                            applicationId={r.id}
-                            stateVersion={r.stateVersion}
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="glass-card rounded-xl p-3 sm:p-4 md:p-5 lg:col-span-5">
-            <div className="mb-3 flex items-center justify-between sm:mb-4">
-              <h2 className="text-sm font-semibold text-default sm:text-base">
-                Actividad reciente
-              </h2>
-            </div>
-
-            {recentActivity.length === 0 ? (
-              <EmptyState title="Sin actividad reciente" />
-            ) : (
-              <div className="space-y-3">
-                {recentActivity.map((activity) => {
-                  const isNew =
-                    activity.createdAt.getTime() === activity.updatedAt.getTime();
-
-                  return (
-                    <div
-                      key={activity.id}
-                      className="flex items-start gap-3 text-sm text-muted"
-                    >
-                      <div className="mt-0.5 shrink-0">
-                        {isNew ? (
-                          <TrendingUp className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                        ) : (
-                          <CheckCircle2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-zinc-400">
-                          {fromNow(activity.updatedAt)}
-                        </p>
-                        <p className="mt-0.5 text-sm text-default">
-                          {isNew ? (
-                            <>
-                              Nueva postulación —{" "}
-                              <span className="font-medium">
-                                {activity.job.title}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <span className="font-medium">
-                                {activity.candidate?.name ?? "Candidato"}
-                              </span>
-                              {" — "}
-                              {canonicalRecruiterReadsEnabled
-                                ? getRecruiterApplicationReadModel(activity, {
-                                    canonicalReadsEnabled: true,
-                                  }).label
-                                : STATUS_LABELS[activity.status] ?? "Actualización"}{" en "}
-                              <span className="font-medium">
-                                {activity.job.title}
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
       </div>
+
+      {emailUnverified && <BannerEmailUnverified />}
+
+      {!hasJobs ? (
+        <EmptyState title="Aún no tienes vacantes" body="Publica tu primera vacante para recibir postulaciones y gestionar tu proceso de selección." ctaHref="/dashboard/jobs/new" ctaLabel="Publicar vacante" />
+      ) : (
+        <div className={recentActivity.length > 0 ? "grid min-w-0 gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]" : "grid min-w-0 gap-6"}>
+          <section aria-labelledby="pending-title" className="min-w-0 max-w-2xl">
+            <h2 id="pending-title" className={headingClass}>Tu trabajo pendiente</h2>
+            {tasks.length > 0 ? <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {tasks.map(task => <li key={task.href + task.cta}>
+                <Link href={task.href} className="-mx-2 flex min-h-11 items-center justify-between gap-4 rounded-md px-2 py-2 text-sm !text-zinc-900 outline-none hover:bg-zinc-50 hover:no-underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:!text-zinc-100 dark:hover:bg-zinc-900">
+                  <span className="min-w-0"><span className="mr-1 font-semibold tabular-nums">{nf(task.count)}</span> {task.label}</span>
+                  <span className="shrink-0 font-medium text-emerald-700 dark:text-emerald-300">{task.cta}</span>
+                </Link>
+              </li>)}
+            </ul> : <p className="py-4 text-sm text-zinc-600 dark:text-zinc-400">
+              {appsTotal === 0 ? "Todavía no recibes postulaciones. Comparte tus vacantes para comenzar a recibir candidatos." : "No hay pendientes en las categorías de este resumen."}
+            </p>}
+
+            {recentWithReadModel.length > 0 && <details id="postulaciones-recientes" className="mt-2 border-t border-zinc-200 dark:border-zinc-800">
+              <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-900">Postulaciones recientes</summary>
+              <p className="mb-2 text-xs text-zinc-600 dark:text-zinc-400">{nf(apps7d)} nuevas en los últimos 7 días · Últimas {nf(recentWithReadModel.length)} postulaciones</p>
+              <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {recentWithReadModel.map(r => <li key={r.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <Link href={`/dashboard/jobs/${r.job.id}/applications`} className="min-w-0 flex-1 rounded text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
+                    <span className="block break-words font-medium">{r.candidate?.name || "Candidato sin nombre"}</span>
+                    <span className="mt-1 block break-words text-xs text-zinc-600 dark:text-zinc-400">{r.job.title} · {fromNow(r.createdAt)}</span>
+                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-700">{r._presentation.label}</span>
+                    {r._presentation.column === "APPLIED" && <div className="[&_button]:h-11 [&_button]:w-11"><QuickActionButtons applicationId={r.id} stateVersion={r.stateVersion} /></div>}
+                  </div>
+                </li>)}
+              </ul>
+              <Link href="/dashboard/candidates/pending" className={actionClass}>Ver candidatos por revisar</Link>
+            </details>}
+          </section>
+
+          <section aria-labelledby="jobs-title" className={`min-w-0 border-t border-zinc-200 pt-4 dark:border-zinc-800 ${recentActivity.length > 0 ? "lg:col-span-2" : ""}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id="jobs-title" className={headingClass}>Mis vacantes</h2>
+              <Link href="/dashboard/jobs" className={actionClass}>Ver todas</Link>
+            </div>
+            <p className="mb-1 text-xs text-zinc-600 dark:text-zinc-400">Hasta cinco vacantes, ordenadas por número de postulaciones.</p>
+            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {topJobs.map(job => <li key={job.id} className="grid min-w-0 gap-2 py-3 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center xl:gap-6">
+                <div className="min-w-0">
+                  <Link href={`/dashboard/jobs/${job.id}/applications`} className="rounded text-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600"><span className="break-words">{job.title}</span></Link>
+                  <span className="mt-1 block text-xs text-zinc-600 dark:text-zinc-400">{job.status === "OPEN" ? "Abierta" : job.status === "PAUSED" ? "En pausa" : "Cerrada"}</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm tabular-nums">
+                  <span>{nf(job.appCount)} {job.appCount === 1 ? "candidato" : "candidatos"}</span>
+                  <span>{nf(job.pendingCount)} por revisar</span>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                    {job.avgMatch !== null ? <>AI Match {pct(job.avgMatch)}</> : matchPlan === "FREE" && job.hasSkills ? "AI Match bloqueado" : "AI Match sin datos"}
+                  </span>
+                </div>
+                <Link href={`/dashboard/jobs/${job.id}`} aria-label={`Ver proceso de ${job.title}`} className={actionClass}>Ver proceso</Link>
+              </li>)}
+            </ul>
+            {globalAvgMatch !== null && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">AI Match · {pct(globalAvgMatch)} de promedio visible en este resumen. Solo incluye postulaciones con acceso según tu plan.</p>}
+          </section>
+
+          {recentActivity.length > 0 && <section aria-labelledby="activity-title" className="min-w-0 border-t border-zinc-200 pt-4 dark:border-zinc-800 lg:col-start-2 lg:row-start-1 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            <h2 id="activity-title" className={headingClass}>Actividad reciente</h2>
+            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {recentActivity.map(event => <li key={event.id} className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1 py-3 text-sm">
+                <div className="min-w-0 flex-1">
+                  <p>{eventLabels[event.type]}</p>
+                  <Link href={`/dashboard/jobs/${event.application.job.id}/applications`} className="mt-1 inline-block break-words rounded text-zinc-600 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-zinc-400">{event.application.candidate.name ?? "Candidato sin nombre"} · {event.application.job.title}</Link>
+                </div>
+                <time dateTime={event.happenedAt.toISOString()} className="text-xs text-zinc-600 dark:text-zinc-400">{fromNow(event.happenedAt)}</time>
+              </li>)}
+            </ul>
+          </section>}
+        </div>
+      )}
+
+      <SetupChecklist compact user={{ name: dbUser?.name ?? user?.name ?? null, emailVerified: dbUser?.emailVerified ?? null }} profile={profile} company={company} />
     </main>
   );
 }
 
-type TodayItem = {
-  count: number;
-  label: string;
-  icon: LucideIcon;
-  href: string;
-  cta: string;
+const actionClass = "inline-flex min-h-11 shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium text-emerald-700 outline-none hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:text-emerald-300 dark:hover:bg-emerald-950 dark:focus-visible:ring-offset-zinc-900";
+const headingClass = "text-base font-semibold tracking-tight";
+const eventLabels: Record<ApplicationEventType, string> = {
+  APPLICATION_CREATED: "Nueva postulación",
+  APPLICATION_STAGE_CHANGED: "Etapa actualizada",
+  APPLICATION_DISPOSITION_CHANGED: "Estado del proceso actualizado",
+  CANDIDATE_REJECTED: "Candidatura descartada",
+  CANDIDATE_WITHDREW: "Candidatura retirada",
+  CANDIDATE_HIRED: "Candidato contratado",
+  PROCESS_CANCELLED: "Proceso cancelado",
+  LEGACY_STATE_IMPORTED: "Estado histórico importado",
 };
 
-function TodaySection({ items }: { items: TodayItem[] }) {
-  const pending = items.filter((i) => i.count > 0);
-
-  return (
-    <section className="glass-card rounded-xl p-4 sm:p-5">
-      <div className="mb-2 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-default sm:text-base">Hoy</h2>
-        {pending.length > 0 && (
-          <span className="text-xs text-muted">
-            {pending.length} {pending.length === 1 ? "pendiente" : "pendientes"}
-          </span>
-        )}
-      </div>
-
-      {pending.length === 0 ? (
-        <p className="flex items-center gap-2 py-1 text-sm text-muted">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-          Todo al día — no tienes pendientes por ahora.
-        </p>
-      ) : (
-        <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {pending.map((item) => {
-            const Icon = item.icon;
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="group -mx-2 flex min-h-[44px] items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/40"
-                >
-                  <Icon className="h-4 w-4 shrink-0 text-zinc-400 dark:text-zinc-500" />
-                  <span className="flex-1 text-sm text-default">
-                    <span className="font-display text-base font-bold tracking-tight">
-                      {nf(item.count)}
-                    </span>{" "}
-                    {item.label}
-                  </span>
-                  <span className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-teal-600 group-hover:underline dark:text-teal-400">
-                    {item.cta}
-                    <ArrowRight className="h-3 w-3" />
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function KpiCard({
-  icon: Icon,
-  eyebrow,
-  label,
-  value,
-  tone = "zinc",
-  badge,
-  description,
-  metricLabel,
-  metricValue,
-  linkHref,
-  linkLabel,
-  featured = false,
-}: {
-  icon: LucideIcon;
-  eyebrow: string;
-  label: string;
-  value: string | number;
-  tone?: "zinc" | "emerald" | "amber" | "blue" | "teal";
-  badge?: string;
-  description: string;
-  metricLabel: string;
-  metricValue: string;
-  linkHref?: string;
-  linkLabel?: string;
-  featured?: boolean;
-}) {
-  const tones: Record<
-    string,
-    {
-      card: string;
-      iconBg: string;
-      iconColor: string;
-      badge: string;
-      value: string;
-      bar: string;
-      link: string;
-    }
-  > = {
-    zinc: {
-      card: "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800",
-      iconBg: "bg-zinc-100 dark:bg-zinc-800",
-      iconColor: "text-zinc-500 dark:text-zinc-400",
-      badge: "border-zinc-200 bg-zinc-100 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300",
-      value: "text-zinc-950 dark:text-zinc-50",
-      bar: "from-zinc-300 to-zinc-500 dark:from-zinc-600 dark:to-zinc-400",
-      link: "text-zinc-700 hover:text-zinc-950 dark:text-zinc-300 dark:hover:text-white",
-    },
-    teal: {
-      card: "bg-teal-50/60 dark:bg-teal-900/15 border-teal-200 dark:border-teal-800/50",
-      iconBg: "bg-teal-100 dark:bg-teal-900/40",
-      iconColor: "text-teal-600 dark:text-teal-400",
-      badge: "border-teal-200 bg-teal-100 text-teal-700 dark:border-teal-500/40 dark:bg-teal-900/40 dark:text-teal-300",
-      value: "text-teal-950 dark:text-teal-100",
-      bar: "from-teal-300 to-teal-600",
-      link: "text-teal-700 hover:text-teal-900 dark:text-teal-300 dark:hover:text-teal-100",
-    },
-    emerald: {
-      card: "bg-emerald-50/70 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/60",
-      iconBg: "bg-emerald-100 dark:bg-emerald-900/40",
-      iconColor: "text-emerald-600 dark:text-emerald-400",
-      badge: "border-emerald-200 bg-emerald-100 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-300",
-      value: "text-emerald-950 dark:text-emerald-100",
-      bar: "from-emerald-300 to-emerald-600",
-      link: "text-emerald-700 hover:text-emerald-900 dark:text-emerald-300 dark:hover:text-emerald-100",
-    },
-    amber: {
-      card: "bg-amber-50/70 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/60",
-      iconBg: "bg-amber-100 dark:bg-amber-900/40",
-      iconColor: "text-amber-600 dark:text-amber-400",
-      badge: "border-amber-200 bg-amber-100 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-300",
-      value: "text-amber-950 dark:text-amber-100",
-      bar: "from-amber-300 to-orange-500",
-      link: "text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100",
-    },
-    blue: {
-      card: "bg-blue-50/60 dark:bg-blue-900/15 border-blue-200 dark:border-blue-800/50",
-      iconBg: "bg-blue-100 dark:bg-blue-900/40",
-      iconColor: "text-blue-600 dark:text-blue-400",
-      badge: "border-blue-200 bg-blue-100 text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/40 dark:text-blue-300",
-      value: "text-blue-950 dark:text-blue-100",
-      bar: "from-blue-300 to-blue-600",
-      link: "text-blue-700 hover:text-blue-900 dark:text-blue-300 dark:hover:text-blue-100",
-    },
-  };
-
-  const t = tones[tone] ?? tones.zinc;
-
-  return (
-    <div
-      className={clsx(
-        "relative flex min-h-[168px] flex-col overflow-hidden rounded-xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md",
-        t.card,
-        featured && "ring-1 ring-amber-300/60 dark:ring-amber-500/30"
-      )}
-    >
-      <div className={clsx("absolute inset-x-0 top-0 h-1 bg-gradient-to-r", t.bar)} />
-
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className={clsx("flex h-9 w-9 shrink-0 items-center justify-center rounded-lg", t.iconBg)}>
-            <Icon className={clsx("h-4 w-4", t.iconColor)} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400 dark:text-zinc-500">
-              {eyebrow}
-            </p>
-            <h3 className="mt-1 truncate text-sm font-semibold text-zinc-700 dark:text-zinc-200">
-              {label}
-            </h3>
-          </div>
-        </div>
-
-        {badge && (
-          <span className={clsx("shrink-0 whitespace-nowrap rounded border px-2 py-0.5 text-xs font-semibold", t.badge)}>
-            {badge}
-          </span>
-        )}
-      </div>
-
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <p className={clsx("font-display text-4xl font-black leading-none tracking-tight", t.value)}>
-          {value}
-        </p>
-        <div className="rounded-xl border border-white/60 bg-white/65 px-2.5 py-1.5 text-right shadow-sm dark:border-white/10 dark:bg-zinc-950/35">
-          <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-            {metricLabel}
-          </p>
-          <p className="mt-0.5 whitespace-nowrap text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-            {metricValue}
-          </p>
-        </div>
-      </div>
-
-      <p className="mt-3 min-h-[34px] text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-        {description}
-      </p>
-
-      <div className="mt-auto pt-3">
-        {linkHref && linkLabel ? (
-          <Link
-            href={linkHref}
-            className={clsx("inline-flex items-center gap-1.5 text-xs font-bold transition hover:underline", t.link)}
-          >
-            {linkLabel}
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-400 dark:text-zinc-500">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Sin acciones pendientes
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-function EmptyState({
-  title,
-  body,
-  ctaHref,
-  ctaLabel,
-}: {
-  title: string;
-  body?: string;
-  ctaHref?: string;
-  ctaLabel?: string;
-}) {
-  return (
-    <div className="glass-card rounded-xl border border-dashed p-5 text-center sm:p-8">
-      <p className="text-sm font-medium text-default sm:text-base">{title}</p>
-      {body && <p className="mt-1 text-xs text-muted sm:text-sm">{body}</p>}
-      {ctaHref && ctaLabel && (
-        <div className="mt-4">
-          <Link href={ctaHref} className="btn-ghost text-sm">
-            {ctaLabel}
-          </Link>
-        </div>
-      )}
-    </div>
-  );
+function EmptyState({ title, body, ctaHref, ctaLabel }: { title: string; body?: string; ctaHref?: string; ctaLabel?: string }) {
+  return <section className="rounded-xl border border-zinc-200 bg-white px-5 py-8 dark:border-zinc-800 dark:bg-zinc-900 sm:py-12">
+    <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+    {body && <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">{body}</p>}
+    {ctaHref && ctaLabel && <Link href={ctaHref} className="btn btn-primary mt-5 min-h-11 bg-emerald-700 !text-white hover:bg-emerald-800">{ctaLabel}</Link>}
+  </section>;
 }

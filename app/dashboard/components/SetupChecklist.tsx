@@ -92,6 +92,17 @@ export default function SetupChecklist({
 
   if (done === total) return null;
 
+  if (compact) return (
+    <section aria-labelledby="setup-checklist-title" className="border-t border-zinc-200 pt-5 dark:border-zinc-800">
+      <h2 id="setup-checklist-title" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Configuración pendiente</h2>
+      <ul className="mt-2 divide-y divide-zinc-200 dark:divide-zinc-800">
+        {tasks.filter(task => !task.ok).map(task => <li key={task.key} className="flex flex-wrap items-center justify-between gap-3 py-2 text-sm text-zinc-600 dark:text-zinc-400 [&_button]:min-h-11 [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-emerald-600">
+          {task.href ? <Link href={task.href} className="inline-flex min-h-11 items-center rounded text-emerald-700 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-300">{task.label}</Link> : <><span>{task.label}</span>{task.action}</>}
+        </li>)}
+      </ul>
+    </section>
+  );
+
   return (
     <section
       aria-labelledby="setup-checklist-title"
