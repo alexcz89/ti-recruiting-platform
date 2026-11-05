@@ -32,5 +32,14 @@ export function isGroupActive(pathname: string, group: NavGroup) {
 }
 
 export function isRecruiterDashboard(pathname: string, role?: string) {
-  return role === "RECRUITER" && (pathname === "/dashboard" || pathname.startsWith("/dashboard/"));
+  return role === "RECRUITER" && isDashboardPath(pathname);
+}
+
+export function isDashboardPath(pathname: string) {
+  return pathname === "/dashboard" || pathname.startsWith("/dashboard/");
+}
+
+// A visual loading state, not authentication or authorization. Server guards remain authoritative.
+export function isDashboardSessionPending(status: string, role?: string) {
+  return status !== "authenticated" || !role;
 }

@@ -107,7 +107,7 @@ describe("recruiter dashboard presentation", () => {
     state.role = role; state.path = "/dashboard/notifications";
     const { container } = render(<Shell />);
     expect(container.querySelector("[data-recruiter-shell], [data-recruiter-header]")).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Notifications" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Notificaciones" })).toHaveLength(1);
     if (role === "ADMIN") expect(screen.getAllByRole("link", { name: "Admin" }).length).toBeGreaterThan(0);
     else expect(screen.getByRole("link", { name: "Evaluaciones" })).toHaveAttribute("href", "/assessments");
   });
@@ -119,10 +119,13 @@ describe("recruiter dashboard presentation", () => {
     if (path === "/assessments/template-demo") expect(screen.getByText("Modo evaluación")).toBeInTheDocument();
   });
 
-  it("does not infer a recruiter shell from pathname while the session is loading", () => {
+  it("reserves the shell while the dashboard session is loading without exposing recruiter navigation", () => {
     state.status = "loading";
     const { container } = render(<Shell />);
-    expect(container.querySelector("[data-recruiter-shell], [data-recruiter-header]")).toBeNull();
+    expect(container.querySelector("[data-recruiter-shell]")).toBeInTheDocument();
+    expect(container.querySelector("[data-recruiter-header]")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Navegación del reclutador" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Cargando sesión");
     expect(isRecruiterDashboard("/dashboard-other", "RECRUITER")).toBe(false);
   });
 });
