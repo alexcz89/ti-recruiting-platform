@@ -50,7 +50,6 @@ export default function Header() {
             <Link href="/dashboard/overview" aria-label="TaskIO, panel de reclutamiento" className="flex min-h-11 items-center rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-700 dark:focus-visible:outline-emerald-300">
               <LogoTaskio className="!h-8 !w-[84px] sm:!w-[140px]" />
             </Link>
-            <span className="hidden border-l border-zinc-200 pl-4 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400 lg:block">Panel de reclutamiento</span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
             <AuthArea compact />

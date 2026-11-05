@@ -30,6 +30,20 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); document.body.style.overflow
 function Shell() { return <><Header /><DashboardLayout><h1>Contenido existente</h1></DashboardLayout></>; }
 
 describe("recruiter dashboard presentation", () => {
+  it("keeps the header minimal without removing its accessible controls", () => {
+    render(<Shell />);
+    const header = screen.getByRole("banner");
+    expect(within(header).queryByText("Panel de reclutamiento")).not.toBeInTheDocument();
+    expect(header.querySelector(".border-l")).toBeNull();
+    const logo = within(header).getByRole("link", { name: "TaskIO, panel de reclutamiento" });
+    expect(logo).toHaveAttribute("href", "/dashboard/overview");
+    expect(within(header).getByRole("button", { name: "Abrir navegación del panel" })).toBeInTheDocument();
+    for (const name of ["Notificaciones", "Menú de usuario", "Cambiar a tema oscuro"]) {
+      const control = within(header).getByRole("button", { name });
+      control.focus(); expect(control).toHaveFocus();
+    }
+  });
+
   it("uses the existing destinations, labels, current page and one notifications instance", async () => {
     const { container } = render(<Shell />);
     expect(container.querySelector("[data-recruiter-shell]")).toBeInTheDocument();
