@@ -4,7 +4,7 @@ import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { ArrowRight, Users } from "lucide-react";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
-import { filterPendingRecruiterApplications } from "@/lib/hiring-process/recruiter-read-model";
+import { filterPendingRecruiterApplications } from "@/lib/hiring-process/recruiter-pending";
 
 export const metadata = { title: "Candidatos por revisar | Panel" };
 
@@ -23,25 +23,17 @@ export default async function PendingCandidatesPage() {
   const canonicalRecruiterReadsEnabled =
     isCanonicalHiringProcessRecruiterReadsEnabled();
 
-  // Keep the legacy query exact while disabled. When enabled, load only the
-  // canonical APPLIED rows and plausible legacy-fallback rows, then let the
-  // centralized read model make the final pending decision.
+  // Bounded state prefilter; the shared ATS presentation makes the final decision.
   const pendingCandidates = await prisma.application.findMany({
-    where: canonicalRecruiterReadsEnabled
-      ? {
-          job: { companyId },
-          OR: [
-            { stage: "APPLIED", disposition: "ACTIVE" },
-            {
-              recruiterInterest: "REVIEW",
-              OR: [{ stage: null }, { disposition: null }],
-            },
-          ],
-        }
-      : {
-          job: { companyId },
-          recruiterInterest: { notIn: ["MAYBE", "ACCEPTED", "REJECTED"] },
-        },
+    where: {
+      job: { companyId },
+      status: "SUBMITTED",
+      recruiterInterest: "REVIEW",
+      OR: [
+        { disposition: "ACTIVE" },
+        { stage: null, disposition: null },
+      ],
+    },
     include: {
       candidate: {
         select: {
@@ -60,9 +52,7 @@ export default async function PendingCandidatesPage() {
     },
     orderBy: { createdAt: "desc" },
   });
-  const pendingApps = filterPendingRecruiterApplications(pendingCandidates, {
-    canonicalReadsEnabled: canonicalRecruiterReadsEnabled,
-  });
+  const pendingApps = filterPendingRecruiterApplications(pendingCandidates, canonicalRecruiterReadsEnabled);
   const applicationsHref = (jobId: string) =>
     canonicalRecruiterReadsEnabled
       ? `/dashboard/jobs/${jobId}/applications?pipeline=APPLIED`

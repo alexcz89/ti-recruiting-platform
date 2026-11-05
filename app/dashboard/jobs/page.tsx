@@ -8,7 +8,7 @@ import AssignTemplateModalTrigger from "@/components/dashboard/AssignTemplateMod
 import AssessmentsBadge from "@/components/dashboard/AssessmentsBadge";
 import { Briefcase, Plus } from "lucide-react";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
-import { getRecruiterApplicationReadModel } from "@/lib/hiring-process/recruiter-read-model";
+import { countPendingRecruiterGroupedRows } from "@/lib/hiring-process/recruiter-pending";
 import { getAssessmentTemplateVisibilityWhere } from "@/lib/assessments/access";
 
 export const metadata = { title: "Vacantes | Panel" };
@@ -135,55 +135,19 @@ export default async function JobsPage({ searchParams }: { searchParams: SearchP
     }),
   ]);
 
-  // Get pending counts per job.
-  // Flag OFF preserves the legacy SUBMITTED behavior.
-  // Flag ON resolves each grouped application state through the canonical recruiter read model.
+  // The same ATS reader drives Overview, Vacantes and the pending queue.
   const jobIds = jobs.map((j) => j.id);
+  const groupedApplicationStates = jobIds.length
+    ? await prisma.application.groupBy({
+        by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion", "hiredAt", "rejectedAt", "rejectionEmailSent"],
+        where: { job: { companyId }, jobId: { in: jobIds } },
+        _count: { _all: true },
+      })
+    : [];
   const pendingMap = new Map<string, number>();
-  if (canonicalRecruiterReadsEnabled) {
-    const groupedApplicationStates = jobIds.length
-      ? await prisma.application.groupBy({
-          by: ["jobId", "stage", "disposition", "status", "recruiterInterest"],
-          where: { jobId: { in: jobIds } },
-          _count: { _all: true },
-        })
-      : [];
-
-    for (const row of groupedApplicationStates) {
-      const readModel = getRecruiterApplicationReadModel(
-        {
-          stage: row.stage,
-          disposition: row.disposition,
-          recruiterInterest: row.recruiterInterest,
-          status: row.status,
-        },
-        { canonicalReadsEnabled: true },
-      );
-
-      if (readModel.bucket !== "APPLIED") continue;
-
-      pendingMap.set(
-        row.jobId,
-        (pendingMap.get(row.jobId) ?? 0) + row._count._all,
-      );
-    }
-  } else {
-    const byJobPending = jobIds.length
-      ? await prisma.application.groupBy({
-          by: ["jobId"],
-          where: {
-            jobId: { in: jobIds },
-            status: "SUBMITTED",
-          },
-          _count: { _all: true },
-        })
-      : [];
-
-    for (const row of byJobPending) {
-      pendingMap.set(row.jobId, row._count._all);
-    }
+  for (const row of groupedApplicationStates) {
+    pendingMap.set(row.jobId, (pendingMap.get(row.jobId) ?? 0) + countPendingRecruiterGroupedRows([row], canonicalRecruiterReadsEnabled));
   }
-
   if (sp.filter === "pending") {
     jobs = jobs.filter(j => (pendingMap.get(j.id) || 0) > 0);
   } else if (sp.filter === "no-applications") {

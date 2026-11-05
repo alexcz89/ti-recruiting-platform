@@ -13,7 +13,7 @@ import { type BillingPlan } from "@/lib/ai/matchScore";
 import { buildRecruiterMatchJob, computeRecruiterMatch, getRecruiterMatchAccessIds, recruiterMatchCandidateSelect, recruiterMatchJobSelect } from "@/lib/ai/recruiter-match";
 import { isCanonicalHiringProcessRecruiterReadsEnabled } from "@/lib/hiring-process/feature-flags";
 import { getRecruitingPresentation } from "@/lib/hiring-process/recruiting-presentation";
-import { countRecruiterPresentationGroupedRows } from "@/lib/hiring-process/recruiter-list";
+import { countPendingRecruiterGroupedRows } from "@/lib/hiring-process/recruiter-pending";
 
 const nf = (n: number) => new Intl.NumberFormat("es-MX").format(n);
 const pct = (n: number) => `${Math.round(n)}%`;
@@ -116,18 +116,19 @@ export default async function OverviewPage() {
     recent,
     recentActivity,
   ] = await Promise.all([
-    // Count jobs without applications in last 15 days
+    // Open jobs older than 15 days with no applications.
     prisma.job.count({
       where: {
         companyId,
         createdAt: { lt: new Date(Date.now() - d15) },
+        status: "OPEN",
         applications: { none: {} },
       },
     }),
     // Minimal grouped state tuple; the centralized reader resolves canonical
     // authority and legacy fallback without loading full application rows.
     prisma.application.groupBy({
-      by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion"],
+      by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion", "hiredAt", "rejectedAt", "rejectionEmailSent"],
       where: { job: { companyId } },
       _count: { _all: true },
     }),
@@ -209,8 +210,7 @@ export default async function OverviewPage() {
     }),
   ]);
 
-  const funnel = countRecruiterPresentationGroupedRows(funnelRaw, canonicalRecruiterReadsEnabled);
-  const appsPending = funnel.APPLIED;
+  const appsPending = countPendingRecruiterGroupedRows(funnelRaw, canonicalRecruiterReadsEnabled);
   // Reuse the same complete grouped data, never the sampled AI Match cohort.
   const groupsByJob = new Map<string, typeof funnelRaw>();
   for (const group of funnelRaw) {
@@ -237,7 +237,7 @@ export default async function OverviewPage() {
       title: job.title,
       status: job.status,
       appCount: job._count.applications,
-      pendingCount: countRecruiterPresentationGroupedRows(groupsByJob.get(job.id) ?? [], canonicalRecruiterReadsEnabled).APPLIED,
+      pendingCount: countPendingRecruiterGroupedRows(groupsByJob.get(job.id) ?? [], canonicalRecruiterReadsEnabled),
       hasSkills: context.jobSkills.length > 0,
       avgMatch,
       createdAt: job.createdAt,
@@ -257,13 +257,13 @@ export default async function OverviewPage() {
   const hasJobs = totalJobs > 0 || topJobs.length > 0;
   const tasks = [
     { count: appsPending, label: appsPending === 1 ? "candidato por revisar" : "candidatos por revisar", href: "/dashboard/candidates/pending", cta: "Revisar" },
-    { count: attemptsToReview, label: attemptsToReview === 1 ? "evaluación completada sin revisar" : "evaluaciones completadas sin revisar", href: "/dashboard/assessments?state=COMPLETED&sort=recent", cta: "Ver resultados" },
-    { count: staleInvites, label: staleInvites === 1 ? "invitación sin respuesta desde hace 3+ días" : "invitaciones sin respuesta desde hace 3+ días", href: "/dashboard/assessments?state=PENDING", cta: "Dar seguimiento" },
+    { count: attemptsToReview, label: attemptsToReview === 1 ? "evaluación sin revisar" : "evaluaciones sin revisar", href: "/dashboard/assessments?state=COMPLETED&sort=recent", cta: "Ver resultados" },
+    { count: staleInvites, label: staleInvites === 1 ? "invitación sin respuesta (3+ días)" : "invitaciones sin respuesta (3+ días)", href: "/dashboard/assessments?state=PENDING", cta: "Dar seguimiento" },
     { count: jobsWithoutApps, label: jobsWithoutApps === 1 ? "vacante sin postulaciones desde hace más de 15 días" : "vacantes sin postulaciones desde hace más de 15 días", href: "/dashboard/jobs", cta: "Ajustar" },
   ].filter(task => task.count > 0);
 
   return (
-    <main className="mx-auto w-full max-w-[1600px] space-y-8 px-4 py-6 text-zinc-900 dark:text-zinc-100 sm:px-6 lg:px-8">
+    <main className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-5 text-zinc-900 dark:text-zinc-100 sm:px-6 lg:px-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
@@ -272,7 +272,6 @@ export default async function OverviewPage() {
             <span className="break-words">{company.name}</span>
           </p>}
         </div>
-        {hasJobs && <Link href="/dashboard/jobs/new" className="btn btn-primary min-h-11 bg-emerald-700 !text-white hover:bg-emerald-800">Publicar vacante</Link>}
       </div>
 
       {emailUnverified && <BannerEmailUnverified />}
@@ -280,13 +279,15 @@ export default async function OverviewPage() {
       {!hasJobs ? (
         <EmptyState title="Aún no tienes vacantes" body="Publica tu primera vacante para recibir postulaciones y gestionar tu proceso de selección." ctaHref="/dashboard/jobs/new" ctaLabel="Publicar vacante" />
       ) : (
-        <>
-          <section aria-labelledby="pending-title" className={sectionClass}>
+        <div className={recentActivity.length > 0 ? "grid min-w-0 gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,2fr)_minmax(16rem,1fr)]" : "grid min-w-0 gap-6"}>
+          <section aria-labelledby="pending-title" className="min-w-0 max-w-2xl">
             <h2 id="pending-title" className={headingClass}>Tu trabajo pendiente</h2>
             {tasks.length > 0 ? <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {tasks.map(task => <li key={task.href + task.cta} className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 py-3">
-                <p className="min-w-0 flex-1 text-sm"><span className="font-semibold tabular-nums">{nf(task.count)}</span> {task.label}</p>
-                <Link href={task.href} className={actionClass}>{task.cta}</Link>
+              {tasks.map(task => <li key={task.href + task.cta}>
+                <Link href={task.href} className="-mx-2 flex min-h-11 items-center justify-between gap-4 rounded-md px-2 py-2 text-sm !text-zinc-900 outline-none hover:bg-zinc-50 hover:no-underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:!text-zinc-100 dark:hover:bg-zinc-900">
+                  <span className="min-w-0"><span className="mr-1 font-semibold tabular-nums">{nf(task.count)}</span> {task.label}</span>
+                  <span className="shrink-0 font-medium text-emerald-700 dark:text-emerald-300">{task.cta}</span>
+                </Link>
               </li>)}
             </ul> : <p className="py-4 text-sm text-zinc-600 dark:text-zinc-400">
               {appsTotal === 0 ? "Todavía no recibes postulaciones. Comparte tus vacantes para comenzar a recibir candidatos." : "No hay pendientes en las categorías de este resumen."}
@@ -311,14 +312,14 @@ export default async function OverviewPage() {
             </details>}
           </section>
 
-          <section aria-labelledby="jobs-title" className={sectionClass}>
+          <section aria-labelledby="jobs-title" className={`min-w-0 border-t border-zinc-200 pt-4 dark:border-zinc-800 ${recentActivity.length > 0 ? "lg:col-span-2" : ""}`}>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 id="jobs-title" className={headingClass}>Mis vacantes</h2>
               <Link href="/dashboard/jobs" className={actionClass}>Ver todas</Link>
             </div>
-            <p className="mb-3 text-xs text-zinc-600 dark:text-zinc-400">Hasta cinco vacantes, ordenadas por número de postulaciones.</p>
+            <p className="mb-1 text-xs text-zinc-600 dark:text-zinc-400">Hasta cinco vacantes, ordenadas por número de postulaciones.</p>
             <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {topJobs.map(job => <li key={job.id} className="grid min-w-0 gap-3 py-4 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center xl:gap-6">
+              {topJobs.map(job => <li key={job.id} className="grid min-w-0 gap-2 py-3 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-center xl:gap-6">
                 <div className="min-w-0">
                   <Link href={`/dashboard/jobs/${job.id}/applications`} className="rounded text-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600"><span className="break-words">{job.title}</span></Link>
                   <span className="mt-1 block text-xs text-zinc-600 dark:text-zinc-400">{job.status === "OPEN" ? "Abierta" : job.status === "PAUSED" ? "En pausa" : "Cerrada"}</span>
@@ -336,7 +337,7 @@ export default async function OverviewPage() {
             {globalAvgMatch !== null && <p className="mt-2 text-xs text-zinc-600 dark:text-zinc-400">AI Match · {pct(globalAvgMatch)} de promedio visible en este resumen. Solo incluye postulaciones con acceso según tu plan.</p>}
           </section>
 
-          {recentActivity.length > 0 && <section aria-labelledby="activity-title" className={sectionClass}>
+          {recentActivity.length > 0 && <section aria-labelledby="activity-title" className="min-w-0 border-t border-zinc-200 pt-4 dark:border-zinc-800 lg:col-start-2 lg:row-start-1 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
             <h2 id="activity-title" className={headingClass}>Actividad reciente</h2>
             <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {recentActivity.map(event => <li key={event.id} className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1 py-3 text-sm">
@@ -348,7 +349,7 @@ export default async function OverviewPage() {
               </li>)}
             </ul>
           </section>}
-        </>
+        </div>
       )}
 
       <SetupChecklist compact user={{ name: dbUser?.name ?? user?.name ?? null, emailVerified: dbUser?.emailVerified ?? null }} profile={profile} company={company} />
@@ -357,7 +358,6 @@ export default async function OverviewPage() {
 }
 
 const actionClass = "inline-flex min-h-11 shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium text-emerald-700 outline-none hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:text-emerald-300 dark:hover:bg-emerald-950 dark:focus-visible:ring-offset-zinc-900";
-const sectionClass = "min-w-0 rounded-xl border border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900 sm:px-5";
 const headingClass = "text-base font-semibold tracking-tight";
 const eventLabels: Record<ApplicationEventType, string> = {
   APPLICATION_CREATED: "Nueva postulación",

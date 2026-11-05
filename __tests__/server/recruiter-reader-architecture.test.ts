@@ -69,9 +69,9 @@ describe("recruiter reader architecture", () => {
   it("keeps overview aggregation and current labels on the centralized read model", () => {
     const page = read("app", "dashboard", "overview", "page.tsx");
 
-    expect(page).toContain("countRecruiterPresentationGroupedRows");
+    expect(page).toContain("countPendingRecruiterGroupedRows");
     expect(page).toContain("getRecruitingPresentation");
-    expect(page).toContain('by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion"]');
+    expect(page).toContain('by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion", "hiredAt", "rejectedAt", "rejectionEmailSent"]');
     expect(page).not.toContain("for (const row of funnelRaw)");
   });
 
@@ -87,11 +87,11 @@ describe("recruiter reader architecture", () => {
     const page = read("app", "dashboard", "jobs", "page.tsx");
 
     expect(page).toContain("isCanonicalHiringProcessRecruiterReadsEnabled");
-    expect(page).toContain("getRecruiterApplicationReadModel");
+    expect(page).toContain("countPendingRecruiterGroupedRows");
     expect(page).toContain(
-      'by: ["jobId", "stage", "disposition", "status", "recruiterInterest"]',
+      'by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion", "hiredAt", "rejectedAt", "rejectionEmailSent"]',
     );
-    expect(page).toContain('readModel.bucket !== "APPLIED"');
+    expect(page).toContain('job: { companyId }, jobId: { in: jobIds }');
     expect(page).toContain("?pipeline=APPLIED");
   });
 

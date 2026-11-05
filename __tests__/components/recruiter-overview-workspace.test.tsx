@@ -7,6 +7,11 @@ import "@testing-library/jest-dom/vitest";
 const db = vi.hoisted(() => ({ session: vi.fn(), user: vi.fn(), profile: vi.fn(), company: vi.fn(), jobCount: vi.fn(), appCount: vi.fn(), attemptCount: vi.fn(), inviteCount: vi.fn(), groups: vi.fn(), jobs: vi.fn(), recent: vi.fn(), events: vi.fn() }));
 vi.mock("next-auth", () => ({ getServerSession: db.session }));
 vi.mock("@/lib/server/auth", () => ({ authOptions: {} }));
+vi.mock("@/lib/server/session", () => ({ getSessionCompanyId: async () => (await db.session())?.user?.companyId }));
+vi.mock("@/components/dashboard/JobActionsMenu", () => ({ default: () => null }));
+vi.mock("@/components/dashboard/JobsFilterBar", () => ({ default: () => null }));
+vi.mock("@/components/dashboard/AssignTemplateModalTrigger", () => ({ default: () => null }));
+vi.mock("@/components/dashboard/AssessmentsBadge", () => ({ default: () => null }));
 vi.mock("@/lib/server/prisma", () => ({ prisma: {
   user: { findUnique: db.user }, recruiterProfile: { findUnique: db.profile }, company: { findUnique: db.company },
   job: { count: db.jobCount, findMany: db.jobs }, application: { count: db.appCount, groupBy: db.groups, findMany: db.recent },
@@ -16,13 +21,17 @@ vi.mock("@/app/dashboard/components/actions", () => ({ resendVerificationAction:
 vi.mock("@/app/dashboard/components/BannerEmailUnverified", () => ({ default: () => <p>Verifica tu correo</p> }));
 vi.mock("@/app/dashboard/overview/QuickActionButtons", () => ({ default: ({ applicationId }: { applicationId: string }) => <button data-application={applicationId}>Acción existente</button> }));
 import Overview from "@/app/dashboard/overview/page";
+import JobsPage from "@/app/dashboard/jobs/page";
+import PendingPage from "@/app/dashboard/candidates/pending/page";
+import { filterPendingRecruiterApplications as oldPendingFilter } from "@/lib/hiring-process/recruiter-read-model";
+import { filterPendingRecruiterApplications, isPendingRecruiterApplication } from "@/lib/hiring-process/recruiter-pending";
 import Loading from "@/app/dashboard/overview/loading";
 import ErrorBoundary from "@/app/dashboard/overview/error";
 import SetupChecklist from "@/app/dashboard/components/SetupChecklist";
 
 const now = new Date("2026-11-05T12:00:00Z");
 const job = { id: "job-a", title: "Frontend", status: "OPEN", createdAt: now, _count: { applications: 3 }, applications: [], skills: [], requiredSkills: [], seniority: null, minYearsExperience: null };
-const applied = { jobId: "job-a", stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", stateVersion: 1, _count: { _all: 2 } };
+const applied = { jobId: "job-a", stage: "APPLIED", disposition: "ACTIVE", status: "SUBMITTED", recruiterInterest: "REVIEW", stateVersion: 1, _count: { _all: 2 } } as const;
 beforeEach(() => {
   vi.resetAllMocks(); vi.stubGlobal("React", React);
   vi.stubEnv("CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED", "true");
@@ -59,7 +68,12 @@ describe("recruiter operational overview", () => {
     db.jobCount.mockResolvedValueOnce(1).mockResolvedValueOnce(1); db.jobs.mockResolvedValue([job]);
     db.attemptCount.mockResolvedValue(2); db.inviteCount.mockResolvedValue(1);
     render(await Overview());
-    for (const [name, href] of [["Revisar", "/dashboard/candidates/pending"], ["Ver resultados", "/dashboard/assessments?state=COMPLETED&sort=recent"], ["Dar seguimiento", "/dashboard/assessments?state=PENDING"], ["Ajustar", "/dashboard/jobs"]]) expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
+    for (const [name, href] of [["Revisar", "/dashboard/candidates/pending"], ["Ver resultados", "/dashboard/assessments?state=COMPLETED&sort=recent"], ["Dar seguimiento", "/dashboard/assessments?state=PENDING"], ["Ajustar", "/dashboard/jobs"]]) {
+      const link = screen.getByRole("link", { name: new RegExp(`${name}$`) });
+      expect(link).toHaveAttribute("href", href);
+      expect(link.querySelector("a,button,input")).toBeNull();
+      link.focus(); expect(link).toHaveFocus();
+    }
     expect(db.jobs).toHaveBeenCalledOnce(); expect(db.groups).toHaveBeenCalledOnce();
     expect(db.jobs.mock.calls[0][0]).toMatchObject({ where: { companyId: "company-a" }, take: 5 });
     expect(db.groups.mock.calls[0][0].where).toEqual({ job: { companyId: "company-a" } });
@@ -126,5 +140,67 @@ describe("recruiter operational overview", () => {
     unmount();
     const { container } = render(<SetupChecklist compact user={{ emailVerified: now }} profile={{ status: "APPROVED", phone: "5555555555" }} company={{ id: "company-a", name: "Empresa A", website: "https://example.invalid", size: "ONE_TO_TEN" }} />);
     expect(container).toBeEmptyDOMElement();
+  });
+  it("removes the duplicate publishing CTA for an existing company and only alerts on old OPEN jobs", async () => {
+    await openWithJobs();
+    expect(screen.queryByRole("link", { name: "Publicar vacante" })).not.toBeInTheDocument();
+    expect(db.jobCount.mock.calls[1][0].where).toEqual({ companyId: "company-a", status: "OPEN", createdAt: { lt: expect.any(Date) }, applications: { none: {} } });
+  });
+  it.each([true, false])("reproduces the old 3-versus-5 discrepancy, reads=%s", reads => {
+    const valid = [applied, ...Array.from({ length: 2 }, () => ({ ...applied, stage: null, disposition: null, stateVersion: 0 }))];
+    const extras = reads
+      ? [{ ...applied, stage: "REVIEW" as const, disposition: null, status: "REVIEWING" }, { ...applied, status: "HIRED" }]
+      : Array.from({ length: 2 }, () => ({ ...applied, stage: null, disposition: null, stateVersion: 0, status: "REVIEWING" }));
+    const records = [...valid, ...extras];
+    expect(oldPendingFilter(records, { canonicalReadsEnabled: reads })).toHaveLength(5);
+    expect(filterPendingRecruiterApplications(records, reads)).toHaveLength(3);
+  });
+  it.each([true, false])("renders the same valid pending cohort in Overview, Vacantes and the queue, reads=%s", async reads => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED", String(reads));
+    const records = ([
+      { ...applied, id: "canonical", stateVersion: 1 },
+      { ...applied, id: "legacy-1", stage: null, disposition: null, stateVersion: 0 },
+      { ...applied, id: "legacy-2", stage: null, disposition: null, stateVersion: 0 },
+      { ...applied, id: "reviewing", stage: null, disposition: null, stateVersion: 0, status: "REVIEWING" },
+      { ...applied, id: "partial", stage: "REVIEW", disposition: null, status: "REVIEWING" },
+      { ...applied, id: "terminal", status: "HIRED" },
+      { ...applied, id: "rejected", recruiterInterest: "REJECTED" },
+      { ...applied, id: "paused", disposition: "HOLD" },
+      { ...applied, id: "footprint", hiredAt: now },
+      { ...applied, id: "rejection-footprint", rejectedAt: now },
+      { ...applied, id: "notified-rejection", rejectionEmailSent: true },
+    ] as const).map(record => ({ ...record, _count: { _all: 1 }, createdAt: now, candidate: { name: record.id, email: "qa@example.invalid" }, job: { id: "job-a", title: "Frontend" } }));
+    const before = structuredClone(records);
+    db.groups.mockResolvedValue(records); db.jobs.mockResolvedValue([{ ...job, assessments: [] }]); db.recent.mockResolvedValue(records); db.appCount.mockResolvedValue(records.length);
+    const overview = render(await Overview());
+    expect(screen.getByRole("region", { name: "Tu trabajo pendiente" })).toHaveTextContent("3 candidatos por revisar");
+    overview.unmount();
+    const jobs = render(await JobsPage({ searchParams: { status: "ALL" } }));
+    expect(screen.getByRole("table")).toHaveTextContent("3 revisar");
+    expect(db.groups.mock.calls.slice(-1)[0][0]).toMatchObject({ where: { job: { companyId: "company-a" }, jobId: { in: ["job-a"] } } });
+    jobs.unmount(); render(await PendingPage());
+    expect(screen.getByText("3 candidatos esperando tu revisión")).toBeInTheDocument();
+    for (const id of ["canonical", "legacy-1", "legacy-2"]) expect(screen.getByText(id)).toBeInTheDocument();
+    for (const id of ["reviewing", "partial", "terminal", "rejected", "paused", "footprint", "rejection-footprint", "notified-rejection"]) expect(screen.queryByText(id)).not.toBeInTheDocument();
+    expect(db.recent.mock.calls.slice(-1)[0][0].where.job).toEqual({ companyId: "company-a" });
+    expect(records).toEqual(before);
+    expect(records.filter(row => isPendingRecruiterApplication(row, reads))).toHaveLength(3);
+  });
+  it.each([true, false])("does not omit any counted state through the queue SQL prefilter, reads=%s", async reads => {
+    vi.stubEnv("CANONICAL_HIRING_PROCESS_RECRUITER_READS_ENABLED", String(reads));
+    await PendingPage();
+    const where = db.recent.mock.calls[0][0].where;
+    const prefilter = where.OR as Array<Record<string, unknown>>;
+    for (const stage of [null, "APPLIED", "REVIEW", "ASSESSMENT", "INTERVIEW", "OFFER", "CLOSED"] as const)
+      for (const disposition of [null, "ACTIVE", "HOLD", "HIRED", "REJECTED", "WITHDRAWN", "CANCELLED"] as const)
+        for (const status of ["SUBMITTED", "REVIEWING", "INTERVIEW", "OFFER", "HIRED", "REJECTED"])
+          for (const recruiterInterest of ["REVIEW", "MAYBE", "ACCEPTED", "REJECTED"])
+            for (const stateVersion of [0, 1]) {
+              const row = { stage, disposition, status, recruiterInterest, stateVersion };
+              if (!isPendingRecruiterApplication(row, reads)) continue;
+              expect(status).toBe(where.status);
+              expect(recruiterInterest).toBe(where.recruiterInterest);
+              expect(prefilter.some(group => Object.entries(group).every(([field, value]) => row[field as keyof typeof row] === value)), JSON.stringify(row)).toBe(true);
+            }
   });
 });
