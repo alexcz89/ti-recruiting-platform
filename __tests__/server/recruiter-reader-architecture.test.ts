@@ -70,8 +70,8 @@ describe("recruiter reader architecture", () => {
     const page = read("app", "dashboard", "overview", "page.tsx");
 
     expect(page).toContain("countRecruiterPresentationGroupedRows");
-    expect(page).toContain("getRecruiterApplicationReadModel");
-    expect(page).toContain('by: ["stage", "disposition", "status", "recruiterInterest", "stateVersion"]');
+    expect(page).toContain("getRecruitingPresentation");
+    expect(page).toContain('by: ["jobId", "stage", "disposition", "status", "recruiterInterest", "stateVersion"]');
     expect(page).not.toContain("for (const row of funnelRaw)");
   });
 
