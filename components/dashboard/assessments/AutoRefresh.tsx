@@ -42,9 +42,9 @@ export default function AutoRefresh({
   if (!hasInProgress) return null;
 
   return (
-    <div className="flex items-center gap-1.5 text-[10px] font-medium text-zinc-400 dark:text-zinc-500">
-      <RefreshCw className="h-3 w-3 animate-spin [animation-duration:3s]" />
-      <span>Auto-refresh en {countdown}s</span>
+    <div className="flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
+      <RefreshCw aria-hidden="true" className="h-3.5 w-3.5" />
+      <span>Actualización en {countdown}s</span>
     </div>
   );
 }
