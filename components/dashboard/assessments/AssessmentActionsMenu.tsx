@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import * as ReactDOM from "react-dom";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import Link from "next/link";
 import { createAssessmentResendBody } from "@/lib/assessments/resend-operation";
 import { useRouter } from "next/navigation";
@@ -13,7 +13,6 @@ import {
   ExternalLink,
   RotateCcw,
   FileText,
-  Link2,
 } from "lucide-react";
 
 type Props = {
@@ -23,6 +22,7 @@ type Props = {
   resultsUrl?: string | null;
   disabled?: boolean;
   className?: string;
+  ariaLabel?: string;
 };
 
 function cn(...xs: Array<string | undefined | null | false>) {
@@ -45,61 +45,7 @@ async function copyToClipboard(text: string) {
   document.body.removeChild(ta);
 }
 
-/**
- * Dropdown rendered in a portal so it never gets clipped by
- * the table container's overflow-hidden.
- * Exposes its DOM node via `portalRef` so the parent can include it
- * in the click-outside check.
- */
-function DropdownPortal({
-  anchorRef,
-  portalRef,
-  onClose,
-  children,
-}: {
-  anchorRef: React.RefObject<HTMLButtonElement | null>;
-  portalRef: React.RefObject<HTMLDivElement | null>;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const [pos, setPos] = React.useState<{ top: number; left: number } | null>(null);
-
-  React.useLayoutEffect(() => {
-    if (!anchorRef.current) return;
-    const rect = anchorRef.current.getBoundingClientRect();
-    // fixed positioning is viewport-relative — no scroll offset needed
-    setPos({
-      top: rect.bottom + 6,
-      left: rect.right - 224, // 224 = w-56
-    });
-  }, [anchorRef]);
-
-  // Close on scroll/resize so it doesn't get stale
-  React.useEffect(() => {
-    const close = () => onClose();
-    window.addEventListener("scroll", close, true);
-    window.addEventListener("resize", close);
-    return () => {
-      window.removeEventListener("scroll", close, true);
-      window.removeEventListener("resize", close);
-    };
-  }, [onClose]);
-
-  if (!pos) return null;
-
-  return ReactDOM.createPortal(
-    <div
-      ref={portalRef as React.RefObject<HTMLDivElement>}
-      role="menu"
-      style={{ top: pos.top, left: pos.left }}
-      className="fixed z-[9999] w-56 overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
-    >
-      {children}
-    </div>,
-    document.body
-  );
-}
-
+/** Existing actions, with the shared menu handling focus, keyboard and portal collisions. */
 export default function AssessmentActionsMenu({
   applicationId,
   templateId,
@@ -107,33 +53,11 @@ export default function AssessmentActionsMenu({
   resultsUrl,
   disabled,
   className,
+  ariaLabel = "Acciones",
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
-  const rootRef = React.useRef<HTMLDivElement | null>(null);
-  const btnRef = React.useRef<HTMLButtonElement | null>(null);
-  const portalRef = React.useRef<HTMLDivElement | null>(null);
-
-  React.useEffect(() => {
-    function onDown(e: MouseEvent) {
-      const target = e.target as Node;
-      // Keep open if click is inside the trigger button OR inside the portal dropdown
-      if (rootRef.current?.contains(target)) return;
-      if (portalRef.current?.contains(target)) return;
-      setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, []);
-
   const inviteUrlAbs =
     invitePath && typeof window !== "undefined"
       ? new URL(invitePath, window.location.origin).toString()
@@ -194,107 +118,25 @@ export default function AssessmentActionsMenu({
   const canResults = Boolean(resultsUrl);
 
   return (
-    <div ref={rootRef} className={cn("relative inline-flex", className)}>
-      <button
-        ref={btnRef}
-        type="button"
-        disabled={disabled || busy}
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "inline-flex h-9 w-9 items-center justify-center rounded-xl border transition-all",
-          "border-zinc-200 bg-white/90 text-zinc-800 hover:bg-zinc-50 hover:border-zinc-300",
-          "dark:border-zinc-700 dark:bg-zinc-950/60 dark:text-zinc-100 dark:hover:bg-zinc-900 dark:hover:border-zinc-600",
-          (disabled || busy) && "opacity-60 cursor-not-allowed"
-        )}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Acciones"
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </button>
-
-      {open && (
-        <DropdownPortal anchorRef={btnRef} portalRef={portalRef} onClose={() => setOpen(false)}>
-          <div className="p-2">
-            {/* Copiar link */}
-            <button
-              type="button"
-              role="menuitem"
-              disabled={!canCopy}
-              onClick={onCopyLink}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
-                canCopy
-                  ? "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
-              )}
-            >
-              {canCopy ? (
-                <ClipboardCopy className="h-4 w-4" />
-              ) : (
-                <Link2 className="h-4 w-4" />
-              )}
-              Copiar link
-            </button>
-
-            {/* Abrir link */}
-            <button
-              type="button"
-              role="menuitem"
-              disabled={!canOpen}
-              onClick={() => {
-                if (!inviteUrlAbs) return;
-                window.open(inviteUrlAbs, "_blank", "noopener,noreferrer");
-                setOpen(false);
-              }}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
-                canOpen
-                  ? "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
-              )}
-            >
-              <ExternalLink className="h-4 w-4" />
-              Abrir link
-            </button>
-
-            <div className="my-2 h-px bg-zinc-100 dark:bg-zinc-800" />
-
-            {/* Reenviar */}
-            <button
-              type="button"
-              role="menuitem"
-              disabled={!canResend || busy}
-              onClick={onResend}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm",
-                canResend && !busy
-                  ? "text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                  : "cursor-not-allowed text-zinc-400 dark:text-zinc-600"
-              )}
-            >
-              <RotateCcw className="h-4 w-4" />
-              {busy ? "Reenviando..." : "Reenviar assessment"}
-            </button>
-
-            {/* Ver resultados */}
-            {canResults && (
-              <>
-                <div className="my-2 h-px bg-zinc-100 dark:bg-zinc-800" />
-                <Link
-                  role="menuitem"
-                  href={resultsUrl!}
-                  onClick={() => setOpen(false)}
-                  className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900"
-                >
-                  <FileText className="h-4 w-4" />
-                  Ver resultados
-                </Link>
-              </>
-            )}
-          </div>
-        </DropdownPortal>
-      )}
-    </div>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" disabled={disabled || busy} aria-label={ariaLabel} className={cn("inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-zinc-700 outline-none hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-200 dark:hover:bg-zinc-800", className)}>
+          <MoreHorizontal aria-hidden="true" className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent compact align="end" collisionPadding={8} className="w-56 max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto">
+        <DropdownMenuItem compact className="min-h-11 text-sm" disabled={!canCopy} onSelect={event => { event.preventDefault(); void onCopyLink(); }}>
+          <ClipboardCopy aria-hidden="true" className="h-4 w-4" />Copiar link
+        </DropdownMenuItem>
+        <DropdownMenuItem compact className="min-h-11 text-sm" disabled={!canOpen} onSelect={() => { if (inviteUrlAbs) window.open(inviteUrlAbs, "_blank", "noopener,noreferrer"); }}>
+          <ExternalLink aria-hidden="true" className="h-4 w-4" />Abrir link
+        </DropdownMenuItem>
+        <DropdownMenuSeparator compact />
+        <DropdownMenuItem compact className="min-h-11 text-sm" disabled={!canResend || busy} onSelect={event => { event.preventDefault(); void onResend(); }}>
+          <RotateCcw aria-hidden="true" className="h-4 w-4" />{busy ? "Reenviando..." : "Reenviar assessment"}
+        </DropdownMenuItem>
+        {canResults && <><DropdownMenuSeparator compact /><DropdownMenuItem compact asChild className="min-h-11 text-sm"><Link href={resultsUrl!}><FileText aria-hidden="true" className="h-4 w-4" />Ver resultados</Link></DropdownMenuItem></>}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

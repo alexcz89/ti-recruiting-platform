@@ -9,22 +9,6 @@ import AssessmentActionsMenu from "@/components/dashboard/assessments/Assessment
 import AutoRefresh from "@/components/dashboard/assessments/AutoRefresh";
 import { authOptions } from '@/lib/server/auth';
 import { fromNow } from "@/lib/dates";
-import {
-  CheckCircle2,
-  XCircle,
-  Clock,
-  ShieldAlert,
-  Filter,
-  Search,
-  Briefcase,
-  ListChecks,
-  TrendingUp,
-  Users,
-  AlertTriangle,
-  Timer,
-  Download,
-  ArrowUpDown,
-} from "lucide-react";
 
 export const metadata = { title: "Evaluaciones | Panel" };
 export const dynamic = "force-dynamic";
@@ -51,16 +35,6 @@ function stateLabel(state: Exclude<StateFilter, "ALL">) {
   if (state === "EXPIRED") return "Expirada";
   if (state === "CANCELLED") return "Cancelada";
   return "Pendiente";
-}
-
-function tone(state: Exclude<StateFilter, "ALL">) {
-  if (state === "COMPLETED")
-    return "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800/50";
-  if (state === "IN_PROGRESS")
-    return "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800/50";
-  if (state === "EXPIRED" || state === "CANCELLED")
-    return "bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-900/50 dark:text-zinc-400 dark:border-zinc-700";
-  return "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800/50";
 }
 
 function fmtScore(n: any) {
@@ -160,20 +134,13 @@ export default async function CompanyAssessmentsPage({
   });
 
   if (!res.ok) {
-    return (
-      <main className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
-        <div className="mx-auto max-w-[1400px] px-4 py-12 sm:px-6 lg:px-8">
-          <div className="rounded-xl border border-red-200 bg-red-50 p-8 dark:border-red-900/50 dark:bg-red-950/20">
-            <p className="text-lg font-semibold text-red-900 dark:text-red-200">
-              Error cargando evaluaciones
-            </p>
-            <p className="mt-2 text-sm text-red-700 dark:text-red-300">
-              Status: {res.status}
-            </p>
-          </div>
-        </div>
-      </main>
-    );
+    return <main className={pageClass}>
+      <h1 className="text-2xl font-semibold tracking-tight">Evaluaciones</h1>
+      <div role="alert" className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
+        <p>No pudimos cargar las evaluaciones.</p>
+        <Link href={buildPageHref(searchParams, page)} className={actionClass}>Reintentar</Link>
+      </div>
+    </main>;
   }
 
   const data = await res.json();
@@ -181,600 +148,146 @@ export default async function CompanyAssessmentsPage({
   const rows: any[] = data.rows ?? [];
   const total: number = data.total ?? 0;
   const totalPages: number = data.totalPages ?? 1;
-
-  // Métricas
-  const mTotal = rows.length;
-  const mCompleted = rows.filter((r) => r.uiState === "COMPLETED").length;
-  const mInProgress = rows.filter((r) => r.uiState === "IN_PROGRESS").length;
-  const mPending = rows.filter((r) => r.uiState === "PENDING").length;
-  const mExpired = rows.filter((r) => r.uiState === "EXPIRED").length;
-  const hasInProgress = mInProgress > 0;
-
-  const scored = rows
-    .map((r) =>
-      typeof r.attempt?.totalScore === "number" ? r.attempt.totalScore : null
-    )
-    .filter((n: any) => n !== null) as number[];
-
-  const avgScore = scored.length
-    ? Math.min(100, Math.round(scored.reduce((s, n) => s + n, 0) / scored.length))
-    : 0;
-
-  const suspicious = rows.filter((r) => {
-    const sev = String(r.attempt?.severity ?? "").toUpperCase();
-    return sev === "SUSPICIOUS" || sev === "CRITICAL" || r.attempt?.multiSession;
-  }).length;
+  const hasInProgress = rows.some(row => row.uiState === "IN_PROGRESS");
+  const attemptFilter = hasAttempt === "1" || hasAttempt === "0";
+  const pageFilters = state !== "ALL" || attemptFilter;
+  const scoreSort = sort === "score_desc" || sort === "score_asc";
+  const filtered = Boolean(q || jobId || pageFilters);
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-zinc-50 via-white to-zinc-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
-      <div className="mx-auto max-w-[1400px] space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+    <main className={pageClass}>
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Evaluaciones</h1>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">Resultados y seguimiento de candidatos</p>
+      </header>
 
-        {/* Header */}
-        <div className="relative overflow-hidden rounded-3xl border border-zinc-200/80 bg-gradient-to-br from-white via-zinc-50/50 to-white p-6 shadow-sm dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
-          <div className="relative">
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl bg-teal-600 p-2 shadow-sm">
-                <ListChecks className="h-4 w-4 text-white" />
-              </div>
-            </div>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-900 dark:text-white">
-              Evaluaciones
-            </h1>
-            <p className="mt-1.5 max-w-2xl text-sm text-zinc-600 dark:text-zinc-300">
-              Monitorea el progreso de tus candidatos, revisa resultados y gestiona evaluaciones en tiempo real.
-            </p>
+      <form method="get" action="/dashboard/assessments" aria-label="Filtros de evaluaciones" className="space-y-2 border-b border-zinc-200 pb-3 dark:border-zinc-800">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-[minmax(12rem,2fr)_minmax(10rem,1fr)_minmax(9rem,1fr)]">
+          <div className="col-span-2 min-w-0 lg:col-span-1">
+            <label htmlFor="assessment-search" className={labelClass}>Buscar</label>
+            <input id="assessment-search" name="q" defaultValue={q} placeholder="Nombre, correo o evaluación" className={inputClass} />
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="assessment-job" className={labelClass}>Vacante</label>
+            <select id="assessment-job" name="jobId" defaultValue={jobId} className={inputClass}>
+              <option value="">Todas</option>
+              {jobs.map(job => <option key={job.id} value={job.id}>{job.title}</option>)}
+            </select>
+          </div>
+          <div className="min-w-0">
+            <label htmlFor="assessment-state" className={labelClass}>Estado</label>
+            <select id="assessment-state" name="state" defaultValue={state} className={inputClass}>
+              <option value="ALL">Todos</option><option value="PENDING">Pendiente</option><option value="IN_PROGRESS">En progreso</option><option value="COMPLETED">Completado</option><option value="EXPIRED">Expirada</option><option value="CANCELLED">Cancelada</option>
+            </select>
           </div>
         </div>
-
-        {/* Métricas */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <MetricCard label="Pendientes" value={mPending} icon={Clock} color="zinc" total={mTotal} />
-          <MetricCard label="En progreso" value={mInProgress} icon={TrendingUp} color="blue" total={mTotal} />
-          <MetricCard label="Completadas" value={mCompleted} icon={CheckCircle2} color="emerald" total={mTotal} />
-          <MetricCard label="Expiradas" value={mExpired} icon={Users} color="zinc" total={mTotal} />
-          <MetricCard label="Score prom." value={`${avgScore}%`} icon={TrendingUp} color="teal" isPercentage />
-          <MetricCard label="Alertas" value={suspicious} icon={AlertTriangle} color="amber" isAlert alertHref={"/dashboard/assessments?state=COMPLETED&cheat=1"} />
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <details open={attemptFilter || scoreSort} className="min-w-0 max-w-full">
+            <summary className="min-h-11 cursor-pointer rounded-md py-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">
+              Intentos y orden{(attemptFilter || scoreSort) && <span className="ml-2 text-xs text-emerald-700 dark:text-emerald-300">Activos</span>}
+            </summary>
+            <div className="grid gap-3 pb-2 sm:grid-cols-2">
+              <div className="min-w-0">
+                <label htmlFor="assessment-attempts" className={labelClass}>Intentos</label>
+                <select id="assessment-attempts" name="hasAttempt" defaultValue={hasAttempt} className={inputClass}><option value="">Todos</option><option value="1">Con intento</option><option value="0">Sin intento</option></select>
+              </div>
+              <div className="min-w-0">
+                <label htmlFor="assessment-sort" className={labelClass}>Ordenar</label>
+                <select id="assessment-sort" name="sort" defaultValue={sort} className={inputClass}><option value="recent">Más reciente</option><option value="score_desc">Calificación mayor a menor</option><option value="score_asc">Calificación menor a mayor</option></select>
+              </div>
+            </div>
+          </details>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="submit" className="btn btn-primary min-h-11 bg-emerald-700 hover:bg-emerald-800">Aplicar filtros</button>
+            <Link href="/dashboard/assessments" className={actionClass}>Limpiar</Link>
+            <a href={`/api/dashboard/assessments/export?${exportQs.toString()}`} download="evaluaciones.csv" title="Exporta hasta 2000 invitaciones de la búsqueda" className={actionClass}>Exportar CSV</a>
+          </div>
         </div>
+        {(pageFilters || scoreSort) && <p className="text-xs leading-5 text-zinc-600 dark:text-zinc-400">
+          {pageFilters && "Estado e intentos filtran la página actual; la paginación conserva las invitaciones de la búsqueda por nombre y vacante. "}
+          {scoreSort && "La calificación se ordena dentro de cada página."}
+        </p>}
+      </form>
 
-        {/* Auto-refresh indicator */}
-        {hasInProgress && (
-          <div className="flex justify-end">
-            <AutoRefresh hasInProgress={hasInProgress} intervalMs={30_000} />
-          </div>
-        )}
-
-        {/* Filtros */}
-        <form className="group relative overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm transition-all hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="p-5">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-12">
-              {/* Buscar */}
-              <div className="sm:col-span-2 lg:col-span-4">
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Buscar
-                </label>
-                <div className="group/input relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
-                  <input
-                    name="q"
-                    defaultValue={q}
-                    placeholder="Nombre, email o assessment..."
-                    className="h-10 w-full rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-3 text-sm text-zinc-900 shadow-sm outline-none transition-all placeholder:text-zinc-400 hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
-                  />
-                </div>
-              </div>
-
-              {/* Vacante */}
-              <div className="lg:col-span-2">
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Vacante
-                </label>
-                <div className="group/input relative">
-                  <Briefcase className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
-                  <select
-                    name="jobId"
-                    defaultValue={jobId}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
-                  >
-                    <option value="">Todas</option>
-                    {jobs.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {j.title}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                    <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Estado */}
-              <div className="lg:col-span-2">
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Estado
-                </label>
-                <div className="group/input relative">
-                  <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
-                  <select
-                    name="state"
-                    defaultValue={state}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
-                  >
-                    <option value="ALL">Todos</option>
-                    <option value="PENDING">Pendiente</option>
-                    <option value="IN_PROGRESS">En progreso</option>
-                    <option value="COMPLETED">Completado</option>
-                    <option value="EXPIRED">Expirada</option>
-                    <option value="CANCELLED">Cancelada</option>
-                  </select>
-                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                    <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Attempts */}
-              <div className="lg:col-span-2">
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Intentos
-                </label>
-                <div className="group/input relative">
-                  <ListChecks className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 transition-colors group-focus-within/input:text-teal-500" />
-                  <select
-                    name="hasAttempt"
-                    defaultValue={hasAttempt}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
-                  >
-                    <option value="">Todos</option>
-                    <option value="1">Con intento</option>
-                    <option value="0">Sin intento</option>
-                  </select>
-                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                    <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ordenar */}
-              <div className="lg:col-span-2">
-                <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  Ordenar
-                </label>
-                <div className="group/input relative">
-                  <ArrowUpDown className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-                  <select
-                    name="sort"
-                    defaultValue={sort}
-                    className="h-10 w-full appearance-none rounded-xl border border-zinc-200 bg-white/80 pl-10 pr-9 text-sm text-zinc-900 shadow-sm outline-none transition-all hover:border-zinc-300 focus:border-teal-500 focus:ring-2 focus:ring-teal-500/10 dark:border-zinc-700 dark:bg-zinc-950/50 dark:text-zinc-100 dark:hover:border-zinc-600 dark:focus:border-teal-400"
-                  >
-                    <option value="recent">Más reciente</option>
-                    <option value="score_desc">Score alto → bajo</option>
-                    <option value="score_asc">Score bajo → alto</option>
-                  </select>
-                  <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-                    <svg className="h-4 w-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 flex flex-col gap-2 border-t border-zinc-200/70 pt-4 dark:border-zinc-700/70 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                Mostrando{" "}
-                <span className="font-bold text-teal-600 dark:text-teal-400">{mTotal}</span>{" "}
-                de{" "}
-                <span className="font-bold text-zinc-900 dark:text-zinc-100">{total}</span>{" "}
-                resultados
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <a
-                  href={`/api/dashboard/assessments/export?${exportQs.toString()}`}
-                  download="evaluaciones.csv"
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border-2 border-emerald-200 bg-emerald-50 px-4 text-xs font-bold text-emerald-700 transition-all hover:bg-emerald-100 active:scale-[0.98] dark:border-emerald-800/50 dark:bg-emerald-950/30 dark:text-emerald-300 dark:hover:bg-emerald-900/40"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Exportar CSV
-                </a>
-                <button
-                  type="submit"
-                  className="group inline-flex h-9 items-center justify-center gap-2 rounded-xl bg-teal-600 px-4 text-xs font-bold text-white shadow-sm transition-all hover:bg-teal-700 hover:shadow-md active:scale-[0.98]"
-                >
-                  <Filter className="h-3.5 w-3.5 transition-transform group-hover:rotate-12" />
-                  Aplicar filtros
-                </button>
-                <Link
-                  href="/dashboard/assessments"
-                  className="inline-flex h-9 items-center justify-center rounded-xl border-2 border-zinc-200 bg-white px-4 text-xs font-bold text-zinc-700 transition-all hover:border-zinc-300 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
-                >
-                  Limpiar
-                </Link>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        {/* ✅ Tabla rediseñada — 5 columnas, sin scroll horizontal */}
+      <section aria-labelledby="assessment-results-title" className="min-w-0 space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="assessment-results-title" className="text-sm font-medium">{rows.length} en esta página <span className="font-normal text-zinc-600 dark:text-zinc-400">· {total} {pageFilters ? "invitaciones antes de filtrar estado e intentos" : "invitaciones para esta búsqueda"}</span></h2>
+          {hasInProgress && <AutoRefresh hasInProgress={hasInProgress} intervalMs={30_000} />}
+        </div>
+        {rows.length > 0 && <p className="hidden text-xs text-zinc-600 dark:text-zinc-400 sm:block xl:hidden">Desliza la tabla para consultar resultados y acciones.</p>}
         {rows.length === 0 ? (
-          <div className="relative overflow-hidden rounded-xl border border-dashed border-zinc-300 bg-white/50 p-12 text-center dark:border-zinc-700 dark:bg-zinc-900/50">
-            <div className="mx-auto max-w-md">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800">
-                <Search className="h-8 w-8 text-zinc-400" />
-              </div>
-              <p className="text-xl font-bold text-zinc-900 dark:text-zinc-100">No hay resultados</p>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
-                Ajusta los filtros o espera a que haya actividad de candidatos.
-              </p>
-            </div>
+          <div className="border-y border-zinc-200 py-8 dark:border-zinc-800">
+            <h3 className="font-medium">{filtered || total > 0 ? "No hay coincidencias en esta página" : "Todavía no hay evaluaciones"}</h3>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{filtered || total > 0 ? "Ajusta los filtros o consulta otra página de la búsqueda." : "Las invitaciones y los resultados de tus candidatos aparecerán aquí."}</p>
+            {filtered && <Link href="/dashboard/assessments" className={actionClass}>Ver sin filtros</Link>}
           </div>
         ) : (
-          <div className="rounded-3xl border border-zinc-200/80 bg-white/80 shadow-lg backdrop-blur-sm dark:border-zinc-800/50 dark:bg-zinc-900/80">
-            <table className="w-full text-sm">
-              <thead className="border-b border-zinc-200/80 bg-gradient-to-r from-zinc-50 via-white to-zinc-50 dark:border-zinc-800/50 dark:from-zinc-900 dark:via-zinc-900/50 dark:to-zinc-900">
-                <tr>
-                  <th className="w-[22%] rounded-tl-3xl whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                    Candidato
-                  </th>
-                  <th className="w-[28%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                    Assessment · Vacante
-                  </th>
-                  <th className="w-[22%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                    Estado · Score
-                  </th>
-                  <th className="w-[14%] whitespace-nowrap px-5 py-3.5 text-left text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                    Anti-cheat
-                  </th>
-                  <th className="w-[14%] rounded-tr-3xl whitespace-nowrap px-5 py-3.5 text-right text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-300">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className={"divide-y divide-zinc-100 dark:divide-zinc-800/50 [&>tr:last-child>td:first-child]:rounded-bl-3xl [&>tr:last-child>td:last-child]:rounded-br-3xl"}>
-                {rows.map((r) => {
-                  const inv = (r?.inv ?? r) as any;
-                  const attempt = (r?.attempt ?? null) as any;
-
+          <div role="region" aria-label="Tabla de evaluaciones" tabIndex={0} className="max-w-full overflow-x-auto rounded-sm border-y border-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:border-zinc-800">
+            <table className="w-full text-left text-sm max-sm:block sm:min-w-[900px] sm:table-fixed">
+              <caption className="sr-only">Resultados y seguimiento de evaluaciones</caption>
+              <colgroup className="max-sm:hidden"><col className="w-[20%]" /><col className="w-[27%]" /><col className="w-[18%]" /><col className="w-[17%]" /><col className="w-[18%]" /></colgroup>
+              <thead className="border-b border-zinc-200 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400 max-sm:sr-only"><tr>
+                {['Candidato', 'Evaluación y vacante', 'Estado y resultado', 'Integridad', 'Acciones'].map(label => <th key={label} scope="col" className="px-2 py-3 font-medium">{label}</th>)}
+              </tr></thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 max-sm:block">
+                {rows.map(r => {
+                  const inv = r?.inv ?? r;
+                  const attempt = r.attempt ?? null;
                   const st = r.uiState as Exclude<StateFilter, "ALL">;
-                  const stTone = tone(st);
-                  const stLabel = stateLabel(st);
-
-                  const scoreRaw =
-                    typeof attempt?.totalScore === "number"
-                      ? Math.min(100, attempt.totalScore)
-                      : attempt?.totalScore;
-                  const scoreTxt = fmtScore(scoreRaw);
-                  const passed = attempt?.passed === true;
-                  const hasFinal = Boolean(r.resultsUrl);
-
-                  const sev = String(attempt?.severity ?? "NORMAL").toUpperCase();
-                  const sevScore =
-                    typeof attempt?.severityScore === "number" ? attempt.severityScore : 0;
-                  const showAlert =
-                    sev === "SUSPICIOUS" || sev === "CRITICAL" || attempt?.multiSession;
-
-                  const lastActivity =
-                    attempt?.submittedAt ||
-                    attempt?.createdAt ||
-                    inv.updatedAt ||
-                    inv.createdAt;
-
-                  const templateId = String(inv?.templateId ?? inv?.template?.id ?? "");
-                  const token = String(inv?.token ?? "");
-                  const inviteLink =
-                    r.inviteLink ??
-                    (templateId && token
-                      ? `/assessments/${encodeURIComponent(templateId)}?token=${encodeURIComponent(token)}`
-                      : null);
-
-                  const resultsUrl =
-                    r.resultsUrl ??
-                    (attempt?.id
-                      ? `/dashboard/assessments/attempts/${attempt.id}/results`
-                      : null);
-
-                  const applicationId = String(
-                    inv?.applicationId ?? inv?.application?.id ?? ""
-                  );
-                  const menuTemplateId = templateId || null;
-
-                  return (
-                    <tr
-                      key={inv.id}
-                      className="group relative bg-white transition-all hover:bg-teal-50/40 dark:bg-zinc-900/50 dark:hover:bg-teal-950/10"
-                    >
-                      {/* Col 1: Candidato */}
-                      <td className="relative px-5 py-4">
-                        <div className="absolute left-0 top-0 h-full w-0.5 bg-teal-500 opacity-0 transition-opacity group-hover:opacity-100" />
-                        <Link
-                          href={`/dashboard/candidates/${inv.candidate?.id || "#"}`}
-                          className="flex items-center gap-2.5 transition-all hover:opacity-80"
-                        >
-                          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-bold text-teal-700 dark:bg-teal-900/40 dark:text-teal-300">
-                            {(inv.candidate?.name || "?").charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="truncate font-bold text-zinc-900 hover:text-teal-600 dark:text-zinc-50 dark:hover:text-teal-400">
-                              {inv.candidate?.name || "Sin nombre"}
-                            </p>
-                            <p className="truncate text-xs text-zinc-400 dark:text-zinc-500">
-                              {inv.candidate?.email}
-                            </p>
-                          </div>
-                        </Link>
-                      </td>
-
-                      {/* Col 2: Assessment + Vacante combinados */}
-                      <td className="px-5 py-4">
-                        <p className="truncate font-semibold text-zinc-900 dark:text-zinc-50">
-                          {inv.template?.title}
-                        </p>
-                        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500">
-                          {inv.application?.job?.title && (
-                            <>
-                              <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                              {inv.application?.job?.id ? (
-                                <Link
-                                  href={`/dashboard/jobs/${inv.application.job.id}/applications`}
-                                  className="truncate font-medium text-teal-600 hover:underline dark:text-teal-400"
-                                >
-                                  {inv.application.job.title}
-                                </Link>
-                              ) : (
-                                <span className="truncate">{inv.application.job.title}</span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                        {/* Actividad */}
-                        {lastActivity && (
-                          <p className="mt-0.5 text-[10px] text-zinc-400 dark:text-zinc-600">
-                            {fromNow(lastActivity)}
-                          </p>
-                        )}
-                      </td>
-
-                      {/* Col 3: Estado + Score combinados */}
-                      <td className="px-5 py-4">
-                        {/* Estado badge */}
-                        <div className="mb-2">
-                          <span
-                            className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${stTone}`}
-                          >
-                            {st === "COMPLETED" && (
-                              <CheckCircle2 className="h-2.5 w-2.5" />
-                            )}
-                            {st === "IN_PROGRESS" && (
-                              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
-                            )}
-                            {st === "PENDING" && <Clock className="h-2.5 w-2.5" />}
-                            {(st === "EXPIRED" || st === "CANCELLED") && (
-                              <XCircle className="h-2.5 w-2.5" />
-                            )}
-                            {stLabel}
-                          </span>
-                        </div>
-                        {/* Score + aprobado/reprobado */}
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`text-lg font-black ${
-                              typeof scoreRaw === "number"
-                                ? scoreRaw >= (attempt?.template?.passingScore ?? 65)
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-red-500 dark:text-red-400"
-                                : "text-zinc-400"
-                            }`}
-                          >
-                            {scoreTxt}
-                          </span>
-                          {hasFinal && attempt?.passed != null && (
-                            <span
-                              className={`text-[10px] font-semibold ${
-                                passed
-                                  ? "text-emerald-600 dark:text-emerald-400"
-                                  : "text-red-500 dark:text-red-400"
-                              }`}
-                            >
-                              {passed ? "✓ Aprobó" : "✗ No aprobó"}
-                            </span>
-                          )}
-                        </div>
-                        {/* Tiempo usado */}
-                        {st === "COMPLETED" && attempt?.timeSpent && (
-                          <div className="mt-1 flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                            <Timer className="h-3 w-3" />
-                            <span>{fmtTime(attempt.timeSpent)}</span>
-                            {typeof inv.template?.timeLimit === "number" && (
-                              <span className="text-zinc-300 dark:text-zinc-700">/ {inv.template.timeLimit}m</span>
-                            )}
-                          </div>
-                        )}
-                        {/* Botón directo "Ver resultados" para completadas */}
-                        {st === "COMPLETED" && resultsUrl && (
-                          <Link
-                            href={resultsUrl}
-                            className="mt-1.5 inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-[10px] font-semibold text-teal-700 transition-colors hover:bg-teal-100 dark:bg-teal-950/30 dark:text-teal-300 dark:hover:bg-teal-900/40"
-                          >
-                            Ver resultados →
-                          </Link>
-                        )}
-                      </td>
-
-                      {/* Col 4: Anti-cheat */}
-                      <td className="px-5 py-4">
-                        {showAlert ? (
-                          <div className="group/alert relative inline-flex">
-                            <span className="inline-flex cursor-help items-center gap-1.5 whitespace-nowrap rounded-full border-2 border-amber-400 bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-900 dark:border-amber-600/50 dark:bg-amber-900/30 dark:text-amber-200">
-                              <ShieldAlert className="h-3 w-3 flex-shrink-0 animate-pulse" />
-                              {sev === "CRITICAL" ? "Crítico" : sev === "SUSPICIOUS" ? "Sospechoso" : sev}
-                            </span>
-                            <div className="pointer-events-none absolute -top-7 left-0 z-10 whitespace-nowrap rounded-lg bg-zinc-900 px-2 py-1 text-[10px] text-white opacity-0 transition-opacity group-hover/alert:opacity-100">
-                              Score: {sevScore}
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-                            <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            Normal
-                          </span>
-                        )}
-                      </td>
-
-                      {/* Col 5: Acciones */}
-                      <td className="px-5 py-4 text-right">
-                        <AssessmentActionsMenu
-                          applicationId={applicationId || null}
-                          templateId={menuTemplateId}
-                          invitePath={inviteLink}
-                          resultsUrl={resultsUrl}
-                        />
-                      </td>
-                    </tr>
-                  );
+                  const candidateName = inv.candidate?.name || "Sin nombre";
+                  const templateId = String(inv.templateId ?? inv.template?.id ?? "");
+                  const token = String(inv.token ?? "");
+                  const inviteLink = r.inviteLink ?? (templateId && token ? `/assessments/${encodeURIComponent(templateId)}?token=${encodeURIComponent(token)}` : null);
+                  const resultsUrl = r.resultsUrl ?? (attempt?.id ? `/dashboard/assessments/attempts/${attempt.id}/results` : null);
+                  const final = Boolean(r.resultsUrl) || st === "COMPLETED";
+                  const score = typeof attempt?.totalScore === "number" ? Math.min(100, attempt.totalScore) : attempt?.totalScore;
+                  const severity = String(attempt?.severity ?? "").toUpperCase();
+                  const alert = severity === "CRITICAL" || severity === "SUSPICIOUS" || attempt?.multiSession;
+                  const lastActivity = attempt?.submittedAt || attempt?.createdAt || inv.updatedAt || inv.createdAt;
+                  return <tr key={inv.id} className="align-top hover:bg-zinc-50 dark:hover:bg-zinc-900 max-sm:block max-sm:py-3">
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
+                      {inv.candidate?.id ? <Link href={`/dashboard/candidates/${inv.candidate.id}`} title={candidateName} className="block truncate rounded font-medium !text-zinc-900 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:!text-zinc-100">{candidateName}</Link> : <span className="block truncate" title={candidateName}>{candidateName}</span>}
+                      <p className="mt-1 truncate text-xs text-zinc-600 dark:text-zinc-400" title={inv.candidate?.email}>{inv.candidate?.email}</p>
+                    </td>
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
+                      <p className="truncate font-medium" title={inv.template?.title}>{inv.template?.title || "Evaluación sin título"}</p>
+                      {inv.application?.job?.id ? <Link href={`/dashboard/jobs/${inv.application.job.id}/applications`} title={inv.application.job.title} className="mt-1 block truncate rounded text-xs text-emerald-700 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-300">{inv.application.job.title}</Link> : <span className="mt-1 block text-xs text-zinc-600 dark:text-zinc-400">Sin vacante vinculada</span>}
+                      {lastActivity && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{fromNow(lastActivity)}</p>}
+                    </td>
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
+                      <p className={st === "IN_PROGRESS" ? "font-medium text-blue-700 dark:text-blue-300" : "font-medium"}>{stateLabel(st)}</p>
+                      {final ? <p className={`mt-1 tabular-nums ${attempt?.passed === true ? "text-emerald-700 dark:text-emerald-300" : attempt?.passed === false ? "text-rose-700 dark:text-rose-300" : "text-zinc-600 dark:text-zinc-400"}`}><span className="font-semibold">{fmtScore(score)}</span>{typeof attempt?.passed === "boolean" && <span className="ml-2 text-xs">{attempt.passed ? "Aprobó" : "No aprobó"}</span>}</p> : <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Sin resultado final</p>}
+                      {st === "COMPLETED" && attempt?.timeSpent ? <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{fmtTime(attempt.timeSpent)}{typeof inv.template?.timeLimit === "number" ? ` / ${inv.template.timeLimit}m` : ""}</p> : null}
+                    </td>
+                    <td className="px-2 py-3 text-xs max-sm:block max-sm:px-0 max-sm:py-1"><span className="mr-1 font-medium text-zinc-500 sm:hidden">Integridad:</span>
+                      {alert ? <details><summary className="min-h-11 cursor-pointer rounded font-medium text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-amber-200">Revisar señales</summary><p className="leading-5 text-zinc-600 dark:text-zinc-400">{severity === "CRITICAL" ? "Nivel crítico." : severity === "SUSPICIOUS" ? "Nivel sospechoso." : "Señal registrada."}{attempt.multiSession ? " Varias sesiones." : ""}{typeof attempt.severityScore === "number" ? ` Indicador: ${attempt.severityScore}.` : ""}</p></details> : <span className="text-zinc-600 dark:text-zinc-400">{attempt ? "Sin datos suficientes" : "Sin datos"}</span>}
+                    </td>
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
+                      <div className="flex items-center justify-end gap-1 max-sm:justify-between">
+                        {st === "COMPLETED" && resultsUrl && <Link href={resultsUrl} aria-label={`Ver resultados de ${candidateName}`} className={actionClass}>Ver resultados</Link>}
+                        <AssessmentActionsMenu applicationId={String(inv.applicationId ?? inv.application?.id ?? "") || null} templateId={templateId || null} invitePath={inviteLink} resultsUrl={resultsUrl} ariaLabel={`Acciones de evaluación de ${candidateName}`} />
+                      </div>
+                    </td>
+                  </tr>;
                 })}
               </tbody>
             </table>
-
-            {/* Paginación */}
-            <div className="flex flex-col gap-2 rounded-b-xl border-t border-zinc-200/80 bg-zinc-50/60 px-5 py-3 dark:border-zinc-800/50 dark:bg-zinc-900/40 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-xs text-zinc-600 dark:text-zinc-300">
-                Página{" "}
-                <span className="font-black text-teal-600 dark:text-teal-400">{page}</span>{" "}
-                de{" "}
-                <span className="font-black text-zinc-900 dark:text-zinc-100">{totalPages}</span>
-              </p>
-              <div className="flex gap-2">
-                <PagerLink disabled={page <= 1} href={buildPageHref(searchParams, page - 1)}>
-                  ← Anterior
-                </PagerLink>
-                <PagerLink
-                  disabled={page >= totalPages}
-                  href={buildPageHref(searchParams, page + 1)}
-                >
-                  Siguiente →
-                </PagerLink>
-              </div>
-            </div>
           </div>
         )}
-      </div>
+        {rows.length > 0 && <p className="text-xs text-zinc-600 dark:text-zinc-400">Las señales de integridad requieren revisión; no determinan fraude.</p>}
+        <nav aria-label="Paginación de evaluaciones" className="flex flex-wrap items-center justify-between gap-3 pt-2 text-sm">
+          <p className="text-zinc-600 dark:text-zinc-400">Página {page} de {totalPages}</p>
+          <div className="flex gap-2"><PagerLink disabled={page <= 1} href={buildPageHref(searchParams, page - 1)}>Anterior</PagerLink><PagerLink disabled={page >= totalPages} href={buildPageHref(searchParams, page + 1)}>Siguiente</PagerLink></div>
+        </nav>
+      </section>
     </main>
   );
 }
 
-function PagerLink({
-  href,
-  disabled,
-  children,
-}: {
-  href: string;
-  disabled?: boolean;
-  children: ReactNode;
-}) {
-  if (disabled) {
-    return (
-      <span className="inline-flex items-center rounded-xl border-2 border-zinc-200 bg-zinc-100 px-3 py-2 text-xs font-bold text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-600">
-        {children}
-      </span>
-    );
-  }
-  return (
-    <Link
-      href={href}
-      className="inline-flex items-center rounded-xl border-2 border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-700 transition-all hover:border-teal-300 hover:bg-teal-50 hover:text-teal-700 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-teal-700 dark:hover:bg-teal-900/20 dark:hover:text-teal-300"
-    >
-      {children}
-    </Link>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-  total,
-  isPercentage,
-  isAlert,
-  alertHref,
-}: {
-  label: string;
-  value: string | number;
-  icon: any;
-  color: "blue" | "emerald" | "zinc" | "teal" | "amber";
-  total?: number;
-  isPercentage?: boolean;
-  isAlert?: boolean;
-  alertHref?: string;
-}) {
-  const colors = {
-    blue: { bg: "from-blue-500 to-cyan-500", shadow: "shadow-blue-500/25", text: "text-blue-600 dark:text-blue-400", bar: "bg-blue-500" },
-    emerald: { bg: "from-emerald-500 to-teal-500", shadow: "shadow-emerald-500/25", text: "text-emerald-600 dark:text-emerald-400", bar: "bg-emerald-500" },
-    zinc: { bg: "from-zinc-400 to-zinc-500", shadow: "shadow-zinc-500/25", text: "text-zinc-600 dark:text-zinc-400", bar: "bg-zinc-500" },
-    teal: { bg: "from-teal-500 to-cyan-500", shadow: "shadow-teal-500/25", text: "text-teal-600 dark:text-teal-400", bar: "bg-teal-500" },
-    amber: { bg: "from-amber-500 to-orange-500", shadow: "shadow-amber-500/25", text: "text-amber-600 dark:text-amber-400", bar: "bg-amber-500" },
-  };
-
-  const c = colors[color];
-  const percentage = total ? Math.round((Number(value) / total) * 100) : 0;
-
-  const inner = (
-    <div className="relative">
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-          {label}
-        </span>
-        <div className={`rounded-lg bg-gradient-to-br ${c.bg} p-1 ${c.shadow} shadow-md`}>
-          <Icon className="h-3 w-3 text-white" />
-        </div>
-      </div>
-      <div className="mt-2">
-        <p className={`text-2xl font-black ${c.text}`}>{value}</p>
-      </div>
-      {total && !isPercentage && !isAlert && typeof value === "number" && (
-        <div className="mt-2">
-          <div className="h-1 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-            <div
-              className={`h-full ${c.bar} transition-all duration-500 ease-out`}
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-          <p className="mt-0.5 text-[10px] font-semibold text-zinc-500 dark:text-zinc-400">
-            {percentage}% del total
-          </p>
-        </div>
-      )}
-      {isAlert && alertHref && typeof value === "number" && value > 0 && (
-        <p className="mt-1.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-          Ver alertas →
-        </p>
-      )}
-    </div>
-  );
-
-  const wrapperClass =
-    "group relative overflow-hidden rounded-xl border border-zinc-200/80 bg-white/80 p-4 shadow-sm transition-all hover:scale-[1.02] hover:shadow-md dark:border-zinc-800/50 dark:bg-zinc-900/80";
-
-  if (alertHref && isAlert && typeof value === "number" && value > 0) {
-    return (
-      <Link href={alertHref} className={wrapperClass}>
-        <div className={`absolute -right-3 -top-3 h-20 w-20 rounded-full bg-gradient-to-br ${c.bg} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
-        {inner}
-      </Link>
-    );
-  }
-
-  return (
-    <div className={wrapperClass}>
-      <div className={`absolute -right-3 -top-3 h-20 w-20 rounded-full bg-gradient-to-br ${c.bg} opacity-10 blur-2xl transition-opacity group-hover:opacity-20`} />
-      {inner}
-    </div>
-  );
+const pageClass = "mx-auto w-full max-w-[1600px] space-y-4 px-4 py-5 text-zinc-900 dark:text-zinc-100 sm:px-6 lg:px-8";
+const labelClass = "mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400";
+const inputClass = "h-11 w-full min-w-0 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
+const actionClass = "inline-flex min-h-11 shrink-0 items-center justify-center rounded-md px-2 text-sm font-medium text-emerald-700 outline-none hover:bg-emerald-50 focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-300 dark:hover:bg-emerald-950";
+function PagerLink({ href, disabled, children }: { href: string; disabled?: boolean; children: ReactNode }) {
+  return disabled ? <span aria-disabled="true" className="inline-flex min-h-11 items-center px-2 text-zinc-500 dark:text-zinc-500">{children}</span> : <Link href={href} className={actionClass}>{children}</Link>;
 }
