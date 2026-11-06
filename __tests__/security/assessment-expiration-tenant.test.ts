@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
   includeDashboardAttempt: false,
 }));
 
-const mocks = vi.hoisted(() => ({ getServerSession: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getServerSession: vi.fn(), selectAssessmentPage: vi.fn() }));
 
 const inviteRow = () => ({
   id: "invite-a",
@@ -103,6 +103,10 @@ const prismaMock = {
   user: { findUnique: vi.fn(async () => ({ id: "candidate-a", name: "Candidate A", email: "a@example.com" })) },
 };
 
+vi.mock("@/lib/assessments/dashboard-page-query", () => ({
+  selectAssessmentPage: mocks.selectAssessmentPage,
+}));
+
 vi.mock("next-auth", () => ({ getServerSession: mocks.getServerSession }));
 vi.mock("@/lib/server/auth", () => ({ authOptions: {} }));
 vi.mock("@/lib/server/prisma", () => ({ prisma: prismaMock }));
@@ -125,6 +129,16 @@ describe("assessment expiration remains tenant isolated", () => {
     state.inviteExpiresAt = new Date(0);
     state.attemptExpiresAt = null;
     state.includeDashboardAttempt = false;
+
+    mocks.selectAssessmentPage.mockImplementation(async () => ({
+      total: 1,
+      rows: [{
+        inviteId: "invite-a",
+        attemptId: state.includeDashboardAttempt ? "attempt-dashboard" : null,
+        uiState: state.includeDashboardAttempt ? "IN_PROGRESS" : "EXPIRED",
+      }],
+    }));
+
     mocks.getServerSession.mockResolvedValue({
       user: { id: "recruiter-a", role: "RECRUITER" },
     });
