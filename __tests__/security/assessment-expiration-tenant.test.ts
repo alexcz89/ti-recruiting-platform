@@ -103,7 +103,8 @@ const prismaMock = {
   user: { findUnique: vi.fn(async () => ({ id: "candidate-a", name: "Candidate A", email: "a@example.com" })) },
 };
 
-vi.mock("@/lib/assessments/dashboard-page-query", () => ({
+vi.mock("@/lib/assessments/dashboard-page-query", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/assessments/dashboard-page-query")>(),
   selectAssessmentPage: mocks.selectAssessmentPage,
 }));
 

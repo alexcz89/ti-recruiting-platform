@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 
 import AssessmentActionsMenu from "@/components/dashboard/assessments/AssessmentActionsMenu";
 import AutoRefresh from "@/components/dashboard/assessments/AutoRefresh";
+import AssessmentExportButton from "@/components/dashboard/assessments/AssessmentExportButton";
 import { authOptions } from '@/lib/server/auth';
 import { fromNow } from "@/lib/dates";
 
@@ -200,7 +201,7 @@ export default async function CompanyAssessmentsPage({
           <div className="flex flex-wrap items-center gap-2">
             <button type="submit" className="btn btn-primary min-h-11 bg-emerald-700 hover:bg-emerald-800">Aplicar filtros</button>
             <Link href="/dashboard/assessments" className={actionClass}>Limpiar</Link>
-            <a href={`/api/dashboard/assessments/export?${exportQs.toString()}`} download="evaluaciones.csv" title="Exporta hasta 2000 invitaciones de la búsqueda" className={actionClass}>Exportar CSV</a>
+            <AssessmentExportButton href={`/api/dashboard/assessments/export?${exportQs.toString()}`} className={actionClass} />
           </div>
         </div>
 

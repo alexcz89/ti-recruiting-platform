@@ -38,7 +38,8 @@ describe("recruiter assessments operational workspace", () => {
     const [url, options] = mocks.fetch.mock.calls[0];
     expect(new URL(url).searchParams.get("q")).toBe("QA"); expect(new URL(url).searchParams.get("state")).toBe("COMPLETED");
     expect(options).toEqual({ cache: "no-store", headers: { cookie: "synthetic-session=qa" } });
-    const exportUrl = screen.getByRole("link", { name: "Exportar CSV" }).getAttribute("href")!;
+    fireEvent.click(screen.getByRole("button", { name: "Exportar CSV" }));
+    const exportUrl = mocks.fetch.mock.calls[1][0] as string;
     expect(exportUrl).toContain("state=COMPLETED"); expect(exportUrl).toContain("hasAttempt=1"); expect(exportUrl).toContain("sort=score_desc"); expect(exportUrl).not.toContain("page=");
   });
   it("prioritizes five accessible columns, real score 0 and existing destinations", async () => {
