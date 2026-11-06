@@ -97,7 +97,8 @@ export async function GET(request: Request) {
       return jsonError(`La búsqueda supera el límite de ${EXPORT_LIMIT} evaluaciones. Refina los filtros para exportar el conjunto completo.`, 422);
     }
     const headers = ["Candidato", "Email", "Assessment", "Vacante", "Estado", "Score (%)", "Aprobado", "Tiempo (seg)", "Anti-cheat", "Fecha"];
-    return new Response([headers.join(","), ...result.lines].join("\r\n"), {
+    // Excel for Windows needs a BOM when opening UTF-8 CSV files directly.
+    return new Response("\uFEFF" + [headers.join(","), ...result.lines].join("\r\n"), {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",

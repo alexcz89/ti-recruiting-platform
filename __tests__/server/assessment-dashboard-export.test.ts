@@ -27,6 +27,25 @@ beforeEach(() => {
 });
 
 describe("global assessment CSV export", () => {
+  it("prefixes one UTF-8 BOM and preserves accents, special characters and all ten columns", async () => {
+    const name = "María — Muñoz 東京";
+    const item = invite("a", name);
+    mocks.invites.mockResolvedValue([item]);
+    mocks.attempts.mockResolvedValue([{ id: "legacy-selected", totalScore: 0, passed: true, timeSpent: 0, severity: "NORMAL", submittedAt: null }]);
+    const response = await GET(request());
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    // Response.text() strips the BOM; inspect the actual file bytes instead.
+    const csv = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true }).decode(bytes);
+    expect(csv.startsWith("\uFEFFCandidato,Email,")).toBe(true);
+    expect(csv.split("\uFEFF")).toHaveLength(2);
+    const [header, row] = csv.slice(1).split("\r\n");
+    expect(header.split(",")).toHaveLength(10);
+    expect(row.split(",")).toHaveLength(10);
+    expect(row).toContain(name);
+    expect(row).toContain(",COMPLETED,0,Sí,0,NORMAL,");
+    expect(item.candidate.name).toBe(name);
+  });
   it("uses the dashboard selection, ignores page, preserves 0/false and selects no tokens or secrets", async () => {
     const response = await GET(request("q=+QA+&jobId=job-a&state=completed&hasAttempt=1&sort=score_asc&page=42"));
     expect(response.status).toBe(200);

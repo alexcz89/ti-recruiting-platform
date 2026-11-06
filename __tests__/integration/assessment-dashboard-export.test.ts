@@ -32,10 +32,10 @@ let exportCsv: typeof import("@/app/api/dashboard/assessments/export/route")["GE
 let selectPage: typeof import("@/lib/assessments/dashboard-page-query")["selectAssessmentPage"];
 const actor = (suffix = "recruiter-a", role = "RECRUITER") => mocks.session.mockResolvedValue({ user: { id: id(suffix), role } });
 const request = (query = "") => new Request(`http://localhost/api/dashboard/assessments/export?${query}`);
-// Independent RFC 4180 reader: handles quoted CR/LF and escaped quotes.
+// Independent RFC 4180 reader: handles optional UTF-8 BOM, CR/LF and escaped quotes.
 function parseCsv(text: string) {
   const rows: string[][] = []; let row: string[] = []; let cell = ""; let quoted = false;
-  for (let index = 0; index < text.length; index++) {
+  for (let index = text.startsWith("\uFEFF") ? 1 : 0; index < text.length; index++) {
     const char = text[index];
     if (char === '"') {
       if (quoted && text[index + 1] === '"') { cell += '"'; index++; }
@@ -119,7 +119,12 @@ database("dashboard/CSV parity on disposable real PostgreSQL", () => {
       emails.push(...body.rows.map((row: { inv: { candidate: { email: string } } }) => row.inv.candidate.email)); page++;
     } while (page <= pages);
     const response = await exportCsv(request(query + "&page=42")); expect(response.status).toBe(200);
-    const text = await response.text(); const csv = parseCsv(text);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    const text = new TextDecoder("utf-8", { ignoreBOM: true, fatal: true }).decode(bytes);
+    const csv = parseCsv(text);
+    expect(csv[0]).toEqual(["Candidato", "Email", "Assessment", "Vacante", "Estado", "Score (%)", "Aprobado", "Tiempo (seg)", "Anti-cheat", "Fecha"]);
+    expect(csv.some(row => row[6] === "Sí")).toBe(true);
     expect(csv).toHaveLength(104); expect(csv.every(row => row.length === 10)).toBe(true);
     expect(csv.slice(1).map(row => row[1])).toEqual(emails);
     const zero = csv.find(row => row[1] === id("candidate-0") + "@example.invalid")!;
