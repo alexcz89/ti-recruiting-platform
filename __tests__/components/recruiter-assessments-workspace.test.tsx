@@ -72,13 +72,23 @@ describe("recruiter assessments operational workspace", () => {
     expect(screen.getByRole("button", { name: "Aplicar filtros" })).toHaveAttribute("type", "submit");
     expect(screen.getByRole("link", { name: "Limpiar" })).toHaveAttribute("href", "/dashboard/assessments"); expect(document.querySelector('form [name="page"]')).toBeNull();
   });
-  it("keeps pagination usable on an empty filtered page and labels its actual scope", async () => {
-    data.rows = []; data.total = 75; data.totalPages = 2;
+  it("paginates globally filtered results and displays the correct total", async () => {
+    data.total = 75;
+    data.totalPages = 2;
     render(await Page({ searchParams: { state: "COMPLETED", hasAttempt: "1", page: "1" } }));
-    expect(screen.getByText("No hay coincidencias en esta página")).toBeInTheDocument(); expect(screen.getByText(/página actual/)).toBeInTheDocument();
+    expect(screen.getByText(/75 evaluaciones coincidentes/)).toBeInTheDocument();
+    expect(screen.queryByText(/página actual/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Siguiente" })).toHaveAttribute("href", expect.stringContaining("page=2"));
     expect(screen.getByRole("link", { name: "Siguiente" })).toHaveAttribute("href", expect.stringContaining("hasAttempt=1"));
-    expect(screen.getByText(/75 invitaciones antes de filtrar estado e intentos/)).toBeInTheDocument();
+  });
+  it("distinguishes an empty filtered result from an empty workspace", async () => {
+    data.rows = [];
+    data.total = 0;
+    data.totalPages = 1;
+    render(await Page({ searchParams: { state: "COMPLETED", hasAttempt: "1" } }));
+    expect(screen.getByText("No hay coincidencias con estos filtros")).toBeInTheDocument();
+    expect(screen.getByText(/0 evaluaciones coincidentes/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Siguiente" })).not.toBeInTheDocument();
   });
   it("distinguishes a genuinely empty workspace, and does not refresh it", async () => {
     data.rows = []; data.total = 0;

@@ -203,22 +203,19 @@ export default async function CompanyAssessmentsPage({
             <a href={`/api/dashboard/assessments/export?${exportQs.toString()}`} download="evaluaciones.csv" title="Exporta hasta 2000 invitaciones de la búsqueda" className={actionClass}>Exportar CSV</a>
           </div>
         </div>
-        {(pageFilters || scoreSort) && <p className="text-xs leading-5 text-zinc-600 dark:text-zinc-400">
-          {pageFilters && "Estado e intentos filtran la página actual; la paginación conserva las invitaciones de la búsqueda por nombre y vacante. "}
-          {scoreSort && "La calificación se ordena dentro de cada página."}
-        </p>}
+
       </form>
 
       <section aria-labelledby="assessment-results-title" className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="assessment-results-title" className="text-sm font-medium">{rows.length} en esta página <span className="font-normal text-zinc-600 dark:text-zinc-400">· {total} {pageFilters ? "invitaciones antes de filtrar estado e intentos" : "invitaciones para esta búsqueda"}</span></h2>
+          <h2 id="assessment-results-title" className="text-sm font-medium">{rows.length} en esta página <span className="font-normal text-zinc-600 dark:text-zinc-400">· {total} evaluaciones coincidentes</span></h2>
           {hasInProgress && <AutoRefresh hasInProgress={hasInProgress} intervalMs={30_000} />}
         </div>
         {rows.length > 0 && <p className="hidden text-xs text-zinc-600 dark:text-zinc-400 sm:block xl:hidden">Desliza la tabla para consultar resultados y acciones.</p>}
         {rows.length === 0 ? (
           <div className="border-y border-zinc-200 py-8 dark:border-zinc-800">
-            <h3 className="font-medium">{filtered || total > 0 ? "No hay coincidencias en esta página" : "Todavía no hay evaluaciones"}</h3>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{filtered || total > 0 ? "Ajusta los filtros o consulta otra página de la búsqueda." : "Las invitaciones y los resultados de tus candidatos aparecerán aquí."}</p>
+            <h3 className="font-medium">{total > 0 ? "No hay resultados en esta página" : filtered ? "No hay coincidencias con estos filtros" : "Todavía no hay evaluaciones"}</h3>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{total > 0 ? "Regresa a una página anterior." : filtered ? "Prueba con otros filtros o consulta todas las evaluaciones." : "Las invitaciones y los resultados de tus candidatos aparecerán aquí."}</p>
             {filtered && <Link href="/dashboard/assessments" className={actionClass}>Ver sin filtros</Link>}
           </div>
         ) : (
