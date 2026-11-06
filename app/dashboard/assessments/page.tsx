@@ -214,7 +214,7 @@ export default async function CompanyAssessmentsPage({
           <h2 id="assessment-results-title" className="text-sm font-medium">{rows.length} en esta página <span className="font-normal text-zinc-600 dark:text-zinc-400">· {total} {pageFilters ? "invitaciones antes de filtrar estado e intentos" : "invitaciones para esta búsqueda"}</span></h2>
           {hasInProgress && <AutoRefresh hasInProgress={hasInProgress} intervalMs={30_000} />}
         </div>
-        {rows.length > 0 && <p className="text-xs text-zinc-600 dark:text-zinc-400 xl:hidden">Desliza la tabla para consultar resultados y acciones.</p>}
+        {rows.length > 0 && <p className="hidden text-xs text-zinc-600 dark:text-zinc-400 sm:block xl:hidden">Desliza la tabla para consultar resultados y acciones.</p>}
         {rows.length === 0 ? (
           <div className="border-y border-zinc-200 py-8 dark:border-zinc-800">
             <h3 className="font-medium">{filtered || total > 0 ? "No hay coincidencias en esta página" : "Todavía no hay evaluaciones"}</h3>
@@ -222,14 +222,14 @@ export default async function CompanyAssessmentsPage({
             {filtered && <Link href="/dashboard/assessments" className={actionClass}>Ver sin filtros</Link>}
           </div>
         ) : (
-          <div role="region" aria-label="Tabla de evaluaciones, desplazamiento horizontal disponible" tabIndex={0} className="max-w-full overflow-x-auto rounded-sm border-y border-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:border-zinc-800">
-            <table className="w-full min-w-[900px] table-fixed text-left text-sm">
+          <div role="region" aria-label="Tabla de evaluaciones" tabIndex={0} className="max-w-full overflow-x-auto rounded-sm border-y border-zinc-200 outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:border-zinc-800">
+            <table className="w-full text-left text-sm max-sm:block sm:min-w-[900px] sm:table-fixed">
               <caption className="sr-only">Resultados y seguimiento de evaluaciones</caption>
-              <colgroup><col className="w-[20%]" /><col className="w-[27%]" /><col className="w-[18%]" /><col className="w-[17%]" /><col className="w-[18%]" /></colgroup>
-              <thead className="border-b border-zinc-200 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400"><tr>
+              <colgroup className="max-sm:hidden"><col className="w-[20%]" /><col className="w-[27%]" /><col className="w-[18%]" /><col className="w-[17%]" /><col className="w-[18%]" /></colgroup>
+              <thead className="border-b border-zinc-200 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400 max-sm:sr-only"><tr>
                 {['Candidato', 'Evaluación y vacante', 'Estado y resultado', 'Integridad', 'Acciones'].map(label => <th key={label} scope="col" className="px-2 py-3 font-medium">{label}</th>)}
               </tr></thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 max-sm:block">
                 {rows.map(r => {
                   const inv = r?.inv ?? r;
                   const attempt = r.attempt ?? null;
@@ -244,26 +244,26 @@ export default async function CompanyAssessmentsPage({
                   const severity = String(attempt?.severity ?? "").toUpperCase();
                   const alert = severity === "CRITICAL" || severity === "SUSPICIOUS" || attempt?.multiSession;
                   const lastActivity = attempt?.submittedAt || attempt?.createdAt || inv.updatedAt || inv.createdAt;
-                  return <tr key={inv.id} className="align-top hover:bg-zinc-50 dark:hover:bg-zinc-900">
-                    <td className="px-2 py-3">
+                  return <tr key={inv.id} className="align-top hover:bg-zinc-50 dark:hover:bg-zinc-900 max-sm:block max-sm:py-3">
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
                       {inv.candidate?.id ? <Link href={`/dashboard/candidates/${inv.candidate.id}`} title={candidateName} className="block truncate rounded font-medium !text-zinc-900 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:!text-zinc-100">{candidateName}</Link> : <span className="block truncate" title={candidateName}>{candidateName}</span>}
                       <p className="mt-1 truncate text-xs text-zinc-600 dark:text-zinc-400" title={inv.candidate?.email}>{inv.candidate?.email}</p>
                     </td>
-                    <td className="px-2 py-3">
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
                       <p className="truncate font-medium" title={inv.template?.title}>{inv.template?.title || "Evaluación sin título"}</p>
                       {inv.application?.job?.id ? <Link href={`/dashboard/jobs/${inv.application.job.id}/applications`} title={inv.application.job.title} className="mt-1 block truncate rounded text-xs text-emerald-700 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-emerald-300">{inv.application.job.title}</Link> : <span className="mt-1 block text-xs text-zinc-600 dark:text-zinc-400">Sin vacante vinculada</span>}
                       {lastActivity && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{fromNow(lastActivity)}</p>}
                     </td>
-                    <td className="px-2 py-3">
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
                       <p className={st === "IN_PROGRESS" ? "font-medium text-blue-700 dark:text-blue-300" : "font-medium"}>{stateLabel(st)}</p>
                       {final ? <p className={`mt-1 tabular-nums ${attempt?.passed === true ? "text-emerald-700 dark:text-emerald-300" : attempt?.passed === false ? "text-rose-700 dark:text-rose-300" : "text-zinc-600 dark:text-zinc-400"}`}><span className="font-semibold">{fmtScore(score)}</span>{typeof attempt?.passed === "boolean" && <span className="ml-2 text-xs">{attempt.passed ? "Aprobó" : "No aprobó"}</span>}</p> : <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Sin resultado final</p>}
                       {st === "COMPLETED" && attempt?.timeSpent ? <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{fmtTime(attempt.timeSpent)}{typeof inv.template?.timeLimit === "number" ? ` / ${inv.template.timeLimit}m` : ""}</p> : null}
                     </td>
-                    <td className="px-2 py-3 text-xs">
+                    <td className="px-2 py-3 text-xs max-sm:block max-sm:px-0 max-sm:py-1"><span className="mr-1 font-medium text-zinc-500 sm:hidden">Integridad:</span>
                       {alert ? <details><summary className="min-h-11 cursor-pointer rounded font-medium text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-amber-200">Revisar señales</summary><p className="leading-5 text-zinc-600 dark:text-zinc-400">{severity === "CRITICAL" ? "Nivel crítico." : severity === "SUSPICIOUS" ? "Nivel sospechoso." : "Señal registrada."}{attempt.multiSession ? " Varias sesiones." : ""}{typeof attempt.severityScore === "number" ? ` Indicador: ${attempt.severityScore}.` : ""}</p></details> : <span className="text-zinc-600 dark:text-zinc-400">{attempt ? "Sin datos suficientes" : "Sin datos"}</span>}
                     </td>
-                    <td className="px-2 py-3">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
+                      <div className="flex items-center justify-end gap-1 max-sm:justify-between">
                         {st === "COMPLETED" && resultsUrl && <Link href={resultsUrl} aria-label={`Ver resultados de ${candidateName}`} className={actionClass}>Ver resultados</Link>}
                         <AssessmentActionsMenu applicationId={String(inv.applicationId ?? inv.application?.id ?? "") || null} templateId={templateId || null} invitePath={inviteLink} resultsUrl={resultsUrl} ariaLabel={`Acciones de evaluación de ${candidateName}`} />
                       </div>
