@@ -91,6 +91,7 @@ jobs:
         env:
           CI: true
           NODE_ENV: test
+          RUN_ASSESSMENT_EXPORT_DB_TESTS: 'true'
 
       - name: Run ATS PostgreSQL integration tests
         shell: bash

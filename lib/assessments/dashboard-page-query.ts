@@ -28,8 +28,25 @@ type QueryRow = {
   uiState: AssessmentState | null;
 };
 
+// Dashboard and CSV must interpret URL filters identically.
+export function parseAssessmentFilters(params: URLSearchParams) {
+  const rawState = (params.get("state") ?? "").toUpperCase();
+  const state: AssessmentState | "ALL" =
+    rawState === "PENDING" || rawState === "IN_PROGRESS" ||
+    rawState === "COMPLETED" || rawState === "EXPIRED" || rawState === "CANCELLED"
+      ? rawState : "ALL";
+  return {
+    q: (params.get("q") ?? "").trim(),
+    jobId: (params.get("jobId") ?? "").trim(),
+    state,
+    hasAttempt: (params.get("hasAttempt") ?? "").trim(),
+    sort: (params.get("sort") ?? "recent").trim(),
+  };
+}
+
 export async function selectAssessmentPage(
-  options: AssessmentPageOptions
+  options: AssessmentPageOptions,
+  client: Pick<Prisma.TransactionClient, "$queryRaw"> = prisma
 ): Promise<{ total: number; rows: AssessmentPageEntry[] }> {
   if (!options.isAdmin && !options.companyId) {
     throw new Error("Company scope required");
@@ -184,7 +201,7 @@ export async function selectAssessmentPage(
     ORDER BY ranked.rn ASC NULLS LAST
   `;
 
-  const result = await prisma.$queryRaw<QueryRow[]>(sql);
+  const result = await client.$queryRaw<QueryRow[]>(sql);
 
   return {
     total: Number(result[0]?.total ?? 0),

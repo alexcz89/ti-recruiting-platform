@@ -35,7 +35,8 @@ vi.mock("@/lib/server/prisma", () => ({
   },
 }));
 
-vi.mock("@/lib/assessments/dashboard-page-query", () => ({
+vi.mock("@/lib/assessments/dashboard-page-query", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/assessments/dashboard-page-query")>(),
   selectAssessmentPage: mocks.select,
 }));
 

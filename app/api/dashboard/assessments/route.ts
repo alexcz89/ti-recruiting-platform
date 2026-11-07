@@ -4,13 +4,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from '@/lib/server/auth';
 import { prisma } from '@/lib/server/prisma';
 import { getSessionCompanyId } from '@/lib/server/session';
-import { isFinalAttemptStatus, type AssessmentState } from "@/lib/assessments/expiration";
-import { selectAssessmentPage } from "@/lib/assessments/dashboard-page-query";
+import { isFinalAttemptStatus } from "@/lib/assessments/expiration";
+import { parseAssessmentFilters, selectAssessmentPage } from "@/lib/assessments/dashboard-page-query";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-type StateFilter = "ALL" | AssessmentState;
 
 function jsonNoStore(data: any, status = 200) {
   return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
@@ -18,16 +16,6 @@ function jsonNoStore(data: any, status = 200) {
 
 function clampInt(n: number, min: number, max: number) {
   return Math.max(min, Math.min(max, n));
-}
-
-function normalizeState(s: string | null): StateFilter {
-  const v = String(s ?? "").toUpperCase();
-  if (v === "PENDING") return "PENDING";
-  if (v === "IN_PROGRESS") return "IN_PROGRESS";
-  if (v === "COMPLETED") return "COMPLETED";
-  if (v === "EXPIRED") return "EXPIRED";
-  if (v === "CANCELLED") return "CANCELLED";
-  return "ALL";
 }
 
 // GET /api/dashboard/assessments?q=&jobId=&state=&hasAttempt=&page=
@@ -44,11 +32,7 @@ export async function GET(request: Request) {
     if (!companyId && role !== "ADMIN") return jsonNoStore({ error: "Sin empresa asociada" }, 403);
 
     const url = new URL(request.url);
-    const q = (url.searchParams.get("q") ?? "").trim();
-    const jobId = (url.searchParams.get("jobId") ?? "").trim();
-    const state = normalizeState(url.searchParams.get("state"));
-    const hasAttempt = (url.searchParams.get("hasAttempt") ?? "").trim(); // "1" | "0" | ""
-    const sort = (url.searchParams.get("sort") ?? "recent").trim();
+    const { q, jobId, state, hasAttempt, sort } = parseAssessmentFilters(url.searchParams);
     const page = clampInt(parseInt(url.searchParams.get("page") || "1", 10) || 1, 1, 9999);
 
     const take = 50;
