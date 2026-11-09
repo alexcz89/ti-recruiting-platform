@@ -812,14 +812,98 @@ describeDatabase("canonical hiring process writer migration", () => {
     }
   });
 
-  it("does not let a concurrent preselect marker overwrite an interview transition", async () => {
+  it("does not let a later preselect marker overwrite a committed interview transition", async () => {
     const application = await createApplication();
     await prisma.application.update({
       where: { id: application.id },
       data: { stage: "REVIEW", status: "REVIEWING", recruiterInterest: "REVIEW" },
     });
 
-    await Promise.allSettled([
+    const interview = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-interview-before-mark" },
+      actor: recruiterActor,
+    });
+    const committed = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id }, include: { events: { orderBy: { id: "asc" } } },
+    });
+    expect(interview.replayed).toBe(false);
+    expect(committed).toMatchObject({
+      stage: "INTERVIEW", disposition: "ACTIVE", stateVersion: 2,
+      status: "INTERVIEW", recruiterInterest: "ACCEPTED",
+    });
+    expect(committed.events).toHaveLength(2); // Creation plus one stage transition.
+    expect(committed.events.filter(event => event.type === "APPLICATION_STAGE_CHANGED")).toEqual([
+      expect.objectContaining({
+        id: interview.event!.id, idempotencyKey: "qa-interview-before-mark",
+        fromStage: "REVIEW", toStage: "INTERVIEW", fromDisposition: "ACTIVE", toDisposition: "ACTIVE",
+        metadata: expect.objectContaining({ resultingStateVersion: 2 }),
+      }),
+    ]);
+
+    await expect(executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 2, commandId: "qa-mark-after-interview" },
+      actor: recruiterActor,
+    })).rejects.toBeInstanceOf(InvalidApplicationTransitionError);
+    expect(await prisma.application.findUniqueOrThrow({
+      where: { id: application.id }, include: { events: { orderBy: { id: "asc" } } },
+    })).toEqual(committed);
+  });
+
+  it("allows an interview after preselection without consuming another canonical version or event for the marker", async () => {
+    const application = await createApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { stage: "REVIEW", status: "REVIEWING", recruiterInterest: "REVIEW" },
+    });
+    const marked = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-before-interview" },
+      actor: recruiterActor,
+    });
+    expect(marked).toMatchObject({
+      replayed: false, event: null,
+      state: { stage: "REVIEW", disposition: "ACTIVE", stateVersion: 1 },
+      legacy: { status: "REVIEWING", recruiterInterest: "MAYBE", stateVersion: 1 },
+    });
+    const beforeInterview = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    expect(beforeInterview).toMatchObject({
+      stage: "REVIEW", disposition: "ACTIVE", stateVersion: 1, status: "REVIEWING", recruiterInterest: "MAYBE",
+    });
+    expect(beforeInterview.events).toHaveLength(1);
+    expect(beforeInterview.events[0].type).toBe("APPLICATION_CREATED");
+
+    const interview = await executeApplicationIntent({
+      applicationId: application.id,
+      command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-interview-after-mark" },
+      actor: recruiterActor,
+    });
+    expect(interview.replayed).toBe(false);
+    const stored = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    expect(stored).toMatchObject({
+      stage: "INTERVIEW", disposition: "ACTIVE", stateVersion: 2, status: "INTERVIEW", recruiterInterest: "ACCEPTED",
+    });
+    expect(stored.events).toHaveLength(2);
+    expect(stored.events.filter(event => event.type === "APPLICATION_STAGE_CHANGED")).toEqual([
+      expect.objectContaining({
+        id: interview.event!.id, idempotencyKey: "qa-interview-after-mark",
+        fromStage: "REVIEW", toStage: "INTERVIEW", fromDisposition: "ACTIVE", toDisposition: "ACTIVE",
+        metadata: expect.objectContaining({ resultingStateVersion: 2 }),
+      }),
+    ]);
+  });
+
+  it("keeps concurrent preselection and interview outcomes consistent, then explicitly retries a conflicted interview", async () => {
+    const application = await createApplication();
+    await prisma.application.update({
+      where: { id: application.id },
+      data: { stage: "REVIEW", status: "REVIEWING", recruiterInterest: "REVIEW" },
+    });
+    const interviewCommand = {
+      intent: "MOVE_TO_INTERVIEW" as const, expectedVersion: 1, commandId: "qa-interview-mark-race",
+    };
+    const [markerOutcome, interviewOutcome] = await Promise.allSettled([
       executeApplicationIntent({
         applicationId: application.id,
         command: { intent: "MARK_PRESELECTED", expectedVersion: 1, commandId: "qa-mark-race" },
@@ -827,18 +911,85 @@ describeDatabase("canonical hiring process writer migration", () => {
       }),
       executeApplicationIntent({
         applicationId: application.id,
-        command: { intent: "MOVE_TO_INTERVIEW", expectedVersion: 1, commandId: "qa-interview-mark-race" },
+        command: interviewCommand,
         actor: recruiterActor,
       }),
     ]);
 
-    expect(await prisma.application.findUniqueOrThrow({ where: { id: application.id } })).toMatchObject({
-      stage: "INTERVIEW",
-      disposition: "ACTIVE",
-      stateVersion: 2,
-      status: "INTERVIEW",
-      recruiterInterest: "ACCEPTED",
+    expect([markerOutcome, interviewOutcome].filter(outcome => outcome.status === "fulfilled").length).toBeGreaterThan(0);
+    if (markerOutcome.status === "fulfilled") {
+      expect(markerOutcome.value).toMatchObject({
+        replayed: false, event: null,
+        state: { stage: "REVIEW", disposition: "ACTIVE", stateVersion: 1 },
+        legacy: { status: "REVIEWING", recruiterInterest: "MAYBE", stateVersion: 1 },
+      });
+    } else {
+      expect(interviewOutcome.status).toBe("fulfilled");
+      // A late source read is invalid; a source read before the winning write fails its guarded CAS.
+      if (markerOutcome.reason instanceof InvalidApplicationTransitionError) {
+        expect(markerOutcome.reason.message).toBe("MARK_PRESELECTED requiere REVIEW / ACTIVE o APPLIED / ACTIVE");
+      } else {
+        expect(markerOutcome.reason).toBeInstanceOf(ConcurrentApplicationTransitionError);
+      }
+    }
+
+    const afterRace = await prisma.application.findUniqueOrThrow({ where: { id: application.id }, include: { events: true } });
+    expect(afterRace.events.filter(event => event.idempotencyKey === "qa-mark-race")).toHaveLength(0);
+    let interviewEventId: string;
+    if (interviewOutcome.status === "fulfilled") {
+      expect(interviewOutcome.value).toMatchObject({
+        replayed: false,
+        state: { stage: "INTERVIEW", disposition: "ACTIVE", stateVersion: 2 },
+        legacy: { status: "INTERVIEW", recruiterInterest: "ACCEPTED", stateVersion: 2 },
+      });
+      expect(afterRace).toMatchObject({
+        stage: "INTERVIEW", disposition: "ACTIVE", stateVersion: 2, status: "INTERVIEW", recruiterInterest: "ACCEPTED",
+      });
+      expect(afterRace.events).toHaveLength(2);
+      interviewEventId = interviewOutcome.value.event!.id;
+    } else {
+      expect(markerOutcome.status).toBe("fulfilled");
+      expect(interviewOutcome.reason).toBeInstanceOf(ConcurrentApplicationTransitionError);
+      expect(afterRace).toMatchObject({
+        stage: "REVIEW", disposition: "ACTIVE", stateVersion: 1, status: "REVIEWING", recruiterInterest: "MAYBE",
+      });
+      expect(afterRace.events).toHaveLength(1);
+      expect(afterRace.events[0].type).toBe("APPLICATION_CREATED");
+      expect(afterRace.events.filter(event => event.idempotencyKey === interviewCommand.commandId)).toHaveLength(0);
+
+      // Only this recognized conflict with version still 1 permits retrying the original command.
+      const retried = await executeApplicationIntent({ applicationId: application.id, command: interviewCommand, actor: recruiterActor });
+      expect(retried).toMatchObject({
+        replayed: false,
+        state: { stage: "INTERVIEW", disposition: "ACTIVE", stateVersion: 2 },
+        legacy: { status: "INTERVIEW", recruiterInterest: "ACCEPTED", stateVersion: 2 },
+      });
+      interviewEventId = retried.event!.id;
+    }
+
+    const beforeReplay = await prisma.application.findUniqueOrThrow({
+      where: { id: application.id }, include: { events: { orderBy: { id: "asc" } } },
     });
+    expect(beforeReplay).toMatchObject({
+      stage: "INTERVIEW", disposition: "ACTIVE", stateVersion: 2, status: "INTERVIEW", recruiterInterest: "ACCEPTED",
+    });
+    expect(beforeReplay.events).toHaveLength(2);
+    expect(beforeReplay.events.filter(event => event.type === "APPLICATION_STAGE_CHANGED")).toEqual([
+      expect.objectContaining({
+        id: interviewEventId, applicationId: application.id, companyId: ids.company,
+        actorType: "RECRUITER", actorId: ids.recruiter, idempotencyKey: interviewCommand.commandId,
+        fromStage: "REVIEW", toStage: "INTERVIEW", fromDisposition: "ACTIVE", toDisposition: "ACTIVE",
+        metadata: expect.objectContaining({ resultingStateVersion: 2 }),
+      }),
+    ]);
+    const replay = await executeApplicationIntent({ applicationId: application.id, command: interviewCommand, actor: recruiterActor });
+    expect(replay).toMatchObject({
+      replayed: true, event: { id: interviewEventId },
+      state: { stage: "INTERVIEW", disposition: "ACTIVE", stateVersion: 2 },
+    });
+    expect(await prisma.application.findUniqueOrThrow({
+      where: { id: application.id }, include: { events: { orderBy: { id: "asc" } } },
+    })).toEqual(beforeReplay);
   });
 
   it("preserves exact flag-off preselect and clear behavior without canonical state or events", async () => {
