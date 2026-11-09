@@ -10,6 +10,7 @@ import AutoRefresh from "@/components/dashboard/assessments/AutoRefresh";
 import AssessmentExportButton from "@/components/dashboard/assessments/AssessmentExportButton";
 import { authOptions } from '@/lib/server/auth';
 import { fromNow } from "@/lib/dates";
+import { getIntegrityPresentation } from "@/lib/assessments/integrity-presentation";
 
 export const metadata = { title: "Evaluaciones | Panel" };
 export const dynamic = "force-dynamic";
@@ -239,8 +240,7 @@ export default async function CompanyAssessmentsPage({
                   const resultsUrl = r.resultsUrl ?? (attempt?.id ? `/dashboard/assessments/attempts/${attempt.id}/results` : null);
                   const final = Boolean(r.resultsUrl) || st === "COMPLETED";
                   const score = typeof attempt?.totalScore === "number" ? Math.min(100, attempt.totalScore) : attempt?.totalScore;
-                  const severity = String(attempt?.severity ?? "").toUpperCase();
-                  const alert = severity === "CRITICAL" || severity === "SUSPICIOUS" || attempt?.multiSession;
+                  const integrity = getIntegrityPresentation(attempt);
                   const lastActivity = attempt?.submittedAt || attempt?.createdAt || inv.updatedAt || inv.createdAt;
                   return <tr key={inv.id} className="align-top hover:bg-zinc-50 dark:hover:bg-zinc-900 max-sm:block max-sm:py-3">
                     <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
@@ -257,8 +257,28 @@ export default async function CompanyAssessmentsPage({
                       {final ? <p className={`mt-1 tabular-nums ${attempt?.passed === true ? "text-emerald-700 dark:text-emerald-300" : attempt?.passed === false ? "text-rose-700 dark:text-rose-300" : "text-zinc-600 dark:text-zinc-400"}`}><span className="font-semibold">{fmtScore(score)}</span>{typeof attempt?.passed === "boolean" && <span className="ml-2 text-xs">{attempt.passed ? "Aprobó" : "No aprobó"}</span>}</p> : <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Sin resultado final</p>}
                       {st === "COMPLETED" && attempt?.timeSpent ? <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{fmtTime(attempt.timeSpent)}{typeof inv.template?.timeLimit === "number" ? ` / ${inv.template.timeLimit}m` : ""}</p> : null}
                     </td>
-                    <td className="px-2 py-3 text-xs max-sm:block max-sm:px-0 max-sm:py-1"><span className="mr-1 font-medium text-zinc-500 sm:hidden">Integridad:</span>
-                      {alert ? <details><summary className="min-h-11 cursor-pointer rounded font-medium text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-amber-200">Revisar señales</summary><p className="leading-5 text-zinc-600 dark:text-zinc-400">{severity === "CRITICAL" ? "Nivel crítico." : severity === "SUSPICIOUS" ? "Nivel sospechoso." : "Señal registrada."}{attempt.multiSession ? " Varias sesiones." : ""}{typeof attempt.severityScore === "number" ? ` Indicador: ${attempt.severityScore}.` : ""}</p></details> : <span className="text-zinc-600 dark:text-zinc-400">{attempt ? "Sin datos suficientes" : "Sin datos"}</span>}
+                    <td className="px-2 py-3 text-xs max-sm:block max-sm:px-0 max-sm:py-1">
+                      <span className="mr-1 font-medium text-zinc-500 sm:hidden">
+                        Integridad:
+                      </span>
+
+                      {integrity.requiresReview ? (
+                        <details>
+                          <summary className="min-h-11 cursor-pointer rounded font-medium text-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 dark:text-amber-200">
+                            {integrity.label}
+                          </summary>
+                          <p className="leading-5 text-zinc-600 dark:text-zinc-400">
+                            {integrity.details}
+                          </p>
+                        </details>
+                      ) : (
+                        <span
+                          className="text-zinc-600 dark:text-zinc-400"
+                          title={integrity.details}
+                        >
+                          {integrity.label}
+                        </span>
+                      )}
                     </td>
                     <td className="px-2 py-3 max-sm:block max-sm:px-0 max-sm:py-1">
                       <div className="flex items-center justify-end gap-1 max-sm:justify-between">

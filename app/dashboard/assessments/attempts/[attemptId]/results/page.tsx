@@ -6,6 +6,7 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import { getIntegrityPresentation } from "@/lib/assessments/integrity-presentation";
 import {
   CheckCircle2,
   XCircle,
@@ -182,7 +183,17 @@ async function getResults(attemptId: string): Promise<ResultsData | null> {
   }
 }
 
-function AnticheatFlags({ anticheat }: { anticheat: Anticheat }) {
+function AnticheatFlags({ anticheat }: { anticheat: Anticheat | null }) {
+
+  const integrity = getIntegrityPresentation(anticheat ?? {});
+
+  if (!anticheat) {
+    return (
+      <p className="text-sm text-gray-500 dark:text-gray-400">
+        {integrity.label}
+      </p>
+    );
+  }
   type Item = { label: string; value: string; warn: boolean };
   const items: Item[] = [];
 
@@ -196,21 +207,36 @@ function AnticheatFlags({ anticheat }: { anticheat: Anticheat }) {
   if (anticheat.pageHides > 0) items.push({ label: "Page hides", value: String(anticheat.pageHides), warn: anticheat.pageHides >= 3 });
   if (anticheat.multiSession) items.push({ label: "Múltiples dispositivos", value: "Detectado", warn: true });
 
-  const severity = String(anticheat.severity ?? "NORMAL").toUpperCase();
-  const severityColor = { CRITICAL: "text-red-600 dark:text-red-400", SUSPICIOUS: "text-amber-600 dark:text-amber-400", NORMAL: "text-emerald-600 dark:text-emerald-400" }[severity] ?? "text-gray-500";
-  const severityLabel = severity === "CRITICAL" ? "🔴 Crítico" : severity === "SUSPICIOUS" ? "🟡 Sospechoso" : "🟢 Normal";
+  const severity = String(anticheat.severity ?? "").toUpperCase();
+
+  const severityColor =
+    severity === "CRITICAL"
+      ? "text-red-600 dark:text-red-400"
+      : integrity.requiresReview
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-gray-600 dark:text-gray-400";
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <span className={`text-sm font-semibold ${severityColor}`}>{severityLabel}</span>
-        <span className="text-xs text-gray-400 dark:text-gray-500">Score: {anticheat.severityScore ?? 0}</span>
+        <span className={`text-sm font-semibold ${severityColor}`}>{integrity.label}</span>
+        {!integrity.requiresReview &&
+          typeof anticheat.severityScore === "number" &&
+          Number.isFinite(anticheat.severityScore) && (
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              Indicador: {anticheat.severityScore}
+            </span>
+          )}
       </div>
+      {integrity.requiresReview && integrity.details && (
+        <p className="text-xs leading-5 text-amber-700 dark:text-amber-300">
+          {integrity.details}
+        </p>
+      )}
       {items.length === 0 ? (
-        <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          <span>Sin alertas detectadas</span>
-        </div>
+        <p className="text-sm text-gray-600 dark:text-gray-400">
+          No se muestran eventos individuales en este resumen.
+        </p>
       ) : (
         <div className="space-y-2">
           {items.map((item) => (
@@ -452,34 +478,20 @@ export default async function AttemptResultsPage({
   const passing = template.passingScore ?? 70;
   const passed = attempt.passed ?? score >= passing;
 
-  const anticheat: Anticheat = attempt.anticheat ?? {
-    tooFast: false,
-    tabSwitches: 0,
-    visibilityHidden: 0,
-    copyAttempts: 0,
-    pasteAttempts: 0,
-    rightClicks: 0,
-    focusLoss: 0,
-    pageHides: 0,
-    multiSession: false,
-    severity: "NORMAL",
-    severityScore: 0,
-  };
+  const anticheat = attempt.anticheat ?? null;
 
-  const severity = String(anticheat.severity ?? "NORMAL").toUpperCase();
 
-  const hasSuspiciousFlags =
-    anticheat.tooFast ||
-    anticheat.tabSwitches >= 3 ||
-    anticheat.visibilityHidden >= 3 ||
-    anticheat.copyAttempts > 0 ||
-    anticheat.pasteAttempts > 0 ||
-    anticheat.rightClicks >= 5 ||
-    anticheat.focusLoss >= 5 ||
-    anticheat.pageHides >= 3 ||
-    anticheat.multiSession ||
-    severity === "CRITICAL" ||
-    severity === "SUSPICIOUS";
+  const hasSuspiciousFlags = Boolean(
+    getIntegrityPresentation(anticheat).requiresReview ||
+    anticheat?.tooFast ||
+    (anticheat?.tabSwitches ?? 0) >= 3 ||
+    (anticheat?.visibilityHidden ?? 0) >= 3 ||
+    (anticheat?.copyAttempts ?? 0) > 0 ||
+    (anticheat?.pasteAttempts ?? 0) > 0 ||
+    (anticheat?.rightClicks ?? 0) >= 5 ||
+    (anticheat?.focusLoss ?? 0) >= 5 ||
+    (anticheat?.pageHides ?? 0) >= 3
+  );
 
   const sectionScores = attempt.sectionScores ?? {};
 

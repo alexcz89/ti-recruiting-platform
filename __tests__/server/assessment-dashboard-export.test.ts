@@ -43,7 +43,7 @@ describe("global assessment CSV export", () => {
     expect(header.split(",")).toHaveLength(10);
     expect(row.split(",")).toHaveLength(10);
     expect(row).toContain(name);
-    expect(row).toContain(",COMPLETED,0,Sí,0,NORMAL,");
+    expect(row).toContain(",COMPLETED,0,Sí,0,Sin alerta de severidad,");
     expect(item.candidate.name).toBe(name);
   });
   it("uses the dashboard selection, ignores page, preserves 0/false and selects no tokens or secrets", async () => {
@@ -52,7 +52,7 @@ describe("global assessment CSV export", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("content-type")).toBe("text/csv; charset=utf-8");
     expect(response.headers.get("content-disposition")).toContain('filename="evaluaciones.csv"');
-    expect(await response.text()).toContain("COMPLETED,0,No,0,NORMAL,2026-11-01T12:00:00.000Z");
+    expect(await response.text()).toContain("COMPLETED,0,No,0,Sin alerta de severidad,2026-11-01T12:00:00.000Z");
     expect(mocks.select).toHaveBeenCalledWith(expect.objectContaining({ q: "QA", jobId: "job-a", state: "COMPLETED", hasAttempt: "1", sort: "score_asc", page: 1, take: 2000, companyId: "company-a", isAdmin: false }), tx);
     expect(mocks.transaction).toHaveBeenCalledWith(expect.any(Function), { isolationLevel: "RepeatableRead", timeout: 15000 });
     expect(mocks.invites.mock.calls[0][0].where.application.job).toEqual({ companyId: "company-a", id: "job-a" });
@@ -65,7 +65,7 @@ describe("global assessment CSV export", () => {
     ] });
     mocks.invites.mockResolvedValue([invite("a"), invite("b", "First")]);
     const lines = (await (await GET(request())).text()).split("\r\n");
-    expect(lines).toHaveLength(3); expect(lines[1]).toContain("First,b@example.invalid,Technical,Backend,PENDING,,-,,-,");
+    expect(lines).toHaveLength(3); expect(lines[1]).toContain("First,b@example.invalid,Technical,Backend,PENDING,,-,,Sin datos,");
     expect(lines[2]).toContain("COMPLETED,0,No,0,");
   });
   it.each([2001, 5001])("rejects %s matches before loading details, never producing partial CSV", async total => {
@@ -123,5 +123,27 @@ describe("global assessment CSV export", () => {
   it("normalizes invalid filters just like the dashboard", () => {
     expect(parseAssessmentFilters(new URLSearchParams("q=+literal%25_+&state=INVALID&hasAttempt=invalid&sort=invalid")))
       .toEqual({ q: "literal%_", state: "ALL", jobId: "", hasAttempt: "invalid", sort: "invalid" });
+  });
+  it("preserves severity and multiple-session evidence in CSV", async () => {
+    mocks.attempts.mockResolvedValue([{
+      id: "legacy-selected",
+      totalScore: 80,
+      passed: true,
+      timeSpent: 60,
+      severity: "NORMAL",
+      severityScore: 30,
+      multiSession: true,
+      submittedAt: null,
+    }]);
+
+    const response = await GET(request());
+    expect(response.status).toBe(200);
+
+    const csv = await response.text();
+
+    expect(csv).toContain("Revisar señales:");
+    expect(csv).toContain("Varias sesiones registradas");
+    expect(csv).toContain("Indicador: 30");
+    expect(csv).not.toContain(",NORMAL,");
   });
 });

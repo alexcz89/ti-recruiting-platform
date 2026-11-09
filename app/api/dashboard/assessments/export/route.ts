@@ -7,6 +7,7 @@ import { authOptions } from "@/lib/server/auth";
 import { prisma } from "@/lib/server/prisma";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { parseAssessmentFilters, selectAssessmentPage } from "@/lib/assessments/dashboard-page-query";
+import { getIntegrityPresentation } from "@/lib/assessments/integrity-presentation";
 
 const EXPORT_LIMIT = 2000;
 
@@ -67,7 +68,10 @@ export async function GET(request: Request) {
           where: { id: { in: selection.rows.flatMap(row => row.attemptId ? [row.attemptId] : []) } },
           select: {
             id: true, totalScore: true, passed: true, timeSpent: true,
-            severity: true, submittedAt: true,
+            severity: true,
+            severityScore: true,
+            multiSession: true,
+            submittedAt: true,
           },
         }),
       ]);
@@ -77,6 +81,7 @@ export async function GET(request: Request) {
         const inv = inviteById.get(inviteId);
         const attempt = attemptId ? attemptById.get(attemptId) : null;
         if (!inv || (attemptId && !attempt)) throw new Error("Incomplete export snapshot");
+        const integrity = getIntegrityPresentation(attempt);
         return [
           inv.candidate.name,
           inv.candidate.email,
@@ -86,7 +91,9 @@ export async function GET(request: Request) {
           typeof attempt?.totalScore === "number" ? String(Math.round(attempt.totalScore)) : "",
           attempt?.passed === true ? "Sí" : attempt?.passed === false ? "No" : "-",
           typeof attempt?.timeSpent === "number" ? String(Math.round(attempt.timeSpent)) : "",
-          attempt?.severity ? String(attempt.severity).toUpperCase() : attempt ? "Normal" : "-",
+          integrity.requiresReview
+            ? `${integrity.label}: ${integrity.details}`
+            : integrity.label,
           fmtDate(attempt?.submittedAt ?? inv.updatedAt),
         ].map(csvEscape).join(",");
       });

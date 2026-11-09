@@ -57,11 +57,54 @@ describe("recruiter assessments operational workspace", () => {
     data.rows = [row("attempt-a", { attempt: { id: "attempt-a", totalScore: 50, passed: true } })];
     render(await Page({})); expect(screen.getByText("Aprobó")).toBeInTheDocument(); expect(screen.getByText("50%")).toBeInTheDocument();
   });
-  it("does not call missing integrity evidence Normal or present a signal as fraud", async () => {
-    data.rows = [row("a", { attempt: null, uiState: "PENDING", resultsUrl: null }), row("b"), row("c", { attempt: { severity: "CRITICAL", severityScore: 90, multiSession: true } })];
-    render(await Page({})); expect(screen.queryByText("Normal")).not.toBeInTheDocument(); expect(screen.getByText("Sin datos")).toBeInTheDocument(); expect(screen.getByText("Sin datos suficientes")).toBeInTheDocument();
-    expect(screen.getByText("Revisar señales")).toBeInTheDocument(); expect(screen.getByText(/no determinan fraude/i)).toBeInTheDocument();
+  it("presents integrity evidence without implying fraud", async () => {
+    data.rows = [
+      row("a", {
+        attempt: null,
+        uiState: "PENDING",
+        resultsUrl: null,
+      }),
+      row("b"),
+      row("c", {
+        attempt: {
+          severity: "CRITICAL",
+          severityScore: 90,
+          multiSession: true,
+        },
+      }),
+      row("d", {
+        attempt: {
+          severity: null,
+          multiSession: false,
+        },
+      }),
+      row("e", {
+        attempt: {
+          severity: "NORMAL",
+          severityScore: 30,
+          multiSession: true,
+        },
+      }),
+    ];
+    render(await Page({}));
+
+    expect(screen.getByText("Sin datos")).toBeInTheDocument();
+    expect(
+      screen.getByText("Sin datos suficientes")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Sin alerta de severidad")
+    ).toBeInTheDocument();
+
+    expect(
+      screen.getAllByText("Revisar señales")
+    ).toHaveLength(2);
+
+    expect(
+      screen.getByText(/no determinan fraude/i)
+    ).toBeInTheDocument();
   });
+
   it("does not display an unfinished default score as a final result and mounts refresh once", async () => {
     data.rows = [row("a", { uiState: "IN_PROGRESS", resultsUrl: null, attempt: { id: "a", totalScore: 0, status: "IN_PROGRESS" } })];
     render(await Page({})); expect(screen.queryByText("0%")).not.toBeInTheDocument(); expect(screen.getByText("Sin resultado final")).toBeInTheDocument(); expect(mocks.refresh).toHaveBeenCalledTimes(1); expect(mocks.refresh).toHaveBeenCalledWith({ hasInProgress: true, intervalMs: 30000 });
