@@ -39,8 +39,8 @@ export async function GET(req: Request) {
 
   if (!jobId) return new Response("Missing jobId", { status: 400 });
 
-  const job = await prisma.job.findUnique({
-    where: { id: jobId },
+  const job = await prisma.job.findFirst({
+    where: { id: jobId, status: "OPEN" },
     select: {
       title: true,
       city: true,
@@ -49,6 +49,8 @@ export async function GET(req: Request) {
       salaryMin: true,
       salaryMax: true,
       currency: true,
+      showSalary: true,
+      companyConfidential: true,
       company: { select: { name: true } },
     },
   });
@@ -72,7 +74,7 @@ export async function GET(req: Request) {
   const chips = [
     locationLabel,
     labelEmployment(job.employmentType),
-    salary,
+    job.showSalary ? salary : null,
   ].filter(Boolean) as string[];
 
   const logoDataUrl = getLogoDataUrl();
@@ -158,7 +160,7 @@ export async function GET(req: Request) {
         </div>
 
         {/* Company */}
-        {job.company?.name && (
+        {!job.companyConfidential && job.company?.name && (
           <div
             style={{
               fontSize: "19px",
