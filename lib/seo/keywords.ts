@@ -54,7 +54,7 @@ export function generateJobKeywords(job: any): string {
   }
 
   // Salary range (if available)
-  if (job.salaryMin && job.salaryMax) {
+  if (job.showSalary && job.salaryMin && job.salaryMax) {
     parts.push(`${job.salaryMin}-${job.salaryMax}`);
   }
 

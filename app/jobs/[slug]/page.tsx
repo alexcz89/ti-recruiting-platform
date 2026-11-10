@@ -154,6 +154,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       salaryMin: true,
       salaryMax: true,
       showSalary: true,
+      companyConfidential: true,
       currency: true,
       updatedAt: true,
       createdAt: true,
@@ -246,6 +247,8 @@ export default async function JobDetail({ params }: Params) {
       slug: true,
       title: true,
       location: true,
+      locationType: true,
+      country: true,
       city: true,
       employmentType: true,
       remote: true,
@@ -263,6 +266,8 @@ export default async function JobDetail({ params }: Params) {
       },
       salaryMin: true,
       salaryMax: true,
+      showSalary: true,
+      companyConfidential: true,
       currency: true,
       createdAt: true,
       updatedAt: true,
@@ -352,15 +357,17 @@ export default async function JobDetail({ params }: Params) {
     id: job.id,
     slug: job.slug ?? null,
     title: job.title,
-    company: job.company?.name ?? null,
+    company: job.companyConfidential ? "Confidencial" : (job.company?.name ?? null),
     location: job.location,
     remote: job.remote,
+    showSalary: job.showSalary,
+    companyConfidential: job.companyConfidential,
     employmentType: job.employmentType,
     description: job.description,
     descriptionHtml: job.descriptionHtml,
     skills: job.skills ?? [],
-    salaryMin: job.salaryMin ?? null,
-    salaryMax: job.salaryMax ?? null,
+    salaryMin: job.showSalary ? (job.salaryMin ?? null) : null,
+    salaryMax: job.showSalary ? (job.salaryMax ?? null) : null,
     currency: job.currency ?? "MXN",
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
@@ -370,32 +377,32 @@ export default async function JobDetail({ params }: Params) {
   const canonicalPath = job.slug ?? job.id;
   const jobUrl = `${APP_URL}/jobs/${canonicalPath}`;
 
-  // Calcular fecha de expiración (30 días desde creación)
+  // No inventar fechas de cierre.
   const datePosted = job.createdAt ?? new Date();
-  const validThrough = new Date(datePosted);
-  validThrough.setDate(validThrough.getDate() + 30);
+
+
 
   // Construir jobLocation array
   const jobLocationArray = [];
   if (job.remote) {
     // Remote jobs también pueden tener una ubicación base
-    if (job.city) {
+    if (job.city && job.country) {
       jobLocationArray.push({
         "@type": "Place",
         address: {
           "@type": "PostalAddress",
           addressLocality: job.city,
-          addressCountry: "MX",
+          addressCountry: job.country,
         },
       });
     }
-  } else if (job.city) {
+  } else if (job.city && job.country) {
     jobLocationArray.push({
       "@type": "Place",
       address: {
         "@type": "PostalAddress",
         addressLocality: job.city,
-        addressCountry: "MX",
+        addressCountry: job.country,
       },
     });
   }
@@ -413,35 +420,33 @@ export default async function JobDetail({ params }: Params) {
     description: stripHtml(job.descriptionHtml || job.description || ""),
     url: jobUrl,
     datePosted: datePosted.toISOString(),
-    validThrough: validThrough.toISOString(),
-    employmentType: job.employmentType || "FULL_TIME",
+
+    employmentType:
+      job.employmentType === "CONTRACT"
+        ? "CONTRACTOR"
+        : job.employmentType === "INTERNSHIP"
+          ? "INTERN"
+          : job.employmentType || "FULL_TIME",
 
     hiringOrganization: {
       "@type": "Organization",
-      name: job.company?.name ?? "Empresa confidencial",
-      sameAs: `${APP_URL}`,
+      name: job.companyConfidential ? "confidential" : (job.company?.name ?? "confidential"),
+
       // ✅ Logo de la empresa (importante para Rich Snippets)
-      ...(job.company?.logoUrl && {
+      ...(!job.companyConfidential && job.company?.logoUrl && {
         logo: job.company.logoUrl,
       }),
     },
 
-    jobLocationType: job.remote ? "TELECOMMUTE" : "ONSITE",
+    ...(job.locationType === "REMOTE" && { jobLocationType: "TELECOMMUTE" }),
 
     // ✅ Ubicaciones del trabajo
     ...(jobLocationArray.length > 0 && {
       jobLocation: jobLocationArray,
     }),
 
-    // ✅ Salario (importante para Google for Jobs)
-    ...(job.salaryMin || job.salaryMax) && {
-      baseSalary: {
-        "@type": "PriceSpecification",
-        currency: job.currency || "MXN",
-        ...(job.salaryMin && { minValue: job.salaryMin }),
-        ...(job.salaryMax && { maxValue: job.salaryMax }),
-      },
-    },
+    // baseSalary omitido hasta disponer de periodicidad salarial verificada.
+
 
     // ✅ Skills requeridos (Rich Snippets)
     ...(skillsArray.length > 0 && {
@@ -497,15 +502,17 @@ export default async function JobDetail({ params }: Params) {
     <>
       <main className="mx-auto max-w-[1100px] space-y-6 px-6 py-8 lg:px-10 xl:max-w-[1200px]">
         {/* ✅ JobPosting Schema */}
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-        />
+        {job.status === "OPEN" && (
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+          />
+        )}
 
         {/* ✅ Breadcrumb Schema */}
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }}
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd).replace(/</g, "\\u003c") }}
         />
 
         {/* ✅ Lazy load CandidateMatchCard only if needed */}
