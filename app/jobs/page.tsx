@@ -10,7 +10,14 @@ import ActiveFilterChips from "@/components/ActiveFilterChips";
 import Footer from "@/components/Footer";
 import ProfileCompletionBanner from "@/components/candidate/ProfileCompletionBanner";
 
-export const metadata = { title: "Vacantes | Bolsa TI" };
+export const metadata = {
+  title: "Vacantes de tecnología en México",
+  description:
+    "Explora oportunidades de empleo en tecnología en México. Encuentra vacantes TI y postúlate en TaskIO.",
+  alternates: {
+    canonical: "/jobs",
+  },
+};
 
 type SearchParams = {
   q?: string;
