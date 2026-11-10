@@ -24,6 +24,7 @@ import {
   getCanonicalUrl,
 } from "@/lib/seo/keywords";
 import { generateJobPostingSchema, generateBreadcrumbSchema } from "@/lib/seo/schema";
+import { resolveJobPostingLocation } from "@/lib/seo/job-posting-location";
 
 // ✅ Lazy load components below-fold for better FCP/LCP
 const CandidateMatchCard = dynamicImport(
@@ -382,27 +383,31 @@ export default async function JobDetail({ params }: Params) {
 
 
 
+  const schemaLocation = resolveJobPostingLocation(job);
+  const cityForSchema = schemaLocation?.city;
+  const countryForSchema = schemaLocation?.country;
+
   // Construir jobLocation array
   const jobLocationArray = [];
   if (job.remote) {
     // Remote jobs también pueden tener una ubicación base
-    if (job.city && job.country) {
+    if (cityForSchema && countryForSchema) {
       jobLocationArray.push({
         "@type": "Place",
         address: {
           "@type": "PostalAddress",
-          addressLocality: job.city,
-          addressCountry: job.country,
+          addressLocality: cityForSchema,
+          addressCountry: countryForSchema,
         },
       });
     }
-  } else if (job.city && job.country) {
+  } else if (cityForSchema && countryForSchema) {
     jobLocationArray.push({
       "@type": "Place",
       address: {
         "@type": "PostalAddress",
-        addressLocality: job.city,
-        addressCountry: job.country,
+        addressLocality: cityForSchema,
+        addressCountry: countryForSchema,
       },
     });
   }
