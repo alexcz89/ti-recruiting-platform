@@ -111,7 +111,6 @@ describe("Public application job status boundary", () => {
     const response = await POST(request());
 
     expect(response.status).toBe(201);
-    expect(response.status).toBe(201);
     expect(mocks.createApplication).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: "job-a",
