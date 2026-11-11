@@ -38,6 +38,7 @@ model Invoice {
 }
 
 model Company {
+  aiInterviewSessions AIInterviewSession[]
   id                            String                         @id @default(cuid())
   name                          String
   country                       String?
@@ -96,6 +97,7 @@ model Company {
 }
 
 model User {
+  aiInterviewSessions AIInterviewSession[]
   id                        String                   @id @default(cuid())
   name                      String?
   email                     String                   @unique
@@ -1469,6 +1471,21 @@ enum InterviewRecommendation {
   HIRE
   MAYBE
   REJECT
+}
+
+// Internal conversation snapshot; never a candidate-facing payload.
+model AIInterviewSession {
+  id          String   @id @default(uuid())
+  companyId   String
+  candidateId String
+  version     Int      @default(0)
+  snapshot    Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  candidate   User     @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+
+  @@index([companyId, candidateId])
 }
 
 model LiveInterview {
