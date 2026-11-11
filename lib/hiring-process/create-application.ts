@@ -6,6 +6,35 @@ import { prisma } from "@/lib/server/prisma";
 
 import { isCanonicalHiringProcessEnabled } from "./feature-flags";
 
+export class JobNotOpenForApplicationsError extends Error {
+  constructor() {
+    super("Esta vacante ya no recibe postulaciones");
+    this.name = "JobNotOpenForApplicationsError";
+  }
+}
+
+async function lockOpenJob(
+  tx: Prisma.TransactionClient,
+  jobId: string,
+): Promise<{ companyId: string }> {
+  const rows = await tx.$queryRaw<
+    Array<{ companyId: string; status: string }>
+  >`
+    SELECT "companyId", "status"
+    FROM "Job"
+    WHERE "id" = ${jobId}
+    FOR SHARE
+  `;
+
+  const job = rows[0];
+
+  if (!job || job.status !== "OPEN") {
+    throw new JobNotOpenForApplicationsError();
+  }
+
+  return { companyId: job.companyId };
+}
+
 export type CreateCanonicalApplicationInput = {
   jobId: string;
   candidateId: string;
@@ -24,10 +53,7 @@ export async function createCanonicalApplication(
   const happenedAt = input.happenedAt ?? new Date();
 
   return prisma.$transaction(async (tx) => {
-    const job = await tx.job.findUniqueOrThrow({
-      where: { id: input.jobId },
-      select: { companyId: true },
-    });
+    const job = await lockOpenJob(tx, input.jobId);
     const application = await tx.application.create({
       data: {
         jobId: input.jobId,
@@ -83,18 +109,22 @@ export async function createApplicationForHiringProcessRollout(
     return createCanonicalApplication(input);
   }
 
-  return prisma.application.create({
-    data: {
-      jobId: input.jobId,
-      candidateId: input.candidateId,
-      coverLetter: input.coverLetter,
-      resumeUrl: input.resumeUrl,
-      stage: null,
-      disposition: null,
-      stateVersion: 0,
-      status: "SUBMITTED",
-      recruiterInterest: "REVIEW",
-    },
-    select: { id: true },
+  return prisma.$transaction(async (tx) => {
+    await lockOpenJob(tx, input.jobId);
+
+    return tx.application.create({
+      data: {
+        jobId: input.jobId,
+        candidateId: input.candidateId,
+        coverLetter: input.coverLetter,
+        resumeUrl: input.resumeUrl,
+        stage: null,
+        disposition: null,
+        stateVersion: 0,
+        status: "SUBMITTED",
+        recruiterInterest: "REVIEW",
+      },
+      select: { id: true },
+    });
   });
 }
