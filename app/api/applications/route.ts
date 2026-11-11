@@ -8,7 +8,10 @@ import { authOptions } from "@/lib/server/auth";
 import { getSessionCompanyId } from "@/lib/server/session";
 import { sendApplicationEmail } from "@/lib/server/mailer";
 import { NotificationService } from "@/lib/notifications/service";
-import { createApplicationForHiringProcessRollout } from "@/lib/hiring-process/create-application";
+import {
+  createApplicationForHiringProcessRollout,
+  JobNotOpenForApplicationsError,
+} from "@/lib/hiring-process/create-application";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -191,12 +194,20 @@ export async function POST(req: NextRequest) {
         title: true,
         companyId: true,
         recruiterId: true,
+        status: true,
         company: { select: { name: true } },
       },
     });
 
     if (!job) {
       return noStoreJson({ error: "Vacante no encontrada" }, 404);
+    }
+
+    if (job.status !== "OPEN") {
+      return noStoreJson(
+        { error: "Esta vacante ya no recibe postulaciones" },
+        409
+      );
     }
 
     const exists = await prisma.application.findFirst({
@@ -294,6 +305,9 @@ export async function POST(req: NextRequest) {
 
     return noStoreJson(response, 201);
   } catch (err: unknown) {
+    if (err instanceof JobNotOpenForApplicationsError) {
+      return noStoreJson({ error: err.message }, 409);
+    }
     if (
       typeof err === "object" &&
       err !== null &&

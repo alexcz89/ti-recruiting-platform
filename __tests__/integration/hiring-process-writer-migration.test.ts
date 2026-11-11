@@ -173,6 +173,97 @@ describeDatabase("canonical hiring process writer migration", () => {
     vi.unstubAllEnvs();
   });
 
+  it.each([
+    ["false", "PAUSED"],
+    ["false", "CLOSED"],
+    ["true", "PAUSED"],
+    ["true", "CLOSED"],
+  ] as const)(
+    "blocks new applications when flag=%s and job=%s",
+    async (flag, status) => {
+      vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", flag);
+
+      await prisma.job.update({
+        where: { id: ids.job },
+        data: { status },
+      });
+
+      await expect(createRolloutApplication()).rejects.toThrow(
+        "Esta vacante ya no recibe postulaciones"
+      );
+
+      expect(
+        await prisma.application.count({
+          where: { jobId: ids.job },
+        })
+      ).toBe(0);
+
+      expect(
+        await prisma.applicationEvent.count({
+          where: { application: { jobId: ids.job } },
+        })
+      ).toBe(0);
+    }
+  );
+
+  it.each(["false", "true"] as const)(
+    "rejects an application during concurrent closure with flag=%s",
+    async (flag) => {
+      vi.stubEnv("CANONICAL_HIRING_PROCESS_ENABLED", flag);
+
+      let signalLocked!: () => void;
+      const locked = new Promise<void>((resolve) => {
+        signalLocked = resolve;
+      });
+
+      let releaseClosure!: () => void;
+      const closureGate = new Promise<void>((resolve) => {
+        releaseClosure = resolve;
+      });
+
+      const closing = prisma.$transaction(
+        async (tx) => {
+          await tx.job.update({
+            where: { id: ids.job },
+            data: { status: "CLOSED" },
+          });
+
+          signalLocked();
+          await closureGate;
+        },
+        { timeout: 8000 }
+      );
+
+      await locked;
+
+      try {
+        const applicationResult = createRolloutApplication().then(
+          () => ({ created: true, error: null }),
+          (error: unknown) => ({ created: false, error })
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 150));
+
+        releaseClosure();
+        await closing;
+
+        const result = await applicationResult;
+
+        expect(result.created).toBe(false);
+        expect(String(result.error)).toContain(
+          "Esta vacante ya no recibe postulaciones"
+        );
+
+        expect(
+          await prisma.application.count({
+            where: { jobId: ids.job },
+          })
+        ).toBe(0);
+      } finally {
+        releaseClosure();
+      }
+    }
+  );
   it("permite una sola reserva concurrente de correo de rechazo", async () => {
     const app = await createApplication();
 
