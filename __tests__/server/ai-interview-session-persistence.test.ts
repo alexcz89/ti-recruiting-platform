@@ -2,16 +2,16 @@ import { describe, expect, it, vi } from "vitest";
 import { createInterviewSessionService, validateStoredInterview, type InterviewStore, type InterviewTransaction, type StoredInterview } from "@/lib/ai/ai-interview-session-service";
 import { createInterviewSession } from "@/lib/ai/ai-interview-conversation-core";
 
-const scope = { actorId: "recruiter", companyId: "company", candidateId: "candidate" };
+const scope = { actorId: "recruiter", companyId: "company", candidateId: "candidate", applicationId: "application" };
 const blueprint = { plan: { roleTitle: "Developer", seniority: "MID", techStack: ["TS"], competencies: [{ id: "c", name: "Core", criteria: ["Reasoning"], weight: 100 }], timeLimitMinutes: 10, maxQuestions: 3, maxFollowUpsPerQuestion: 1 }, questions: [{ id: "q", competencyId: "c", text: "Explain transactions", order: 0 }] };
 const start = { type: "START_INTERVIEW", commandId: "start" };
 function fixture() {
   let row: StoredInterview | null = null;
   let clock = 1000;
   const tx: InterviewTransaction = {
-    authorize: vi.fn(async s => s.actorId === scope.actorId && s.companyId === scope.companyId && s.candidateId === scope.candidateId),
+    authorize: vi.fn(async s => s.actorId === scope.actorId && s.companyId === scope.companyId && s.candidateId === scope.candidateId && s.applicationId === scope.applicationId),
     find: vi.fn(async () => structuredClone(row)), now: vi.fn(async () => clock),
-    insert: vi.fn(async (s, snapshot) => { row = { id: "session", companyId: s.companyId, candidateId: s.candidateId, version: 0, snapshot: structuredClone(snapshot) }; return structuredClone(row); }),
+    insert: vi.fn(async (s, snapshot) => { row = { id: "session", companyId: s.companyId, candidateId: s.candidateId, applicationId: s.applicationId, version: 0, snapshot: structuredClone(snapshot) }; return structuredClone(row); }),
     update: vi.fn(async (_s, old, snapshot) => { if (!row || row.version !== old.version) return false; row = { ...row, version: row.version + 1, snapshot: structuredClone(snapshot) }; return true; }),
   };
   const store: InterviewStore = { transaction: async work => work(tx) };
@@ -19,6 +19,27 @@ function fixture() {
   return { tx, store, service, setClock: (t: number) => { clock = t; }, getRow: () => row!, setRow: (r: StoredInterview) => { row = r; } };
 }
 describe("interview persistence service with simulated storage (not PostgreSQL concurrency)", () => {
+  it("rejects a different authorized application of the same candidate on read and replay", async () => {
+    const f = fixture(); await f.service.create(scope, blueprint); await f.service.execute(scope, "session", 0, start);
+    vi.mocked(f.tx.authorize).mockResolvedValue(true);
+    const other = { ...scope, applicationId: "another-application" };
+    await expect(f.service.read(other, "session")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(f.service.execute(other, "session", 0, start)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(f.tx.update).toHaveBeenCalledTimes(1);
+  });
+  it("checks scope and revoked permissions for create, read and commands", async () => {
+    const f = fixture(); await f.service.create(scope, blueprint);
+    vi.mocked(f.tx.authorize).mockResolvedValue(false);
+    await expect(f.service.create(scope, blueprint)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(f.service.read(scope, "session")).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(f.service.execute(scope, "session", 0, start)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(f.tx.insert).toHaveBeenCalledTimes(1); expect(f.tx.update).not.toHaveBeenCalled();
+  });
+  it.each(["", " ", undefined])("rejects malformed application scope %j without touching storage", async applicationId => {
+    const f = fixture(); const invalid = { ...scope, applicationId } as typeof scope;
+    await expect(f.service.create(invalid, blueprint)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(f.tx.insert).not.toHaveBeenCalled();
+  });
   it("denies creation until approval is explicitly supplied by a trusted integration", async () => {
     const f = fixture(); await expect(createInterviewSessionService(f.store).create(scope, blueprint)).rejects.toMatchObject({ code: "APPROVAL_REQUIRED" });
     expect(f.tx.insert).not.toHaveBeenCalled();
@@ -54,7 +75,7 @@ describe("interview persistence service with simulated storage (not PostgreSQL c
     expect(expired.snapshot.history).toEqual(active.snapshot.history);
     expect(await f.service.execute(scope, "session", 0, start)).toEqual(expired);
   });
-  it.each([{ companyId: "other" }, { candidateId: "other" }, { actorId: "other" }])("rejects unauthorized scope %j before reading", async patch => {
+  it.each([{ companyId: "other" }, { candidateId: "other" }, { actorId: "other" }, { applicationId: "missing" }])("rejects unauthorized scope %j before reading", async patch => {
     const f = fixture(); await expect(f.service.read({ ...scope, ...patch }, "session")).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(f.tx.find).not.toHaveBeenCalled();
   });

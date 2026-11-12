@@ -319,6 +319,7 @@ model Job {
 }
 
 model Application {
+  aiInterviewSessions AIInterviewSession[]
   id                 String                  @id @default(cuid())
   jobId              String
   candidateId        String
@@ -1478,14 +1479,17 @@ model AIInterviewSession {
   id          String   @id @default(uuid())
   companyId   String
   candidateId String
+  applicationId String
   version     Int      @default(0)
   snapshot    Json
   createdAt   DateTime @default(now())
   updatedAt   DateTime @default(now()) @updatedAt
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Restrict)
   candidate   User     @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Restrict)
 
   @@index([companyId, candidateId])
+  @@index([applicationId])
 }
 
 model LiveInterview {

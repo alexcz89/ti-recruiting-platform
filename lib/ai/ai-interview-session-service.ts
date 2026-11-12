@@ -3,9 +3,9 @@ import { z } from "zod";
 import { applyInterviewCommand, createInterviewSession, InterviewCommandSchema, INTERVIEW_CONVERSATION_LIMITS, type InterviewSession } from "./ai-interview-conversation-core";
 
 const id = z.string().min(1).max(200).refine(value => value.trim().length > 0);
-const ScopeSchema = z.object({ actorId: id, companyId: id, candidateId: id }).strict();
+const ScopeSchema = z.object({ actorId: id, companyId: id, candidateId: id, applicationId: id }).strict();
 export type InterviewScope = z.infer<typeof ScopeSchema>;
-export type StoredInterview = { id: string; companyId: string; candidateId: string; version: number; snapshot: unknown };
+export type StoredInterview = { id: string; companyId: string; candidateId: string; applicationId: string; version: number; snapshot: unknown };
 export interface InterviewTransaction {
   authorize(scope: InterviewScope): Promise<boolean>;
   find(scope: InterviewScope, sessionId: string, lock: boolean): Promise<StoredInterview | null>;
@@ -43,13 +43,15 @@ export function validateStoredInterview(value: unknown): InterviewSession {
  */
 export function createInterviewSessionService(store: InterviewStore, approve: (scope: InterviewScope, blueprint: InterviewSession["blueprint"]) => Promise<boolean> = async () => false) {
   async function authorized(tx: InterviewTransaction, raw: InterviewScope) {
-    const scope = ScopeSchema.parse(raw);
+    const parsed = ScopeSchema.safeParse(raw);
+    if (!parsed.success) throw new InterviewPersistenceError("NOT_FOUND");
+    const scope = parsed.data;
     if (!await tx.authorize(scope)) throw new InterviewPersistenceError("NOT_FOUND");
     return scope;
   }
   async function load(tx: InterviewTransaction, scope: InterviewScope, sessionId: string, lock: boolean) {
     const row = await tx.find(scope, id.parse(sessionId), lock);
-    if (!row || row.companyId !== scope.companyId || row.candidateId !== scope.candidateId) throw new InterviewPersistenceError("NOT_FOUND");
+    if (!row || row.companyId !== scope.companyId || row.candidateId !== scope.candidateId || row.applicationId !== scope.applicationId) throw new InterviewPersistenceError("NOT_FOUND");
     if (!Number.isSafeInteger(row.version) || row.version < 0) throw new InterviewPersistenceError("INVALID_SNAPSHOT");
     const snapshot = validateStoredInterview(row.snapshot);
     if (row.version !== snapshot.commands.length) throw new InterviewPersistenceError("INVALID_SNAPSHOT");
