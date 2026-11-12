@@ -19,6 +19,15 @@ function fixture() {
   return { tx, store, service, setClock: (t: number) => { clock = t; }, getRow: () => row!, setRow: (r: StoredInterview) => { row = r; } };
 }
 describe("interview persistence service with simulated storage (not PostgreSQL concurrency)", () => {
+  it("rechecks authorization before replay lookup and never returns a revoked actor's snapshot", async () => {
+    const f = fixture(); await f.service.create(scope, blueprint);
+    await f.service.execute(scope, "session", 0, start);
+    vi.mocked(f.tx.authorize).mockResolvedValue(false);
+    vi.mocked(f.tx.find).mockClear(); vi.mocked(f.tx.now).mockClear(); vi.mocked(f.tx.update).mockClear();
+    await expect(f.service.execute(scope, "session", 0, start)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(f.tx.find).not.toHaveBeenCalled(); expect(f.tx.now).not.toHaveBeenCalled(); expect(f.tx.update).not.toHaveBeenCalled();
+    expect(f.getRow().version).toBe(1);
+  });
   it("rejects a different authorized application of the same candidate on read and replay", async () => {
     const f = fixture(); await f.service.create(scope, blueprint); await f.service.execute(scope, "session", 0, start);
     vi.mocked(f.tx.authorize).mockResolvedValue(true);

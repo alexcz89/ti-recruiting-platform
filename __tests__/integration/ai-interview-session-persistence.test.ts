@@ -26,7 +26,7 @@ describe.skipIf(!enabled)("interview persistence with real PostgreSQL (schema mu
     service = createInterviewSessionService(createPrismaInterviewStore(db), async () => true);
     otherServer = createInterviewSessionService(createPrismaInterviewStore(second), async () => true);
     await db.company.createMany({ data: [{ id: scope.companyId, name: "Synthetic A" }, { id: prefix + "-b", name: "Synthetic B" }] });
-    await db.user.createMany({ data: [{ id: scope.actorId, email: prefix + "-r@example.invalid", role: "RECRUITER" }, { id: scope.candidateId, email: prefix + "-c@example.invalid", role: "CANDIDATE" }] });
+    await db.user.createMany({ data: [{ id: scope.actorId, email: prefix + "-r@example.invalid", role: "RECRUITER" }, { id: scope.candidateId, email: prefix + "-c@example.invalid", role: "CANDIDATE" }, { id: prefix + "-admin", email: prefix + "-admin@example.invalid", role: "ADMIN" }] });
     await db.recruiterProfile.create({ data: { userId: scope.actorId, companyId: scope.companyId, companyName: "Synthetic A", status: "APPROVED" } });
     await db.job.create({ data: { id: prefix, companyId: scope.companyId, title: "Synthetic", description: "QA", location: "QA", employmentType: "FULL_TIME", skills: [] } });
     await db.application.create({ data: { id: prefix, jobId: prefix, candidateId: scope.candidateId } });
@@ -41,7 +41,7 @@ describe.skipIf(!enabled)("interview persistence with real PostgreSQL (schema mu
       await db.$executeRaw`DELETE FROM "AIInterviewSession" WHERE "companyId" = ${scope.companyId}`;
       await db.application.deleteMany({ where: { id: { in: [prefix, prefix + "-other", prefix + "-foreign"] } } }); await db.job.deleteMany({ where: { id: { in: [prefix, prefix + "-other", prefix + "-foreign"] } } });
       await db.recruiterProfile.deleteMany({ where: { userId: scope.actorId } });
-      await db.user.deleteMany({ where: { id: { in: [scope.actorId, scope.candidateId] } } });
+      await db.user.deleteMany({ where: { id: { in: [scope.actorId, scope.candidateId, prefix + "-admin"] } } });
       await db.company.deleteMany({ where: { id: { in: [scope.companyId, prefix + "-b"] } } });
     } finally { await db.$disconnect(); await second?.$disconnect(); }
   });
@@ -51,6 +51,37 @@ describe.skipIf(!enabled)("interview persistence with real PostgreSQL (schema mu
     const [a, b] = await Promise.all([service.execute(scope, row.id, 0, start), otherServer.execute(scope, row.id, 0, start)]);
     expect(a).toEqual(b); expect(a.version).toBe(1); expect(a.snapshot.commands).toHaveLength(1);
     expect(a.applicationId).toBe(scope.applicationId);
+  });
+  it("denies a global ADMIN creation, read, commands and replay against a company's session", async () => {
+    const row = await service.create(scope, blueprint);
+    const active = await service.execute(scope, row.id, 0, start);
+    const admin = { ...scope, actorId: prefix + "-admin" };
+    await expect(service.create(admin, blueprint)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.read(admin, row.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.execute(admin, row.id, 1, { type: "SKIP_QUESTION", commandId: "admin-skip", turnId: "turn-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(service.execute(admin, row.id, 0, start)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(await service.read(scope, row.id)).toEqual(active);
+  });
+  it.each(["candidate-role", "admin-with-profile", "other-company", "pending", "suspended", "inactive", "deleted"])("revokes all operations including replay after actor change: %s", async kind => {
+    const row = await service.create(scope, blueprint);
+    const active = await service.execute(scope, row.id, 0, start);
+    try {
+      if (kind === "candidate-role" || kind === "admin-with-profile") await db.user.update({ where: { id: scope.actorId }, data: { role: kind === "candidate-role" ? "CANDIDATE" : "ADMIN" } });
+      if (kind === "other-company") await db.recruiterProfile.update({ where: { userId: scope.actorId }, data: { companyId: prefix + "-b" } });
+      if (kind === "pending") await db.recruiterProfile.update({ where: { userId: scope.actorId }, data: { status: "PENDING" } });
+      if (kind === "suspended") await db.user.update({ where: { id: scope.actorId }, data: { isSuspended: true } });
+      if (kind === "inactive") await db.user.update({ where: { id: scope.actorId }, data: { isActive: false } });
+      if (kind === "deleted") await db.user.update({ where: { id: scope.actorId }, data: { deletedAt: new Date() } });
+      await expect(service.create(scope, blueprint)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(service.read(scope, row.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(service.execute(scope, row.id, 1, { type: "SKIP_QUESTION", commandId: "revoked-skip", turnId: "turn-1" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      await expect(service.execute(scope, row.id, 0, start)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    } finally {
+      await db.user.update({ where: { id: scope.actorId }, data: { role: "RECRUITER", isActive: true, isSuspended: false, deletedAt: null } });
+      await db.recruiterProfile.update({ where: { userId: scope.actorId }, data: { companyId: scope.companyId, status: "APPROVED" } });
+    }
+    expect(await service.read(scope, row.id)).toEqual(active);
+    expect(await service.execute(scope, row.id, 0, start)).toEqual(active);
   });
   it("rejects nonexistent and foreign applications for creation, read and commands", async () => {
     const row = await service.create(scope, blueprint);
