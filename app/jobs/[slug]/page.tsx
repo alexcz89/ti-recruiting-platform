@@ -2,6 +2,7 @@
 // ✅ Rename dynamic import to avoid conflict with export const dynamic
 import dynamicImport from "next/dynamic";
 import { Suspense } from "react";
+import Link from "next/link";
 import { prisma } from "@/lib/server/prisma";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
@@ -162,6 +163,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       remote: true,
       skills: true,
       seniority: true,
+      status: true,
       company: { select: { name: true } },
     },
   });
@@ -182,6 +184,9 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title,
     description,
     keywords,
+    robots: job.status === "OPEN"
+      ? undefined
+      : { index: false, follow: true },
     alternates: { canonical: url },
     openGraph: {
       title,
@@ -285,6 +290,36 @@ export default async function JobDetail({ params }: Params) {
   });
 
   if (!job) notFound();
+
+  if (job.status !== "OPEN") {
+    return (
+      <>
+        <main className="mx-auto max-w-[900px] px-6 py-12 lg:px-10">
+          <section className="rounded-2xl border glass-card p-6 md:p-10">
+            <p className="mb-3 text-sm font-semibold text-zinc-600 dark:text-zinc-400">
+              Vacante no disponible
+            </p>
+            <h1 className="text-2xl font-bold text-default md:text-3xl">
+              {job.title}
+            </h1>
+            <p className="mt-4 text-zinc-600 dark:text-zinc-400">
+              Esta vacante ya no recibe postulaciones.
+              Consulta las oportunidades disponibles actualmente en TaskIO.
+            </p>
+            <Link
+              href="/jobs"
+              className="mt-6 inline-flex rounded-lg bg-emerald-600 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-700"
+            >
+              Ver vacantes disponibles
+            </Link>
+          </section>
+        </main>
+        <Suspense fallback={null}>
+          <Footer />
+        </Suspense>
+      </>
+    );
+  }
 
   let canEdit = false;
   if (isRecruiterOrAdmin) {

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/server/auth';
 import { prisma } from "@/lib/server/prisma";
 import JobSearchBar from "@/components/JobSearchBar";
 import ClientSplitView from "@/components/jobs/ClientSplitView";
+import ExampleTechProfiles from "@/components/jobs/ExampleTechProfiles";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import ActiveFilterChips from "@/components/ActiveFilterChips";
@@ -111,6 +112,8 @@ export default async function PublicJobsPage({ searchParams }: { searchParams: S
         </header>
 
         <ClientSplitView filters={filters} />
+
+        <ExampleTechProfiles />
       </main>
       <Footer />
     </>
