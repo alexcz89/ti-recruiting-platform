@@ -23,10 +23,11 @@ describe("Prisma interview adapter query contracts (SQL mocked, not concurrency 
     expect((updateSql as string[]).join("?")).toContain('AND "applicationId" = ? AND "version" = ?');
     expect(updateValues).toEqual([JSON.stringify(snapshot), "session", "company", "candidate", "application", 2]);
   });
-  it("checks persisted actor status, explicit admin/recruiter roles and approved company membership", async () => {
+  it("requires an active approved recruiter of the exact company without an ADMIN bypass", async () => {
     const f = fixture(); expect(await f.store.transaction(tx => tx.authorize(scope))).toBe(true);
     expect(f.tx.user.findFirst).toHaveBeenCalledWith({ where: { id: "actor", isActive: true, isSuspended: false, deletedAt: null,
-      OR: [{ role: "ADMIN" }, { role: "RECRUITER", recruiterProfile: { is: { companyId: "company", status: "APPROVED" } } }],
+      role: "RECRUITER",
+      recruiterProfile: { is: { companyId: "company", status: "APPROVED" } },
     }, select: { id: true } });
     expect(f.tx.application.findFirst).toHaveBeenCalledWith({ where: { id: "application", candidateId: "candidate", job: { companyId: "company" }, candidate: { role: "CANDIDATE", isActive: true, isSuspended: false, deletedAt: null } }, select: { id: true } });
   });

@@ -12,7 +12,8 @@ export function createPrismaInterviewStore(db: PrismaClient): InterviewStore {
       async authorize(scope) {
         const actor = await tx.user.findFirst({ where: {
           id: scope.actorId, isActive: true, isSuspended: false, deletedAt: null,
-          OR: [{ role: "ADMIN" }, { role: "RECRUITER", recruiterProfile: { is: { companyId: scope.companyId, status: "APPROVED" } } }],
+          role: "RECRUITER",
+          recruiterProfile: { is: { companyId: scope.companyId, status: "APPROVED" } },
         }, select: { id: true } });
         if (!actor) return false;
         return Boolean(await tx.application.findFirst({ where: {
