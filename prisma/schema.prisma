@@ -38,6 +38,7 @@ model Invoice {
 }
 
 model Company {
+  aiInterviewBlueprintVersions AIInterviewBlueprintVersion[]
   aiInterviewSessions AIInterviewSession[]
   id                            String                         @id @default(cuid())
   name                          String
@@ -97,6 +98,8 @@ model Company {
 }
 
 model User {
+  createdInterviewBlueprintVersions AIInterviewBlueprintVersion[] @relation("InterviewBlueprintCreator")
+  approvedInterviewBlueprintVersions AIInterviewBlueprintVersion[] @relation("InterviewBlueprintApprover")
   aiInterviewSessions AIInterviewSession[]
   id                        String                   @id @default(cuid())
   name                      String?
@@ -256,6 +259,7 @@ model Education {
 }
 
 model Job {
+  aiInterviewBlueprintVersions AIInterviewBlueprintVersion[]
   id                    String                  @id @default(cuid())
   title                 String
   location              String
@@ -1472,6 +1476,35 @@ enum InterviewRecommendation {
   HIRE
   MAYBE
   REJECT
+}
+
+enum AIInterviewBlueprintStatus {
+  DRAFT
+  APPROVED
+  REVOKED
+}
+
+// Each ID is one content version. Approval is internal, not public authorization.
+model AIInterviewBlueprintVersion {
+  id           String @id @default(uuid())
+  companyId    String
+  jobId        String
+  blueprint    Json
+  status       AIInterviewBlueprintStatus @default(DRAFT)
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime? @db.Timestamptz(3)
+  fingerprint  String?
+  createdAt    DateTime @default(now()) @db.Timestamptz(3)
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  job          Job @relation(fields: [jobId], references: [id], onDelete: Restrict)
+  createdBy    User @relation("InterviewBlueprintCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  approvedBy   User? @relation("InterviewBlueprintApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+
+  @@index([companyId, jobId, status])
+  @@index([jobId])
+  @@index([createdById])
+  @@index([approvedById])
 }
 
 // Internal conversation snapshot; never a candidate-facing payload.
