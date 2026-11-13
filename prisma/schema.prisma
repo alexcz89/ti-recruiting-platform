@@ -1486,6 +1486,7 @@ enum AIInterviewBlueprintStatus {
 
 // Each ID is one content version. Approval is internal, not public authorization.
 model AIInterviewBlueprintVersion {
+  sessions AIInterviewSession[]
   id           String @id @default(uuid())
   companyId    String
   jobId        String
@@ -1509,6 +1510,10 @@ model AIInterviewBlueprintVersion {
 
 // Internal conversation snapshot; never a candidate-facing payload.
 model AIInterviewSession {
+  blueprintVersionId String?
+  blueprintVersion AIInterviewBlueprintVersion? @relation(fields: [blueprintVersionId], references: [id], onDelete: Restrict)
+
+  @@index([blueprintVersionId])
   id          String   @id @default(uuid())
   companyId   String
   candidateId String

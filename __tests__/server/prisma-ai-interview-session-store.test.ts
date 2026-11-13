@@ -13,15 +13,26 @@ describe("Prisma interview adapter query contracts (SQL mocked, not concurrency 
   it("persists application ownership and includes it in versioned UPDATE predicates", async () => {
     const f = fixture();
     const snapshot = createInterviewSession({ plan: { roleTitle: "Developer", seniority: "MID", techStack: ["TS"], competencies: [{ id: "c", name: "Core", criteria: ["Reasoning"], weight: 100 }], timeLimitMinutes: 10, maxQuestions: 3, maxFollowUpsPerQuestion: 1 }, questions: [{ id: "q", competencyId: "c", text: "Question", order: 0 }] });
-    await f.store.transaction(tx => tx.insert(scope, snapshot));
+    await f.store.transaction(tx => tx.insert(scope, snapshot, "approved"));
     const [insertSql, uuid, ...insertValues] = f.tx.$queryRaw.mock.calls[0];
     expect((insertSql as string[]).join("?")).toContain('"applicationId"');
     expect(uuid).toEqual(expect.any(String));
-    expect(insertValues).toEqual(["company", "candidate", "application", JSON.stringify(snapshot)]);
-    await f.store.transaction(tx => tx.update(scope, { id: "session", companyId: "company", candidateId: "candidate", applicationId: "application", version: 2, snapshot }, snapshot));
+    expect(insertValues).toEqual(["company", "candidate", "application", JSON.stringify(snapshot), "approved"]);
+    await f.store.transaction(tx => tx.update(scope, { blueprintVersionId: "approved", id: "session", companyId: "company", candidateId: "candidate", applicationId: "application", version: 2, snapshot }, snapshot));
     const [updateSql, ...updateValues] = f.tx.$executeRaw.mock.calls[0];
     expect((updateSql as string[]).join("?")).toContain('AND "applicationId" = ? AND "version" = ?');
     expect(updateValues).toEqual([JSON.stringify(snapshot), "session", "company", "candidate", "application", 2]);
+  });
+  it("locks the exact application/job and approved version on the existing transaction", async () => {
+    const f = fixture();
+    f.tx.$queryRaw.mockResolvedValueOnce([{ jobId: "job" }] as never).mockResolvedValueOnce([{ id: "approved" }] as never);
+    expect(await f.store.transaction(tx => tx.findBlueprint(scope, "approved"))).toEqual({ jobId: "job", version: { id: "approved" } });
+    const [sql, ...values] = f.tx.$queryRaw.mock.calls[0];
+    expect((sql as string[]).join("?")).toContain("FOR SHARE OF a, j");
+    expect(values).toEqual([scope.applicationId, scope.candidateId, scope.companyId]);
+    const query = f.tx.$queryRaw.mock.calls[1][0] as unknown as { sql: string; values: unknown[] };
+    expect(query.sql).toContain("FOR UPDATE"); expect(query.values).toEqual(["approved", "company", "job"]);
+    expect(f.transaction).toHaveBeenCalledTimes(1);
   });
   it("requires an active approved recruiter of the exact company without an ADMIN bypass", async () => {
     const f = fixture(); expect(await f.store.transaction(tx => tx.authorize(scope))).toBe(true);

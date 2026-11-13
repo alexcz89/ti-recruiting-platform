@@ -47,7 +47,7 @@ export function fingerprintInterviewBlueprint(input: unknown): string {
   return createHash("sha256").update(canonicalJson(parsed.data), "utf8").digest("hex");
 }
 
-function validateRecord(raw: unknown, scope: BlueprintScope, id?: string): BlueprintVersion {
+export function validateBlueprintVersion(raw: unknown, scope: BlueprintScope, id?: string): BlueprintVersion {
   const parsed = RecordSchema.safeParse(raw);
   if (!parsed.success) throw new BlueprintApprovalError("INTEGRITY_ERROR");
   const row = parsed.data;
@@ -64,8 +64,8 @@ function validateRecord(raw: unknown, scope: BlueprintScope, id?: string): Bluep
  * client assertion. Returned records are not candidate/public payloads.
  * Each ID is one immutable content version; editing requires another draft.
  * Replays reauthorize and preserve the first approval's actor/time/fingerprint.
- * This does NOT enable session creation or grant future approval indefinitely:
- * integrations must check approved status at use time, in their transaction.
+ * Session creation reuses validation under the same database transaction.
+ * An approved record returned here is not a permanent authorization token.
  */
 export function createInterviewBlueprintService(store: BlueprintStore) {
   async function authorized<T>(input: BlueprintScope, work: (tx: BlueprintTransaction, scope: BlueprintScope) => Promise<T>): Promise<T> {
@@ -82,13 +82,13 @@ export function createInterviewBlueprintService(store: BlueprintStore) {
     if (!row) throw new BlueprintApprovalError("NOT_FOUND");
     // Recheck after a potentially blocking row lock, including approval replays.
     if (lock && !await tx.authorize(scope)) throw new BlueprintApprovalError("NOT_FOUND");
-    return validateRecord(row, scope, id);
+    return validateBlueprintVersion(row, scope, id);
   }
   return {
     createDraft: (scope: BlueprintScope, input: unknown) => authorized(scope, async (tx, s) => {
       const blueprint = InterviewBlueprintSchema.safeParse(input);
       if (!blueprint.success) throw new BlueprintApprovalError("INVALID_BLUEPRINT");
-      return validateRecord(await tx.insert(s, blueprint.data), s);
+      return validateBlueprintVersion(await tx.insert(s, blueprint.data), s);
     }),
     readApproved: (scope: BlueprintScope, id: string) => authorized(scope, async (tx, s) => {
       const row = await load(tx, s, id, false);
@@ -101,7 +101,7 @@ export function createInterviewBlueprintService(store: BlueprintStore) {
       if (row.status !== "DRAFT") throw new BlueprintApprovalError("INVALID_TRANSITION");
       const approved = await tx.approve(s, id, fingerprintInterviewBlueprint(row.blueprint));
       if (!approved) throw new BlueprintApprovalError("CONFLICT");
-      return validateRecord(approved, s, id);
+      return validateBlueprintVersion(approved, s, id);
     }),
     revoke: (scope: BlueprintScope, id: string) => authorized(scope, async (tx, s) => {
       const row = await load(tx, s, id, true);
@@ -109,7 +109,7 @@ export function createInterviewBlueprintService(store: BlueprintStore) {
       if (row.status !== "APPROVED") throw new BlueprintApprovalError("INVALID_TRANSITION");
       const revoked = await tx.revoke(s, id);
       if (!revoked) throw new BlueprintApprovalError("CONFLICT");
-      return validateRecord(revoked, s, id);
+      return validateBlueprintVersion(revoked, s, id);
     }),
   };
 }
