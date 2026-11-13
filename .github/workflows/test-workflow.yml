@@ -156,12 +156,38 @@ jobs:
           npm run db:migrate:deploy
 
       - name: Run AI interview PostgreSQL tests
+        shell: bash
         env:
           CI: "true"
           NODE_ENV: test
           RUN_AI_INTERVIEW_DB_TESTS: "true"
           AI_INTERVIEW_TEST_DATABASE_URL: "postgresql://taskio_ci:taskio_ci_password@127.0.0.1:55433/taskio_ai_interview_test?schema=public"
-        run: npx vitest run __tests__/integration/ai-interview-session-persistence.test.ts --reporter=verbose
+        run: |
+          npx vitest run __tests__/integration/ai-interview-session-persistence.test.ts __tests__/integration/ai-interview-blueprint-approval.test.ts --no-file-parallelism --reporter=default --reporter=json --outputFile=/tmp/ai-interview-tests.json
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('/tmp/ai-interview-tests.json', 'utf8'));
+          const expected = [
+            'ai-interview-session-persistence.test.ts',
+            'ai-interview-blueprint-approval.test.ts',
+          ];
+          const files = report.testResults ?? [];
+          const missing = expected.filter(name => !files.some(file => file.name.endsWith(name)));
+          const valid =
+            files.length === 2 && missing.length === 0 &&
+            report.numTotalTests >= 34 && report.numPassedTests === report.numTotalTests &&
+            report.numFailedTests === 0 && report.numPendingTests === 0 &&
+            (report.numTodoTests ?? 0) === 0 && files.every(file => file.status === 'passed');
+          console.log('AI interview PostgreSQL verification:', {
+            files: files.length, passed: report.numPassedTests,
+            skipped: report.numPendingTests, failed: report.numFailedTests, missing,
+          });
+          if (!valid) {
+            console.error('AI interview PostgreSQL coverage validation failed.');
+            process.exit(1);
+          }
+          NODE
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

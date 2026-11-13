@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { InterviewStore, StoredInterview } from "./ai-interview-session-service";
+import { interviewRecruiterWhere } from "./ai-interview-authorization";
 
 /** Parameterized SQL via Prisma keeps the row lock and JSON write on one connection.
  * READ COMMITTED re-reads the winning snapshot after waiting; no automatic retries.
@@ -10,11 +11,7 @@ export function createPrismaInterviewStore(db: PrismaClient): InterviewStore {
   return {
     transaction: work => db.$transaction(async tx => work({
       async authorize(scope) {
-        const actor = await tx.user.findFirst({ where: {
-          id: scope.actorId, isActive: true, isSuspended: false, deletedAt: null,
-          role: "RECRUITER",
-          recruiterProfile: { is: { companyId: scope.companyId, status: "APPROVED" } },
-        }, select: { id: true } });
+        const actor = await tx.user.findFirst({ where: interviewRecruiterWhere(scope.actorId, scope.companyId), select: { id: true } });
         if (!actor) return false;
         return Boolean(await tx.application.findFirst({ where: {
           id: scope.applicationId, candidateId: scope.candidateId, job: { companyId: scope.companyId },
