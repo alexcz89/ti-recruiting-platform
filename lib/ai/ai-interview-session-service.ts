@@ -1,3 +1,4 @@
+import { validateBlueprintVersion, type StoredBlueprintVersion } from "./ai-interview-blueprint-service";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
 import { applyInterviewCommand, createInterviewSession, InterviewCommandSchema, INTERVIEW_CONVERSATION_LIMITS, type InterviewSession } from "./ai-interview-conversation-core";
@@ -5,12 +6,13 @@ import { applyInterviewCommand, createInterviewSession, InterviewCommandSchema, 
 const id = z.string().min(1).max(200).refine(value => value.trim().length > 0);
 const ScopeSchema = z.object({ actorId: id, companyId: id, candidateId: id, applicationId: id }).strict();
 export type InterviewScope = z.infer<typeof ScopeSchema>;
-export type StoredInterview = { id: string; companyId: string; candidateId: string; applicationId: string; version: number; snapshot: unknown };
+export type StoredInterview = { id: string; companyId: string; candidateId: string; applicationId: string; blueprintVersionId: string | null; version: number; snapshot: unknown };
 export interface InterviewTransaction {
   authorize(scope: InterviewScope): Promise<boolean>;
   find(scope: InterviewScope, sessionId: string, lock: boolean): Promise<StoredInterview | null>;
+  findBlueprint(scope: InterviewScope, versionId: string): Promise<{ jobId: string; version: StoredBlueprintVersion } | null>;
   now(): Promise<number>;
-  insert(scope: InterviewScope, snapshot: InterviewSession): Promise<StoredInterview>;
+  insert(scope: InterviewScope, snapshot: InterviewSession, blueprintVersionId: string): Promise<StoredInterview>;
   update(scope: InterviewScope, row: StoredInterview, snapshot: InterviewSession): Promise<boolean>;
 }
 export interface InterviewStore { transaction<T>(work: (tx: InterviewTransaction) => Promise<T>): Promise<T> }
@@ -38,10 +40,10 @@ export function validateStoredInterview(value: unknown): InterviewSession {
 }
 
 /** Internal server callers only. actorId MUST come from authenticated server context.
- * Approval is deny-by-default, not a client boolean. This module exposes internal
+ * Creation requires a persisted, locked approval. This module exposes internal
  * snapshots, never HTTP DTOs. Candidate-facing access requires a future projection.
  */
-export function createInterviewSessionService(store: InterviewStore, approve: (scope: InterviewScope, blueprint: InterviewSession["blueprint"]) => Promise<boolean> = async () => false) {
+export function createInterviewSessionService(store: InterviewStore) {
   async function authorized(tx: InterviewTransaction, raw: InterviewScope) {
     const parsed = ScopeSchema.safeParse(raw);
     if (!parsed.success) throw new InterviewPersistenceError("NOT_FOUND");
@@ -58,11 +60,18 @@ export function createInterviewSessionService(store: InterviewStore, approve: (s
     return { ...row, snapshot };
   }
   return {
-    create: (scope: InterviewScope, blueprint: unknown) => store.transaction(async tx => {
+    create: (scope: InterviewScope, blueprintVersionId: string) => store.transaction(async tx => {
       scope = await authorized(tx, scope);
-      const snapshot = createInterviewSession(blueprint);
-      if (!await approve({ ...scope }, structuredClone(snapshot.blueprint))) throw new InterviewPersistenceError("APPROVAL_REQUIRED");
-      const row = await tx.insert(scope, snapshot);
+      if (!id.safeParse(blueprintVersionId).success) throw new InterviewPersistenceError("APPROVAL_REQUIRED");
+      const found = await tx.findBlueprint(scope, blueprintVersionId);
+      if (!found) throw new InterviewPersistenceError("NOT_FOUND");
+      // The adapter holds the blueprint row lock until this transaction commits.
+      // Reauthorize after waiting, including persisted actor and application.
+      scope = await authorized(tx, scope);
+      const approved = validateBlueprintVersion(found.version, { actorId: scope.actorId, companyId: scope.companyId, jobId: found.jobId }, blueprintVersionId);
+      if (approved.status !== "APPROVED") throw new InterviewPersistenceError("APPROVAL_REQUIRED");
+      const snapshot = createInterviewSession(approved.blueprint);
+      const row = await tx.insert(scope, snapshot, approved.id);
       return { ...row, snapshot: validateStoredInterview(row.snapshot) };
     }),
     read: (scope: InterviewScope, sessionId: string) => store.transaction(async tx => load(tx, await authorized(tx, scope), sessionId, false)),

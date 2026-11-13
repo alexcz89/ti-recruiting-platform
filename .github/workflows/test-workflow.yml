@@ -163,7 +163,7 @@ jobs:
           RUN_AI_INTERVIEW_DB_TESTS: "true"
           AI_INTERVIEW_TEST_DATABASE_URL: "postgresql://taskio_ci:taskio_ci_password@127.0.0.1:55433/taskio_ai_interview_test?schema=public"
         run: |
-          npx vitest run __tests__/integration/ai-interview-session-persistence.test.ts __tests__/integration/ai-interview-blueprint-approval.test.ts --no-file-parallelism --reporter=default --reporter=json --outputFile=/tmp/ai-interview-tests.json
+          npx vitest run __tests__/integration/ai-interview-session-persistence.test.ts __tests__/integration/ai-interview-blueprint-approval.test.ts --no-file-parallelism --reporter=default --reporter=json --retry=0 --outputFile=/tmp/ai-interview-tests.json
 
           node <<'NODE'
           const fs = require('node:fs');
@@ -176,7 +176,7 @@ jobs:
           const missing = expected.filter(name => !files.some(file => file.name.endsWith(name)));
           const valid =
             files.length === 2 && missing.length === 0 &&
-            report.numTotalTests >= 34 && report.numPassedTests === report.numTotalTests &&
+            report.numTotalTests >= 42 && report.numPassedTests === report.numTotalTests &&
             report.numFailedTests === 0 && report.numPendingTests === 0 &&
             (report.numTodoTests ?? 0) === 0 && files.every(file => file.status === 'passed');
           console.log('AI interview PostgreSQL verification:', {

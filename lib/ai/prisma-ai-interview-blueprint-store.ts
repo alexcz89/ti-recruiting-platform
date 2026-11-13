@@ -11,7 +11,12 @@ const fields = Prisma.sql`"id", "companyId", "jobId", "blueprint", "status", "cr
  */
 export function createPrismaInterviewBlueprintStore(db: PrismaClient): BlueprintStore {
   return {
-    transaction: work => db.$transaction(async tx => work({
+    transaction: work => db.$transaction(async tx => work(createPrismaBlueprintTransaction(tx)), { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10_000 }),
+  };
+}
+
+export function createPrismaBlueprintTransaction(tx: Prisma.TransactionClient): import("./ai-interview-blueprint-service").BlueprintTransaction {
+  return {
       async authorize(scope) {
         const actor = await tx.user.findFirst({ where: interviewRecruiterWhere(scope.actorId, scope.companyId), select: { id: true } });
         if (!actor) return false;
@@ -46,6 +51,5 @@ export function createPrismaInterviewBlueprintStore(db: PrismaClient): Blueprint
           RETURNING ${fields}`);
         return rows[0] ?? null;
       },
-    }), { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10_000 }),
   };
 }
