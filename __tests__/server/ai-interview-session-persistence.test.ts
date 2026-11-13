@@ -83,6 +83,11 @@ describe("interview persistence service with simulated storage (not PostgreSQL c
     expect((await f.service.read(scope, row.id)).blueprintVersionId).toBeNull();
     expect((await f.service.execute(scope, row.id, 0, start)).snapshot.status).toBe("IN_PROGRESS");
   });
+  it("reserves candidate commands on invited sessions to the candidate service", async () => {
+    const f = fixture(); await f.service.create(scope, "approved"); f.setRow({ ...f.getRow(), invitedAt: new Date() });
+    await expect(f.service.execute(scope, "session", 0, start)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(f.tx.update).not.toHaveBeenCalled();
+  });
   it("creates, reads and isolates the complete snapshot", async () => {
     const f = fixture(); const created = await f.service.create(scope, "approved");
     created.snapshot.blueprint.questions[0].text = "mutated";

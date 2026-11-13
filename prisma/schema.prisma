@@ -98,6 +98,8 @@ model Company {
 }
 
 model User {
+  aiInterviewInvitations AIInterviewSession[] @relation("AIInterviewInviter")
+  aiInterviewCancellations AIInterviewSession[] @relation("AIInterviewCanceller")
   createdInterviewBlueprintVersions AIInterviewBlueprintVersion[] @relation("InterviewBlueprintCreator")
   approvedInterviewBlueprintVersions AIInterviewBlueprintVersion[] @relation("InterviewBlueprintApprover")
   aiInterviewSessions AIInterviewSession[]
@@ -1510,6 +1512,19 @@ model AIInterviewBlueprintVersion {
 
 // Internal conversation snapshot; never a candidate-facing payload.
 model AIInterviewSession {
+  invitedById String?
+  invitedAt DateTime? @db.Timestamptz(3)
+  invitationExpiresAt DateTime? @db.Timestamptz(3)
+  invitationCancelledAt DateTime? @db.Timestamptz(3)
+  invitationCancelledById String?
+  invitationRequestId String?
+  invitationFingerprint String?
+  invitedBy User? @relation("AIInterviewInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+  invitationCancelledBy User? @relation("AIInterviewCanceller", fields: [invitationCancelledById], references: [id], onDelete: Restrict)
+  @@unique([companyId, invitationRequestId])
+  @@index([invitedById])
+  @@index([invitationCancelledById])
+
   blueprintVersionId String?
   blueprintVersion AIInterviewBlueprintVersion? @relation(fields: [blueprintVersionId], references: [id], onDelete: Restrict)
 

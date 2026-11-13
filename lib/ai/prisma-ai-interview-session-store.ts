@@ -10,7 +10,12 @@ import { interviewRecruiterWhere } from "./ai-interview-authorization";
  */
 export function createPrismaInterviewStore(db: PrismaClient): InterviewStore {
   return {
-    transaction: work => db.$transaction(async tx => work({
+    transaction: work => db.$transaction(async tx => work(createPrismaInterviewTransaction(tx)), { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10_000 }),
+  };
+}
+
+export function createPrismaInterviewTransaction(tx: Prisma.TransactionClient): import("./ai-interview-session-service").InterviewTransaction {
+  return {
       async authorize(scope) {
         const actor = await tx.user.findFirst({ where: interviewRecruiterWhere(scope.actorId, scope.companyId), select: { id: true } });
         if (!actor) return false;
@@ -21,7 +26,7 @@ export function createPrismaInterviewStore(db: PrismaClient): InterviewStore {
       },
       async find(scope, sessionId, lock) {
         const rows = await tx.$queryRaw<StoredInterview[]>(Prisma.sql`
-          SELECT "id", "companyId", "candidateId", "applicationId", "blueprintVersionId", "version", "snapshot" FROM "AIInterviewSession"
+          SELECT "id", "companyId", "candidateId", "applicationId", "blueprintVersionId", "invitedAt", "version", "snapshot" FROM "AIInterviewSession"
           WHERE "id" = ${sessionId} AND "companyId" = ${scope.companyId} AND "candidateId" = ${scope.candidateId} AND "applicationId" = ${scope.applicationId}
           ${lock ? Prisma.sql`FOR UPDATE` : Prisma.empty}`);
         return rows[0] ?? null;
@@ -44,7 +49,7 @@ export function createPrismaInterviewStore(db: PrismaClient): InterviewStore {
         const [row] = await tx.$queryRaw<StoredInterview[]>`
           INSERT INTO "AIInterviewSession" ("id", "companyId", "candidateId", "applicationId", "snapshot", "blueprintVersionId")
           VALUES (${randomUUID()}, ${scope.companyId}, ${scope.candidateId}, ${scope.applicationId}, ${JSON.stringify(snapshot)}::jsonb, ${blueprintVersionId})
-          RETURNING "id", "companyId", "candidateId", "applicationId", "blueprintVersionId", "version", "snapshot"`;
+          RETURNING "id", "companyId", "candidateId", "applicationId", "blueprintVersionId", "version", "snapshot", "invitedAt"`;
         return row;
       },
       async update(scope, row, snapshot) {
@@ -54,6 +59,5 @@ export function createPrismaInterviewStore(db: PrismaClient): InterviewStore {
           WHERE "id" = ${row.id} AND "companyId" = ${scope.companyId} AND "candidateId" = ${scope.candidateId} AND "applicationId" = ${scope.applicationId} AND "version" = ${row.version}`;
         return count === 1;
       },
-    }), { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted, timeout: 10_000 }),
   };
 }
