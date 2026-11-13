@@ -6,7 +6,7 @@ import { applyInterviewCommand, createInterviewSession, InterviewCommandSchema, 
 const id = z.string().min(1).max(200).refine(value => value.trim().length > 0);
 const ScopeSchema = z.object({ actorId: id, companyId: id, candidateId: id, applicationId: id }).strict();
 export type InterviewScope = z.infer<typeof ScopeSchema>;
-export type StoredInterview = { id: string; companyId: string; candidateId: string; applicationId: string; blueprintVersionId: string | null; version: number; snapshot: unknown };
+export type StoredInterview = { invitedAt?: Date | null; id: string; companyId: string; candidateId: string; applicationId: string; blueprintVersionId: string | null; version: number; snapshot: unknown };
 export interface InterviewTransaction {
   authorize(scope: InterviewScope): Promise<boolean>;
   find(scope: InterviewScope, sessionId: string, lock: boolean): Promise<StoredInterview | null>;
@@ -79,14 +79,22 @@ export function createInterviewSessionService(store: InterviewStore) {
       scope = await authorized(tx, scope);
       const row = await load(tx, scope, sessionId, true);
       const command = InterviewCommandSchema.parse(rawCommand);
-      z.number().int().min(0).max(INTERVIEW_CONVERSATION_LIMITS.maxCommands).parse(expectedVersion);
-      const replay = row.snapshot.commands.some(receipt => receipt.commandId === command.commandId);
-      if (!replay && expectedVersion !== row.version) throw new InterviewPersistenceError("VERSION_CONFLICT");
-      // clock_timestamp, sampled AFTER acquiring the row lock, not transaction start.
-      const next = applyInterviewCommand(row.snapshot, command, await tx.now());
-      if (replay) return row;
-      if (!await tx.update(scope, row, next)) throw new InterviewPersistenceError("VERSION_CONFLICT");
-      return { ...row, version: row.version + 1, snapshot: next };
+      if (row.invitedAt && ["START_INTERVIEW", "SUBMIT_ANSWER", "SKIP_QUESTION"].includes(command.type)) throw new InterviewPersistenceError("NOT_FOUND");
+      return executeInterviewSessionCommand(tx, scope, row, expectedVersion, command);
     }),
   };
+}
+
+/** Caller must authorize and lock the session in the same transaction first. */
+export async function executeInterviewSessionCommand(tx: InterviewTransaction, scope: InterviewScope,
+  row: StoredInterview & { snapshot: InterviewSession }, expectedVersion: number, rawCommand: unknown) {
+  const command = InterviewCommandSchema.parse(rawCommand);
+  z.number().int().min(0).max(INTERVIEW_CONVERSATION_LIMITS.maxCommands).parse(expectedVersion);
+  const replay = row.snapshot.commands.some(receipt => receipt.commandId === command.commandId);
+  if (!replay && expectedVersion !== row.version) throw new InterviewPersistenceError("VERSION_CONFLICT");
+  // clock_timestamp, sampled AFTER acquiring the row lock, not transaction start.
+  const next = applyInterviewCommand(row.snapshot, command, await tx.now());
+  if (replay) return row;
+  if (!await tx.update(scope, row, next)) throw new InterviewPersistenceError("VERSION_CONFLICT");
+  return { ...row, version: row.version + 1, snapshot: next };
 }
